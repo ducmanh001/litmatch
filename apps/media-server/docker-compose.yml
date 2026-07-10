@@ -2,7 +2,8 @@
 # (cần redis từ docker-compose.yml gốc đang chạy)
 services:
   livekit:
-    image: livekit/livekit-server:latest
+    # Pin release + multi-arch digest: nâng version qua PR có benchmark/compatibility evidence.
+    image: livekit/livekit-server:v1.13.1@sha256:2c6869d2d5ff6c9c0166f47be1c92dad6928bfecfa5e4060a6ece48db8accfa3
     container_name: litmatch-livekit
     command: --config /etc/livekit.yaml
     ports:

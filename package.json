@@ -3,14 +3,16 @@
   "version": "0.0.1",
   "private": true,
   "license": "UNLICENSED",
+  "packageManager": "pnpm@11.9.0",
   "engines": {
-    "node": ">=22"
+    "node": ">=22 <23"
   },
   "scripts": {
     "build": "nx run-many -t build",
     "test": "nx run-many -t test",
     "lint": "nx run-many -t lint",
-    "e2e": "nx run-many -t e2e"
+    "e2e": "nx run-many -t e2e",
+    "verify": "pnpm lint && pnpm test && pnpm build"
   },
   "devDependencies": {
     "@nestjs/schematics": "^11.0.0",
@@ -68,6 +70,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "helmet": "^8.2.0",
+    "ioredis": "^5.4.1",
     "joi": "^18.2.3",
     "jose": "^5.10.0",
     "kafkajs": "^2.2.4",

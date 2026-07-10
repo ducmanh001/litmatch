@@ -27,8 +27,18 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     env:
       INTEGRATION_DB_URL: postgresql://litmatch:litmatch_local@localhost:5432/litmatch_test
+      REDIS_URL: redis://localhost:6379/15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -54,10 +64,12 @@ jobs:
       - name: Build
         run: pnpm nx run-many -t build
 
+      - name: End-to-end smoke test
+        run: pnpm nx run-many -t e2e --parallel=2
+
   docker:
     # Build image để xác nhận Dockerfile luôn hợp lệ — push registry cấu hình ở Giai đoạn 6 (K8s)
     needs: verify
-    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -8,6 +8,7 @@ import { AuthIdentity } from '../auth/entities/auth-identity.entity';
 import { PhoneOtp } from '../auth/entities/phone-otp.entity';
 import { RefreshToken } from '../auth/entities/refresh-token.entity';
 import { User } from '../user/entities/user.entity';
+import { UserService } from '../user/user.service';
 
 import { EconomyService } from './economy.service';
 import { EconomyErrors } from './economy.errors';
@@ -88,6 +89,7 @@ d('Economy integration (Postgres thật)', () => {
       ds.getRepository(LedgerTransaction),
       ledger,
       stubVerifier,
+      new UserService(ds.getRepository(User), {} as ConfigService),
     );
     refundService = new RefundService(ds.getRepository(IapReceipt), ds.getRepository(LedgerTransaction), ledger);
 
