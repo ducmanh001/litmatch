@@ -6,7 +6,10 @@ Mục tiêu thiết kế: quy mô Litmatch thật (hàng trăm nghìn – hàng 
 
 ## Trạng thái hiện tại
 
-Repo mới chỉ có **docs + khung thư mục định hướng**, chưa có source code thật. Mục đích: đưa cho Claude Code (hoặc agent tương đương) một base đầy đủ, nhất quán để bắt đầu code từ Giai đoạn 0 — xem [`docs/07-roadmap.md`](./docs/07-roadmap.md).
+- **Giai đoạn 0 (Nền móng) — xong**: monorepo Nx + pnpm + Node 22, 3 app (`core-api`, `signaling-gateway`, `media-server`), docker-compose local (Postgres/Redis/Kafka), Auth + User module, CI, shared libs.
+- **Giai đoạn 1 (Economy) — đang triển khai**: đã có khung double-entry ledger trong `apps/core-api/src/modules/economy` (LedgerAccount/LedgerEntry/Transaction/Wallet/IAP/Outbox); đặc tả chi tiết ở [`docs/services/economy-service.md`](./docs/services/economy-service.md), gồm refund/chargeback, gift 2-chân, versioned pricing, idempotency.
+
+Xem trạng thái chi tiết theo giai đoạn ở [`docs/07-roadmap.md`](./docs/07-roadmap.md) (tick `[x]` thủ công khi hoàn thành).
 
 ## Cấu trúc repo
 
