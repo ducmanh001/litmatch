@@ -39,6 +39,23 @@ export const coreApiEnvSchema = Joi.object({
   ECONOMY_RECONCILIATION_ENABLED: Joi.boolean().default(true),
   ECONOMY_RECONCILIATION_INTERVAL_MS: Joi.number().integer().min(10_000).default(300_000),
 
+  // Refund/chargeback (docs/services/economy-service.md § 5)
+  // Mặc định 'store' (fail-closed) — thiếu config thì getOrThrow() chết ngay lúc verify thay vì
+  // âm thầm chấp nhận webhook giả mạo nếu ai đó quên set biến này ở production (docs/10 § Economy).
+  ECONOMY_APPLE_WEBHOOK_VERIFIER: Joi.string().valid('dev', 'store').default('store'),
+  ECONOMY_APPLE_ROOT_CA_PEM: Joi.string().allow('').default(''),
+  ECONOMY_GOOGLE_RTDN_VERIFIER: Joi.string().valid('dev', 'store').default('store'),
+  ECONOMY_GOOGLE_RTDN_AUDIENCE: Joi.string().allow('').default(''),
+  ECONOMY_GOOGLE_RTDN_SERVICE_ACCOUNT_EMAIL: Joi.string().allow('').default(''),
+  ECONOMY_APPLE_ISSUER_ID: Joi.string().allow('').default(''),
+  ECONOMY_APPLE_KEY_ID: Joi.string().allow('').default(''),
+  ECONOMY_APPLE_PRIVATE_KEY: Joi.string().allow('').default(''),
+  ECONOMY_APPLE_BUNDLE_ID: Joi.string().allow('').default(''),
+  ECONOMY_APPLE_SERVER_API_ENV: Joi.string().valid('sandbox', 'production').default('sandbox'),
+  ECONOMY_REFUND_POLL_ENABLED: Joi.boolean().default(false),
+  ECONOMY_REFUND_POLL_INTERVAL_MS: Joi.number().integer().min(60_000).default(3_600_000),
+  ECONOMY_REFUND_POLL_WINDOW_DAYS: Joi.number().integer().min(1).default(60),
+
   THROTTLE_TTL_SECONDS: Joi.number().integer().min(1).default(60),
   THROTTLE_LIMIT: Joi.number().integer().min(1).default(100),
 });

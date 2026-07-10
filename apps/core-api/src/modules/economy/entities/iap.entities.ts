@@ -54,6 +54,14 @@ export class IapReceipt {
   @Column({ type: 'uuid', nullable: true })
   transactionId!: string | null;
 
+  /** Trỏ tới transaction type=reversal đã hoàn receipt này — null nếu chưa refund. */
+  @Column({ type: 'uuid', nullable: true })
+  refundTransactionId!: string | null;
+
+  /** Watermark job quét backstop (IapRefundPollService) — null nghĩa là chưa từng được quét. */
+  @Column({ type: 'timestamptz', nullable: true })
+  refundCheckedAt!: Date | null;
+
   @Column({ type: 'jsonb', default: {} })
   rawPayload!: Record<string, unknown>;
 
