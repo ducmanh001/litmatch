@@ -32,6 +32,8 @@ export interface RecordTransactionInput {
   reversalOf?: string;
   /** Chạy trong CÙNG DB transaction sau khi ghi sổ (vd set VIP expiry, lưu receipt) — fail thì rollback cả sổ. */
   withinTransaction?: (manager: EntityManager, transaction: LedgerTransaction) => Promise<void>;
+  /** Ghi đè eventType outbox mặc định (theo dấu balanceDelta) — vd refund cần 'economy.diamond.refunded' rõ ràng thay vì 'debited' chung chung. */
+  outboxEventTypeOverride?: string;
 }
 
 export interface RecordResult {
@@ -51,6 +53,13 @@ export class LedgerService {
 
   async record(input: RecordTransactionInput): Promise<RecordResult> {
     this.validateEntries(input.entries);
+    if (input.type === TransactionType.Adjustment && !input.actorUserId) {
+      // Adjustment (sửa sai thủ công) ĐƯỢC PHÉP đẩy balance âm (xem applyWalletDeltas) — bắt
+      // buộc có actor để audit được (docs/10 § Economy "reversal/adjustment không actor_user_id
+      // → không audit được khi có tranh chấp"). Refund tự động (Reversal) không bắt buộc vì đã
+      // có reversalOf + reason làm audit trail riêng.
+      throw new Error('Transaction type=adjustment bắt buộc có actorUserId (ai thực hiện sửa sai) để audit');
+    }
     const requestHash = this.hashRequest(input);
 
     // Fast path: key đã tồn tại → replay (check trước để không tốn transaction)
@@ -96,7 +105,7 @@ export class LedgerService {
           ),
         );
 
-        await this.applyWalletDeltas(manager, txn, input.entries, wallets);
+        await this.applyWalletDeltas(manager, txn, input.entries, wallets, input.outboxEventTypeOverride);
         await input.withinTransaction?.(manager, txn);
         return txn;
       });
@@ -117,7 +126,19 @@ export class LedgerService {
    * các entry đảo chiều, trỏ `reversalOf` về gốc. An toàn dưới race bằng UPDATE
    * có điều kiện status: 2 request cùng reverse thì chỉ 1 bên thắng.
    */
-  async reverse(originalTransactionId: string, idempotencyKey: string, reason: string): Promise<RecordResult> {
+  async reverse(
+    originalTransactionId: string,
+    idempotencyKey: string,
+    reason: string,
+    opts: {
+      /** Ai khởi tạo bút toán đảo — undefined = giữ nguyên actor giao dịch gốc, null = hệ thống (vd refund tự động từ webhook store). */
+      actorUserId?: string | null;
+      /** Ghi đè eventType outbox (mặc định suy ra từ dấu balanceDelta) — vd 'economy.diamond.refunded'. */
+      outboxEventTypeOverride?: string;
+      /** Chạy thêm trong CÙNG DB transaction sau khi đánh dấu giao dịch gốc là Reversed (vd set iap_receipts.status=refunded). */
+      withinTransaction?: (manager: EntityManager, reversalTxn: LedgerTransaction) => Promise<void>;
+    } = {},
+  ): Promise<RecordResult> {
     const original = await this.dataSource
       .getRepository(LedgerTransaction)
       .findOneBy({ id: originalTransactionId });
@@ -137,9 +158,10 @@ export class LedgerService {
     return this.record({
       type: TransactionType.Reversal,
       idempotencyKey,
-      actorUserId: original.actorUserId ?? undefined,
+      actorUserId: opts.actorUserId !== undefined ? (opts.actorUserId ?? undefined) : (original.actorUserId ?? undefined),
       reversalOf: original.id,
       metadata: { reason, originalType: original.type },
+      outboxEventTypeOverride: opts.outboxEventTypeOverride,
       entries: entries.map((e) => {
         const account = accountById.get(e.accountId);
         if (!account) throw new Error(`Ledger account ${e.accountId} biến mất — dữ liệu hỏng`);
@@ -151,7 +173,7 @@ export class LedgerService {
           currency: e.currency,
         };
       }),
-      withinTransaction: async (manager) => {
+      withinTransaction: async (manager, reversalTxn) => {
         const marked = await manager.update(
           LedgerTransaction,
           { id: original.id, status: TransactionStatus.Completed },
@@ -161,6 +183,7 @@ export class LedgerService {
           // request khác vừa reverse xong trước — rollback toàn bộ bút toán đảo của mình
           throw new DomainException(EconomyErrors.TRANSACTION_ALREADY_REVERSED, 'Giao dịch đã được hoàn trước đó', 409);
         }
+        await opts.withinTransaction?.(manager, reversalTxn);
       },
     });
   }
@@ -279,6 +302,7 @@ export class LedgerService {
     txn: LedgerTransaction,
     entries: LedgerEntryInput[],
     wallets: Map<string, Wallet>,
+    outboxEventTypeOverride?: string,
   ): Promise<void> {
     for (const [userId, wallet] of wallets) {
       let balanceDelta = 0n;
@@ -318,7 +342,7 @@ export class LedgerService {
         await manager.save(
           manager.create(OutboxEvent, {
             topic: 'litmatch.economy.events',
-            eventType: balanceDelta > 0n ? 'economy.diamond.credited' : 'economy.diamond.debited',
+            eventType: outboxEventTypeOverride ?? (balanceDelta > 0n ? 'economy.diamond.credited' : 'economy.diamond.debited'),
             payload: {
               version: 1,
               transactionId: txn.id,

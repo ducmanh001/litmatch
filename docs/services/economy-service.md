@@ -78,10 +78,10 @@
 
 Apple/Google cho user hoàn tiền **sau khi** đã nạp và có thể **đã tiêu** diamond. Đây là lỗ hổng kinh tế kinh điển nếu không thiết kế từ đầu — phải xử lý bằng bút toán đảo, không xoá/sửa giao dịch gốc.
 
-**Nguồn tín hiệu (server-to-server, không tin client):**
-- Apple: **App Store Server Notifications v2** (loại `REFUND`, `REVOKE`).
-- Google: **Real-time Developer Notifications (RTDN)** qua Pub/Sub (`voidedPurchaseNotification`).
-- Bổ sung job quét định kỳ Apple/Google Voided/Refund API để bắt notification bị miss (không coi webhook là đảm bảo 100%).
+**Nguồn tín hiệu (server-to-server, không tin client)** — `POST /economy/webhooks/apple`, `POST /economy/webhooks/google/rtdn` (`@Public()`, verify chữ ký trước khi xử lý, luôn ACK 200 sau khi verify để tránh store retry storm):
+- Apple: **App Store Server Notifications V2** — JWS `signedPayload`, verify chain `x5c` lên **Apple Root CA G3** (`ECONOMY_APPLE_ROOT_CA_PEM`, tải từ trang certificate authority của Apple, không hardcode trong code). `notificationType` = `REFUND`/`REVOKE` → hoàn.
+- Google: **RTDN** qua Pub/Sub push (verify OIDC bearer token) chỉ là tín hiệu phụ — `oneTimeProductNotification.notificationType=2` (CANCELED) không đảm bảo đúng nghĩa "voided" cho sản phẩm one-time. **Nguồn chính thức cho refund one-time là Voided Purchases API** (`purchases.voidedpurchases.list`) — job quét định kỳ ở dưới.
+- **Job quét định kỳ (backstop, không coi webhook là đảm bảo 100%)**: Apple **Get Refund History** (`/inApps/v2/refund/lookup/{transactionId}`, gọi từng receipt Apple còn `credited` vì Apple không có API liệt kê refund toàn cục) + Google **Voided Purchases** (liệt kê 1 lần/run, đối chiếu tại chỗ) — quét các `iap_receipts` còn `credited` trong window gần đây (`ECONOMY_REFUND_POLL_WINDOW_DAYS`).
 
 **Luồng khi nhận refund hợp lệ (idempotent theo provider_transaction_id):**
 1. Tìm `iap_receipts` gốc theo (provider, provider_transaction_id). Nếu đã `refunded` → bỏ qua (idempotent).
@@ -102,3 +102,9 @@ Gift **không thể** cân trong 1 cặp Nợ/Có duy nhất, vì người tặn
 - Chân PTS (thưởng): Nợ `system_points_mint` / Có `user_earnings` (người nhận) — số PTS = `giá quà × tỉ lệ quy đổi` (làm tròn xuống, số nguyên).
 
 Cả hai chân nằm trong **cùng 1 DB transaction** (nếu 1 chân fail thì rollback cả hai — chống "trừ mà không cộng"/"cộng mà không trừ", [10 § Gift](../10-code-review-checklist.md)). Snapshot tỉ lệ quy đổi áp dụng lưu vào `transactions.metadata` (§ 1.5). Diamond **không bao giờ** chuyển thẳng user→user 1:1 — chênh lệch (giá quà − PTS thưởng) ở lại `system_gift_pool`/không mint thành DIA (chống rửa diamond, [06 § 3 bất biến](../06-domain-rules.md)).
+
+> **Việc cần làm khi bắt đầu code Gift (Giai đoạn 3)**: guard chặn balance âm hiện tại (`ledger.service.ts`) chỉ mở cho `type=Reversal`/`Adjustment` trên account `user_wallet`; reverse 1 giao dịch Gift sẽ đụng `user_earnings` (PTS) và bị chặn bởi `newEarnings < 0n` vì PTS chưa có luồng tiêu ở Giai đoạn 1 (earnings vẫn giữ `CHECK >= 0`, xem migration `1752000000000`). Trước khi code hoàn tiền Gift, cần quyết định: PTS có được phép âm khi reverse không, hay chính sách khác (chặn hoàn Gift nếu người nhận đã tiêu hết PTS).
+
+## 7. Giới hạn đã biết, cần đóng trước khi bật `store` thật (không chặn code Giai đoạn 1, nhưng phải nhớ)
+
+- **`StoreIapVerifier.verifyApple()` khớp `product_id` bằng `find()` — lấy phần tử ĐẦU TIÊN trùng product trong mảng `in_app` của receipt.** Với product tiêu dùng nhiều lần (consumable, user mua lại cùng `productId` nhiều lần), receipt hợp nhất của Apple chứa NHIỀU giao dịch cùng `product_id` — `providerTransactionId` lưu lại có thể không phải giao dịch user vừa mua, và khác với `transactionId` mà Apple gửi trong App Store Server Notification khi refund giao dịch cụ thể đó → `RefundService.refundIapPurchase()` có thể trả `unknown_receipt` dù thực ra có receipt tương ứng. Cần đóng trước khi bật `ECONOMY_IAP_VERIFIER=store`/`ECONOMY_APPLE_WEBHOOK_VERIFIER=store` ở production: client nên gửi kèm `transactionId` cụ thể (StoreKit 2 cung cấp sẵn) thay vì chỉ `productId`, server khớp đúng theo id đó.

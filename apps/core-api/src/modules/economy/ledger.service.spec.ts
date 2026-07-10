@@ -88,10 +88,16 @@ describe('LedgerService (validation thuần)', () => {
       id: 't1',
       requestHash: (service as unknown as { hashRequest: (i: unknown) => string }).hashRequest({
         type: TransactionType.Adjustment,
+        actorUserId: 'u1',
         entries: balanced,
       }),
     });
-    const result = await service.record({ type: TransactionType.Adjustment, idempotencyKey: 'k6', entries: balanced });
+    const result = await service.record({
+      type: TransactionType.Adjustment,
+      actorUserId: 'u1', // Adjustment bắt buộc actor để audit (docs/10 § Economy)
+      idempotencyKey: 'k6',
+      entries: balanced,
+    });
     expect(result.replayed).toBe(true);
     expect(dataSource.transaction).not.toHaveBeenCalled();
   });
@@ -101,9 +107,20 @@ describe('LedgerService (validation thuần)', () => {
     await expect(
       service.record({
         type: TransactionType.Adjustment,
+        actorUserId: 'u1',
         idempotencyKey: 'k7',
         entries: [entry(), entry({ direction: LedgerDirection.Credit, accountKind: LedgerAccountKind.SystemRevenue })],
       }),
     ).rejects.toMatchObject({ code: EconomyErrors.IDEMPOTENCY_CONFLICT, httpStatus: 409 });
+  });
+
+  it('type=adjustment bắt buộc actorUserId để audit (docs/10 § Economy) — thiếu actor phải bị chặn', async () => {
+    await expect(
+      service.record({
+        type: TransactionType.Adjustment,
+        idempotencyKey: 'k8',
+        entries: [entry(), entry({ direction: LedgerDirection.Credit, accountKind: LedgerAccountKind.SystemRevenue })],
+      }),
+    ).rejects.toThrow(/actorUserId/);
   });
 });

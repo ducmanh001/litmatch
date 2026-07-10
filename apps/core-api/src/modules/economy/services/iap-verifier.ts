@@ -1,10 +1,10 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DomainException } from '@litmatch/common-exceptions';
-import { SignJWT, importPKCS8 } from 'jose';
 
 import { EconomyErrors } from '../economy.errors';
 import { IapProvider } from '../entities/iap.entities';
+import { getGoogleServiceAccountAccessToken } from './google-service-account';
 
 export interface VerifiedPurchase {
   providerTransactionId: string;
@@ -115,27 +115,6 @@ export class StoreIapVerifier extends IapVerifier {
   }
 
   private async googleAccessToken(): Promise<string> {
-    const email = this.config.getOrThrow<string>('ECONOMY_GOOGLE_SA_EMAIL');
-    const privateKeyPem = this.config.getOrThrow<string>('ECONOMY_GOOGLE_SA_PRIVATE_KEY').replace(/\\n/g, '\n');
-    const key = await importPKCS8(privateKeyPem, 'RS256');
-    const assertion = await new SignJWT({ scope: 'https://www.googleapis.com/auth/androidpublisher' })
-      .setProtectedHeader({ alg: 'RS256' })
-      .setIssuer(email)
-      .setAudience('https://oauth2.googleapis.com/token')
-      .setIssuedAt()
-      .setExpirationTime('5m')
-      .sign(key);
-
-    const res = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-        assertion,
-      }),
-    });
-    if (!res.ok) throw new Error(`Google OAuth lỗi ${res.status}`);
-    const body = (await res.json()) as { access_token: string };
-    return body.access_token;
+    return getGoogleServiceAccountAccessToken(this.config, 'https://www.googleapis.com/auth/androidpublisher');
   }
 }
