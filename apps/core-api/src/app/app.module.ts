@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { buildPinoHttpOptions } from '@litmatch/logger';
@@ -12,6 +13,7 @@ import { GlobalExceptionFilter } from '../common/filters/global-exception.filter
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { ResponseEnvelopeInterceptor } from '../common/interceptors/response-envelope.interceptor';
 import { AuthModule } from '../modules/auth';
+import { EconomyModule } from '../modules/economy';
 import { UserModule } from '../modules/user';
 
 import { HealthController } from './health.controller';
@@ -49,8 +51,10 @@ import { HealthController } from './health.controller';
         ],
       }),
     }),
+    ScheduleModule.forRoot(),
     UserModule,
     AuthModule,
+    EconomyModule,
   ],
   controllers: [HealthController],
   providers: [

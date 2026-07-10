@@ -16,9 +16,9 @@
 
 ## Giai đoạn 1 — Economy trước (vì mọi feature khác phụ thuộc vào nó)
 > Vì mục tiêu là quy mô Litmatch thật (không phải MVP), xây **double-entry ledger đầy đủ ngay từ Giai đoạn 1** theo đúng [03-architecture.md § 3.8.C](./03-architecture.md) — không làm bản đơn giản (1 cột `balance`) rồi tính chuyển đổi sau, vì đổi mô hình dữ liệu tiền bạc giữa chừng khi đã có giao dịch thật là việc rất tốn kém và rủi ro.
-- [ ] Economy module: `LedgerEntry` (double-entry, append-only, idempotency key unique ở DB) làm nguồn sự thật; `Wallet` chỉ là snapshot/cache dẫn xuất — đúng [02-domain-model.md](./02-domain-model.md)
-- [ ] Tích hợp Apple IAP + Google Play Billing (sandbox trước), có job đối soát (reconciliation) so khớp ledger nội bộ với dữ liệu IAP ngay từ đầu, không đợi tới Giai đoạn 7
-- [ ] VIP membership: mua, gia hạn, hết hạn tự downgrade
+- [x] Economy module: `LedgerEntry` (double-entry, append-only — có DB trigger chặn UPDATE/DELETE) làm nguồn sự thật; idempotency key unique trên `Transaction`; `Wallet` chỉ là snapshot dẫn xuất, cập nhật cùng DB transaction — đúng [02-domain-model.md](./02-domain-model.md) + [services/economy-service.md](./services/economy-service.md)
+- [x] Tích hợp Apple IAP + Google Play Billing: `StoreIapVerifier` (Apple verifyReceipt + Google Play Developer API) đã viết, **chưa chạy sandbox thật vì chưa có credential store** — dev dùng `DevIapVerifier` (chặn cứng ở production); job đối soát chạy định kỳ từ ngày đầu (bất biến Nợ=Có, receipt↔transaction, wallet↔ledger)
+- [x] VIP membership: mua bằng diamond, gia hạn cộng dồn, hết hạn tự downgrade (derive khi đọc, không phụ thuộc cron)
 
 ## Giai đoạn 2 — Matching lõi (Soul Match + Voice Match)
 > Xây Matching module theo đúng hình dạng full-scale ở [03-architecture.md § 3.8.B](./03-architecture.md) ngay từ đầu (ticket state machine + shard theo tiêu chí), thay vì làm 1 queue Redis đơn giản rồi tái cấu trúc sau.
