@@ -29,6 +29,16 @@ export const coreApiEnvSchema = Joi.object({
 
   USER_DEFAULT_AVATAR_ID: Joi.string().default('default-01'),
 
+  ECONOMY_IAP_VERIFIER: Joi.string().valid('dev', 'store').default('dev'),
+  ECONOMY_APPLE_SHARED_SECRET: Joi.string().allow('').default(''),
+  ECONOMY_GOOGLE_PACKAGE_NAME: Joi.string().allow('').default(''),
+  ECONOMY_GOOGLE_SA_EMAIL: Joi.string().allow('').default(''),
+  ECONOMY_GOOGLE_SA_PRIVATE_KEY: Joi.string().allow('').default(''),
+  ECONOMY_OUTBOX_RELAY_ENABLED: Joi.boolean().default(false),
+  ECONOMY_OUTBOX_RELAY_INTERVAL_MS: Joi.number().integer().min(200).default(2000),
+  ECONOMY_RECONCILIATION_ENABLED: Joi.boolean().default(true),
+  ECONOMY_RECONCILIATION_INTERVAL_MS: Joi.number().integer().min(10_000).default(300_000),
+
   THROTTLE_TTL_SECONDS: Joi.number().integer().min(1).default(60),
   THROTTLE_LIMIT: Joi.number().integer().min(1).default(100),
 });

@@ -45,6 +45,9 @@ pnpm nx serve core-api                  # dev server (PORT trong .env, mặc đ�
 pnpm nx run-many -t lint                # lint tất cả (kèm @nx/enforce-module-boundaries)
 pnpm nx run-many -t test                # unit test tất cả (kèm arch test module boundaries)
 pnpm nx run-many -t build               # build tất cả → dist/apps/*
+
+# Integration test tiền bạc trên Postgres thật — BẮT BUỘC pass trước khi merge code động tới Economy:
+INTEGRATION_DB_URL=postgresql://litmatch:litmatch_local@localhost:5432/litmatch_test pnpm nx test core-api
 ```
 
 - Swagger dev: `http://localhost:<PORT>/docs`. LiveKit local: `docker compose -f apps/media-server/docker-compose.yml up -d`.
