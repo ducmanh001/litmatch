@@ -1,0 +1,9 @@
+{
+  "name": "@litmatch/signaling-gateway",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Deps webpack không tự dò được — merge vào package.json generated trong dist",
+  "dependencies": {
+    "tslib": "^2.8.1"
+  }
+}

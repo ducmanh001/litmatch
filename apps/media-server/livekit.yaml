@@ -1,0 +1,16 @@
+# Cấu hình LiveKit self-host cho dev local (docs/03 § 3.8.A — SFU đã chốt là LiveKit).
+# Media server KHÔNG chứa business logic (docs/03 § 3.3) — chỉ là config + deployment.
+# Production: keys lấy từ secret manager, không commit key thật vào repo.
+port: 7880
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50200
+  use_external_ip: false
+redis:
+  address: host.docker.internal:6379
+keys:
+  # DEV ONLY — sinh key thật bằng `livekit-server generate-keys` khi deploy
+  devkey: devsecret_change_me_0123456789abcdef
+logging:
+  level: info

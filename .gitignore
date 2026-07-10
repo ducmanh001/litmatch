@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+
+# build outputs
+dist/
+tmp/
+out-tsc/
+
+# nx
+.nx/cache
+.nx/workspace-data
+
+# env — không commit secret, dùng .env.example
+.env
+.env.local
+.env.*.local
+
+# test
+coverage/
+
+# IDE / OS
+.idea/
+.DS_Store
+
+# logs
+*.log
