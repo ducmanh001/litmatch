@@ -92,5 +92,15 @@ Mỗi module nghiệp vụ khác (auth, user, social, content, moderation, notif
 - Event schema có field `version`; consumer phải chịu được version cũ — thêm field là non-breaking, đổi/xoá field phải lên version mới.
 - Commit theo Conventional Commits, scope là tên module: `feat(economy): ...`, `fix(matching): ...`.
 
+## 5.10 Idempotency & ghi tiền (convention dùng chung, không riêng Economy)
+
+Áp dụng cho **mọi** thao tác có tác dụng phụ không được lặp: trừ/cộng diamond, đặt match ticket, tặng quà, settle call, claim thưởng. Economy chỉ là nơi áp dụng đầu tiên và kỹ nhất ([services/economy-service.md § 3](./services/economy-service.md)).
+
+- **Idempotency key là unique constraint ở DB**, không bao giờ check-rồi-insert bằng code (check-then-act vẫn có race). Luồng chuẩn: cố `INSERT` → bắt **unique violation** → đọc lại row đã tồn tại → xử lý theo trạng thái của nó, KHÔNG tạo bản ghi thứ 2.
+- **2 request song song cùng key** (request đầu chưa commit): request sau bắt unique violation *trước* khi request đầu xong → **retry đọc ngắn có backoff** tới khi row hiện trạng thái cuối, rồi trả kết quả cũ. Không được tự tạo giao dịch mới.
+- **Cùng key nhưng payload khác** (`request_hash` khác) → trả 409 `*_IDEMPOTENCY_CONFLICT` (lỗi client, không phải retry).
+- **Check + hành động luôn atomic**: gộp trong 1 DB transaction với `SELECT ... FOR UPDATE` (hoặc optimistic lock), xác minh lại điều kiện (số dư, quyền, trạng thái) **tại thời điểm hành động**, không tin giá trị đọc trước đó ([10 § 10.0.C](./10-code-review-checklist.md)).
+- **Không diễn giải lại giao dịch cũ theo config hiện tại**: giá/tỉ lệ áp dụng phải snapshot vào bản ghi giao dịch (versioned pricing), đọc lại từ snapshot đó — đổi giá không bao giờ đụng giao dịch đã ghi.
+
 ---
 [← 04 · Tech Stack](./04-tech-stack.md) · [06 · Domain Rules →](./06-domain-rules.md)

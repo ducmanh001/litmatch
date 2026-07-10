@@ -9,6 +9,9 @@ export enum VipTier {
  * SNAPSHOT dẫn xuất từ ledger — KHÔNG phải nguồn sự thật (luật 2 CLAUDE.md).
  * Chỉ LedgerService được ghi, trong cùng DB transaction với bút toán.
  * Rebuild được bất cứ lúc nào bằng EconomyService.rebuildWallet().
+ * `balance` CÓ THỂ âm sau refund/chargeback (user nợ diamond — docs/services/economy-service.md § 5);
+ * chống tiêu quá số dư là guard tầng ứng dụng (SELECT ... FOR UPDATE + balance - amount >= 0),
+ * không phải CHECK ở DB.
  */
 @Entity({ name: 'wallets' })
 export class Wallet {

@@ -292,7 +292,11 @@ export class LedgerService {
 
       const newBalance = BigInt(wallet.balance) + balanceDelta;
       const newEarnings = BigInt(wallet.earnings) + earningsDelta;
-      if (newBalance < 0n) {
+      // Reversal/Adjustment (refund, chargeback, sửa sai admin) ĐƯỢC PHÉP đẩy balance âm = user nợ
+      // diamond (docs/services/economy-service.md § 5); giao dịch tiêu tiền thường thì KHÔNG.
+      const mayGoNegative =
+        txn.type === TransactionType.Reversal || txn.type === TransactionType.Adjustment;
+      if (newBalance < 0n && !mayGoNegative) {
         // Xác minh lại ĐÚNG THỜI ĐIỂM trừ tiền (docs/10 § 10.0.C) — không tin check ở đầu luồng
         throw new DomainException(
           EconomyErrors.WALLET_INSUFFICIENT_BALANCE,

@@ -5,7 +5,9 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * Chốt chặn ở tầng DB, không chỉ ở code:
  * - transactions.idempotency_key UNIQUE (luật 2 CLAUDE.md)
  * - ledger_entries: TRIGGER chặn UPDATE/DELETE — append-only tuyệt đối
- * - wallets.balance CHECK >= 0 — không bao giờ âm kể cả khi code có bug
+ * - wallets.balance KHÔNG đặt CHECK >= 0: số dư âm là trạng thái hợp lệ sau refund/chargeback
+ *   (user nợ diamond — docs/services/economy-service.md § 5). Chống tiêu quá số dư là guard
+ *   tầng ứng dụng (SELECT ... FOR UPDATE + balance - amount >= 0), không phải constraint snapshot.
  * - amount CHECK > 0, bigint — không float, không bút toán 0/âm
  */
 export class EconomyLedger1752000000000 implements MigrationInterface {
@@ -74,7 +76,9 @@ export class EconomyLedger1752000000000 implements MigrationInterface {
     await queryRunner.query(`
       CREATE TABLE wallets (
         user_id         uuid PRIMARY KEY REFERENCES users(id),
-        balance         bigint      NOT NULL DEFAULT 0 CHECK (balance >= 0),
+        -- balance CÓ THỂ âm sau refund/chargeback (user nợ diamond) — không đặt CHECK >= 0
+        balance         bigint      NOT NULL DEFAULT 0,
+        -- earnings (PTS) chỉ được cộng ở giai đoạn này (chưa có luồng tiêu) → vẫn giữ CHECK >= 0
         earnings        bigint      NOT NULL DEFAULT 0 CHECK (earnings >= 0),
         vip_tier        varchar(16) NULL,
         vip_expires_at  timestamptz NULL,

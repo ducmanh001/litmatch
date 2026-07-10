@@ -94,7 +94,16 @@
 - Balance hiển thị cho user bị coi là nguồn sự thật thay vì dữ liệu dẫn xuất từ ledger → khi lệch, không có cách nào rebuild lại đúng
 - Refund/hoàn tiền viết đè lên giao dịch gốc thay vì tạo **bút toán đảo (reversal entry)** mới trỏ ngược về giao dịch gốc — làm mất lịch sử đầy đủ, khó đối soát khi có khiếu nại
 - Đơn vị tiền tệ khác nhau (nếu có mở rộng đa quốc gia sau này) bị cộng/trừ lẫn lộn mà không quy đổi hoặc không tách tài khoản theo currency
-- **Discount/ưu đãi VIP tính lại theo trạng thái cũ**: giá gói/diamond hiển thị lúc bắt đầu thanh toán khác với giá thực tính lúc chốt giao dịch (vd VIP hết hạn giữa lúc đang thanh toán) mà server không tính lại giá tại thời điểm chốt
+- **Discount/ưu đãi VIP tính lại theo trạng thái cũ**: giá gói/diamond hiển thị lúc bắt đầu thanh toán khác với giá thực tính lúc chốt giao dịch (vd VIP hết hạn giữa lúc đang thanh toán) mà server không tính lại giá tại thời điểm chốt — chống bằng snapshot giá vào giao dịch (versioned pricing, [services/economy-service.md § 1.5](./services/economy-service.md))
+- **Refund/chargeback từ store bị bỏ quên**: chỉ xử lý credit lúc nạp, không có luồng nhận App Store Server Notifications / Google RTDN → user hoàn tiền sau khi đã tiêu diamond mà hệ thống không đảo bút toán → thất thoát. Refund phải tạo bút toán đảo và cho phép số dư âm (nợ), không "clamp về 0" (phá bất biến double-entry) — xem [services/economy-service.md § 5](./services/economy-service.md)
+- **CHECK balance >= 0 ở DB chặn nhầm refund hợp lệ**: đặt constraint số dư không âm trên bảng snapshot làm không ghi được bút toán đảo khi user đã tiêu → chống tiêu quá số dư là guard tầng ứng dụng (`SELECT ... FOR UPDATE` + `balance - amount >= 0`), không phải constraint trên snapshot
+- **Giao dịch sửa sai không truy được người thực hiện**: bút toán `reversal`/`adjustment` thủ công không ghi `actor_user_id` + lý do → không audit được khi có tranh chấp tài chính
+- **Gift trộn 2 currency trong 1 chân**: cố cân "trừ DIA / cộng PTS" trong cùng 1 cặp Nợ/Có (2 currency khác nhau) thay vì 2 chân độc lập mỗi chân tự cân theo currency → phá bất biến, sinh/mất tiền — xem [services/economy-service.md § 6](./services/economy-service.md)
+
+> **Tiêu chí "xong" bắt buộc cho Economy (không phải tuỳ chọn) — không chỉ dựa vào review đọc mắt:**
+> - **Property test bất biến double-entry**: sinh ngẫu nhiên chuỗi giao dịch (nạp/mua VIP/gift/refund), sau mỗi bước assert **tổng Nợ = tổng Có theo từng currency** và `rebuildWallet()` khớp snapshot. Đây là cái linter/review không thay được.
+> - **Test concurrency thật trên Postgres**: N request song song cùng trừ 1 ví (không lost update), N request song song cùng `idempotency_key` (chỉ 1 giao dịch được tạo), refund song song với tiêu tiền.
+> - **Test refund-sau-tiêu**: user nạp → tiêu hết → refund → assert balance âm đúng, tiêu tiếp bị chặn, nạp bù trừ nợ đúng.
 
 **Matching — nơi dễ sai logic ghép cặp**
 - Race condition: 2 matching worker cùng lấy 1 user ra khỏi queue và ghép với 2 người khác nhau cùng lúc → user bị match đôi (khắc phục bằng lock/Lua script atomic khi lấy user ra khỏi queue, xem [03-architecture.md § 3.8.B](./03-architecture.md))
