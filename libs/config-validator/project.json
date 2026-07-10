@@ -1,0 +1,19 @@
+{
+  "name": "config-validator",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/config-validator/src",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/config-validator",
+        "main": "libs/config-validator/src/index.ts",
+        "tsConfig": "libs/config-validator/tsconfig.lib.json",
+        "assets": ["libs/config-validator/*.md"]
+      }
+    }
+  },
+  "tags": ["type:lib", "scope:shared"]
+}

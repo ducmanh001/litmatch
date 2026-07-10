@@ -1,0 +1,56 @@
+{
+  "name": "core-api",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/core-api/src",
+  "projectType": "application",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "webpack-cli build",
+        "env": {
+          "NODE_ENV": "production"
+        },
+        "cwd": "apps/core-api"
+      },
+      "configurations": {
+        "development": {
+          "env": {
+            "NODE_ENV": "development"
+          }
+        }
+      }
+    },
+    "migration-run": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "ts-node --project apps/core-api/tsconfig.app.json -r tsconfig-paths/register node_modules/typeorm/cli.js migration:run -d apps/core-api/src/database/data-source.ts"
+      }
+    },
+    "migration-revert": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "ts-node --project apps/core-api/tsconfig.app.json -r tsconfig-paths/register node_modules/typeorm/cli.js migration:revert -d apps/core-api/src/database/data-source.ts"
+      }
+    },
+    "serve": {
+      "continuous": true,
+      "executor": "@nx/js:node",
+      "defaultConfiguration": "development",
+      "dependsOn": ["build"],
+      "options": {
+        "buildTarget": "core-api:build",
+        "runBuildTargetDependencies": false
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "core-api:build:development"
+        },
+        "production": {
+          "buildTarget": "core-api:build:production"
+        }
+      }
+    }
+  },
+  "tags": ["type:app", "scope:core"]
+}

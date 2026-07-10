@@ -1,0 +1,24 @@
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "rootDir": ".",
+    "sourceMap": true,
+    "declaration": false,
+    "moduleResolution": "node",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "target": "es2022",
+    "module": "esnext",
+    "lib": ["es2023"],
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "paths": {
+      "@litmatch/common-exceptions": ["./libs/common-exceptions/src/index.ts"],
+      "@litmatch/common-dtos": ["./libs/common-dtos/src/index.ts"],
+      "@litmatch/logger": ["./libs/logger/src/index.ts"],
+      "@litmatch/config-validator": ["./libs/config-validator/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "tmp"]
+}

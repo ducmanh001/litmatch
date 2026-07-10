@@ -1,0 +1,19 @@
+{
+  "name": "common-exceptions",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/common-exceptions/src",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/common-exceptions",
+        "main": "libs/common-exceptions/src/index.ts",
+        "tsConfig": "libs/common-exceptions/tsconfig.lib.json",
+        "assets": ["libs/common-exceptions/*.md"]
+      }
+    }
+  },
+  "tags": ["type:lib", "scope:shared"]
+}

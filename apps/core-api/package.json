@@ -1,0 +1,10 @@
+{
+  "name": "@litmatch/core-api",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Deps webpack không tự dò được (require động của typeorm, TS helpers) — merge vào package.json generated trong dist",
+  "dependencies": {
+    "pg": "^8.16.3",
+    "tslib": "^2.8.1"
+  }
+}

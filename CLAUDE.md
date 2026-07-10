@@ -7,7 +7,7 @@ Hệ thống social-entertainment kiểu Litmatch: voice/text matching ẩn danh
 ## 3 luật không được vi phạm (dừng lại và hỏi lại nếu code đang đi ngược 1 trong 3 điều này)
 
 1. **Chỉ 3 thành phần deploy riêng biệt**: `apps/core-api`, `apps/signaling-gateway`, `apps/media-server`. Mọi domain khác (auth, user, matching, economy, social, content, moderation, notification, gift, party-room, feed, avatar...) là **module NestJS bên trong `apps/core-api`**, KHÔNG phải app/service riêng. Không tự ý tạo app thứ 4. Chi tiết + lý do: `docs/03-architecture.md`.
-2. **Economy/diamond**: `LedgerEntry` (double-entry, append-only, idempotency key unique ở tầng DB) là nguồn sự thật duy nhất. `Wallet.balance` chỉ là snapshot dẫn xuất, không bao giờ được coi là nguồn sự thật. Không update/xoá dòng ledger cũ — sửa sai bằng bút toán đảo (reversal entry) mới. Chi tiết: `docs/03-architecture.md § 3.8.C`, `docs/02-domain-model.md`.
+2. **Economy/diamond**: `LedgerEntry` (double-entry, append-only) là nguồn sự thật duy nhất; idempotency key là unique constraint ở tầng DB trên bảng `Transaction` (1 key/giao dịch — KHÔNG đặt unique trên `LedgerEntry` vì 1 giao dịch có ≥2 bút toán). `Wallet.balance` chỉ là snapshot dẫn xuất, không bao giờ được coi là nguồn sự thật. Không update/xoá dòng ledger cũ — sửa sai bằng bút toán đảo (reversal entry) mới. Chi tiết: `docs/03-architecture.md § 3.8.C`, `docs/02-domain-model.md`.
 3. **Trước khi báo 1 task/module là "xong"**: tự chấm lại theo `docs/10-code-review-checklist.md`, bắt đầu từ § 10.0 (liệt kê luồng nghiệp vụ + giả định đang đặt ra về hành vi user, rồi xác nhận từng giả định có bị phá vỡ được không). Đây là bước bắt buộc, không phải tuỳ chọn — đặc biệt cho mọi thứ động tới Economy/Matching/Calling/Gift/Party Room.
 
 ## Bản đồ docs (đọc file tương ứng trước khi động vào phần đó, đừng đoán từ trí nhớ)
@@ -34,9 +34,21 @@ Hệ thống social-entertainment kiểu Litmatch: voice/text matching ẩn danh
 - Nếu 1 quyết định cần thiết chưa có trong `docs/`, đề xuất phương án + lý do, hỏi lại thay vì tự ý quyết rồi im lặng — đặc biệt với bất cứ điều gì ảnh hưởng tới 3 luật ở trên.
 - Khi phát hiện `docs/` sai hoặc thiếu 1 domain rule quan trọng trong lúc code thật: sửa trực tiếp vào file `docs/` tương ứng (không chỉ sửa trong hội thoại rồi để trôi mất), rồi tiếp tục.
 
-## Lệnh build/test (cập nhật khi Giai đoạn 0 xong)
+## Lệnh build/test (Giai đoạn 0 đã xong — Nx + pnpm + Node 22)
 
-> Chưa có — repo mới chỉ có docs + khung thư mục, chưa scaffold code. Khi hoàn thành Giai đoạn 0 (`docs/07-roadmap.md`), cập nhật đúng lệnh thật vào đây (vd `pnpm install`, `pnpm test`, `pnpm --filter core-api start:dev`...) để các session sau không phải đoán lại.
+```bash
+pnpm install                            # cài dependency (pnpm 11, Node 22)
+cp .env.example .env                    # config local (không commit .env)
+docker compose up -d                    # Postgres + Redis + Kafka local
+pnpm nx run core-api:migration-run      # migration TypeORM (cấm synchronize, kể cả dev)
+pnpm nx serve core-api                  # dev server (PORT trong .env, mặc định 3000)
+pnpm nx run-many -t lint                # lint tất cả (kèm @nx/enforce-module-boundaries)
+pnpm nx run-many -t test                # unit test tất cả (kèm arch test module boundaries)
+pnpm nx run-many -t build               # build tất cả → dist/apps/*
+```
+
+- Swagger dev: `http://localhost:<PORT>/docs`. LiveKit local: `docker compose -f apps/media-server/docker-compose.yml up -d`.
+- Test 1 project: `pnpm nx test core-api`. Docker image: `pnpm nx build core-api && docker build -f apps/core-api/Dockerfile .`
 
 ## Giới hạn của file này
 
