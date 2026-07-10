@@ -10,7 +10,7 @@
 |---|---|---|
 | 1 | [01-product-features.md](./01-product-features.md) | Danh sách tính năng thật của Litmatch |
 | 2 | [02-domain-model.md](./02-domain-model.md) | Domain Model tổng thể (entity chính) |
-| 3 | [03-architecture.md](./03-architecture.md) | Kiến trúc: modular monolith, 3.1-3.7 nền tảng, **3.8 = quyết định thiết kế cho quy mô lớn (SFU, shard matching, ledger)** |
+| 3 | [03-architecture.md](./03-architecture.md) | Kiến trúc: modular monolith, 3 server workload ban đầu, topology LiveKit, transaction boundary và quyết định scale |
 | 4 | [04-tech-stack.md](./04-tech-stack.md) | Tech stack đề xuất |
 | 5 | [05-coding-standards.md](./05-coding-standards.md) | Coding standard NestJS + cấu trúc thư mục |
 | 6 | [06-domain-rules.md](./06-domain-rules.md) | Domain rules bắt buộc (đừng để agent tự đoán) |
@@ -18,15 +18,18 @@
 | 8 | [08-working-with-claude-code.md](./08-working-with-claude-code.md) | Quy trình làm việc với Claude Code trên repo này |
 | 9 | [09-practical-notes.md](./09-practical-notes.md) | Lưu ý thực tế, tránh vỡ trận giữa đường |
 | 10 | [10-code-review-checklist.md](./10-code-review-checklist.md) | **Checklist review code — 10.0 phương pháp luận lỗi logic nghiệp vụ, 10.1 lỗi chung, 10.2 lỗi đặc thù từng domain, 10.3 cách áp dụng** |
+| 11 | [11-nfr-and-production-readiness.md](./11-nfr-and-production-readiness.md) | Capacity assumption, SLO, data-safety/security gate và evidence để được gọi là production-ready |
 | — | [services/economy-service.md](./services/economy-service.md) | **Đặc tả chi tiết Economy module**: schema ledger, loại tài khoản, bất biến, luồng IAP/VIP, quy tắc concurrency |
+| — | [services/matching-service.md](./services/matching-service.md) | **Đặc tả Matching M1**: state machine, Postgres/Redis ownership, idempotency, durability, shard và fairness |
+| — | [services/safety-service.md](./services/safety-service.md) | **Đặc tả R-007 Safety**: Block/Report foundation, moderation/decision/appeal, age/device/evidence/emergency và enforcement gate |
 | — | [sources.md](./sources.md) | Nguồn tham khảo đã dùng để nghiên cứu bộ docs này |
 
 ## Đường dẫn đọc gợi ý theo tình huống
 
-- **Mới vào dự án / chưa code gì**: đọc theo thứ tự 1 → 10 một lượt (khoảng 15-20 phút), đúng như file spec gốc dự định.
+- **Mới vào dự án / chưa code gì**: đọc theo thứ tự 1 → 11; với module phức tạp đọc thêm file tương ứng trong `services/`.
 - **Bắt đầu 1 giai đoạn mới trong roadmap**: đọc `07-roadmap.md` (mục đang làm) + file mục tương ứng nếu giai đoạn đó động tới kiến trúc/domain rule mới.
 - **Sắp merge 1 PR / vừa viết xong 1 module**: bắt buộc đọc `10-code-review-checklist.md`, chạy qua § 10.0 trước khi đọc lại code.
-- **Không chắc 1 quyết định kiến trúc có đúng không**: đọc `03-architecture.md`, đặc biệt § 3.8 nếu liên quan tới SFU/matching scale/ledger.
+- **Không chắc 1 quyết định kiến trúc có đúng không**: đọc `03-architecture.md`; mọi tuyên bố scale/release phải kiểm tra thêm `11-nfr-and-production-readiness.md`.
 
 ## Quy ước khi sửa bộ docs này
 

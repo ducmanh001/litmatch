@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { UserModule } from '../user';
+
 import { EconomyController } from './economy.controller';
 import { EconomyService } from './economy.service';
 import { LedgerService } from './ledger.service';
@@ -29,6 +31,7 @@ import { EconomyWebhooksController } from './webhooks/economy-webhooks.controlle
 
 @Module({
   imports: [
+    UserModule,
     TypeOrmModule.forFeature([
       LedgerAccount,
       LedgerTransaction,
@@ -48,32 +51,29 @@ import { EconomyWebhooksController } from './webhooks/economy-webhooks.controlle
     OutboxRelayService,
     ReconciliationService,
     IapRefundPollService,
-    DevIapVerifier,
-    StoreIapVerifier,
     {
       provide: IapVerifier,
-      inject: [ConfigService, DevIapVerifier, StoreIapVerifier],
-      useFactory: (config: ConfigService, dev: DevIapVerifier, store: StoreIapVerifier) =>
-        config.getOrThrow<string>('ECONOMY_IAP_VERIFIER') === 'store' ? store : dev,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService): IapVerifier =>
+        config.getOrThrow<string>('ECONOMY_IAP_VERIFIER') === 'store'
+          ? new StoreIapVerifier(config)
+          : new DevIapVerifier(config),
     },
-    DevAppleNotificationVerifier,
-    StoreAppleNotificationVerifier,
     {
       provide: AppleNotificationVerifier,
-      inject: [ConfigService, DevAppleNotificationVerifier, StoreAppleNotificationVerifier],
-      useFactory: (
-        config: ConfigService,
-        dev: DevAppleNotificationVerifier,
-        store: StoreAppleNotificationVerifier,
-      ) => (config.getOrThrow<string>('ECONOMY_APPLE_WEBHOOK_VERIFIER') === 'store' ? store : dev),
+      inject: [ConfigService],
+      useFactory: (config: ConfigService): AppleNotificationVerifier =>
+        config.getOrThrow<string>('ECONOMY_APPLE_WEBHOOK_VERIFIER') === 'store'
+          ? new StoreAppleNotificationVerifier(config)
+          : new DevAppleNotificationVerifier(config),
     },
-    DevGoogleRtdnVerifier,
-    StoreGoogleRtdnVerifier,
     {
       provide: GoogleRtdnVerifier,
-      inject: [ConfigService, DevGoogleRtdnVerifier, StoreGoogleRtdnVerifier],
-      useFactory: (config: ConfigService, dev: DevGoogleRtdnVerifier, store: StoreGoogleRtdnVerifier) =>
-        config.getOrThrow<string>('ECONOMY_GOOGLE_RTDN_VERIFIER') === 'store' ? store : dev,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService): GoogleRtdnVerifier =>
+        config.getOrThrow<string>('ECONOMY_GOOGLE_RTDN_VERIFIER') === 'store'
+          ? new StoreGoogleRtdnVerifier(config)
+          : new DevGoogleRtdnVerifier(config),
     },
   ],
   exports: [EconomyService],

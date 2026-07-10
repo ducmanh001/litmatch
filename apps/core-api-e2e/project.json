@@ -11,7 +11,7 @@
         "jestConfig": "apps/core-api-e2e/jest.config.cts",
         "passWithNoTests": true
       },
-      "dependsOn": ["core-api:build", "core-api:serve"]
+        "dependsOn": ["core-api:migration-run", "core-api:build", "core-api:serve"]
     }
   }
 }

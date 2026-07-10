@@ -1,13 +1,16 @@
-<!-- Claude Code đọc file này CÙNG VỚI CLAUDE.md ở root khi làm việc trong apps/media-server. -->
+<!-- Đọc cùng CLAUDE.md ở root khi làm việc trong apps/media-server. -->
 
-# apps/media-server — ghi chú riêng
+# apps/media-server — LiveKit deployment notes
 
-Sidecar Pattern: tầng "cơ bắp" chuyển tiếp gói RTP, **tuyệt đối không business logic, không query DB, không biết về diamond/quyền/user profile**. Xem `../../docs/03-architecture.md § 3.3`.
+Đây là config/deployment cho LiveKit self-host, không phải nơi viết business logic. LiveKit không query DB/ledger/profile; nó **có** biết participant identity/grant đã ký trong token để enforce media permission.
 
-## Riêng cho app này
+## Luật riêng
 
-- **SFU đã chốt: LiveKit self-host** (`../../docs/03-architecture.md § 3.8.A` + `../../docs/04-tech-stack.md`) — không bắt đầu bằng mediasoup; muốn đổi thì sửa 2 file docs đó trước khi code.
-- Ước lượng tải: N người trong phòng tạo N-1 consumer/người (tổng consumer tăng theo N×(N-1)) — cách tính chi tiết ở `../../docs/03-architecture.md § 3.5` (viết cho mediasoup nhưng công thức áp dụng nguyên cho LiveKit).
-- **Giới hạn cứng số speaker/phòng** (config được từ `core-api`, không hardcode ở đây) — Party Room chạm ngưỡng tải sớm hơn Voice Match rất nhiều vì consumer tăng theo N×(N-1).
-- Giải phóng room ngay khi call/party kết thúc — không giải phóng đúng lúc gây leak resource, xem `../../docs/10-code-review-checklist.md § Calling/Signaling/SFU`.
-- Việc cascade nhiều node (LiveKit mesh) là việc của vận hành ở quy mô lớn (`../../docs/07-roadmap.md § Giai đoạn 7`), không phải việc dựng nền tảng ban đầu.
+- SFU đã chốt là LiveKit self-host theo [docs/03 § 3.8.A](../../docs/03-architecture.md).
+- Client kết nối trực tiếp tới LiveKit; không route media/SDP/ICE qua Socket.IO gateway.
+- Chỉ `core-api` giữ LiveKit API secret và gọi RoomService. Không copy secret/caller quyền cao sang Signaling Gateway nếu chưa có ADR threat-model riêng.
+- Multi-node self-host phân phối room qua Redis; **một room/node**, không ghi hoặc triển khai “cascade room qua nhiều node” như tính năng sẵn có.
+- Capacity theo active publisher/subscriber/bitrate/packet workload. Party có `S` speaker, `N` participant thì subscription xấp xỉ `S × (N-1)` nếu tất cả nghe tất cả; không dùng mặc định `N × (N-1)`.
+- Participant/speaker cap do `core-api` quyết định từ config/policy; chỉ tăng sau load test đúng environment.
+- Room cleanup dựa trên server-authoritative session + signed webhook/reconciliation; event duplicate/out-of-order phải idempotent.
+- Production pin image/Helm version, dùng secret manager, TLS/TURN/public IP, readiness/draining và gate [docs/11 § 11.5](../../docs/11-nfr-and-production-readiness.md).

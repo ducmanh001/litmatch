@@ -1,8 +1,8 @@
 [← 03 · Architecture](./03-architecture.md) · **04 · Tech Stack** · [05 · Coding Standards →](./05-coding-standards.md)
 
-# 4. Tech Stack — ĐÃ CHỐT (2026-07-10)
+# 4. Tech Stack — baseline đã chốt, decision mở phải ghi rõ
 
-> Các lựa chọn dạng "A hoặc B" trước đây đã được chốt để mọi session code (người hoặc agent) nhất quán, không mỗi lần tự quyết một kiểu. Muốn đổi 1 lựa chọn: sửa file này trước (kèm lý do), rồi mới code — không đổi ngầm trong code.
+> Các lựa chọn baseline bên dưới đã chốt cho server hiện tại. Dòng có trạng thái “chưa chốt” là decision gate, không được implementation tự chọn im lặng. Muốn đổi lựa chọn đã chốt: tạo/sửa ADR + docs trước khi code.
 
 | Layer | Lựa chọn | Ghi chú |
 |---|---|---|
@@ -13,13 +13,16 @@
 | DB chính | PostgreSQL | user, ledger/wallet, transaction, feed — cần ACID cho tiền |
 | Cache/Queue matching | Redis | matching queue, session cache, pub/sub, feed cache |
 | Message broker | **Kafka** | outbox relay + event fanout ở Litmatch-scale; RabbitMQ bị loại vì mục tiêu throughput/replay |
-| Realtime signaling | **Socket.IO** (trên NestJS `@WebSocketGateway`) | + Redis adapter khi chạy nhiều instance (bắt buộc từ [07-roadmap.md § Giai đoạn 6](./07-roadmap.md)) |
-| Media/SFU | **LiveKit self-host** | đã chốt theo [03-architecture.md § 3.8.A](./03-architecture.md) — không bắt đầu bằng mediasoup |
-| Payment | Apple IAP + Google Play Billing SDK, hoặc Stripe nếu có web/nạp ngoài | chi tiết chốt ở Giai đoạn 1 khi tích hợp sandbox |
+| Application realtime | **Socket.IO** (NestJS `@WebSocketGateway`) | presence/chat/session/control intent; **không proxy SDP/ICE LiveKit**; Redis adapter khi nhiều instance |
+| Media/SFU | **LiveKit self-host** | client kết nối trực tiếp bằng LiveKit SDK/token scope hẹp; multi-node scale số room qua Redis, **một room/node** — [03 § 3.5](./03-architecture.md) |
+| Client apps | **Chưa chốt trong repo backend hiện tại** | mobile/admin không bị cấm bởi luật 3 server workload; phải có ADR về native/cross-platform, release/store, push/offline/accessibility trước khi build |
+| Payment | **Apple IAP + Google Play Billing** cho digital goods mobile | production gate R-004: Apple signed transaction/App Store Server API, Google acknowledge/consume/PENDING; Stripe/web chỉ sau policy + ADR riêng |
 | API Gateway | NestJS custom gateway hoặc Kong | chưa chốt — quyết ở Giai đoạn 6/7 khi có nhu cầu thật, giai đoạn đầu core-api expose trực tiếp sau LB |
-| Container/orchestration | Docker + Kubernetes | |
+| Container/orchestration | Docker + Kubernetes | image/Helm version pin; LiveKit không dùng tag `latest` ở production |
 | Observability | Prometheus + Grafana, OpenTelemetry tracing, ELK/Loki | |
 | CI/CD | GitHub Actions → build image → deploy K8s | |
+
+Ba workload server ban đầu (`core-api`, `signaling-gateway`, LiveKit) là topology baseline, không phải lệnh cấm client/admin/worker. Capacity và điều kiện production nằm ở [11-nfr-and-production-readiness.md](./11-nfr-and-production-readiness.md).
 
 ---
 [← 03 · Architecture](./03-architecture.md) · [05 · Coding Standards →](./05-coding-standards.md)

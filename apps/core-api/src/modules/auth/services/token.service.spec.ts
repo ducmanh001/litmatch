@@ -1,11 +1,12 @@
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { getRepositoryToken } from '@nestjs/typeorm';
+import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
 
 import { TokenService } from './token.service';
 import { AuthErrors } from '../auth.errors';
 import { RefreshToken } from '../entities/refresh-token.entity';
+import { User } from '../../user';
 
 describe('TokenService', () => {
   const repo = {
@@ -13,6 +14,21 @@ describe('TokenService', () => {
     create: jest.fn((t: Partial<RefreshToken>) => t),
     findOneBy: jest.fn(),
     update: jest.fn(),
+  };
+  const txRefreshRepo = {
+    findOne: jest.fn(),
+    save: jest.fn((t: RefreshToken) => Promise.resolve(t)),
+    create: jest.fn((t: Partial<RefreshToken>) => t),
+    update: jest.fn(),
+  };
+  const txUserRepo = { findOneByOrFail: jest.fn() };
+  const manager = {
+    getRepository: jest.fn((entity: typeof RefreshToken | typeof User) =>
+      entity === RefreshToken ? txRefreshRepo : txUserRepo,
+    ),
+  };
+  const dataSource = {
+    transaction: jest.fn(async (cb: (m: typeof manager) => Promise<unknown>) => cb(manager)),
   };
   const jwt = { signAsync: jest.fn().mockResolvedValue('access.jwt') };
   const config = {
@@ -38,6 +54,7 @@ describe('TokenService', () => {
       providers: [
         TokenService,
         { provide: getRepositoryToken(RefreshToken), useValue: repo },
+        { provide: getDataSourceToken(), useValue: dataSource },
         { provide: JwtService, useValue: jwt },
         { provide: ConfigService, useValue: config },
       ],
@@ -54,31 +71,35 @@ describe('TokenService', () => {
     expect(saved.tokenHash).not.toContain(tokens.refreshToken);
   });
 
-  it('rotate thành công khi token còn hiệu lực và chưa rotate', async () => {
-    repo.findOneBy.mockResolvedValue(storedToken());
-    repo.update.mockResolvedValue({ affected: 1 });
+  it('rotate atomically và ký access token theo isGuest thật trong DB', async () => {
+    txRefreshRepo.findOne.mockResolvedValue(storedToken());
+    txUserRepo.findOneByOrFail.mockResolvedValue({ id: 'u1', isGuest: true });
     const result = await service.rotate('refresh-plain');
     expect(result.userId).toBe('u1');
     expect(result.tokens.refreshToken).toBeDefined();
+    expect(jwt.signAsync).toHaveBeenLastCalledWith({ sub: 'u1', isGuest: true }, { expiresIn: 900 });
+    expect(txRefreshRepo.save).toHaveBeenCalledTimes(2); // mark parent + insert child trong cùng transaction
   });
 
   it('token không tồn tại / hết hạn / đã revoke → AUTH_REFRESH_TOKEN_INVALID', async () => {
-    repo.findOneBy.mockResolvedValue(null);
+    txRefreshRepo.findOne.mockResolvedValue(null);
     await expect(service.rotate('x')).rejects.toMatchObject({ code: AuthErrors.REFRESH_TOKEN_INVALID });
 
-    repo.findOneBy.mockResolvedValue(storedToken({ expiresAt: new Date(Date.now() - 1000) }));
+    txRefreshRepo.findOne.mockResolvedValue(storedToken({ expiresAt: new Date(Date.now() - 1000) }));
     await expect(service.rotate('x')).rejects.toMatchObject({ code: AuthErrors.REFRESH_TOKEN_INVALID });
 
-    repo.findOneBy.mockResolvedValue(storedToken({ revokedAt: new Date() }));
+    txRefreshRepo.findOne.mockResolvedValue(storedToken({ revokedAt: new Date() }));
     await expect(service.rotate('x')).rejects.toMatchObject({ code: AuthErrors.REFRESH_TOKEN_INVALID });
   });
 
-  it('reuse (2 request song song cùng 1 token — UPDATE có điều kiện affected=0) → revoke cả family', async () => {
-    repo.findOneBy.mockResolvedValue(storedToken());
-    repo.update
-      .mockResolvedValueOnce({ affected: 0 }) // thua race đánh dấu rotated
-      .mockResolvedValueOnce({ affected: 3 }); // revokeFamily
+  it('reuse sau rotation revoke family trong transaction, bao gồm child đã commit', async () => {
+    txRefreshRepo.findOne.mockResolvedValue(storedToken({ rotatedAt: new Date() }));
+    txRefreshRepo.update.mockResolvedValue({ affected: 2 });
     await expect(service.rotate('stolen')).rejects.toMatchObject({ code: AuthErrors.REFRESH_TOKEN_REUSED });
-    expect(repo.update).toHaveBeenCalledWith({ familyId: 'fam1', revokedAt: expect.anything() }, expect.anything());
+    expect(txRefreshRepo.update).toHaveBeenCalledWith(
+      { familyId: 'fam1', revokedAt: expect.anything() },
+      { revokedAt: expect.any(Date) },
+    );
+    expect(jwt.signAsync).not.toHaveBeenCalled();
   });
 });

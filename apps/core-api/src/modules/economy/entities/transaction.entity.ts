@@ -3,6 +3,7 @@ import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 
 export enum TransactionType {
   IapPurchase = 'iap_purchase',
   VipPurchase = 'vip_purchase',
+  MatchingSpeedup = 'matching_speedup',
   Reversal = 'reversal',
   Adjustment = 'adjustment',
 }
