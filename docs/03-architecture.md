@@ -34,9 +34,9 @@ Chia 8 service từ ngày 0 nghĩa là: 8 lần deploy, 8 lần theo dõi log, 8
                 ▼
      ┌────────────────────┐
      │   Media Server      │
-     │  (mediasoup — tách   │
-     │   riêng bắt buộc,    │
-     │   là C++ subprocess, │
+     │  (LiveKit self-host  │
+     │   — tách riêng bắt   │
+     │   buộc, sidecar,     │
      │   không business logic)│
      └────────────────────┘
 ```
@@ -60,6 +60,8 @@ Chỉ tách 1 module ra khỏi `core-api` khi có **ít nhất 1** lý do cụ t
 Feed, Content, Avatar, Moderation, Notification gần như chắc chắn **không cần tách** cho tới khi có traffic thật đủ lớn.
 
 ## 3.5 mediasoup — cách scale đúng ngay từ đầu (tránh thiết kế sai)
+
+> **Ghi chú**: SFU đã chốt là **LiveKit self-host** (xem § 3.8.A) — mục này giữ lại làm tài liệu tham khảo về cách tính tải SFU: khái niệm worker/consumer và công thức N×(N-1) áp dụng nguyên cho LiveKit.
 
 - 1 **Worker** = 1 CPU core. 1 **Router** thường tương ứng 1 "room". Một worker chịu tải được khoảng 500 **consumer** (không phải 500 participant — mỗi participant trong phòng N người tạo ra N-1 consumer).
 - Voice Match 1-1 rất nhẹ: mỗi người chỉ nhận từ 1 người kia → 2 consumer/room → 1 worker chứa được hàng trăm phòng 1-1 cùng lúc, không cần lo scale phức tạp ở giai đoạn đầu.
@@ -91,6 +93,7 @@ Luồng `Matching → Calling → Economy` chạm vào nhiều module, không th
 - mediasoup là **thư viện xây SFU**, không phải sản phẩm hoàn chỉnh: tự quản lý worker sống/chết, tự viết logic route signaling tới đúng worker cho từng phòng, tự viết cơ chế nối nhiều router qua nhiều host (`pipeToRouter`) khi vượt quá 1 máy — toàn bộ phần "distributed" này Litmatch-scale thật sự cần, mediasoup không cho sẵn.
 - LiveKit đã đóng gói sẵn đúng bài toán này: cụm node LiveKit giống hệt nhau, đồng bộ qua Redis, 1 phòng có thể trải trên nhiều server vật lý, người dùng luôn nối vào node gần nhất — đây gọi là **cascading SFU / distributed mesh**, cùng ý tưởng với Octo của Jitsi nhưng LiveKit làm nó thành hành vi mặc định chứ không phải tính năng phải tự lắp. Một cụm LiveKit chạy được từ 1 tới hàng trăm node cùng cấu hình, và tài liệu LiveKit ghi nhận việc scale tới hàng triệu cuộc gọi đồng thời khi triển khai đúng theo mô hình mesh này.
 - **Khuyến nghị**: bắt đầu vẫn có thể dùng mediasoup (rẻ, tự chủ) cho các giai đoạn đầu. Nhưng vì roadmap đã xác định rõ mục tiêu Litmatch-scale, nên **đánh giá lại và chọn LiveKit self-host (hoặc LiveKit Cloud) làm nền Media Server chính** trước khi viết nhiều logic phụ thuộc vào cấu trúc mediasoup — chuyển SFU giữa chừng khi đã có hàng trăm phòng sống là việc cực tốn công. Quy tắc chọn nhanh: 1 node SFU xử lý tốt tới vài nghìn publisher; vượt ngưỡng đó bắt buộc cascade nhiều node theo vùng — Party Room (multi-party, N người) chạm ngưỡng này sớm hơn Voice Match 1-1 rất nhiều vì số consumer tăng theo N×(N-1).
+- **ĐÃ CHỐT (2026-07-10): dùng LiveKit self-host làm Media Server chính ngay từ Giai đoạn 2**, không bắt đầu bằng mediasoup rồi chuyển sau — đúng theo lập luận trên (mục tiêu Litmatch-scale đã xác định từ đầu, nên trả trước chi phí học LiveKit rẻ hơn nhiều chi phí đổi SFU giữa chừng). mediasoup chỉ còn là phương án dự phòng nếu LiveKit gặp trở ngại lớn không lường trước — đổi lại quyết định này thì sửa file này + [04-tech-stack.md](./04-tech-stack.md) trước khi code.
 
 ### B. Matching Queue phải shard theo tiêu chí + region ngay từ đầu, không chỉ 1 queue Redis duy nhất
 
@@ -103,7 +106,8 @@ Luồng `Matching → Calling → Economy` chạm vào nhiều module, không th
 - Cách làm phổ biến và an toàn nhất trong ngành fintech cho hệ tiền ảo ở quy mô lớn là dùng **double-entry ledger** thật sự — mỗi sự kiện tiền (nạp, trừ, gift, refund) được ghi thành **ít nhất 2 bút toán** (1 ghi Nợ, 1 ghi Có) vào 2 tài khoản nội bộ khác nhau (vd tài khoản `user_wallet:userId` và tài khoản `system_revenue` hoặc `gift_pool`), thay vì chỉ tăng/giảm 1 con số `balance`.
 - Lợi ích khi hệ thống lớn: **balance luôn được tính lại (derive) từ tổng các bút toán ledger** thay vì tin vào 1 cột số dư có thể lệch do bug; hệ thống **tự cân đối được** (tổng Nợ luôn bằng tổng Có, sai lệch là phát hiện được ngay bằng 1 câu query); và có sẵn cấu trúc để **đối soát (reconciliation)** với dữ liệu từ Apple/Google IAP khi có tranh chấp.
 - Balance hiển thị cho user (cần đọc nhanh) thì **cache/snapshot balance** như 1 dữ liệu dẫn xuất (derived), có thể rebuild lại bất cứ lúc nào từ ledger gốc nếu nghi ngờ sai lệch — không bao giờ coi bảng balance là nguồn sự thật (source of truth) duy nhất.
-- Idempotency key bắt buộc là **unique constraint ở tầng DB** trên bảng ledger (không chỉ check-rồi-insert ở tầng code, vì đó vẫn có race condition) — request trùng idempotency key thì trả lại chính kết quả bút toán cũ, không tạo bút toán mới.
+- Idempotency key bắt buộc là **unique constraint ở tầng DB**, đặt trên bảng `Transaction` (1 key cho cả giao dịch nghiệp vụ) — **KHÔNG đặt unique trên bảng `LedgerEntry`**: mỗi giao dịch tạo ≥2 bút toán cùng thuộc 1 key, unique ở tầng ledger sẽ chặn chính bút toán thứ 2 của giao dịch hợp lệ. Các `LedgerEntry` trỏ về `transaction_id`. Không chỉ check-rồi-insert ở tầng code (vẫn có race condition) — request trùng idempotency key thì trả lại chính kết quả giao dịch cũ, không tạo bút toán mới.
+- Snapshot `Wallet.balance` được cập nhật trong **cùng transaction DB** với thao tác append bút toán ledger (không async qua event) — nhờ đó bước "check đủ diamond trước khi trừ" dựa trên snapshot + `SELECT ... FOR UPDATE` là an toàn. Chỉ chuyển sang cập nhật async khi số liệu thật cho thấy contention thực sự — và khi đó phải thiết kế lại luôn cả bước check số dư đi kèm, không đổi lẻ 1 nửa.
 - Ở giai đoạn scale thật, cân nhắc PostgreSQL với constraint chặt + partition theo thời gian là đủ cho phần lớn trường hợp; chỉ cân nhắc engine ledger chuyên dụng (vd TigerBeetle) nếu throughput giao dịch tiền vượt quá khả năng Postgres đã tối ưu (đây là quyết định đo bằng số liệu thật, không phải mặc định).
 
 ---

@@ -6,8 +6,8 @@ Sidecar Pattern: tầng "cơ bắp" chuyển tiếp gói RTP, **tuyệt đối k
 
 ## Riêng cho app này
 
-- **Chọn mediasoup hay LiveKit theo mục tiêu scale** — quyết định này nên chốt sớm, đổi giữa chừng khi đã có phòng sống là rất tốn kém. Xem `../../docs/03-architecture.md § 3.8.A` trước khi implement.
-- Nếu dùng mediasoup: 1 Worker = 1 CPU core, 1 Router ≈ 1 room, ước lượng ~500 consumer/worker (không phải 500 participant — N người trong phòng tạo N-1 consumer/người). Xem `../../docs/03-architecture.md § 3.5`.
+- **SFU đã chốt: LiveKit self-host** (`../../docs/03-architecture.md § 3.8.A` + `../../docs/04-tech-stack.md`) — không bắt đầu bằng mediasoup; muốn đổi thì sửa 2 file docs đó trước khi code.
+- Ước lượng tải: N người trong phòng tạo N-1 consumer/người (tổng consumer tăng theo N×(N-1)) — cách tính chi tiết ở `../../docs/03-architecture.md § 3.5` (viết cho mediasoup nhưng công thức áp dụng nguyên cho LiveKit).
 - **Giới hạn cứng số speaker/phòng** (config được từ `core-api`, không hardcode ở đây) — Party Room chạm ngưỡng tải sớm hơn Voice Match rất nhiều vì consumer tăng theo N×(N-1).
 - Giải phóng room ngay khi call/party kết thúc — không giải phóng đúng lúc gây leak resource, xem `../../docs/10-code-review-checklist.md § Calling/Signaling/SFU`.
-- Việc cascade nhiều node (`pipeToRouter` hoặc LiveKit mesh) là việc của vận hành ở quy mô lớn (`../../docs/07-roadmap.md § Giai đoạn 7`), không phải việc dựng nền tảng ban đầu.
+- Việc cascade nhiều node (LiveKit mesh) là việc của vận hành ở quy mô lớn (`../../docs/07-roadmap.md § Giai đoạn 7`), không phải việc dựng nền tảng ban đầu.

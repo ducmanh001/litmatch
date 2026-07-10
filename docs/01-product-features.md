@@ -15,11 +15,13 @@
 | 7 | **Avatar tuỳ chỉnh** | Không cần ảnh thật, chọn/tạo avatar giữ ẩn danh | Thấp — quản lý asset (item, layer ghép hình) |
 | 8 | **Diamond (tiền ảo) + VIP Membership** | Hệ kinh tế xuyên suốt: mua diamond, VIP subscription, mọi tính năng trả phí đều trừ diamond | Cao — xương sống tiền bạc, cần transaction chuẩn, chống gian lận, tích hợp IAP (Apple/Google) |
 | 9 | **Speed-up matching** | Trả diamond để ưu tiên ghép nhanh hơn trong queue | Thấp-Trung bình |
-| 10 | **Gift trong Party room / Voice call** | Tặng quà ảo, hiệu ứng, đối phương nhận diamond/exp | Trung bình — trừ/cộng diamond + trigger animation event realtime |
+| 10 | **Gift trong Party room / Voice call** | Tặng quà ảo, hiệu ứng; người nhận nhận **điểm quy đổi/exp theo tỉ lệ config, KHÔNG phải diamond 1:1** (chống rửa diamond — xem [06-domain-rules.md](./06-domain-rules.md)) | Trung bình — trừ diamond + cộng điểm quy đổi + trigger animation event realtime |
 | 11 | **Mini game** (đua xe, giải đố) | Chơi game nhỏ trong lúc chat để tăng tương tác | Thấp (ưu tiên thấp nhất) |
 | 12 | **Report / Block** | Tố cáo, chặn người dùng | Trung bình — trust & safety, ảnh hưởng matching |
 | 13 | **Bộ lọc tuổi/giới tính khi match** | Filter cơ bản trước khi vào queue | Thấp |
 | 14 | Giới hạn theo platform | Bản iOS Litmatch **chỉ có Soul Match + Voice Match** (Apple hạn chế tính năng live/random call kiểu group), Android có đủ | Cần lưu ý chính sách store khi lên production |
+| 15 | **Friend Chat (nhắn tin 1-1)** | Đích đến của phễu matching: cả 2 "Thích" → thành bạn → chat 1-1 lâu dài (khác chat ẩn danh tạm thời trong Soul Match) | Trung bình — messaging realtime + lưu lịch sử + block/report áp dụng cho chat |
+| 16 | **Đăng ký / Onboarding** | Phone OTP hoặc social login (Google/Apple/Facebook); **guest account** dùng thử với tính năng bị giới hạn cho tới khi gắn số điện thoại/social | Trung bình — auth đa phương thức + ràng buộc tuổi tối thiểu (xem [06-domain-rules.md](./06-domain-rules.md)) |
 
 **Nhận xét quan trọng:** Litmatch không phải app "chỉ có voice call" — nó là **social-entertainment platform** với voice/text matching làm lõi, xoay quanh **1 hệ kinh tế diamond** để monetize toàn bộ. Nếu "bê nguyên" tính năng, thì **Diamond/Economy module** mới là phần phải thiết kế chắc nhất ngay từ đầu — không phải Voice Match.
 
