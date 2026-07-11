@@ -68,3 +68,4 @@ Mobile/admin client chưa nằm trong repo này; trước khi build phải chố
 - `LedgerEntry` double-entry append-only là nguồn sự thật; Wallet chỉ là snapshot.
 - Postgres là business source of truth của Matching; Redis queue là index dẫn xuất và phải rebuild được.
 - `implemented` không đồng nghĩa `production-ready`; provider/media/safety/DR gate cần evidence riêng.
+# litmatch
