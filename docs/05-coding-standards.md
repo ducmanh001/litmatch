@@ -46,7 +46,14 @@ src/
  `-- main.ts
 ```
 
-Mỗi module nghiệp vụ khác (auth, user, social, content, moderation, notification, gift) đi theo đúng bộ khung `*.controller.ts / *.service.ts / *.module.ts / dto/ / entities/ / events/` như ví dụ `matching/` ở trên.
+Mỗi module nghiệp vụ khác (auth, user, social, content, moderation, notification, gift) đi theo đúng bộ khung `*.controller.ts / *.service.ts / *.module.ts / dto/ / entities/ / events/` như ví dụ `matching/` ở trên. **Sinh module mới bằng skill `/new-module`** — thứ tự sinh file cố định + tự nối vào các mảnh khung dùng chung:
+
+- `BaseAppEntity` (`src/common/entities/base.entity.ts`): uuid PK + createdAt/updatedAt — opt-in, entity có PK nghiệp vụ riêng hoặc bảng append-only thì tự khai cột.
+- `@IdempotencyKey()` + `@ApiIdempotencyKeyHeader()` (`src/common/decorators/idempotency-key.decorator.ts`): chuẩn duy nhất để nhận idempotency key ở controller — validate bắt buộc + độ dài, service chỉ còn lo prefix theo domain + unique constraint DB.
+- `CursorPageQueryDto` / `encodeCursor` / `decodeCursor` / `buildCursorPage` (`@litmatch/common-dtos`): chuẩn duy nhất cho list cursor-based — query `limit + 1` rồi đưa qua `buildCursorPage`.
+- `DomainException` + `<Module>Errors` trong `*.errors.ts` (`@litmatch/common-exceptions`).
+
+Khung chỉ cứng ở tầng hình thái này — business logic trong service tự do, không abstract hoá nghiệp vụ.
 
 ## 5.4 API contract
 
@@ -87,7 +94,7 @@ Mỗi module nghiệp vụ khác (auth, user, social, content, moderation, notif
 
 ## 5.9 Testing & git convention
 
-- Coverage tối thiểu **80% cho service layer** (gate ở CI); riêng Economy/Matching bắt buộc thêm **test race-condition** (2 request song song cùng trừ tiền / cùng lấy 1 user khỏi queue) — xem [10-code-review-checklist.md § 10.1.E](./10-code-review-checklist.md).
+- Coverage đích **80% cho service layer**, enforce bằng `coverageThreshold` trong `apps/core-api/jest.config.cts` chạy ở CI với `--coverage` — ngưỡng là **ratchet chỉ nâng không hạ** (sàn hiện tại thấp hơn 80 vì `iap-refund-poll`/`outbox-relay` chưa có test, xem comment trong file config; bổ sung test thì nâng ngưỡng lên trong cùng PR). Lưu ý: đo coverage phải kèm `INTEGRATION_DB_URL` (Economy test chủ yếu là integration) và `--skip-nx-cache` khi cần số thật. Riêng Economy/Matching bắt buộc thêm **test race-condition** (2 request song song cùng trừ tiền / cùng lấy 1 user khỏi queue) — xem [10-code-review-checklist.md § 10.1.E](./10-code-review-checklist.md).
 - e2e bắt buộc cho: mua diamond, gift, matching → call → billing, refund/reversal (chạy với Postgres/Redis thật qua testcontainers hoặc docker-compose CI).
 - Event schema có field `version`; consumer phải chịu được version cũ — thêm field là non-breaking, đổi/xoá field phải lên version mới.
 - Commit theo Conventional Commits, scope là tên module: `feat(economy): ...`, `fix(matching): ...`.

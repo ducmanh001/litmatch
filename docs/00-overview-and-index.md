@@ -19,6 +19,7 @@
 | 9 | [09-practical-notes.md](./09-practical-notes.md) | Lưu ý thực tế, tránh vỡ trận giữa đường |
 | 10 | [10-code-review-checklist.md](./10-code-review-checklist.md) | **Checklist review code — 10.0 phương pháp luận lỗi logic nghiệp vụ, 10.1 lỗi chung, 10.2 lỗi đặc thù từng domain, 10.3 cách áp dụng** |
 | — | [services/economy-service.md](./services/economy-service.md) | **Đặc tả chi tiết Economy module**: schema ledger, loại tài khoản, bất biến, luồng IAP/VIP, quy tắc concurrency |
+| — | [adr/](./adr/README.md) | Architecture Decision Records — lịch sử các quyết định đã chốt (bối cảnh, phương án loại, hệ quả); 03 là trạng thái đích, ADR là lý do lịch sử |
 | — | [sources.md](./sources.md) | Nguồn tham khảo đã dùng để nghiên cứu bộ docs này |
 
 ## Đường dẫn đọc gợi ý theo tình huống

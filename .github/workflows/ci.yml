@@ -58,8 +58,9 @@ jobs:
       - name: Lint
         run: pnpm nx run-many -t lint
 
-      - name: Unit test (kèm arch test module boundaries)
-        run: pnpm nx run-many -t test
+      - name: Unit + integration test (kèm arch test module boundaries, gate coverage service layer)
+        # --coverage kích hoạt coverageThreshold trong apps/core-api/jest.config.cts (docs/05 § 5.9)
+        run: pnpm nx run-many -t test --coverage
 
       - name: Build
         run: pnpm nx run-many -t build
