@@ -1,4 +1,6 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Column, Entity } from 'typeorm';
+
+import { BaseAppEntity } from '../../../common/entities/base.entity';
 
 export enum Gender {
   Unknown = 'unknown',
@@ -13,10 +15,7 @@ export enum UserStatus {
 }
 
 @Entity({ name: 'users' })
-export class User {
-  @PrimaryGeneratedColumn('uuid')
-  id!: string;
-
+export class User extends BaseAppEntity {
   @Column({ length: 50 })
   nickname!: string;
 
@@ -41,10 +40,4 @@ export class User {
 
   @Column({ default: false })
   isGuest!: boolean;
-
-  @CreateDateColumn({ type: 'timestamptz' })
-  createdAt!: Date;
-
-  @UpdateDateColumn({ type: 'timestamptz' })
-  updatedAt!: Date;
 }

@@ -8,7 +8,7 @@ Hệ thống social-entertainment kiểu Litmatch: voice/text matching ẩn danh
 
 1. **Chỉ 3 thành phần deploy riêng biệt**: `apps/core-api`, `apps/signaling-gateway`, `apps/media-server`. Mọi domain khác (auth, user, matching, economy, social, content, moderation, notification, gift, party-room, feed, avatar...) là **module NestJS bên trong `apps/core-api`**, KHÔNG phải app/service riêng. Không tự ý tạo app thứ 4. Chi tiết + lý do: `docs/03-architecture.md`.
 2. **Economy/diamond**: `LedgerEntry` (double-entry, append-only) là nguồn sự thật duy nhất; idempotency key là unique constraint ở tầng DB trên bảng `Transaction` (1 key/giao dịch — KHÔNG đặt unique trên `LedgerEntry` vì 1 giao dịch có ≥2 bút toán). `Wallet.balance` chỉ là snapshot dẫn xuất, không bao giờ được coi là nguồn sự thật. Không update/xoá dòng ledger cũ — sửa sai bằng bút toán đảo (reversal entry) mới. Chi tiết: `docs/03-architecture.md § 3.8.C`, `docs/02-domain-model.md`.
-3. **Trước khi báo 1 task/module là "xong"**: tự chấm lại theo `docs/10-code-review-checklist.md`, bắt đầu từ § 10.0 (liệt kê luồng nghiệp vụ + giả định đang đặt ra về hành vi user, rồi xác nhận từng giả định có bị phá vỡ được không). Đây là bước bắt buộc, không phải tuỳ chọn — đặc biệt cho mọi thứ động tới Economy/Matching/Calling/Gift/Party Room.
+3. **Trước khi báo 1 task/module là "xong"**: tự chấm lại theo `docs/10-code-review-checklist.md` bằng skill **`/review-module`** (`plan` trước khi code, `verify` trước khi báo xong — output template cố định, verify FAIL thì chưa được báo xong). Đây là bước bắt buộc, không phải tuỳ chọn — đặc biệt cho mọi thứ động tới Economy/Matching/Calling/Gift/Party Room.
 
 ## Bản đồ docs (đọc file tương ứng trước khi động vào phần đó, đừng đoán từ trí nhớ)
 
@@ -53,6 +53,6 @@ INTEGRATION_DB_URL=postgresql://litmatch:litmatch_local@localhost:5432/litmatch_
 - Swagger dev: `http://localhost:<PORT>/docs`. LiveKit local: `docker compose -f apps/media-server/docker-compose.yml up -d`.
 - Test 1 project: `pnpm nx test core-api`. Docker image: `pnpm nx build core-api && docker build -f apps/core-api/Dockerfile .`
 
-## Giới hạn của file này
+## Giới hạn của file này & guardrail cứng
 
-File này là ngữ cảnh Claude đọc và cố gắng tuân theo, không phải cấu hình chặn cứng — nếu 1 hành vi bắt buộc phải chặn tuyệt đối (không chỉ "cố gắng tuân theo"), cần thêm hook riêng (xem tài liệu Claude Code về hooks), không chỉ dựa vào file này.
+File này là ngữ cảnh Claude đọc và cố gắng tuân theo, không phải cấu hình chặn cứng. Các luật phải chặn tuyệt đối đã có **hook** tại `.claude/hooks/pre-tool-guard.mjs` (đăng ký trong `.claude/settings.json`), chặn: tạo app thứ 4 trong `apps/`, `synchronize: true`, sửa/xoá migration đã commit, UPDATE/DELETE `ledger_entries`. Bị hook chặn nghĩa là đang vi phạm 1 trong các luật trên — sửa cách làm hoặc hỏi user, không tìm cách lách. Muốn thêm luật chặn cứng mới: sửa hook đó, không chỉ thêm chữ vào file này.
