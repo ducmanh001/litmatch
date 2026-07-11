@@ -2,12 +2,12 @@
 
 # Litmatch-style System — Hướng dẫn cho Claude Code
 
-Hệ thống social-entertainment kiểu Litmatch: voice/text matching ẩn danh làm lõi, xoay quanh Economy diamond. Mục tiêu dài hạn là quy mô lớn, nhưng mọi scale/release claim phải có NFR + evidence theo `docs/11-nfr-and-production-readiness.md`. Xem @README.md để biết trạng thái repo.
+Hệ thống social-entertainment kiểu Litmatch: voice/text matching ẩn danh làm lõi, xoay quanh 1 hệ kinh tế diamond (Economy) để monetize. Mục tiêu là quy mô Litmatch thật (hàng trăm nghìn – hàng triệu người dùng đồng thời), **không phải MVP**. Xem @README.md để biết tổng quan repo.
 
 ## 3 luật không được vi phạm (dừng lại và hỏi lại nếu code đang đi ngược 1 trong 3 điều này)
 
-1. **Boundary server**: baseline có 3 server workload family — `core-api`, `signaling-gateway`, LiveKit (`apps/media-server` là config). Mọi business domain khác là module NestJS trong `core-api` cho tới khi có ADR + metric theo `docs/03-architecture.md § 3.4`. Luật này không cấm mobile/web/admin client, infrastructure, migration job hay worker cùng codebase; worker phải ghi ownership/idempotency/scaling semantics.
-2. **Economy/diamond**: `LedgerEntry` double-entry, append-only là nguồn sự thật; idempotency ở transaction nghiệp vụ, scope theo operation + actor (không đặt unique trên từng LedgerEntry). `Wallet.balance` chỉ là snapshot dẫn xuất. Không update/xoá ledger cũ — sửa bằng reversal mới. Chi tiết: `docs/03-architecture.md § 3.8.C`, `docs/services/economy-service.md`; production gap hiện tại ở roadmap R-004/R-005.
+1. **Chỉ 3 thành phần deploy riêng biệt**: `apps/core-api`, `apps/signaling-gateway`, `apps/media-server`. Mọi domain khác (auth, user, matching, economy, social, content, moderation, notification, gift, party-room, feed, avatar...) là **module NestJS bên trong `apps/core-api`**, KHÔNG phải app/service riêng. Không tự ý tạo app thứ 4. Chi tiết + lý do: `docs/03-architecture.md`.
+2. **Economy/diamond**: `LedgerEntry` (double-entry, append-only) là nguồn sự thật duy nhất; idempotency key là unique constraint ở tầng DB trên bảng `Transaction` (1 key/giao dịch — KHÔNG đặt unique trên `LedgerEntry` vì 1 giao dịch có ≥2 bút toán). `Wallet.balance` chỉ là snapshot dẫn xuất, không bao giờ được coi là nguồn sự thật. Không update/xoá dòng ledger cũ — sửa sai bằng bút toán đảo (reversal entry) mới. Chi tiết: `docs/03-architecture.md § 3.8.C`, `docs/02-domain-model.md`.
 3. **Trước khi báo 1 task/module là "xong"**: tự chấm lại theo `docs/10-code-review-checklist.md`, bắt đầu từ § 10.0 (liệt kê luồng nghiệp vụ + giả định đang đặt ra về hành vi user, rồi xác nhận từng giả định có bị phá vỡ được không). Đây là bước bắt buộc, không phải tuỳ chọn — đặc biệt cho mọi thứ động tới Economy/Matching/Calling/Gift/Party Room.
 
 ## Bản đồ docs (đọc file tương ứng trước khi động vào phần đó, đừng đoán từ trí nhớ)
@@ -25,14 +25,12 @@ Hệ thống social-entertainment kiểu Litmatch: voice/text matching ẩn danh
 | Quy trình giao việc/review theo giai đoạn | `docs/08-working-with-claude-code.md` |
 | Lỗi hay gặp cần tránh khi triển khai | `docs/09-practical-notes.md` |
 | **Tự review trước khi báo "xong"** | `docs/10-code-review-checklist.md` |
-| NFR, capacity, security/data-safety và production gate | `docs/11-nfr-and-production-readiness.md` |
-| Matching M1 state/durability/fairness | `docs/services/matching-service.md` |
 
 ## Quy trình làm việc mặc định
 
-- Làm đúng **một task ID/slice có acceptance rõ** trong `docs/07-roadmap.md` mỗi lần. `[x] implemented` không được diễn giải thành production-ready; provider/load/safety/DR gate cần evidence riêng.
+- Làm **đúng 1 giai đoạn** trong `docs/07-roadmap.md` mỗi lần, tick `[x]` khi xong, dừng lại để review trước khi sang giai đoạn tiếp theo — không tự ý nhảy cóc.
 - Viết test song song với feature, không dồn cuối.
-- Mọi API động tới diamond: idempotency key scope theo operation+actor, canonical request hash, DB constraint + transaction (`SELECT ... FOR UPDATE` hoặc optimistic lock). Không hardcode giá/threshold — đưa vào config/catalog và snapshot policy/price áp dụng.
+- Mọi API động tới diamond: idempotency key bắt buộc + transaction DB (`SELECT ... FOR UPDATE` hoặc optimistic lock). Không hardcode giá/threshold — đưa vào `.env` + `ConfigModule`.
 - Nếu 1 quyết định cần thiết chưa có trong `docs/`, đề xuất phương án + lý do, hỏi lại thay vì tự ý quyết rồi im lặng — đặc biệt với bất cứ điều gì ảnh hưởng tới 3 luật ở trên.
 - Khi phát hiện `docs/` sai hoặc thiếu 1 domain rule quan trọng trong lúc code thật: sửa trực tiếp vào file `docs/` tương ứng (không chỉ sửa trong hội thoại rồi để trôi mất), rồi tiếp tục.
 

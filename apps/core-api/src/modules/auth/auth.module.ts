@@ -11,7 +11,7 @@ import { AuthIdentity } from './entities/auth-identity.entity';
 import { PhoneOtp } from './entities/phone-otp.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { OtpService } from './services/otp.service';
-import { DevSmsProvider, SmsProvider, UnavailableSmsProvider } from './services/sms-provider';
+import { DevSmsProvider, SmsProvider } from './services/sms-provider';
 import { SocialVerifierService } from './services/social-verifier';
 import { TokenService } from './services/token.service';
 
@@ -33,16 +33,7 @@ import { TokenService } from './services/token.service';
     TokenService,
     OtpService,
     SocialVerifierService,
-    {
-      provide: SmsProvider,
-      inject: [ConfigService],
-      // Factory chỉ khởi tạo implementation được chọn. Production fail-closed riêng
-      // endpoint OTP cho tới khi cắm provider thật; tuyệt đối không log OTP giả.
-      useFactory: (config: ConfigService): SmsProvider =>
-        config.getOrThrow<string>('NODE_ENV') === 'production'
-          ? new UnavailableSmsProvider()
-          : new DevSmsProvider(),
-    },
+    { provide: SmsProvider, useClass: DevSmsProvider }, // đổi sang provider thật khi tích hợp SMS
   ],
   exports: [],
 })

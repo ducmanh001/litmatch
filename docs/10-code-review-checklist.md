@@ -1,4 +1,4 @@
-[← 09 · Practical Notes](./09-practical-notes.md) · **10 · Code Review Checklist** · [11 · NFR & Production Readiness →](./11-nfr-and-production-readiness.md)
+[← 09 · Practical Notes](./09-practical-notes.md) · **10 · Code Review Checklist** · [sources →](./sources.md)
 
 # 10. Checklist Review Code — lỗi phổ quát + lỗi logic nghiệp vụ + lỗi đặc thù dự án
 
@@ -108,7 +108,7 @@
 **Matching — nơi dễ sai logic ghép cặp**
 - Race condition: 2 matching worker cùng lấy 1 user ra khỏi queue và ghép với 2 người khác nhau cùng lúc → user bị match đôi (khắc phục bằng lock/Lua script atomic khi lấy user ra khỏi queue, xem [03-architecture.md § 3.8.B](./03-architecture.md))
 - User rớt kết nối giữa chừng nhưng không bị xoá khỏi queue → "zombie" chiếm chỗ mãi trong hàng đợi
-- Chỉ check Safety lúc vào queue, không re-check block hai chiều/enforcement/age tại pair commit → vẫn ghép người vừa bị block/restrict ([Safety spec § 10](./services/safety-service.md))
+- Chỉ check điều kiện block/report lúc vào queue, không check lại tại thời điểm ghép thật → vẫn ghép nhầm người vừa bị block sau đó (vi phạm nguyên tắc § 10.0.C — "xác minh lại đúng thời điểm hành động")
 - Thiếu rate-limit số lần match/giờ → bot có thể spam tạo queue ảo
 - **Ticket (yêu cầu ghép) không có state machine rõ ràng** (`queued → matched → confirmed → expired/cancelled`) → dễ xảy ra trạng thái mơ hồ khi 2 sự kiện đến gần như đồng thời (vd user vừa cancel vừa được match)
 - Ở quy mô lớn: 1 queue Redis duy nhất không shard theo region/tiêu chí → matcher trở thành hotspot, hoặc match ra 2 người cách nhau nửa vòng trái đất (latency cao khi call)
@@ -118,7 +118,7 @@
 - Không giải phóng room trên SFU khi call kết thúc → leak resource, media server quá tải dần
 - Billing tick vẫn tiếp tục trừ tiền vài giây sau khi call đã thực sự kết thúc (race giữa event `call.ended` và job trừ tiền định kỳ)
 - Không có timeout cho WebSocket signaling → client đơ giữa chừng làm cả 2 bên treo mãi không thoát được phòng
-- **Ở quy mô lớn** ([03-architecture.md § 3.5](./03-architecture.md)): một LiveKit self-host room phải fit một node; không giả định room tự cascade. Hard-cap speaker/participant theo capacity test `publisher × subscriber`, route room mới sang node khác và drain node an toàn
+- **Ở quy mô lớn** ([03-architecture.md § 3.8.A](./03-architecture.md)): 1 SFU node nhận quá nhiều consumer (Party Room đông người) mà không cascade/route sang node khác → nghẽn hoặc rớt media; cần giới hạn cứng số speaker/phòng cho tới khi có cơ chế cascade
 - Signaling gửi lệnh điều khiển media (mute, kick, đổi quyền) mà không đợi ACK từ Media Server → state ở signaling nói "đã mute" nhưng thực tế Media Server chưa xử lý xong, gây lệch trạng thái UI/thực tế
 - Free-call timer (7 phút/2-3 phút) tính ở client, server chỉ tin báo cáo từ client → user sửa client để gọi miễn phí vô hạn; timer bắt buộc phải tính và enforce ở server
 
@@ -146,29 +146,23 @@
 **Distributed system (cross-cutting, áp dụng cả khi còn là modular monolith lẫn khi đã tách service)**
 - Publish event trước khi transaction DB commit xong → consumer nhận event nhưng data chưa thực sự tồn tại (dual-write problem) → nên dùng **Outbox Pattern**
 - Event xử lý không idempotent → nếu Kafka/RabbitMQ gửi lại message (retry), xử lý 2 lần gây lệch dữ liệu (vd cộng diamond 2 lần) → dùng **Inbox Pattern**, kiểm tra event id đã xử lý chưa trước khi xử lý
-- Không có timeout/circuit breaker/bulkhead ở **network boundary** sau khi tách service/provider → 1 phần chết kéo sập chuỗi; không áp circuit breaker máy móc cho DI call cùng process
+- Không có circuit breaker khi gọi Economy module từ Matching/Calling → 1 phần chết kéo sập cả chuỗi
 - Không xử lý thứ tự event (vd `call.started` xử lý sau `call.ended` do độ trễ mạng) → sai trạng thái session
 
-**Trust & Safety / tuân thủ — review cùng [Safety R-007 spec](./services/safety-service.md)**
-- Coi DOB tự khai là age assurance; không có policy theo market/expiry/manual fallback, suspected-minor restriction/escalation và appeal
-- Block lưu directed nhưng chỉ enforce một chiều, hoặc chỉ ẩn UI; phải deny interaction nếu active block ở bất kỳ chiều nào và re-check ở pair/message/token/join/speaker/gift/feed boundary
-- Block/unblock/report không có operation scope + request hash + DB transaction/audit, nên retry/race tạo duplicate hoặc state/audit lệch; unblock vô tình khôi phục friendship/invite cũ
-- Report priority/trust penalty do client chọn hoặc auto-punish ngay khi submit; thiếu chống brigading/correlated false report/rate limit và làm lộ reporter cho subject
-- Evidence nhận arbitrary URL/blob/base64, không verify ownership/provenance/hash/scan, không encryption/retention/legal hold/access audit; moderator có thể xem/export không purpose/authorization
-- Hai moderator claim/decide cùng case, sửa decision cũ thay vì append superseding decision, enforcement/cache/event reorder làm restriction cũ sống lại
-- Appeal do chính reviewer ban đầu xử lý, không có eligibility/SLA/independent review; overturn không atomic với lift enforcement/notification/audit
-- Device/IP bị coi là identity chắc chắn và permanent-ban nhiều account dùng chung; thiếu confidence/expiry/privacy/false-positive recovery
-- Minor/emergency signal không page specialist/on-call hoặc ngược lại tự động disclosure/ban không qua policy/human authorization/runbook
-- Enforcement chỉ ở Auth/Matching create, không re-check tại action boundary; Safety outage silently fail-open cho pair/message/call/party/gift high-risk
+**Trust & Safety / tuân thủ — đặc thù nhạy cảm của app match ẩn danh với người lạ**
+- Thiếu cơ chế xác thực độ tuổi đủ mạnh khi đăng ký (chỉ hỏi tuổi qua form, không có gì ngăn khai gian) — đây là rủi ro pháp lý/reputation nghiêm trọng cho loại app ghép ngẫu nhiên qua voice/video với người lạ, nên bắt buộc có tầng kiểm soát (hạn chế tính năng cho tài khoản chưa xác minh, ưu tiên xử lý nhanh các report liên quan đến trẻ vị thành niên)
+- Trust score bị hạ nhưng không có audit log → khó điều tra khi có khiếu nại
+- Report bị lạm dụng để "vote kick" người khác (report giả hàng loạt) nhưng hệ thống không rate-limit hay phát hiện pattern bất thường
+- Unmatch/block chỉ ẩn ở UI nhưng vẫn cho phép bên kia tìm lại qua tính năng khác (feed, party room công khai) → "block" không thực sự cắt hết điểm chạm giữa 2 user
 
 > Danh sách trên không đầy đủ — khi bắt đầu 1 domain mới chưa có ở đây (vd Movie Match, Palm Match), viết thêm 1 mục con mới theo đúng cấu trúc và tư duy của § 10.0, thay vì chỉ áp checklist cũ.
 
 ## 10.3 Cách áp dụng checklist này
 
 - **Luôn bắt đầu bằng § 10.0** (liệt kê luồng + giả định) trước khi đọc code chi tiết — đây là bước hay bị bỏ qua nhất, vì tư duy tự nhiên là đọc code trước, nhưng lỗi logic nghiệp vụ chỉ lộ ra khi tư duy theo luồng nghiệp vụ trước, code sau.
-- Dùng làm **PR review template**: mỗi PR liên quan tới Economy/Matching/Calling/Party Room/Feed/Gift/Avatar/Safety phải tick đúng mục ở § 10.2; Safety còn phải đối chiếu acceptance ở [Safety spec § 14](./services/safety-service.md).
+- Dùng làm **PR review template**: mỗi PR liên quan tới Economy/Matching/Calling/Party Room/Feed/Gift/Avatar/Trust & Safety phải tick qua đúng mục tương ứng ở § 10.2 trước khi merge.
 - Yêu cầu Claude Code **tự chấm lại code theo đúng § 10.0, 10.1 và 10.2** sau khi viết xong 1 module, trước khi báo "xong" — coi đây là bước bắt buộc, không phải tuỳ chọn. Có thể yêu cầu Claude Code viết ra rõ ràng: "các giả định về hành vi user mà module này đang đặt ra là gì, và mỗi giả định được chặn ở đâu trong code."
 - Định kỳ (mỗi giai đoạn) đưa lại phần § 10.2 cho Claude Code đọc, vì mỗi giai đoạn mới sẽ có nhóm lỗi đặc thù khác nhau nổi lên.
 
 ---
-[← 09 · Practical Notes](./09-practical-notes.md) · [11 · NFR & Production Readiness →](./11-nfr-and-production-readiness.md)
+[← 09 · Practical Notes](./09-practical-notes.md) · [sources →](./sources.md)

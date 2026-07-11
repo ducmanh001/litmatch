@@ -139,24 +139,6 @@ export class LedgerService {
       withinTransaction?: (manager: EntityManager, reversalTxn: LedgerTransaction) => Promise<void>;
     } = {},
   ): Promise<RecordResult> {
-    const existingReversal = await this.dataSource
-      .getRepository(LedgerTransaction)
-      .findOneBy({ idempotencyKey });
-    if (existingReversal) {
-      if (
-        existingReversal.type === TransactionType.Reversal &&
-        existingReversal.reversalOf === originalTransactionId &&
-        existingReversal.metadata['reason'] === reason &&
-        (opts.actorUserId === undefined || existingReversal.actorUserId === opts.actorUserId)
-      ) {
-        return { transaction: existingReversal, replayed: true };
-      }
-      throw new DomainException(
-        EconomyErrors.IDEMPOTENCY_CONFLICT,
-        'Idempotency key đã dùng cho 1 request khác nội dung',
-        409,
-      );
-    }
     const original = await this.dataSource
       .getRepository(LedgerTransaction)
       .findOneBy({ id: originalTransactionId });
@@ -254,9 +236,6 @@ export class LedgerService {
       type: input.type,
       actorUserId: input.actorUserId ?? null,
       reversalOf: input.reversalOf ?? null,
-      // Metadata chứa business payload không thể suy ra từ entries (planId, ticketId,
-      // reason reversal...). Bỏ nó khỏi hash sẽ cho phép cùng key replay 1 request khác.
-      metadata: this.canonicalize(input.metadata ?? {}),
       entries: input.entries.map((e) => ({
         k: e.accountKind,
         u: e.userId ?? null,
@@ -289,31 +268,20 @@ export class LedgerService {
     };
     const found = await manager.getRepository(LedgerAccount).findOneBy(where);
     if (found) return found;
-
-    // Không catch 23505 bên trong transaction Postgres: sau unique violation, transaction đã
-    // aborted và query findOne tiếp theo chỉ nhận 25P02. Upsert idempotent không làm transaction
-    // rơi vào failed state khi 2 giao dịch cùng tạo account lần đầu.
-    await manager.query(
-      `INSERT INTO ledger_accounts (kind, user_id, currency)
-       VALUES ($1, $2, $3)
-       ON CONFLICT DO NOTHING`,
-      [entry.accountKind, isUserAccount ? (entry.userId as string) : null, entry.currency],
-    );
-    return manager.getRepository(LedgerAccount).findOneByOrFail(where);
-  }
-
-  /** JSON canonical đệ quy: object key order không được làm cùng payload sinh hash khác. */
-  private canonicalize(value: unknown): unknown {
-    if (Array.isArray(value)) return value.map((item) => this.canonicalize(item));
-    if (value instanceof Date) return value.toISOString();
-    if (value !== null && typeof value === 'object') {
-      return Object.fromEntries(
-        Object.entries(value as Record<string, unknown>)
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-          .map(([key, child]) => [key, this.canonicalize(child)]),
+    try {
+      return await manager.save(
+        manager.create(LedgerAccount, {
+          kind: entry.accountKind,
+          userId: isUserAccount ? (entry.userId as string) : null,
+          currency: entry.currency,
+        }),
       );
+    } catch (err) {
+      if ((err as { code?: string }).code === PG_UNIQUE_VIOLATION) {
+        return manager.getRepository(LedgerAccount).findOneByOrFail(where);
+      }
+      throw err;
     }
-    return value;
   }
 
   private async lockWallet(manager: EntityManager, userId: string): Promise<Wallet> {

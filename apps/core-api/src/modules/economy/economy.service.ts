@@ -14,11 +14,7 @@ import { VipPlan } from './entities/vip-plan.entity';
 import { VipTier, Wallet } from './entities/wallet.entity';
 import { IapVerifier } from './services/iap-verifier';
 
-import { UserService } from '../user';
-
 import type { CursorPageMeta } from '@litmatch/common-dtos';
-
-const SPEND_TRANSACTION_TYPES = new Set<TransactionType>([TransactionType.MatchingSpeedup]);
 
 export interface WalletView {
   balance: string;
@@ -48,7 +44,6 @@ export class EconomyService {
     @InjectRepository(LedgerTransaction) private readonly txnRepo: Repository<LedgerTransaction>,
     private readonly ledger: LedgerService,
     private readonly iapVerifier: IapVerifier,
-    private readonly userService: UserService,
   ) {}
 
   async getWallet(userId: string): Promise<WalletView> {
@@ -72,7 +67,6 @@ export class EconomyService {
     payload: Record<string, unknown>,
     productId: string,
   ): Promise<{ transactionId: string; diamonds: string; replayed: boolean }> {
-    await this.assertEconomyAllowed(userId);
     const product = await this.productRepo.findOneBy({ productId, provider, active: true });
     if (!product) {
       throw new DomainException(EconomyErrors.IAP_PRODUCT_UNKNOWN, `Product ${productId} không tồn tại`, 400);
@@ -124,7 +118,6 @@ export class EconomyService {
     planId: string,
     idempotencyKey: string | undefined,
   ): Promise<{ transactionId: string; tier: VipTier; vipExpiresAt: Date; replayed: boolean }> {
-    await this.assertEconomyAllowed(userId);
     if (!idempotencyKey) {
       throw new DomainException(EconomyErrors.IDEMPOTENCY_KEY_MISSING, 'Thiếu header Idempotency-Key', 400);
     }
@@ -181,80 +174,6 @@ export class EconomyService {
       };
     }
     return { transactionId: result.transaction.id, tier: plan.tier, vipExpiresAt: newExpiry, replayed: false };
-  }
-
-  /**
-   * Trừ diamond cho 1 tính năng trả phí bất kỳ (vd Matching speed-up) — Debit UserWallet /
-   * Credit SystemRevenue, KHÔNG kèm side-effect nghiệp vụ nào khác (module gọi tự làm bước
-   * tiếp theo trong transaction riêng của nó, theo saga 2 bước — docs/03 § 3.6, không dùng
-   * chung 1 DB transaction xuyên module vì Economy có thể tách service riêng sau này).
-   * Module gọi PHẢI tự bù trừ bằng `reverseTransaction` nếu bước sau thất bại.
-   */
-  async spendDiamond(params: {
-    userId: string;
-    amount: bigint;
-    type: TransactionType;
-    idempotencyKey: string;
-    metadata?: Record<string, unknown>;
-  }): Promise<{ transactionId: string; replayed: boolean }> {
-    if (!SPEND_TRANSACTION_TYPES.has(params.type)) {
-      throw new DomainException(
-        EconomyErrors.TRANSACTION_TYPE_INVALID,
-        `Transaction type ${params.type} không được phép qua spendDiamond`,
-        400,
-      );
-    }
-    await this.assertEconomyAllowed(params.userId);
-    const result = await this.ledger.record({
-      type: params.type,
-      idempotencyKey: params.idempotencyKey,
-      actorUserId: params.userId,
-      metadata: params.metadata ?? {},
-      entries: [
-        {
-          accountKind: LedgerAccountKind.UserWallet,
-          userId: params.userId,
-          direction: LedgerDirection.Debit,
-          amount: params.amount,
-          currency: LedgerCurrency.Diamond,
-        },
-        {
-          accountKind: LedgerAccountKind.SystemRevenue,
-          direction: LedgerDirection.Credit,
-          amount: params.amount,
-          currency: LedgerCurrency.Diamond,
-        },
-      ],
-    });
-    return { transactionId: result.transaction.id, replayed: result.replayed };
-  }
-
-  /**
-   * Bù trừ 1 giao dịch spendDiamond khi bước nghiệp vụ sau đó thất bại (saga compensation).
-   * Wrapper mỏng trên `ledger.reverse()` — xem docs/06 "sửa sai bằng bút toán đảo".
-   */
-  async reverseTransaction(
-    transactionId: string,
-    idempotencyKey: string,
-    reason: string,
-  ): Promise<{ transactionId: string; replayed: boolean }> {
-    const result = await this.ledger.reverse(transactionId, idempotencyKey, reason);
-    return { transactionId: result.transaction.id, replayed: result.replayed };
-  }
-
-  /**
-   * JWT isGuest chỉ là snapshot TTL ngắn; quyết định tiền phải đọc user hiện tại từ DB.
-   * Guest không được nạp/mua/tiêu diamond cho tới khi flow upgrade gắn identity thật hoàn tất.
-   */
-  private async assertEconomyAllowed(userId: string): Promise<void> {
-    const user = await this.userService.getByIdOrThrow(userId);
-    if (user.isGuest) {
-      throw new DomainException(
-        EconomyErrors.GUEST_FORBIDDEN,
-        'Tài khoản guest phải nâng cấp trước khi sử dụng diamond',
-        403,
-      );
-    }
   }
 
   /** Lịch sử giao dịch — cursor pagination (docs/05 § 5.4), diamondDelta ký hiệu +/− theo ví user. */

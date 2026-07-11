@@ -67,7 +67,7 @@ Mỗi module nghiệp vụ khác (auth, user, social, content, moderation, notif
 
 - File: kebab-case chuẩn NestJS (`matching.service.ts`, `match-ticket.entity.ts`); class PascalCase; hằng số UPPER_SNAKE.
 - DB: bảng snake_case số nhiều (`ledger_entries`, `match_tickets`), cột snake_case — map qua naming strategy của TypeORM, không đặt tên cột camelCase trong DB.
-- Event (nội bộ + Kafka): `<domain>.<subject>.<động-từ-quá-khứ>` — vd `economy.diamond.debited`, `matching.pair.confirmed`, `call.session.ended`; tên nằm trong event catalog, không dùng synonym cho cùng một event.
+- Event (nội bộ + Kafka): `<domain>.<subject>.<động-từ-quá-khứ>` — vd `economy.diamond.deducted`, `matching.pair.confirmed`, `call.session.ended`.
 - Kafka topic theo domain: `litmatch.<domain>.events`; consumer group theo app + module: `core-api.notification`.
 - Env var: UPPER_SNAKE có prefix domain — `ECONOMY_FREE_CALL_SECONDS`, `MATCHING_SPEEDUP_PRICE_DIAMOND`.
 
@@ -96,9 +96,9 @@ Mỗi module nghiệp vụ khác (auth, user, social, content, moderation, notif
 
 Áp dụng cho **mọi** thao tác có tác dụng phụ không được lặp: trừ/cộng diamond, đặt match ticket, tặng quà, settle call, claim thưởng. Economy chỉ là nơi áp dụng đầu tiên và kỹ nhất ([services/economy-service.md § 3](./services/economy-service.md)).
 
-- **Idempotency key là DB constraint có scope**, tối thiểu `(operation_scope, actor_user_id, idempotency_key)`; provider/server key phải namespace tương đương. Không check-rồi-insert bằng code.
-- Với PostgreSQL, concurrent insert cùng unique key có thể **block** tới khi transaction cạnh tranh commit/rollback. Dùng `INSERT ... ON CONFLICT DO NOTHING RETURNING` hoặc savepoint/rollback đúng; không query trong transaction đã abort sau `23505`, và không giả định đọc được row chưa commit.
-- Lưu canonical `request_hash`: cùng scope/key + cùng hash replay immutable result; khác hash trả 409 `*_IDEMPOTENCY_CONFLICT`. Trạng thái in-progress/timeout và `Retry-After` phải được đặc tả cho API high-risk.
+- **Idempotency key là unique constraint ở DB**, không bao giờ check-rồi-insert bằng code (check-then-act vẫn có race). Luồng chuẩn: cố `INSERT` → bắt **unique violation** → đọc lại row đã tồn tại → xử lý theo trạng thái của nó, KHÔNG tạo bản ghi thứ 2.
+- **2 request song song cùng key** (request đầu chưa commit): request sau bắt unique violation *trước* khi request đầu xong → **retry đọc ngắn có backoff** tới khi row hiện trạng thái cuối, rồi trả kết quả cũ. Không được tự tạo giao dịch mới.
+- **Cùng key nhưng payload khác** (`request_hash` khác) → trả 409 `*_IDEMPOTENCY_CONFLICT` (lỗi client, không phải retry).
 - **Check + hành động luôn atomic**: gộp trong 1 DB transaction với `SELECT ... FOR UPDATE` (hoặc optimistic lock), xác minh lại điều kiện (số dư, quyền, trạng thái) **tại thời điểm hành động**, không tin giá trị đọc trước đó ([10 § 10.0.C](./10-code-review-checklist.md)).
 - **Không diễn giải lại giao dịch cũ theo config hiện tại**: giá/tỉ lệ áp dụng phải snapshot vào bản ghi giao dịch (versioned pricing), đọc lại từ snapshot đó — đổi giá không bao giờ đụng giao dịch đã ghi.
 
