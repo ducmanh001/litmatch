@@ -10,13 +10,12 @@
 | Bảng | Vai trò |
 |---|---|
 | `ledger_accounts` | Tài khoản nội bộ. `kind` + `user_id` (null với tài khoản hệ thống) + `currency`. Unique (kind, user_id, currency). |
-| `transactions` | Metadata 1 giao dịch. Production contract: unique `(operation_scope, actor_user_id, idempotency_key)` hoặc server namespace tương đương; canonical `request_hash`; `reversal_of`; actor type/id + reason/ticket cho system/admin audit; `metadata` snapshot giá/policy (invariant 5 bên dưới). Không chứa số tiền. Implementation global-key/actor gap được theo dõi ở R-005. |
+| `transactions` | Metadata 1 giao dịch nghiệp vụ. **`idempotency_key` unique ở DB** (1 key/giao dịch), `request_hash` để phát hiện key trùng nhưng nội dung khác, `reversal_of` trỏ giao dịch gốc khi là bút toán đảo, **`actor_user_id`** (ai khởi tạo — user/null=hệ thống/admin) cho audit, `metadata` (jsonb) lưu **snapshot giá tại thời điểm giao dịch** (versioned pricing — xem § 5). Không chứa số tiền (số tiền ở `ledger_entries`). |
 | `ledger_entries` | Bút toán Nợ/Có. **Append-only tuyệt đối — có DB trigger chặn UPDATE/DELETE**, không chỉ dựa vào kỷ luật code. |
 | `wallets` | Snapshot dẫn xuất: `balance` (DIA) + `earnings` (PTS) + VIP tier/expiry. Cập nhật trong **cùng DB transaction** với insert ledger_entries. **KHÔNG đặt CHECK balance >= 0 ở DB** — số dư âm là trạng thái hợp lệ sau refund/chargeback (nợ diamond, xem § 5); chặn tiêu quá số dư là việc của guard tầng ứng dụng khi `SELECT ... FOR UPDATE` (đọc `balance - amount >= 0`), không phải của constraint snapshot. |
 | `iap_products` / `vip_plans` | Catalog: product store → số diamond; plan VIP → giá diamond + số ngày. Không hardcode trong code. |
 | `iap_receipts` | Receipt đã verify — nguồn đối soát với Apple/Google. Unique theo (provider, provider_transaction_id). |
 | `outbox_events` | Outbox Pattern ([03 § 3.6](../03-architecture.md)): event ghi cùng transaction, relay đọc và publish Kafka sau. |
-| `provider_events` / Inbox tương đương | Durable inbox cho Apple/Google webhook/RTDN: unique provider event/message id, verified payload hash, processing status/retry; persist trước ACK. Production gate R-004. |
 
 ### Loại tài khoản (`kind`)
 
@@ -38,18 +37,13 @@
 ## 2. Luồng nghiệp vụ Giai đoạn 1
 
 ### Nạp diamond qua IAP
-
-`POST /api/v1/economy/iap/verify` nhận provider proof cụ thể, không dùng một blob mơ hồ làm contract production:
-
-- Apple: StoreKit 2 signed transaction/`transactionId`; server verify JWS/App Store Server API và validate bundle id, environment, app/product/transaction/account binding. `verifyReceipt` hiện tại là deprecated và chỉ được coi là implementation tạm trước R-004.
-- Google: `purchaseToken` + product; server gọi Play Developer API, validate package/product/account binding, chỉ grant khi `PURCHASED`, xử lý `PENDING`, sau grant phải consume/acknowledge server-side có retry.
-
-1. `IapVerifier` verify proof **ở server** → trả exact `providerTransactionId`/purchase token + trạng thái/provider metadata đã validate.
+`POST /api/v1/economy/iap/verify` {provider, payload, productId}
+1. `IapVerifier` (theo provider) verify receipt/purchase token **ở server** → trả `providerTransactionId`.
 2. Idempotency thật = `iap:{provider}:{providerTransactionId}` (server tự sinh — receipt gửi lại 2 lần chỉ credit 1 lần, kể cả không có header).
 3. Tra `iap_products` → số diamond. Ledger: Nợ `system_iap` / Có `user_wallet`. Lưu `iap_receipts` (status `credited`, trỏ `transaction_id`). Ghi snapshot `{productId, diamonds}` vào `transactions.metadata`.
 4. **Nếu `user_wallet` đang âm** (còn nợ do refund trước đó): credit mới **tự động bù nợ** — vì balance = tổng Có − tổng Nợ, việc Có thêm sẽ kéo balance lên; không cần logic riêng, chỉ cần không có CHECK >= 0 chặn giữa chừng.
 
-- Dev/test dùng `DevIapVerifier` (chặn cứng ở production). Store mode không được bật trước sandbox evidence R-004.
+- Dev/test dùng `DevIapVerifier` (chặn cứng ở production, giống DevSmsProvider).
 - **Anti-fraud (từ Giai đoạn 1, không đợi Trust & Safety Giai đoạn 4)**: `iap_receipts` unique (provider, provider_transaction_id) chặn replay ở DB; thêm rate-limit số lần verify/user + cảnh báo khi 1 user có tỉ lệ refund-sau-tiêu bất thường (xem § 5).
 
 ### Mua VIP bằng diamond
@@ -67,16 +61,16 @@
 ## 3. Quy tắc concurrency (docs/10 § Economy)
 
 - Điểm tuần tự hoá per-user: `SELECT ... FOR UPDATE` trên dòng `wallets` (lock theo thứ tự userId khi chạm nhiều ví để tránh deadlock).
-- Idempotency production scope theo operation+actor+key (provider key namespace riêng), không check-rồi-insert. PostgreSQL concurrent unique insert có thể block tới khi transaction cạnh tranh kết thúc; dùng `INSERT ... ON CONFLICT DO NOTHING RETURNING` hoặc savepoint/rollback đúng rồi đọc row committed:
+- Idempotency: unique constraint trên `transactions.idempotency_key` (nguồn chân lý, không check-rồi-insert). Luồng chuẩn: `INSERT ... transaction` → nếu **unique violation** thì đọc lại row đã tồn tại và xử lý theo trạng thái của nó:
   - `request_hash` trùng + transaction đã `completed` → trả lại kết quả cũ (idempotent replay). Response đủ để tái tạo lấy từ `transactions` + ledger của nó, không cần cột cache riêng.
-  - `request_hash` trùng nhưng trạng thái còn in-progress → trả/retry theo contract có timeout/`Retry-After`; không tự tạo giao dịch thứ hai.
+  - `request_hash` trùng nhưng transaction **chưa commit xong** (2 request song song, request đầu đang trong dở transaction) → request sau nhận unique violation *trước* khi request đầu commit; xử lý bằng **retry đọc ngắn có backoff** tới khi row hiện completed, rồi trả kết quả cũ — không tự tạo giao dịch thứ 2.
   - `request_hash` khác → 409 `ECONOMY_TRANSACTION_IDEMPOTENCY_CONFLICT` (cùng key, nội dung khác = lỗi client, không phải retry).
 - `LedgerService` là **writer duy nhất** vào ledger/wallet — module khác gọi qua public API của Economy module, không đụng repository trực tiếp (arch test enforce).
 - Bắt buộc có integration test race thật trên Postgres: 2 request song song cùng trừ tiền, N request song song cùng idempotency key.
 
 ## 4. Event (Outbox)
 
-`economy.diamond.credited` / `economy.diamond.debited` / `economy.vip.purchased` / `economy.diamond.refunded` — envelope tối thiểu `{eventId, version, occurredAt, traceId, transactionId, userId, amount, transactionType}`. Ghi vào `outbox_events` cùng DB transaction; relay (`FOR UPDATE SKIP LOCKED`) publish Kafka topic `litmatch.economy.events`. Consumer dedup bằng Inbox/eventId.
+`economy.diamond.credited` / `economy.diamond.debited` / `economy.vip.purchased` / `economy.diamond.refunded` — payload `{version: 1, transactionId, userId, amount, transactionType}`. Ghi vào `outbox_events` cùng DB transaction; relay (interval, `FOR UPDATE SKIP LOCKED`) publish Kafka topic `litmatch.economy.events`, bật/tắt bằng env.
 
 > **Event là hợp đồng liên module**: mọi module khác tiêu thụ diamond (Matching speed-up, Calling per-phút, Gift) gọi Economy **qua DI trong process** (không qua network — [CLAUDE.md luật 1](../../CLAUDE.md)), nhưng các phản ứng phụ (notification, analytics, trust score) chỉ được nghe **qua event outbox này**, không đọc thẳng bảng của Economy. Thêm loại event mới là non-breaking; đổi/xoá field phải lên `version` mới ([05 § 5.9](../05-coding-standards.md)).
 
@@ -84,7 +78,7 @@
 
 Apple/Google cho user hoàn tiền **sau khi** đã nạp và có thể **đã tiêu** diamond. Đây là lỗ hổng kinh tế kinh điển nếu không thiết kế từ đầu — phải xử lý bằng bút toán đảo, không xoá/sửa giao dịch gốc.
 
-**Nguồn tín hiệu (server-to-server, không tin client)** — `POST /economy/webhooks/apple`, `POST /economy/webhooks/google/rtdn` (`@Public()` chỉ bỏ JWT user, vẫn phải verify provider). Production flow: verify identity/signature + validate app/environment → persist durable inbox idempotently → ACK theo provider contract → worker xử lý/retry. Không ACK thành công trước khi có bản ghi durable.
+**Nguồn tín hiệu (server-to-server, không tin client)** — `POST /economy/webhooks/apple`, `POST /economy/webhooks/google/rtdn` (`@Public()`, verify chữ ký trước khi xử lý, luôn ACK 200 sau khi verify để tránh store retry storm):
 - Apple: **App Store Server Notifications V2** — JWS `signedPayload`, verify chain `x5c` lên **Apple Root CA G3** (`ECONOMY_APPLE_ROOT_CA_PEM`, tải từ trang certificate authority của Apple, không hardcode trong code). `notificationType` = `REFUND`/`REVOKE` → hoàn.
 - Google: **RTDN** qua Pub/Sub push (verify OIDC bearer token) chỉ là tín hiệu phụ — `oneTimeProductNotification.notificationType=2` (CANCELED) không đảm bảo đúng nghĩa "voided" cho sản phẩm one-time. **Nguồn chính thức cho refund one-time là Voided Purchases API** (`purchases.voidedpurchases.list`) — job quét định kỳ ở dưới.
 - **Job quét định kỳ (backstop, không coi webhook là đảm bảo 100%)**: Apple **Get Refund History** (`/inApps/v2/refund/lookup/{transactionId}`, gọi từng receipt Apple còn `credited` vì Apple không có API liệt kê refund toàn cục) + Google **Voided Purchases** (liệt kê 1 lần/run, đối chiếu tại chỗ) — quét các `iap_receipts` còn `credited` trong window gần đây (`ECONOMY_REFUND_POLL_WINDOW_DAYS`).
@@ -111,13 +105,6 @@ Cả hai chân nằm trong **cùng 1 DB transaction** (nếu 1 chân fail thì r
 
 > **Việc cần làm khi bắt đầu code Gift (Giai đoạn 3)**: guard chặn balance âm hiện tại (`ledger.service.ts`) chỉ mở cho `type=Reversal`/`Adjustment` trên account `user_wallet`; reverse 1 giao dịch Gift sẽ đụng `user_earnings` (PTS) và bị chặn bởi `newEarnings < 0n` vì PTS chưa có luồng tiêu ở Giai đoạn 1 (earnings vẫn giữ `CHECK >= 0`, xem migration `1752000000000`). Trước khi code hoàn tiền Gift, cần quyết định: PTS có được phép âm khi reverse không, hay chính sách khác (chặn hoàn Gift nếu người nhận đã tiêu hết PTS).
 
-## 7. Gate còn mở trước khi bật `store` thật
+## 7. Giới hạn đã biết, cần đóng trước khi bật `store` thật (không chặn code Giai đoạn 1, nhưng phải nhớ)
 
-- [ ] Thay Apple `verifyReceipt`/`product_id.find()` bằng exact StoreKit 2 signed transaction/App Store Server API transaction ID; bug consumable hiện tại có thể credit/refund nhầm transaction.
-- [ ] Google `PURCHASED`/`PENDING`, server consume/acknowledge, retry và obfuscated account binding.
-- [ ] Durable provider Inbox/dedup/retry; sandbox E2E purchase/replay/refund/revoke/notification.
-- [ ] Unique/idempotent reversal theo original transaction hoặc model partial refund rõ; lock receipt/status để refund đồng thời không tạo hai reversal.
-- [ ] Actor type/id/reason/ticket cho system/admin adjustment; `null` không được đồng thời mang nghĩa system và admin.
-- [ ] Chốt PTS reversal/debt policy của Gift ở § 6.
-
-Theo dõi bằng R-004/R-005 trong [roadmap](../07-roadmap.md) và evidence gate [11 § 11.8](../11-nfr-and-production-readiness.md).
+- **`StoreIapVerifier.verifyApple()` khớp `product_id` bằng `find()` — lấy phần tử ĐẦU TIÊN trùng product trong mảng `in_app` của receipt.** Với product tiêu dùng nhiều lần (consumable, user mua lại cùng `productId` nhiều lần), receipt hợp nhất của Apple chứa NHIỀU giao dịch cùng `product_id` — `providerTransactionId` lưu lại có thể không phải giao dịch user vừa mua, và khác với `transactionId` mà Apple gửi trong App Store Server Notification khi refund giao dịch cụ thể đó → `RefundService.refundIapPurchase()` có thể trả `unknown_receipt` dù thực ra có receipt tương ứng. Cần đóng trước khi bật `ECONOMY_IAP_VERIFIER=store`/`ECONOMY_APPLE_WEBHOOK_VERIFIER=store` ở production: client nên gửi kèm `transactionId` cụ thể (StoreKit 2 cung cấp sẵn) thay vì chỉ `productId`, server khớp đúng theo id đó.

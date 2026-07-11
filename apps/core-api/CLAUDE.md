@@ -10,4 +10,4 @@
 - **Module hoá nghiêm ngặt**: mỗi module chỉ export qua interface rõ ràng, không import chéo trực tiếp vào file nội bộ của module khác. Có ArchUnit-style test chặn import chéo trái phép (xem `../../docs/03-architecture.md § 3.2`).
 - **Cấu trúc 1 module**: theo đúng khung ở `../../docs/05-coding-standards.md § 5.3` (`*.controller.ts / *.service.ts / *.module.ts / dto/ / entities/ / events/`).
 - **Economy module là module nhạy cảm nhất trong app này** — mọi thay đổi liên quan `ledger.service.ts` bắt buộc tự review theo `../../docs/10-code-review-checklist.md § Economy/Wallet/Ledger` trước khi báo xong.
-- **Media control**: `core-api` là nơi duy nhất giữ LiveKit API secret/mint token/gọi RoomService. Signaling Gateway gửi control intent về `core-api`; client kết nối LiveKit trực tiếp. Không copy secret hoặc business authorization sang gateway. Xem `../../docs/03-architecture.md § 3.2-3.7`.
+- **Giao tiếp ra ngoài `core-api`** (tới Signaling Gateway / Media Server): qua internal API (REST/gRPC nội bộ), không public ra internet. Xem `../../docs/03-architecture.md § 3.7`.

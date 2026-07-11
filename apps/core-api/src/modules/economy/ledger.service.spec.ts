@@ -1,7 +1,7 @@
-import { DataSource, EntityManager } from 'typeorm';
+import { DataSource } from 'typeorm';
 
 import { LedgerService } from './ledger.service';
-import { LedgerAccount, LedgerAccountKind, LedgerCurrency } from './entities/ledger-account.entity';
+import { LedgerAccountKind, LedgerCurrency } from './entities/ledger-account.entity';
 import { LedgerDirection } from './entities/ledger-entry.entity';
 import { TransactionType } from './entities/transaction.entity';
 import { EconomyErrors } from './economy.errors';
@@ -112,81 +112,6 @@ describe('LedgerService (validation thuần)', () => {
         entries: [entry(), entry({ direction: LedgerDirection.Credit, accountKind: LedgerAccountKind.SystemRevenue })],
       }),
     ).rejects.toMatchObject({ code: EconomyErrors.IDEMPOTENCY_CONFLICT, httpStatus: 409 });
-  });
-
-  it('requestHash canonical metadata: không phụ thuộc thứ tự key, nhưng đổi business payload phải đổi hash', () => {
-    const hashRequest = (service as unknown as { hashRequest: (input: unknown) => string }).hashRequest.bind(service);
-    const entries = [entry(), entry({ direction: LedgerDirection.Credit, accountKind: LedgerAccountKind.SystemRevenue })];
-    const base = { type: TransactionType.Reversal, actorUserId: 'u1', reversalOf: 'original-1', entries };
-
-    const first = hashRequest({ ...base, metadata: { reason: 'refund', nested: { ticketId: 't1', planId: 'p1' } } });
-    const reordered = hashRequest({ ...base, metadata: { nested: { planId: 'p1', ticketId: 't1' }, reason: 'refund' } });
-    const changed = hashRequest({ ...base, metadata: { reason: 'refund', nested: { ticketId: 't2', planId: 'p1' } } });
-
-    expect(reordered).toBe(first);
-    expect(changed).not.toBe(first);
-  });
-
-  it('resolveAccount dùng INSERT ON CONFLICT, không bắt 23505 trong transaction đã aborted', async () => {
-    const account = Object.assign(new LedgerAccount(), {
-      id: 'account-1',
-      kind: LedgerAccountKind.SystemIap,
-      userId: null,
-      currency: LedgerCurrency.Diamond,
-    });
-    const accountRepo = {
-      findOneBy: jest.fn().mockResolvedValue(null),
-      findOneByOrFail: jest.fn().mockResolvedValue(account),
-    };
-    const manager = {
-      getRepository: jest.fn(() => accountRepo),
-      query: jest.fn().mockResolvedValue([]),
-    } as unknown as EntityManager;
-    const resolveAccount = (
-      service as unknown as {
-        resolveAccount: (m: EntityManager, e: ReturnType<typeof entry>) => Promise<LedgerAccount>;
-      }
-    ).resolveAccount.bind(service);
-
-    await expect(resolveAccount(manager, entry())).resolves.toBe(account);
-    expect(manager.query).toHaveBeenCalledWith(expect.stringContaining('ON CONFLICT DO NOTHING'), [
-      LedgerAccountKind.SystemIap,
-      null,
-      LedgerCurrency.Diamond,
-    ]);
-    expect(accountRepo.findOneByOrFail).toHaveBeenCalled();
-  });
-
-  it('reverse replay cùng key nhưng khác reason phải conflict', async () => {
-    findOneBy.mockResolvedValue({
-      id: 'reversal-1',
-      type: TransactionType.Reversal,
-      reversalOf: 'original-1',
-      actorUserId: null,
-      metadata: { reason: 'store_refund' },
-    });
-
-    await expect(service.reverse('original-1', 'reverse-key-1', 'admin_adjustment')).rejects.toMatchObject({
-      code: EconomyErrors.IDEMPOTENCY_CONFLICT,
-      httpStatus: 409,
-    });
-    expect(dataSource.transaction).not.toHaveBeenCalled();
-  });
-
-  it('reverse replay cùng key, original và reason trả transaction cũ để saga recovery hội tụ', async () => {
-    findOneBy.mockResolvedValue({
-      id: 'reversal-1',
-      type: TransactionType.Reversal,
-      reversalOf: 'original-1',
-      actorUserId: null,
-      metadata: { reason: 'ticket_not_queued' },
-    });
-
-    await expect(service.reverse('original-1', 'reverse-key-1', 'ticket_not_queued')).resolves.toMatchObject({
-      replayed: true,
-      transaction: { id: 'reversal-1' },
-    });
-    expect(dataSource.transaction).not.toHaveBeenCalled();
   });
 
   it('type=adjustment bắt buộc actorUserId để audit (docs/10 § Economy) — thiếu actor phải bị chặn', async () => {

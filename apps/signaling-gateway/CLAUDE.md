@@ -1,14 +1,13 @@
-<!-- Đọc cùng CLAUDE.md ở root khi làm việc trong apps/signaling-gateway. -->
+<!-- Claude Code đọc file này CÙNG VỚI CLAUDE.md ở root khi làm việc trong apps/signaling-gateway. -->
 
-# apps/signaling-gateway — application realtime notes
+# apps/signaling-gateway — ghi chú riêng
 
-Scale theo số connection/fanout; không sở hữu business state.
+WebSocket gateway, scale theo số **kết nối đồng thời** (connection-bound) — khác quy luật scale của `core-api` (CPU/DB-bound). Xem `../../docs/03-architecture.md § 3.3`.
 
-## Luật riêng
+## Riêng cho app này
 
-- Socket.IO xử lý application realtime/presence/chat/control intent. LiveKit tự xử lý WebRTC signaling/media; không proxy SDP/ICE qua gateway.
-- Không tính tiền, quyết định match/role hay mint LiveKit token tại đây. Gateway gửi intent tới `core-api`; chỉ `core-api` giữ LiveKit API secret/gọi RoomService.
-- Chỉ emit “đã mute/kick/end” sau authoritative result từ `core-api`/LiveKit và reconcile webhook, không optimistic-success cho hành động quyền.
-- Multi-instance dùng Redis adapter cho fanout/presence dẫn xuất; Redis không phải source of truth của session/role/billing.
-- Connection có auth, heartbeat/timeout, reconnect window và duplicate/out-of-order handling. Disconnect timestamp là tín hiệu; Calling module dùng server time quyết định billing/settlement.
-- Mọi thay đổi phải có metric connection, reconnect, event latency/drop, backpressure và test node draining theo [docs/11](../../docs/11-nfr-and-production-readiness.md).
+- **Không chứa business logic nặng** (tính tiền, quyết định match...) — gọi `core-api` qua internal API để lấy quyết định, gateway chỉ điều phối kết nối/room/tín hiệu.
+- **Điều khiển Media Server**: gửi lệnh (mute/kick/đổi quyền) qua internal control API, **phải đợi ACK** trước khi coi hành động đã hoàn tất — không tự cập nhật state ở gateway rồi coi như xong (xem lỗi cụ thể ở `../../docs/10-code-review-checklist.md § Calling/Signaling/SFU`).
+- **Chạy nhiều instance**: bắt buộc dùng Redis adapter cho Socket.IO để đồng bộ state (ai đang ở phòng nào, ai đang speaker) giữa các instance — thiếu cái này gây lệch trạng thái phòng khi scale ngang (`../../docs/07-roadmap.md § Giai đoạn 6`).
+- **Timeout bắt buộc** cho mọi kết nối WebSocket — không để client đơ giữa chừng làm phòng "vô chủ" không ai dọn.
+- **Free-call timer tính ở server**, không tin báo cáo từ client (`../../docs/06-domain-rules.md`).
