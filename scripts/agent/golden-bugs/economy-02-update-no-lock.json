@@ -1,0 +1,8 @@
+{
+  "id": "economy-02-update-no-lock",
+  "module": "economy",
+  "docsRef": "không lock → 2 request đồng thời trừ tiền gây lệch số dư (lost update)",
+  "description": "Trừ diamond bằng UPDATE trực tiếp không SELECT ... FOR UPDATE trước — 2 request song song đọc cùng balance cũ rồi ghi đè lên nhau.",
+  "buggyCode": "async function spend(userId: string, amount: bigint) {\n  const wallet = await walletRepo.findOneBy({ userId }); // đọc balance, KHÔNG lock\n  const newBalance = BigInt(wallet.balance) - amount;\n  if (newBalance < 0n) throw new DomainException(EconomyErrors.WALLET_INSUFFICIENT_BALANCE, 'Không đủ diamond', 422);\n  wallet.balance = newBalance.toString();\n  await walletRepo.save(wallet); // ghi đè — request khác đọc balance cũ giữa lúc này sẽ mất bản cập nhật của mình\n}",
+  "whyWrong": "2 request A và B cùng đọc balance=100 trước khi 1 trong 2 ghi xong (check-then-act không atomic). A trừ 60 → ghi 40. B trừ 50 (dựa trên 100 đã đọc trước đó) → ghi 50, ghi đè mất luôn việc trừ 60 của A — user tiêu 110 diamond nhưng hệ thống chỉ ghi nhận trừ 50 (lost update). Đúng ra phải lock ví bằng `SELECT ... FOR UPDATE` (xem `lockWallet()` thật trong `ledger.service.ts`) làm điểm tuần tự hoá per-user trước khi đọc/ghi."
+}

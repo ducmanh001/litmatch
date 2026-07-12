@@ -1,0 +1,8 @@
+{
+  "id": "matching-04-speedup-no-rate-limit",
+  "module": "matching",
+  "docsRef": "có thể trả tiền speed-up nhiều lần liên tiếp để luôn đứng đầu",
+  "description": "API speed-up trừ diamond và cộng priority boost mà không giới hạn số lần/khung giờ — user có tiền có thể gọi liên tục để luôn đứng đầu hàng đợi, chèn ép user thường.",
+  "buggyCode": "@Post('tickets/:id/speedup')\nasync speedup(@Param('id') ticketId: string, @CurrentUser() user) {\n  // BUG: không có rate-limit — gọi bao nhiêu lần cũng được, miễn còn tiền\n  const price = this.config.getOrThrow('MATCHING_SPEEDUP_PRICE_DIAMOND', { infer: true });\n  await this.economy.spendDiamond(user.userId, TransactionType.MatchingSpeedup, price, idempotencyKey, {});\n  await this.ticketRepo.increment({ id: ticketId }, 'priorityBoostMs', boostMs);\n}",
+  "whyWrong": "Không giới hạn số lần speed-up/giờ, user có nhiều tiền có thể liên tục trả phí để boost, luôn đứng đầu hàng đợi bất kể người khác đã chờ bao lâu — bất công có hệ thống cho user thường, và về bản chất vẫn là 1 dạng \"giới hạn chỉ enforce phía không đủ\" (docs/10 § 10.1.H). Đúng ra phải có `MATCHING_SPEEDUP_MAX_PER_HOUR` + rate-limit atomic (Lua script INCR+EXPIRE) CHẶN TRƯỚC KHI TRỪ TIỀN — như `matching.service.ts` thật đang làm — để giới hạn số lần/khung giờ, không chỉ giới hạn bằng số dư ví."
+}

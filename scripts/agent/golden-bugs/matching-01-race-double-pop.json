@@ -1,0 +1,8 @@
+{
+  "id": "matching-01-race-double-pop",
+  "module": "matching",
+  "docsRef": "user bị match đôi",
+  "description": "2 instance MatcherWorkerService cùng chạy song song, mỗi con lấy user ra khỏi queue bằng 1 câu lệnh không atomic (đọc rồi mới xoá) — cả 2 cùng lấy được cùng 1 user.",
+  "buggyCode": "async function drainShard(shard: string) {\n  // BUG: đọc phần tử đầu queue rồi mới xoá ở 1 lệnh RIÊNG — không atomic\n  const [ticketId] = await redis.zrange(shard, 0, 0);\n  if (!ticketId) return;\n  await redis.zrem(shard, ticketId); // 2 worker cùng đọc trúng ticketId này TRƯỚC KHI 1 trong 2 kịp zrem\n  await matchWith(ticketId, ...);\n}",
+  "whyWrong": "Giữa lệnh đọc (`zrange`) và lệnh xoá (`zrem`) là 2 round-trip riêng biệt tới Redis — worker A và worker B chạy song song đều có thể đọc trúng CÙNG ticketId trước khi bên nào kịp xoá, dẫn tới cùng 1 user được ghép với 2 người khác nhau cùng lúc (user bị match đôi). Đúng ra phải dùng `ZPOPMIN` (đọc VÀ xoá trong 1 lệnh atomic, Redis đơn luồng đảm bảo không worker nào lấy trùng) như `matcher-worker.service.ts` thật đang làm."
+}

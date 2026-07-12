@@ -1,0 +1,8 @@
+{
+  "id": "economy-04-trust-client-iap-status",
+  "module": "economy",
+  "docsRef": "Không validate receipt IAP với Apple/Google ở server → client có thể giả mạo giao dịch mua diamond",
+  "description": "Server tin thẳng field `success`/`productId`/`diamonds` client gửi lên để credit ví, không tự gọi verifyReceipt/Play Developer API để xác minh với Apple/Google.",
+  "buggyCode": "@Post('iap/verify')\nasync verifyIap(@CurrentUser() user, @Body() dto: VerifyIapDto) {\n  // BUG: tin thẳng dto.success và dto.diamonds do CLIENT tự khai, không gọi Apple/Google verify\n  if (dto.success) {\n    await this.economyService.creditWallet(user.userId, BigInt(dto.diamonds));\n  }\n  return { credited: dto.success };\n}",
+  "whyWrong": "Client (app di động) hoàn toàn có thể tự viết request gửi thẳng lên API này với `success: true, diamonds: 999999` mà chưa từng mua gì thật — server không có cách nào phân biệt request thật với request giả mạo nếu không tự gọi verifyReceipt (Apple) / Play Developer API (Google) để lấy `providerTransactionId` và số lượng sản phẩm ĐÃ MUA THẬT từ chính Apple/Google, rồi mới tra bảng `iap_products` lấy số diamond tương ứng (không tin số diamond client gửi). Đây là ví dụ kinh điển của docs/10 § 10.0.B: không bao giờ tin dữ liệu quyết định tiền do client gửi lên."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "economy-08-check-constraint-blocks-refund",
+  "module": "economy",
+  "docsRef": "không phải constraint trên snapshot",
+  "description": "Đặt CHECK constraint balance >= 0 ngay trên bảng wallets snapshot — chặn luôn cả bút toán đảo hợp lệ khi user đã tiêu hết tiền trước khi bị refund/chargeback.",
+  "buggyCode": "-- migration: BUG — CHECK constraint cứng ở tầng DB trên bảng snapshot\nALTER TABLE wallets ADD CONSTRAINT chk_balance_non_negative CHECK (balance >= 0);\n\n-- User nạp 100 diamond, tiêu hết 100 (balance = 0), rồi Apple/Google báo refund giao dịch nạp đó:\n-- UPDATE wallets SET balance = balance - 100 WHERE user_id = ... → VI PHẠM CHECK, insert bút toán đảo bị lỗi 23514",
+  "whyWrong": "Refund/chargeback từ store xảy ra SAU khi user đã tiêu diamond đó là chuyện bình thường (docs/10 mục 'Refund/chargeback từ store bị bỏ quên') — bút toán đảo hợp lệ PHẢI được phép đẩy balance âm (user nợ diamond). CHECK constraint cứng ở tầng DB trên bảng snapshot chặn nhầm cả trường hợp hợp lệ này, refund sẽ crash thay vì ghi nhận đúng khoản nợ. Chặn tiêu-quá-số-dư phải là guard ở TẦNG ỨNG DỤNG lúc trừ tiền thường (`SELECT ... FOR UPDATE` + so sánh `balance - amount >= 0` chỉ áp cho giao dịch KHÔNG phải Reversal/Adjustment), không phải CHECK constraint áp dụng cho mọi trường hợp."
+}

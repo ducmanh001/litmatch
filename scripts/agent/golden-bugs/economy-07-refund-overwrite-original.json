@@ -1,0 +1,8 @@
+{
+  "id": "economy-07-refund-overwrite-original",
+  "module": "economy",
+  "docsRef": "làm mất lịch sử đầy đủ, khó đối soát khi có khiếu nại",
+  "description": "Xử lý refund bằng cách đổi status giao dịch gốc thành 'refunded' và cộng lại tiền vào cùng giao dịch đó, thay vì tạo giao dịch đảo mới.",
+  "buggyCode": "async function refund(originalTxnId: string) {\n  const txn = await txnRepo.findOneByOrFail({ id: originalTxnId });\n  // BUG: sửa thẳng giao dịch gốc, không tạo giao dịch đảo mới\n  txn.status = TransactionStatus.Refunded;\n  await txnRepo.save(txn);\n  wallet.balance = (BigInt(wallet.balance) + BigInt(txn.amount)).toString();\n  await walletRepo.save(wallet);\n}",
+  "whyWrong": "Giao dịch gốc bị đổi status/nội dung nghĩa là không còn phản ánh đúng \"tại thời điểm đó đã xảy ra chuyện gì\" — khi đối soát (tổng Nợ = tổng Có) sẽ không khớp vì không có entry mới cân bằng lại. Đúng ra `RefundService`/`LedgerService.reverse()` thật tạo TRANSACTION MỚI (`type: Reversal`) với entry đảo chiều Nợ/Có, đánh dấu giao dịch gốc `status: Reversed` (không xoá/sửa nội dung), giữ đủ 2 giao dịch để audit trail đầy đủ."
+}

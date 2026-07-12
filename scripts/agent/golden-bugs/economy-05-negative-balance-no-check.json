@@ -1,0 +1,8 @@
+{
+  "id": "economy-05-negative-balance-no-check",
+  "module": "economy",
+  "docsRef": "Cho phép balance âm do thiếu check trước khi trừ",
+  "description": "Trừ diamond cho giao dịch tiêu tiền thông thường (không phải reversal/adjustment) mà không chặn khi kết quả sẽ âm.",
+  "buggyCode": "async function spendDiamond(userId: string, amount: bigint) {\n  const wallet = await lockWallet(userId);\n  const newBalance = BigInt(wallet.balance) - amount;\n  // BUG: thiếu check newBalance < 0n trước khi ghi — user tiêu vượt số dư vẫn được chấp nhận\n  wallet.balance = newBalance.toString();\n  await walletRepo.save(wallet);\n}",
+  "whyWrong": "Giao dịch tiêu tiền THÔNG THƯỜNG (mua VIP, gift, speed-up...) không được phép đẩy số dư âm — chỉ Reversal/Adjustment (refund, sửa sai admin) mới được phép, và phải có actor rõ ràng để audit (xem economy-09). Thiếu check này, user có thể tiêu vượt số dư đang có, hệ thống ghi nhận số âm mà không ai biết là bug hay refund hợp lệ. Đúng ra như `applyWalletDeltas()` thật: `if (newBalance < 0n && !mayGoNegative) throw DomainException(WALLET_INSUFFICIENT_BALANCE)`."
+}

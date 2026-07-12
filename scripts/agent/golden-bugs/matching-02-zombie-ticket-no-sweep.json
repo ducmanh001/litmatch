@@ -1,0 +1,8 @@
+{
+  "id": "matching-02-zombie-ticket-no-sweep",
+  "module": "matching",
+  "docsRef": "chiếm chỗ mãi trong hàng đợi",
+  "description": "Ticket vào queue không có cơ chế hết hạn/sweeper — user rớt kết nối hoặc đóng app giữa chừng, ticket vẫn nằm mãi trong Redis chờ ghép.",
+  "buggyCode": "async function joinQueue(userId: string, matchType: string) {\n  const ticket = await ticketRepo.save(ticketRepo.create({ userId, matchType, status: 'queued', enqueuedAt: new Date() }));\n  await redis.zadd(shardKey, ticket.enqueuedAt.getTime(), ticket.id);\n  // BUG: không có job định kỳ nào kiểm tra + expire ticket quá hạn — nếu user rớt mạng,\n  // ticket này nằm trong Redis MÃI MÃI, chiếm chỗ, matcher vẫn cố ghép nó với người khác\n  return ticket;\n}",
+  "whyWrong": "Không phải mọi client đều gọi được API huỷ ticket khi thoát (mất mạng, tắt app đột ngột, crash) — nếu không có sweeper định kỳ quét và expire ticket quá hạn chờ (`MATCHING_QUEUE_MAX_WAIT_SECONDS`), các ticket \"zombie\" này tích tụ dần, làm hàng đợi phình to giả tạo và có thể bị ghép nhầm cho user đang thật sự online. `TicketSweeperService` thật chạy job định kỳ `expireStaleQueuedTickets()` chính là chốt chặn cho vấn đề này — không được bỏ qua khi thêm luồng enqueue mới."
+}

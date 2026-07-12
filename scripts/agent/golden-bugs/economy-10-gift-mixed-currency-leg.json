@@ -1,0 +1,8 @@
+{
+  "id": "economy-10-gift-mixed-currency-leg",
+  "module": "economy",
+  "docsRef": "phá bất biến, sinh/mất tiền",
+  "description": "Gift trừ DIAMOND của người tặng và cộng POINTS (currency khác) cho người nhận trong CÙNG 1 cặp Nợ/Có, thay vì 2 chân độc lập mỗi chân tự cân theo currency riêng.",
+  "buggyCode": "await ledgerService.record({\n  type: TransactionType.Gift,\n  idempotencyKey,\n  entries: [\n    // BUG: 1 cặp Nợ/Có nhưng 2 currency khác nhau (Diamond vs Points) — không cân được theo TỪNG currency\n    { accountKind: LedgerAccountKind.UserWallet, userId: senderId, direction: LedgerDirection.Debit, amount: 100n, currency: LedgerCurrency.Diamond },\n    { accountKind: LedgerAccountKind.UserEarnings, userId: receiverId, direction: LedgerDirection.Credit, amount: 100n, currency: LedgerCurrency.Points },\n  ],\n});",
+  "whyWrong": "Bất biến double-entry là TỔNG NỢ = TỔNG CÓ THEO TỪNG CURRENCY (không phải theo số lượng) — trộn Diamond và Points trong cùng 1 giao dịch làm mỗi currency tự nó KHÔNG cân (100 Diamond Nợ mà không có Diamond Có tương ứng; 100 Points Có mà không có Points Nợ tương ứng) → tự sinh 100 Points từ hư không và tự làm mất 100 Diamond. Đúng ra phải tách 2 CHÂN GIAO DỊCH ĐỘC LẬP, mỗi chân tự cân đúng 1 currency: chân 1 (Diamond: Debit sender / Credit system), chân 2 (Points: Debit system / Credit receiver) — xem services/economy-service.md § 6."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "economy-03-check-then-insert-idempotency",
+  "module": "economy",
+  "docsRef": "check-rồi-insert vẫn có race",
+  "description": "Idempotency được đảm bảo bằng \"tìm rồi mới insert\" trong code thay vì unique constraint DB — 2 request song song cùng idempotencyKey đều pass qua bước tìm trước khi bên nào kịp insert.",
+  "buggyCode": "async function record(idempotencyKey: string, input: RecordTransactionInput) {\n  const existing = await txnRepo.findOneBy({ idempotencyKey });\n  if (existing) return { transaction: existing, replayed: true }; // BUG: check ở đây\n\n  // Không có unique constraint DB trên idempotencyKey — 2 request cùng key\n  // đều không thấy 'existing' (chưa ai insert xong) nên đều đi tiếp xuống dưới\n  const txn = txnRepo.create({ idempotencyKey, ...input });\n  await txnRepo.save(txn); // cả 2 request cùng insert thành công → 2 giao dịch cho 1 lần trả tiền\n  return { transaction: txn, replayed: false };\n}",
+  "whyWrong": "Giữa lúc request A đọc xong 'không tồn tại' và lúc A insert xong, request B (retry do timeout mạng, cùng idempotencyKey) cũng đọc 'không tồn tại' — cả 2 cùng insert, tạo 2 giao dịch cho 1 hành động, trừ tiền 2 lần. Đúng ra idempotencyKey phải là UNIQUE CONSTRAINT ở DB (`uq_transactions_idempotency_key`): cố INSERT trước, bắt lỗi unique violation (23505), rồi mới đọc lại row đã tồn tại — DB tự làm trọng tài, không phải code."
+}

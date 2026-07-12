@@ -1,0 +1,8 @@
+{
+  "id": "economy-09-adjustment-no-actor",
+  "module": "economy",
+  "docsRef": "không audit được khi có tranh chấp tài chính",
+  "description": "Bút toán adjustment (sửa sai thủ công) được tạo mà không bắt buộc ghi actor_user_id — không ai biết ai đã thực hiện thay đổi.",
+  "buggyCode": "async function adjustBalance(userId: string, delta: bigint, reason: string) {\n  // BUG: type=Adjustment nhưng không yêu cầu actorUserId — admin nào cũng gọi được, không truy vết được\n  await ledgerService.record({\n    type: TransactionType.Adjustment,\n    idempotencyKey: `adjustment:${userId}:${Date.now()}`,\n    entries: [ /* ... */ ],\n    metadata: { reason },\n  });\n}",
+  "whyWrong": "Adjustment là sửa sai THỦ CÔNG do 1 người (admin/support) thực hiện — nếu sau này có tranh chấp tài chính (\"tại sao ví tôi tự nhiên bị trừ 500 diamond?\"), phải truy được CHÍNH XÁC ai đã làm và lý do gì. Thiếu `actorUserId` bắt buộc thì log audit vô dụng. `LedgerService.record()` thật throw lỗi ngay lúc validate nếu `type === Adjustment && !actorUserId` — đây chính là guard cần có, không phải tuỳ chọn."
+}
