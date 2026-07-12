@@ -10,7 +10,11 @@ import { AppModule } from './app/app.module';
 import type { CoreApiEnv } from './config/env.validation';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  // rawBody: webhook LiveKit verify chữ ký trên NGUYÊN VĂN body (calling/webhooks — spec § 3)
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true,
+    rawBody: true,
+  });
   app.useLogger(app.get(Logger));
 
   const config = app.get<ConfigService<CoreApiEnv, true>>(ConfigService);

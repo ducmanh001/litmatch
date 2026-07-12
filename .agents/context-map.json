@@ -83,6 +83,36 @@
       "pnpm nx build core-api"
     ]
   },
+  "calling": {
+    "description": "Voice call 2 người trên LiveKit — CallSession lifecycle, token, free-call timer, billing theo phút",
+    "read": [
+      "AGENTS.md",
+      "apps/core-api/AGENTS.md",
+      "docs/03-architecture.md",
+      "docs/06-domain-rules.md",
+      "docs/services/calling-service.md",
+      "docs/services/realtime-gateway.md",
+      "docs/adr/0001-livekit-self-host-lam-media-server.md",
+      "docs/10-code-review-checklist.md"
+    ],
+    "paths": [
+      "apps/core-api/src/modules/calling",
+      "apps/media-server",
+      "apps/core-api/src/database/migrations"
+    ],
+    "invariants": [
+      "Timer free-call + billing enforce ở server, không tin client",
+      "ended là terminal; mọi transition idempotent (webhook retry an toàn)",
+      "Billing tick idempotent theo (call, user, phút) — unique DB trên Transaction",
+      "Mọi nhánh end đều deleteRoom LiveKit (không leak room)"
+    ],
+    "checks": [
+      "pnpm agent:check",
+      "INTEGRATION_DB_URL=postgresql://litmatch:litmatch_local@localhost:5432/litmatch_test pnpm nx test core-api --skip-nx-cache",
+      "pnpm nx run core-api:lint",
+      "pnpm nx build core-api"
+    ]
+  },
   "signaling": {
     "description": "WebSocket, room state và realtime signaling (fanout theo user — gateway không business logic)",
     "read": [

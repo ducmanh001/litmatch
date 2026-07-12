@@ -15,6 +15,7 @@ import { GlobalExceptionFilter } from '../common/filters/global-exception.filter
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { ResponseEnvelopeInterceptor } from '../common/interceptors/response-envelope.interceptor';
 import { AuthModule } from '../modules/auth';
+import { CallingModule } from '../modules/calling';
 import { EconomyModule } from '../modules/economy';
 import { FriendModule } from '../modules/friend';
 import { MatchingModule } from '../modules/matching';
@@ -65,6 +66,7 @@ import { ReadinessService } from './readiness.service';
     MatchingModule,
     FriendModule,
     SoulMatchModule,
+    CallingModule,
   ],
   controllers: [HealthController],
   providers: [
