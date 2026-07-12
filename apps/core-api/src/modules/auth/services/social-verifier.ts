@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DomainException } from '@litmatch/common-exceptions';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
@@ -17,6 +17,8 @@ export interface SocialIdentity {
  */
 @Injectable()
 export class SocialVerifierService {
+  private readonly logger = new Logger(SocialVerifierService.name);
+
   private readonly jwks = {
     [AuthProvider.Google]: createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs')),
     [AuthProvider.Apple]: createRemoteJWKSet(new URL('https://appleid.apple.com/auth/keys')),
@@ -45,7 +47,10 @@ export class SocialVerifierService {
       const { payload } = await jwtVerify(idToken, this.jwks[provider], { issuer, audience: clientId });
       if (!payload.sub) throw new Error('missing sub');
       return { uid: payload.sub };
-    } catch {
+    } catch (err) {
+      // Log lỗi gốc để phân biệt token thật sự giả mạo với lỗi mạng/JWKS rotate — response
+      // cho client giữ nguyên message chung để không lộ chi tiết xác thực (docs/05 § 5.7).
+      this.logger.warn(`Social token verify thất bại (${provider}): ${err}`);
       throw new DomainException(AuthErrors.SOCIAL_TOKEN_INVALID, 'ID token không hợp lệ', 401);
     }
   }

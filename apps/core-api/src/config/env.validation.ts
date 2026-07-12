@@ -56,6 +56,17 @@ export const coreApiEnvSchema = Joi.object({
   ECONOMY_REFUND_POLL_INTERVAL_MS: Joi.number().integer().min(60_000).default(3_600_000),
   ECONOMY_REFUND_POLL_WINDOW_DAYS: Joi.number().integer().min(1).default(60),
 
+  // Matching — Giai đoạn 2 M1 (docs/services/matching-service.md § 8); default khớp .env.example
+  MATCHING_MATCHER_INTERVAL_MS: Joi.number().integer().min(50).default(300),
+  MATCHING_MATCHER_BATCH_SIZE: Joi.number().integer().min(1).default(20),
+  MATCHING_SWEEPER_INTERVAL_MS: Joi.number().integer().min(500).default(5000),
+  MATCHING_QUEUE_MAX_WAIT_SECONDS: Joi.number().integer().min(5).default(120),
+  MATCHING_CONFIRM_TIMEOUT_SECONDS: Joi.number().integer().min(3).default(15),
+  MATCHING_AGE_BAND_SIZE: Joi.number().integer().min(1).default(5),
+  MATCHING_SPEEDUP_PRICE_DIAMOND: Joi.number().integer().min(1).default(50),
+  MATCHING_SPEEDUP_MAX_PER_HOUR: Joi.number().integer().min(1).default(3),
+  MATCHING_PRIORITY_BOOST_MS: Joi.number().integer().min(0).default(300_000),
+
   THROTTLE_TTL_SECONDS: Joi.number().integer().min(1).default(60),
   THROTTLE_LIMIT: Joi.number().integer().min(1).default(100),
 });

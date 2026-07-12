@@ -13,6 +13,7 @@ import { LedgerTransaction, TransactionStatus, TransactionType } from './entitie
 import { Wallet } from './entities/wallet.entity';
 
 const PG_UNIQUE_VIOLATION = '23505';
+const UQ_TRANSACTIONS_IDEMPOTENCY_KEY = 'uq_transactions_idempotency_key';
 const USER_ACCOUNT_KINDS = new Set([LedgerAccountKind.UserWallet, LedgerAccountKind.UserEarnings]);
 
 export interface LedgerEntryInput {
@@ -111,7 +112,7 @@ export class LedgerService {
       });
       return { transaction, replayed: false };
     } catch (err) {
-      if ((err as { code?: string }).code === PG_UNIQUE_VIOLATION && (err as Error).message.includes('idempotency')) {
+      if (this.isUniqueViolation(err) && this.violatedConstraint(err, UQ_TRANSACTIONS_IDEMPOTENCY_KEY)) {
         const winner = await this.dataSource
           .getRepository(LedgerTransaction)
           .findOneByOrFail({ idempotencyKey: input.idempotencyKey });
@@ -268,20 +269,31 @@ export class LedgerService {
     };
     const found = await manager.getRepository(LedgerAccount).findOneBy(where);
     if (found) return found;
-    try {
-      return await manager.save(
-        manager.create(LedgerAccount, {
-          kind: entry.accountKind,
-          userId: isUserAccount ? (entry.userId as string) : null,
-          currency: entry.currency,
-        }),
-      );
-    } catch (err) {
-      if ((err as { code?: string }).code === PG_UNIQUE_VIOLATION) {
-        return manager.getRepository(LedgerAccount).findOneByOrFail(where);
-      }
-      throw err;
-    }
+    // Tạo lazy idempotent bằng ON CONFLICT DO NOTHING — KHÔNG dùng insert-rồi-bắt-23505 ở đây:
+    // resolveAccount chạy TRONG transaction ledger, 1 lỗi 23505 sẽ abort cả transaction Postgres
+    // (mọi lệnh sau đó fail 25P02), nên nhánh "bắt lỗi rồi findOneByOrFail lại" không bao giờ
+    // chạy được — 2 giao dịch đầu tiên cùng chạm 1 tài khoản CHƯA tồn tại (vd system_revenue ở
+    // lần tiêu tiền đầu tiên, hoặc ví của user mới với 2 request song song) làm bên thua chết 500
+    // thay vì dùng account bên thắng vừa tạo. DO NOTHING chờ bên thắng commit rồi đi tiếp,
+    // không error nào bị ném (cùng pattern lockWallet bên dưới).
+    await manager.query(
+      `INSERT INTO ledger_accounts (kind, user_id, currency) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+      [entry.accountKind, isUserAccount ? (entry.userId as string) : null, entry.currency],
+    );
+    return manager.getRepository(LedgerAccount).findOneByOrFail(where);
+  }
+
+  /** So driver error code, kèm fallback driverError (pg driver bọc code gốc trong đó). */
+  private isUniqueViolation(err: unknown): boolean {
+    const e = err as { code?: string; driverError?: { code?: string } };
+    return (e.driverError?.code ?? e.code) === PG_UNIQUE_VIOLATION;
+  }
+
+  /** So đúng tên constraint (không suy đoán qua message) — fallback message.includes cho driver cũ không trả constraint. */
+  private violatedConstraint(err: unknown, constraint: string): boolean {
+    const e = err as { driverError?: { constraint?: string }; constraint?: string; message?: string };
+    const name = e.driverError?.constraint ?? e.constraint;
+    return name === constraint || (e.message?.includes(constraint) ?? false);
   }
 
   private async lockWallet(manager: EntityManager, userId: string): Promise<Wallet> {

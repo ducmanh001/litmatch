@@ -116,11 +116,8 @@ export class EconomyService {
   async purchaseVip(
     userId: string,
     planId: string,
-    idempotencyKey: string | undefined,
+    idempotencyKey: string,
   ): Promise<{ transactionId: string; tier: VipTier; vipExpiresAt: Date; replayed: boolean }> {
-    if (!idempotencyKey) {
-      throw new DomainException(EconomyErrors.IDEMPOTENCY_KEY_MISSING, 'Thiếu header Idempotency-Key', 400);
-    }
     const plan = await this.planRepo.findOneBy({ id: planId, active: true });
     if (!plan) {
       throw new DomainException(EconomyErrors.VIP_PLAN_UNKNOWN, `Gói VIP ${planId} không tồn tại`, 404);
@@ -174,6 +171,59 @@ export class EconomyService {
       };
     }
     return { transactionId: result.transaction.id, tier: plan.tier, vipExpiresAt: newExpiry, replayed: false };
+  }
+
+  /**
+   * Trừ diamond generic cho module khác gọi qua DI (matching speed-up, gift, call billing... —
+   * docs/services/matching-service.md § 4): debit UserWallet / credit SystemRevenue qua
+   * `ledger.record()` (đã tự lo SELECT FOR UPDATE + idempotency + check số dư tại thời điểm trừ).
+   * KHÔNG side-effect nghiệp vụ nào khác ngoài ghi sổ — hiệu ứng riêng của từng domain
+   * (boost queue, gửi quà...) là việc của caller, không phình vào Economy.
+   * Caller tự prefix idempotencyKey theo domain, vd `matching:speedup:${userId}:${key}`.
+   */
+  async spendDiamond(
+    userId: string,
+    type: TransactionType,
+    amountDiamond: number,
+    idempotencyKey: string,
+    metadata: Record<string, unknown>,
+  ): Promise<{ transactionId: string; replayed: boolean }> {
+    if (!Number.isSafeInteger(amountDiamond) || amountDiamond <= 0) {
+      // Lỗi lập trình của caller (giá phải từ config, nguyên dương) — không phải lỗi client → Error, không DomainException
+      throw new Error(`spendDiamond: amountDiamond phải là số nguyên dương, nhận ${amountDiamond}`);
+    }
+    const amount = BigInt(amountDiamond);
+    const result = await this.ledger.record({
+      type,
+      idempotencyKey,
+      actorUserId: userId,
+      metadata,
+      entries: [
+        {
+          accountKind: LedgerAccountKind.UserWallet,
+          userId,
+          direction: LedgerDirection.Debit,
+          amount,
+          currency: LedgerCurrency.Diamond,
+        },
+        {
+          accountKind: LedgerAccountKind.SystemRevenue,
+          direction: LedgerDirection.Credit,
+          amount,
+          currency: LedgerCurrency.Diamond,
+        },
+      ],
+    });
+    return { transactionId: result.transaction.id, replayed: result.replayed };
+  }
+
+  /**
+   * 1 idempotency key đã có giao dịch ghi sổ chưa — read-only, cho caller phân biệt RETRY
+   * (phải replay kết quả cũ — docs/05 § 5.10) với LƯỢT MỚI trước khi áp rate-limit riêng
+   * của domain (vd matching speed-up: retry request đã trả tiền không được ăn 409 rate-limit).
+   */
+  async hasTransaction(idempotencyKey: string): Promise<boolean> {
+    return (await this.txnRepo.countBy({ idempotencyKey })) > 0;
   }
 
   /** Lịch sử giao dịch — cursor pagination (docs/05 § 5.4), diamondDelta ký hiệu +/− theo ví user. */

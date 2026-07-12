@@ -23,7 +23,8 @@
 
 ## Giai đoạn 2 — Matching lõi (Soul Match + Voice Match)
 > Xây Matching module theo đúng hình dạng full-scale ở [03-architecture.md § 3.8.B](./03-architecture.md) ngay từ đầu (ticket state machine + shard theo tiêu chí), thay vì làm 1 queue Redis đơn giản rồi tái cấu trúc sau.
-- [ ] Matching module: `MatchTicket` với state machine `queued → matched → confirmed → expired/cancelled`, queue shard theo (loại match × region × dải tiêu chí lọc cơ bản: tuổi/giới tính), priority speed-up (trừ diamond qua Economy module qua DI, không qua network)
+- [x] Matching module (slice M1 — ticket/queue engine): `MatchTicket` với state machine `queued → matched → confirmed → expired/cancelled`, queue **shard theo (loại match × region × dải tuổi)** — [services/matching-service.md](./services/matching-service.md). Giới tính KHÔNG phải tiêu chí shard (nhóm cùng giới lại không đúng kỹ thuật) — chuyển thành **filter lúc ghép cặp**, xem mục ngay dưới. Priority speed-up trừ diamond qua Economy module qua DI (không qua network) — đã có.
+- [ ] Matching: bộ lọc giới tính khi ghép cặp (docs/01 #13) — check ở thời điểm `tryPair` (cùng chỗ verify block/report, `docs/10 § 10.0.C`), theo preference lưu trên `User`/ticket, không phải sharding
 - [ ] Soul Match: chat room ẩn danh tạm thời, cơ chế like/dislike 2 chiều, unlock profile khi match
 - [ ] Signaling Gateway (Socket.IO) cho Voice Match
 - [ ] Tích hợp SFU (**LiveKit self-host — đã chốt theo § 3.8.A**) cho phòng 2 người
