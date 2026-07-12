@@ -111,7 +111,7 @@ Gift **không thể** cân trong 1 cặp Nợ/Có duy nhất, vì người tặn
 
 Cả hai chân nằm trong **cùng 1 DB transaction** (nếu 1 chân fail thì rollback cả hai — chống "trừ mà không cộng"/"cộng mà không trừ", [10 § Gift](../10-code-review-checklist.md)). Snapshot tỉ lệ quy đổi áp dụng lưu vào `transactions.metadata` (§ 1.5). Diamond **không bao giờ** chuyển thẳng user→user 1:1 — chênh lệch (giá quà − PTS thưởng) ở lại `system_gift_pool`/không mint thành DIA (chống rửa diamond, [06 § 3 bất biến](../06-domain-rules.md)).
 
-> **Việc cần làm khi bắt đầu code Gift (Giai đoạn 3)**: guard chặn balance âm hiện tại (`ledger.service.ts`) chỉ mở cho `type=Reversal`/`Adjustment` trên account `user_wallet`; reverse 1 giao dịch Gift sẽ đụng `user_earnings` (PTS) và bị chặn bởi `newEarnings < 0n` vì PTS chưa có luồng tiêu ở Giai đoạn 1 (earnings vẫn giữ `CHECK >= 0`, xem migration `1752000000000`). Trước khi code hoàn tiền Gift, cần quyết định: PTS có được phép âm khi reverse không, hay chính sách khác (chặn hoàn Gift nếu người nhận đã tiêu hết PTS).
+> **Trạng thái Giai đoạn 3 (Gift đã code — [gift-service.md](./gift-service.md))**: luồng tặng chạy qua `EconomyService.sendGift` (type `gift_send`, 4 bút toán như trên; chân PTS bỏ hẳn khi điểm = 0 — người nhận là guest, docs/06). Guard chặn balance âm (`ledger.service.ts`) và `CHECK (earnings >= 0)` GIỮ NGUYÊN; **luồng hoàn tiền Gift CHƯA code** — reverse gift sẽ đụng `newEarnings < 0n` đúng thiết kế. Trước khi code hoàn Gift (khi PTS có luồng tiêu), cần quyết định: PTS có được phép âm khi reverse không, hay chặn hoàn nếu người nhận đã tiêu hết PTS.
 
 ## 7. Giới hạn đã biết, cần đóng trước khi bật `store` thật (không chặn code Giai đoạn 1, nhưng phải nhớ)
 
