@@ -1,0 +1,8 @@
+{
+  "id": "frontend-03-double-submit",
+  "module": "frontend",
+  "docsRef": "Double-submit do thiếu gate trên hành động, không chỉ thiếu disable UI",
+  "description": "Form mua VIP không disable nút submit lúc mutation đang chạy — bấm nhanh 2 lần gửi 2 request mua liên tiếp trước khi UI kịp phản ánh trạng thái pending.",
+  "buggyCode": "function BuyVipButton({ planId }: { planId: string }) {\n  const buyVip = useMutation({\n    mutationFn: () => apiClient.POST('/api/v1/economy/vip/purchase', { body: { planId } }),\n  });\n\n  // BUG: không disabled={buyVip.isPending} — double-click gửi 2 request mua\n  return <button onClick={() => buyVip.mutate()}>Mua VIP</button>;\n}",
+  "whyWrong": "Không có gì ngăn 2 lần click gần như đồng thời gửi 2 mutation song song trước khi `isPending` kịp true — nếu request không mang cùng 1 idempotency key (docs/13 § 13.4: sinh UUID 1 lần cho mỗi intent, giữ nguyên khi retry) thì backend coi đây là 2 giao dịch mua riêng biệt, trừ tiền 2 lần. Disable nút theo `isPending` chỉ là lớp UX phụ; chốt chặn thật vẫn là idempotency key phía server."
+}

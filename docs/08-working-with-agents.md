@@ -83,6 +83,22 @@ Prompt, contract, context map, guard và skill được coi là code:
 - Thay đổi rule cần thêm positive case và negative case.
 - CI phải chạy `pnpm agent:check` và `pnpm agent:test`.
 
+## 8.8 Eval golden-bugs — 2 tầng, chỉ tầng 1 nằm trong CI
+
+`scripts/agent/golden-bugs/*.json` là thư viện lỗi nghiệp vụ thật khớp `docs/10 § 10.2`.
+
+- **Tầng 1 (tool, miễn phí, chạy trong `pnpm agent:test`)**: fixture còn parse được, đủ field,
+  `docsRef` còn khớp nguyên văn docs/10, mỗi module đã có ≥1 fixture. Đây chỉ đảm bảo _thư viện
+  câu hỏi_ còn nguyên vẹn, KHÔNG đo được agent review có thực sự bắt bug hay không.
+- **Tầng 2 (AI, có chi phí LLM thật, KHÔNG nằm trong CI/agent:test)**: đo agent review có bắt
+  được từng fixture không. Quy trình: `node scripts/agent/golden-bugs-eval-prep.mjs [--module=X]`
+  in prompt review MÙ (chỉ `buggyCode`, không lộ `whyWrong`/`description`) — giao mỗi fixture
+  cho 1 Agent call riêng, rồi tự so câu trả lời với `whyWrong` của đúng fixture đó để chấm.
+  Chạy tay khi: đổi đáng kể phương pháp luận `docs/10 § 10.0`, hoặc định kỳ (khuyến nghị hàng
+  quý) để phát hiện review chất lượng có tụt theo thời gian không. Không tự động hoá thành cron
+  mặc định — chi phí token định kỳ là quyết định người dùng phải bật rõ ràng (skill `/schedule`),
+  không phải hạ tầng agent tự ý bật.
+
 ---
 
 [← 07 · Roadmap](./07-roadmap.md) · [09 · Practical Notes →](./09-practical-notes.md)

@@ -75,6 +75,18 @@
 - [ ] CQRS/read-replica cho Feed khi lượng đọc vượt xa lượng ghi (fanout-on-write hoặc fanout-on-read tuỳ tỉ lệ follower trung bình)
 - [ ] Chaos testing cho luồng tiền (kill Economy giữa transaction, kill matcher giữa lúc ghép cặp) để xác nhận idempotency/outbox hoạt động đúng dưới lỗi thật, không chỉ đúng trên giấy
 
+## Frontend track (song song, không thuộc số Giai đoạn backend)
+
+> `apps/admin` và `apps/web` là client, không phải domain service ([12-frontend-architecture.md](./12-frontend-architecture.md)) — track này chạy **song song** với các Giai đoạn backend ở trên, không chiếm số Giai đoạn riêng (giữ đúng quy ước "không đánh lại số cũ"). Mỗi mục phụ thuộc backend nào được ghi rõ; mục không ghi phụ thuộc là làm được ngay.
+
+- [x] Hợp đồng REST: OpenAPI emit/gen + `libs/api-client` (ApiError, refresh rotation, token store) — xong 2026-07-13
+- [x] Scaffold core/base `apps/admin` (Vite+React) + `apps/web` (Next.js): env, providers, auth OTP, layout shell, realtime/media wiring — xong 2026-07-13
+- [ ] **Task 0 backend** (chặn mọi feature UI thật của admin): role enum + `RolesGuard` + admin endpoints + CORS — [12 § 12.7](./12-frontend-architecture.md)
+- [ ] Admin: users, moderation queue, economy ops, gift catalog (phụ thuộc Task 0 backend ở trên)
+- [ ] Web: matching, chat 1-1, party room UI (phụ thuộc Giai đoạn 2/3 backend — đã xong, làm được độc lập với Task 0 admin)
+- [ ] CI gate chống lệch OpenAPI spec (`openapi:emit` + `git diff --exit-code`) — [12 § 12.3](./12-frontend-architecture.md)
+- [ ] Coverage ratchet riêng cho `admin`/`web`/`api-client` khi feature thật đầu tiên vào (cùng cơ chế chỉ-nâng-không-hạ như core-api)
+
 ---
 
 [← 06 · Domain Rules](./06-domain-rules.md) · [08 · Working with Agents →](./08-working-with-agents.md)

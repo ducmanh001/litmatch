@@ -1,0 +1,8 @@
+{
+  "id": "frontend-01-copy-server-state",
+  "module": "frontend",
+  "docsRef": "Copy server state vào `useState`/store rồi render từ bản copy",
+  "description": "Sau khi tặng gift thành công, component tự cộng số dư vào state cục bộ thay vì để query refetch — số dư hiển thị lệch khỏi server ngay lần render tiếp theo.",
+  "buggyCode": "const [balance, setBalance] = useState(wallet.data?.balance ?? 0);\n\nconst sendGift = useMutation({\n  mutationFn: (input) => apiClient.POST('/api/v1/gifts/send', { body: input }),\n  onSuccess: (res, input) => {\n    // BUG: tự trừ tiền ở client thay vì invalidateQueries(walletKeys.detail())\n    setBalance((prev) => prev - input.priceDiamond);\n  },\n});",
+  "whyWrong": "`balance` giờ là 1 bản copy tách rời khỏi TanStack Query cache — lần query khác refetch ví (vd sau khi nhận thêm gift từ người khác qua realtime) sẽ cập nhật cache nhưng KHÔNG cập nhật `balance` cục bộ này, UI tiếp tục hiện số cũ. Đúng theo docs/13 § 13.4: mutation xong phải `invalidateQueries`, không tự dựng kết quả nghiệp vụ ở client."
+}

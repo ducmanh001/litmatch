@@ -187,6 +187,17 @@
 - Đổi/trang bị item không kiểm tra user thực sự sở hữu item đó (IDOR trên `itemId`) → mặc item của người khác
 - Race condition khi "sử dụng" 1 item có số lượng giới hạn (vd item event) → 2 request dùng cùng lúc dẫn tới dùng vượt số lượng sở hữu, tương tự lỗi nhân đôi vật phẩm phổ biến trong game
 
+**Frontend (browser) — lỗi kinh điển client-side, khác họ với lỗi backend ở trên** ([docs/13](./13-frontend-coding-standards.md))
+
+- **Copy server state vào `useState`/store rồi render từ bản copy**: mutation xong gọi `setQueryData`/`setState` tự dựng kết quả thay vì để server trả trạng thái mới — refetch xong UI vẫn hiện bản cũ vì đang đọc từ bản copy, không phải từ query (cấm ở [13 § 13.4](./13-frontend-coding-standards.md))
+- **Stale closure trong socket listener**: đăng ký handler 1 lần lúc mount, handler giữ tham chiếu state/props tại thời điểm đó (vd `roomId`) — event đến sau khi state đã đổi (đổi phòng, logout rồi login lại) vẫn xử lý theo giá trị cũ vì listener chưa được đăng ký lại
+- **Thiếu cleanup listener khi unmount**: mỗi lần component mount lại mà không gỡ listener cũ → nhiều listener cộng dồn, 1 event bị xử lý N lần với N tăng dần theo số lần mount — không lộ ra khi test tay 1 lần, chỉ lộ khi dùng lâu (điều hướng qua lại nhiều lần)
+- **Double-submit do thiếu gate trên hành động, không chỉ thiếu disable UI**: nút bấm nhanh 2 lần trước khi `isPending` kịp cập nhật, hoặc gọi lại mutation từ 2 chỗ khác nhau gần như đồng thời — chống thật là idempotency key phía server ([13 § 13.4](./13-frontend-coding-standards.md)), disable nút chỉ là lớp UX phụ
+- **Sinh idempotency key MỚI mỗi lần gọi (kể cả lúc retry vì lỗi mạng)**: vô hiệu hoá hẳn cơ chế idempotency phía backend — request timeout rồi retry với key mới bị server coi là giao dịch khác, có thể trừ tiền/tặng quà 2 lần dù client tưởng đang "thử lại y hệt"
+- **Tin dữ liệu tính ở client để quyết định cho phép hành động** (giá hiển thị, số dư còn lại, VIP còn hạn) thay vì luôn dựa trên response mới nhất từ server — client lệch một nhịp so với server (do cache, do request khác vừa chạy) là ra quyết định sai
+- **Reconnect socket nhưng không refetch REST**: coi im lặng trong lúc mất kết nối là "không có gì đổi" — event đã miss trong lúc rớt mạng không được server gửi lại, UI lệch khỏi state thật cho tới lần F5 tiếp theo (cấm ở [13 § 13.8](./13-frontend-coding-standards.md))
+- **Guard route/ẩn UI theo role bị coi là chốt chặn thật**: route bị ẩn nhưng API đứng sau vẫn không có guard ở server, hoặc 1 đường khác (deep link, gọi thẳng hàm) bỏ qua được UI đã ẩn — enforcement thật luôn ở backend guard ([12 § 12.9](./12-frontend-architecture.md)), ẩn ở FE chỉ là UX
+
 **Distributed system (cross-cutting, áp dụng cả khi còn là modular monolith lẫn khi đã tách service)**
 
 - Publish event trước khi transaction DB commit xong → consumer nhận event nhưng data chưa thực sự tồn tại (dual-write problem) → nên dùng **Outbox Pattern**

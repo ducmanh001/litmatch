@@ -5,7 +5,13 @@ export const ALLOWED_APPS = new Set([
   'core-api-e2e',
   'signaling-gateway-e2e',
   'media-server-e2e',
+  // Frontend client — không phải deployable backend thứ 4 (docs/12 § 12.1)
+  'admin',
+  'web',
 ]);
+
+/** App frontend (docs/12) — có bộ rule riêng bên dưới, khác rule backend. */
+export const FRONTEND_APPS = new Set(['admin', 'web']);
 
 export function isTestFile(filePath) {
   return (
@@ -77,6 +83,48 @@ export function inspectChange({
     violations.push(
       'Migration đã commit là bất biến; tạo migration mới thay vì sửa/xoá.',
     );
+  }
+
+  // ── Rule riêng cho frontend app (enforce docs/12 § 12.9 + docs/13 bằng máy) ──
+  // File config build-time (vite/next/postcss...) không phải code bundle — miễn rule env
+  const isBuildConfig =
+    /\/[^/]+\.config\.[cm]?[jt]s$/u.test(normalized) ||
+    /\.d\.ts$/u.test(normalized);
+  const isFrontendFile =
+    appMatch &&
+    FRONTEND_APPS.has(appMatch[1]) &&
+    codeFile &&
+    !isTestFile(normalized) &&
+    !isBuildConfig;
+  if (isFrontendFile) {
+    const isEnvModule = /\/shared\/env\.ts$/u.test(normalized);
+    if (!isEnvModule && /import\.meta\.env|process\.env/u.test(content)) {
+      violations.push(
+        'FE chỉ đọc env qua src/shared/env.ts (docs/13 § 13.10); không đọc import.meta.env/process.env rải rác.',
+      );
+    }
+    if (
+      /from\s+['"]axios['"]|\bnew\s+XMLHttpRequest\b|\bfetch\s*\(/u.test(
+        content,
+      )
+    ) {
+      violations.push(
+        'Mọi REST call của FE đi qua @litmatch/api-client (docs/12 § 12.3); không fetch/axios tay.',
+      );
+    }
+    if (/from\s+['"]@litmatch\/common-dtos['"]/u.test(content)) {
+      violations.push(
+        "FE import '@litmatch/common-dtos/pure' (entry thuần), không import entry chính — kéo class-validator vào bundle (docs/12 § 12.3).",
+      );
+    }
+    if (
+      /from\s+['"][^'"]*apps\/core-api/u.test(content) ||
+      /from\s+['"]\.\..*core-api/u.test(content)
+    ) {
+      violations.push(
+        'FE không import từ apps/core-api — hợp đồng đi qua @litmatch/api-client (docs/12 § 12.9).',
+      );
+    }
   }
 
   return violations;

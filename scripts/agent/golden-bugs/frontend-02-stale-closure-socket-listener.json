@@ -1,0 +1,8 @@
+{
+  "id": "frontend-02-stale-closure-socket-listener",
+  "module": "frontend",
+  "docsRef": "Stale closure trong socket listener",
+  "description": "Listener `party.member.joined` đăng ký 1 lần lúc mount với dependency rỗng, đóng lại `roomId` cũ — user chuyển sang phòng khác nhưng event vẫn xử lý theo phòng trước đó.",
+  "buggyCode": "function usePartyRoomMembers(roomId: string) {\n  const [members, setMembers] = useState<Member[]>([]);\n\n  useEffect(() => {\n    // BUG: dependency [] — closure giữ roomId tại lần mount đầu tiên mãi mãi\n    return subscribeRealtime(RealtimeEvents.PartyMemberJoined, (data) => {\n      if (data.roomId === roomId) setMembers((m) => [...m, data.member]);\n    });\n  }, []);\n\n  return members;\n}",
+  "whyWrong": "`roomId` trong closure là giá trị tại lần effect chạy đầu tiên (React exhaustive-deps sẽ cảnh báo điều này) — user rời phòng A vào phòng B, listener cũ (đóng gói `roomId=A`) vẫn còn sống vì effect không re-run, nên event của phòng B bị so sánh nhầm với `roomId=A` và bị bỏ qua. Phải đưa `roomId` vào dependency array để effect cleanup + đăng ký lại listener mới mỗi khi đổi phòng (docs/13 § 13.8)."
+}
