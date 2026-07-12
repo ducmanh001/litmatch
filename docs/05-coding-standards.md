@@ -55,6 +55,14 @@ Mỗi module nghiệp vụ khác (auth, user, social, content, moderation, notif
 
 Khung chỉ cứng ở tầng hình thái này — business logic trong service tự do, không abstract hoá nghiệp vụ.
 
+**Enum và interface nội bộ — định nghĩa cùng file dùng nó, không tách file riêng mặc định:**
+
+- Enum chỉ gắn với 1 cột của đúng 1 entity (vd `IapProvider` trên cột `IapReceipt.provider`) → khai ngay trong file entity đó (`*.entity.ts`/`*.entities.ts`), `export` để nơi khác import khi cần. Không tạo `*.enums.ts` riêng cho 1 enum nhỏ dùng 1 chỗ.
+- Interface là input/output cho lời gọi **nội bộ giữa module qua DI** (không phải DTO nhận từ HTTP — HTTP DTO vẫn bắt buộc class + class-validator theo § 5.1) → khai ngay trong `*.service.ts` là nơi định nghĩa/dùng nó, `export` thẳng để module khác import qua đúng public API (`index.ts`). Không cần class-validator vì đây không phải system boundary.
+- Chỉ tách ra file riêng (`*.enums.ts`, `*.interfaces.ts`) khi 1 enum/interface thực sự dùng chung bởi ≥2 entity/service không liên quan trực tiếp, để tránh import vòng hoặc kéo cả file service chỉ để lấy 1 type.
+- **Port/Strategy có nhiều implementation chọn qua config** (vd verify receipt IAP, gửi SMS, verify webhook — nơi cần đổi Dev ↔ Store/thật qua env mà không sửa code gọi): khai `abstract class` + toàn bộ implementation cụ thể (`Dev...`, `Store...`) chung 1 file đặt tên theo khái niệm (`iap-verifier.ts`, `sms-provider.ts`), không tách mỗi implementation 1 file. Bind qua module bằng `provide: <AbstractClass>` (dùng thẳng class làm token, không cần `Symbol`) + `useClass`/`useFactory` chọn theo config.
+- **DI token qua `Symbol()`**: chỉ dùng khi KHÔNG có class để làm token — type của thư viện ngoài (vd client Redis) hoặc 1 `interface` thuần không tồn tại lúc runtime (vd 1 policy có thể bị override bởi module khác chưa tồn tại). Có abstract class rồi thì bind thẳng bằng class đó, không tạo thêm `Symbol`.
+
 ## 5.4 API contract
 
 - REST, version trong URI ngay từ đầu: `api/v1/...` (URI versioning của NestJS) — đổi breaking thì lên `v2`, không sửa ngầm `v1`.

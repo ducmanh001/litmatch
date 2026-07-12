@@ -1,11 +1,12 @@
-import { Body, Controller, Get, Headers, HttpCode, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiHeader, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, HttpCode, Post, Query } from '@nestjs/common';
+import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { CursorPageQueryDto } from '@litmatch/common-dtos';
 
 import { EconomyService } from './economy.service';
 import { PurchaseVipDto, VerifyIapDto, WalletDto } from './dto/economy.dtos';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ApiIdempotencyKeyHeader, IdempotencyKey } from '../../common/decorators/idempotency-key.decorator';
 
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 
@@ -34,12 +35,12 @@ export class EconomyController {
 
   @Post('vip/purchase')
   @HttpCode(200)
-  @ApiHeader({ name: 'Idempotency-Key', required: true, description: 'Bắt buộc cho mọi API trừ diamond (docs/05 § 5.4)' })
+  @ApiIdempotencyKeyHeader()
   @ApiOperation({ summary: 'Mua VIP bằng diamond — gia hạn cộng dồn nếu đang active' })
   purchaseVip(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: PurchaseVipDto,
-    @Headers('idempotency-key') idempotencyKey?: string,
+    @IdempotencyKey() idempotencyKey: string,
   ) {
     return this.economyService.purchaseVip(user.userId, dto.planId, idempotencyKey);
   }

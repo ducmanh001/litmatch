@@ -54,9 +54,11 @@ export class AuthService {
     // Xác minh lại trạng thái ĐÚNG THỜI ĐIỂM hành động (docs/10 § 10.0.C):
     // user bị ban giữa 2 lần refresh thì không được cấp phiên mới
     const user = await this.userService.getByIdOrThrow(userId);
-    if (user.status !== UserStatus.Active) {
+    try {
+      this.assertActive(user);
+    } catch (err) {
       await this.tokenService.revoke(tokens.refreshToken);
-      throw new DomainException(AuthErrors.USER_BANNED, 'Tài khoản đã bị khoá', 403);
+      throw err;
     }
     return { ...tokens, userId: user.id, isGuest: user.isGuest };
   }
