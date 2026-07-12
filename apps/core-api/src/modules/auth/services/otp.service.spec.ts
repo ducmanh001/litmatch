@@ -5,7 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
 import { OtpService } from './otp.service';
-import { SmsProvider } from './sms-provider';
+import { SmsProvider } from '../ports/sms-provider';
 import { AuthErrors } from '../auth.errors';
 import { PhoneOtp } from '../entities/phone-otp.entity';
 

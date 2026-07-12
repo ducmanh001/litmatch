@@ -1,13 +1,14 @@
-import { Body, Controller, Headers, HttpCode, Logger, Post } from '@nestjs/common';
+import { Body, Controller, Headers, HttpCode, HttpStatus, Logger, Post } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiExcludeController } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
+import { Throttle, minutes } from '@nestjs/throttler';
 
+import type { CoreApiEnv } from '../../../config/env.validation';
 import { Public } from '../../../common/decorators/public.decorator';
 import { AppleServerNotificationDto, GoogleRtdnEnvelopeDto } from '../dto/webhook.dtos';
 import { IapProvider } from '../entities/iap.entities';
 import { RefundService } from '../services/refund.service';
-import { AppleNotificationVerifier, GoogleRtdnVerifier } from '../services/notification-verifier';
+import { AppleNotificationVerifier, GoogleRtdnVerifier } from '../ports/notification-verifier';
 
 // Notification type gây hoàn tiền (Apple App Store Server Notifications V2).
 const APPLE_REFUND_NOTIFICATION_TYPES = new Set(['REFUND', 'REVOKE']);
@@ -30,18 +31,18 @@ export class EconomyWebhooksController {
     private readonly refundService: RefundService,
     private readonly appleVerifier: AppleNotificationVerifier,
     private readonly googleVerifier: GoogleRtdnVerifier,
-    private readonly config: ConfigService,
+    private readonly config: ConfigService<CoreApiEnv, true>,
   ) {}
 
   @Post('apple')
-  @HttpCode(200)
-  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 60, ttl: minutes(1) } })
   async appleNotification(@Body() dto: AppleServerNotificationDto): Promise<{ received: boolean }> {
     const payload = await this.appleVerifier.verify(dto.signedPayload);
 
     // Defense-in-depth: chain hợp lệ chỉ chứng minh "Apple ký", chưa chứng minh "ký cho app này"
     // (mọi app dùng chung 1 chain chứng chỉ Apple) — phải tự đối chiếu bundleId cấu hình.
-    const expectedBundleId = this.config.getOrThrow<string>('ECONOMY_APPLE_BUNDLE_ID');
+    const expectedBundleId = this.config.getOrThrow('ECONOMY_APPLE_BUNDLE_ID', { infer: true });
     if (expectedBundleId && payload.data.bundleId !== expectedBundleId) {
       this.logger.warn(`Apple notification bundleId lạ: ${payload.data.bundleId}`);
       return { received: true };
@@ -60,8 +61,8 @@ export class EconomyWebhooksController {
   }
 
   @Post('google/rtdn')
-  @HttpCode(200)
-  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 60, ttl: minutes(1) } })
   async googleRtdn(
     @Body() dto: GoogleRtdnEnvelopeDto,
     @Headers('authorization') authorizationHeader?: string,

@@ -1,10 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@litmatch/common-exceptions';
 import { Repository } from 'typeorm';
 
+import { buildCursorPage, decodeCursor } from '@litmatch/common-dtos';
+
+import { ECONOMY_EVENTS_TOPIC } from './economy.constants';
 import { EconomyErrors } from './economy.errors';
-import { LedgerService } from './ledger.service';
+import { LedgerService } from './services/ledger.service';
 import { LedgerAccountKind, LedgerCurrency } from './entities/ledger-account.entity';
 import { LedgerDirection } from './entities/ledger-entry.entity';
 import { IapProduct, IapProvider, IapReceipt } from './entities/iap.entities';
@@ -12,7 +15,7 @@ import { OutboxEvent } from './entities/outbox-event.entity';
 import { LedgerTransaction, TransactionType } from './entities/transaction.entity';
 import { VipPlan } from './entities/vip-plan.entity';
 import { VipTier, Wallet } from './entities/wallet.entity';
-import { IapVerifier } from './services/iap-verifier';
+import { IapVerifier } from './ports/iap-verifier';
 
 import type { CursorPageMeta } from '@litmatch/common-dtos';
 
@@ -69,7 +72,7 @@ export class EconomyService {
   ): Promise<{ transactionId: string; diamonds: string; replayed: boolean }> {
     const product = await this.productRepo.findOneBy({ productId, provider, active: true });
     if (!product) {
-      throw new DomainException(EconomyErrors.IAP_PRODUCT_UNKNOWN, `Product ${productId} không tồn tại`, 400);
+      throw new DomainException(EconomyErrors.IAP_PRODUCT_UNKNOWN, `Product ${productId} không tồn tại`, HttpStatus.BAD_REQUEST);
     }
 
     const verified = await this.iapVerifier.verify(provider, payload, productId);
@@ -120,7 +123,7 @@ export class EconomyService {
   ): Promise<{ transactionId: string; tier: VipTier; vipExpiresAt: Date; replayed: boolean }> {
     const plan = await this.planRepo.findOneBy({ id: planId, active: true });
     if (!plan) {
-      throw new DomainException(EconomyErrors.VIP_PLAN_UNKNOWN, `Gói VIP ${planId} không tồn tại`, 404);
+      throw new DomainException(EconomyErrors.VIP_PLAN_UNKNOWN, `Gói VIP ${planId} không tồn tại`, HttpStatus.NOT_FOUND);
     }
 
     let newExpiry = new Date();
@@ -152,7 +155,7 @@ export class EconomyService {
         await manager.update(Wallet, { userId }, { vipTier: plan.tier, vipExpiresAt: newExpiry });
         await manager.save(
           manager.create(OutboxEvent, {
-            topic: 'litmatch.economy.events',
+            topic: ECONOMY_EVENTS_TOPIC,
             eventType: 'economy.vip.purchased',
             payload: { version: 1, userId, planId, tier: plan.tier, vipExpiresAt: newExpiry.toISOString() },
           }),
@@ -249,27 +252,30 @@ export class EconomyService {
       .limit(limit + 1);
 
     if (cursor) {
-      const [createdAt, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
-      qb.andWhere('(t.created_at, t.id) < (:cursorCreatedAt, :cursorId)', { cursorCreatedAt: createdAt, cursorId: id });
+      // decode/encode qua helper chuẩn của @litmatch/common-dtos (docs/05 § 5.3) — không tự chế format cursor riêng
+      const pos = decodeCursor<{ createdAt: string; id: string }>(cursor);
+      if (!pos?.createdAt || !pos?.id) {
+        throw new DomainException(EconomyErrors.CURSOR_INVALID, 'Cursor không hợp lệ', HttpStatus.BAD_REQUEST);
+      }
+      qb.andWhere('(t.created_at, t.id) < (:cursorCreatedAt, :cursorId)', {
+        cursorCreatedAt: pos.createdAt,
+        cursorId: pos.id,
+      });
     }
 
     const rows: Array<{ id: string; type: TransactionType; status: string; created_at: Date; diamond_delta: string }> =
       await qb.getRawMany();
-    const page = rows.slice(0, limit);
-    const nextCursor =
-      rows.length > limit && page.length > 0
-        ? Buffer.from(`${page[page.length - 1].created_at.toISOString()}|${page[page.length - 1].id}`).toString('base64url')
-        : null;
+    const page = buildCursorPage(rows, limit, (last) => ({ createdAt: last.created_at.toISOString(), id: last.id }));
 
     return {
-      data: page.map((r) => ({
+      data: page.items.map((r) => ({
         id: r.id,
         type: r.type,
         status: r.status,
         diamondDelta: r.diamond_delta,
         createdAt: r.created_at,
       })),
-      meta: { nextCursor },
+      meta: page.meta,
     };
   }
 }

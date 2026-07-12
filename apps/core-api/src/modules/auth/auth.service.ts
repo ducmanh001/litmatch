@@ -1,10 +1,11 @@
 import { randomInt } from 'node:crypto';
 
-import { Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@litmatch/common-exceptions';
 import { DataSource, Repository } from 'typeorm';
 
+import { isUniqueViolation } from '../../database/postgres-errors';
 import { User, UserService, UserStatus } from '../user';
 
 import { AuthErrors } from './auth.errors';
@@ -14,8 +15,6 @@ import { SocialVerifierService } from './services/social-verifier';
 import { TokenService } from './services/token.service';
 
 import type { AuthTokensDto } from './dto/auth-tokens.dto';
-
-const PG_UNIQUE_VIOLATION = '23505';
 
 @Injectable()
 export class AuthService {
@@ -91,7 +90,7 @@ export class AuthService {
         return user;
       });
     } catch (err) {
-      if ((err as { code?: string }).code === PG_UNIQUE_VIOLATION) {
+      if (isUniqueViolation(err)) {
         const identity = await this.identityRepo.findOneByOrFail({ provider, providerUid });
         return this.assertActive(await this.userService.getByIdOrThrow(identity.userId));
       }
@@ -101,7 +100,7 @@ export class AuthService {
 
   private assertActive(user: User): User {
     if (user.status !== UserStatus.Active) {
-      throw new DomainException(AuthErrors.USER_BANNED, 'Tài khoản đã bị khoá', 403);
+      throw new DomainException(AuthErrors.USER_BANNED, 'Tài khoản đã bị khoá', HttpStatus.FORBIDDEN);
     }
     return user;
   }

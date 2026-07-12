@@ -4,7 +4,7 @@ import { DomainException } from '@litmatch/common-exceptions';
 import { Repository } from 'typeorm';
 
 import { EconomyErrors } from '../economy.errors';
-import { LedgerService } from '../ledger.service';
+import { LedgerService } from './ledger.service';
 import { IapProvider, IapReceipt, IapReceiptStatus } from '../entities/iap.entities';
 import { LedgerTransaction } from '../entities/transaction.entity';
 

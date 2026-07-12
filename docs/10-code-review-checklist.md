@@ -71,6 +71,12 @@
 
 **G. Code hygiene**
 - Magic number/string rải rác thay vì đưa vào constant/config
+- **Tự viết tay/tự định nghĩa lại 1 giá trị mà framework/thư viện đang dùng đã có sẵn hằng số/enum/type cho đúng việc đó** (vd `@HttpCode(200)` thay vì `HttpStatus.OK` của `@nestjs/common`, tự định nghĩa lại 1 union type trùng enum thư viện đã export, tự parse thứ mà 1 decorator/pipe có sẵn đã làm) — luôn kiểm tra framework/thư viện đã cung cấp sẵn trước khi viết tay hoặc tự định nghĩa hằng số riêng trùng lặp. Ngoại lệ: khi giá trị đó bắt buộc phải cấu hình động qua `.env`/`ConfigService` (§ 5.1) mà API tĩnh của thư viện không hỗ trợ (vd interval của cron đọc từ config → phải dùng `SchedulerRegistry` động thay vì decorator `@Interval()`/`@Cron()` tĩnh) thì không tính là lỗi.
+- **Cùng 1 giá trị/helper bị định nghĩa ≥2 nơi trong repo** (`docs/05 § 5.1` — grep trước khi khai mới): mã lỗi Postgres, helper bắt unique-violation, URL bên thứ 3, topic Kafka, JWT payload shape... — 1 định nghĩa duy nhất tại tầng chủ quản (`database/`, `common/`, `<module>.constants.ts`), mọi nơi khác import.
+- **Tự chế lại 1 helper mà khung dùng chung đã có** (`docs/05 § 5.3`: cursor pagination, idempotency decorator, postgres-errors, DomainException...) — vd tự encode cursor bằng `Buffer` thay vì `encodeCursor`/`buildCursorPage` của `@litmatch/common-dtos`. 2 chuẩn song song = mỗi bản thiếu 1 case khác nhau.
+- **Chuỗi định danh nội bộ (job name, Redis key, Kafka topic, tên constraint, prefix idempotency, Symbol DI token) viết literal tại chỗ dùng** thay vì named constant/builder ở file chủ quản, hoặc khai báo mà không có comment lý do (`docs/05 § 5.1` mục 4).
+- **Hợp đồng type giữa producer và consumer bị chẻ đôi** — 2 đầu tự khai shape riêng (vd nơi ký JWT truyền object literal, nơi verify tự khai interface): thêm field là phải sửa 2 chỗ, lệch không báo compile (`docs/05 § 5.3`).
+- **Module có cấu trúc thư mục lệch chuẩn `docs/05 § 5.3`** (service phụ nằm ở gốc module thay vì `services/`, thiếu `index.ts`/`*.errors.ts`) — module sau copy theo là lệch lan rộng.
 - Comment lỗi thời không khớp code thật, hoặc code bị comment out để "sau này dùng"
 - Method quá dài (>50 dòng) hoặc nesting sâu (>3 cấp if/else)
 

@@ -1,6 +1,8 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import type { CoreApiEnv } from '../../../config/env.validation';
+
 /** Cổng gửi SMS — implementation thật (Twilio/SNS/nhà mạng) cắm vào ở giai đoạn sau. */
 export abstract class SmsProvider {
   abstract send(phone: string, message: string): Promise<void>;
@@ -14,12 +16,12 @@ export abstract class SmsProvider {
 export class DevSmsProvider extends SmsProvider implements OnApplicationBootstrap {
   private readonly logger = new Logger(DevSmsProvider.name);
 
-  constructor(private readonly config: ConfigService) {
+  constructor(private readonly config: ConfigService<CoreApiEnv, true>) {
     super();
   }
 
   onApplicationBootstrap(): void {
-    if (this.config.get<string>('NODE_ENV') === 'production') {
+    if (this.config.get('NODE_ENV', { infer: true }) === 'production') {
       throw new Error('DevSmsProvider không được dùng ở production — cấu hình SmsProvider thật trước khi deploy');
     }
   }

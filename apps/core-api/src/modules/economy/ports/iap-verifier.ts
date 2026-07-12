@@ -1,10 +1,20 @@
-import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DomainException } from '@litmatch/common-exceptions';
 
+import type { CoreApiEnv } from '../../../config/env.validation';
+import {
+  ANDROID_PUBLISHER_API_BASE,
+  ANDROID_PUBLISHER_SCOPE,
+  APPLE_STATUS_OK,
+  APPLE_STATUS_SANDBOX_RECEIPT,
+  APPLE_VERIFY_RECEIPT_SANDBOX_URL,
+  APPLE_VERIFY_RECEIPT_URL,
+  GOOGLE_PURCHASE_STATE_PURCHASED,
+} from '../economy.constants';
 import { EconomyErrors } from '../economy.errors';
 import { IapProvider } from '../entities/iap.entities';
-import { getGoogleServiceAccountAccessToken } from './google-service-account';
+import { getGoogleServiceAccountAccessToken } from '../clients/google-service-account';
 
 export interface VerifiedPurchase {
   providerTransactionId: string;
@@ -23,12 +33,12 @@ export abstract class IapVerifier {
 export class DevIapVerifier extends IapVerifier implements OnApplicationBootstrap {
   private readonly logger = new Logger(DevIapVerifier.name);
 
-  constructor(private readonly config: ConfigService) {
+  constructor(private readonly config: ConfigService<CoreApiEnv, true>) {
     super();
   }
 
   onApplicationBootstrap(): void {
-    if (this.config.get<string>('NODE_ENV') === 'production') {
+    if (this.config.get('NODE_ENV', { infer: true }) === 'production') {
       throw new Error('DevIapVerifier không được dùng ở production — set ECONOMY_IAP_VERIFIER=store');
     }
   }
@@ -36,7 +46,7 @@ export class DevIapVerifier extends IapVerifier implements OnApplicationBootstra
   async verify(provider: IapProvider, payload: Record<string, unknown>): Promise<VerifiedPurchase> {
     const devId = payload['devTransactionId'];
     if (typeof devId !== 'string' || devId.length < 4) {
-      throw new DomainException(EconomyErrors.IAP_RECEIPT_INVALID, 'devTransactionId không hợp lệ', 400);
+      throw new DomainException(EconomyErrors.IAP_RECEIPT_INVALID, 'devTransactionId không hợp lệ', HttpStatus.BAD_REQUEST);
     }
     this.logger.warn(`[DEV-ONLY IAP] chấp nhận receipt giả ${provider}:${devId}`);
     return { providerTransactionId: devId };
@@ -49,7 +59,7 @@ export class DevIapVerifier extends IapVerifier implements OnApplicationBootstra
  */
 @Injectable()
 export class StoreIapVerifier extends IapVerifier {
-  constructor(private readonly config: ConfigService) {
+  constructor(private readonly config: ConfigService<CoreApiEnv, true>) {
     super();
   }
 
@@ -61,22 +71,22 @@ export class StoreIapVerifier extends IapVerifier {
   private async verifyApple(payload: Record<string, unknown>, productId: string): Promise<VerifiedPurchase> {
     const receipt = payload['receiptData'];
     if (typeof receipt !== 'string') {
-      throw new DomainException(EconomyErrors.IAP_RECEIPT_INVALID, 'Thiếu receiptData', 400);
+      throw new DomainException(EconomyErrors.IAP_RECEIPT_INVALID, 'Thiếu receiptData', HttpStatus.BAD_REQUEST);
     }
-    const sharedSecret = this.config.getOrThrow<string>('ECONOMY_APPLE_SHARED_SECRET');
+    const sharedSecret = this.config.getOrThrow('ECONOMY_APPLE_SHARED_SECRET', { infer: true });
 
-    // verifyReceipt: thử production trước, 21007 → receipt sandbox → thử lại endpoint sandbox (quy tắc Apple)
-    let body = await this.postAppleVerify('https://buy.itunes.apple.com/verifyReceipt', receipt, sharedSecret);
-    if (body.status === 21007) {
-      body = await this.postAppleVerify('https://sandbox.itunes.apple.com/verifyReceipt', receipt, sharedSecret);
+    // verifyReceipt: thử production trước, receipt sandbox → thử lại endpoint sandbox (quy tắc Apple)
+    let body = await this.postAppleVerify(APPLE_VERIFY_RECEIPT_URL, receipt, sharedSecret);
+    if (body.status === APPLE_STATUS_SANDBOX_RECEIPT) {
+      body = await this.postAppleVerify(APPLE_VERIFY_RECEIPT_SANDBOX_URL, receipt, sharedSecret);
     }
-    if (body.status !== 0) {
-      throw new DomainException(EconomyErrors.IAP_RECEIPT_INVALID, `Apple từ chối receipt (status ${body.status})`, 400);
+    if (body.status !== APPLE_STATUS_OK) {
+      throw new DomainException(EconomyErrors.IAP_RECEIPT_INVALID, `Apple từ chối receipt (status ${body.status})`, HttpStatus.BAD_REQUEST);
     }
     const purchases = (body.receipt?.in_app ?? []) as Array<{ product_id: string; transaction_id: string }>;
     const match = purchases.find((p) => p.product_id === productId);
     if (!match) {
-      throw new DomainException(EconomyErrors.IAP_RECEIPT_INVALID, 'Receipt không chứa product này', 400);
+      throw new DomainException(EconomyErrors.IAP_RECEIPT_INVALID, 'Receipt không chứa product này', HttpStatus.BAD_REQUEST);
     }
     return { providerTransactionId: match.transaction_id };
   }
@@ -97,24 +107,24 @@ export class StoreIapVerifier extends IapVerifier {
   private async verifyGoogle(payload: Record<string, unknown>, productId: string): Promise<VerifiedPurchase> {
     const purchaseToken = payload['purchaseToken'];
     if (typeof purchaseToken !== 'string') {
-      throw new DomainException(EconomyErrors.IAP_RECEIPT_INVALID, 'Thiếu purchaseToken', 400);
+      throw new DomainException(EconomyErrors.IAP_RECEIPT_INVALID, 'Thiếu purchaseToken', HttpStatus.BAD_REQUEST);
     }
-    const packageName = this.config.getOrThrow<string>('ECONOMY_GOOGLE_PACKAGE_NAME');
+    const packageName = this.config.getOrThrow('ECONOMY_GOOGLE_PACKAGE_NAME', { infer: true });
     const accessToken = await this.googleAccessToken();
 
-    const url = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${encodeURIComponent(packageName)}/purchases/products/${encodeURIComponent(productId)}/tokens/${encodeURIComponent(purchaseToken)}`;
+    const url = `${ANDROID_PUBLISHER_API_BASE}/applications/${encodeURIComponent(packageName)}/purchases/products/${encodeURIComponent(productId)}/tokens/${encodeURIComponent(purchaseToken)}`;
     const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
     if (!res.ok) {
-      throw new DomainException(EconomyErrors.IAP_RECEIPT_INVALID, `Google từ chối purchase token (${res.status})`, 400);
+      throw new DomainException(EconomyErrors.IAP_RECEIPT_INVALID, `Google từ chối purchase token (${res.status})`, HttpStatus.BAD_REQUEST);
     }
     const body = (await res.json()) as { purchaseState?: number; orderId?: string };
-    if (body.purchaseState !== 0 || !body.orderId) {
-      throw new DomainException(EconomyErrors.IAP_RECEIPT_INVALID, 'Purchase chưa ở trạng thái purchased', 400);
+    if (body.purchaseState !== GOOGLE_PURCHASE_STATE_PURCHASED || !body.orderId) {
+      throw new DomainException(EconomyErrors.IAP_RECEIPT_INVALID, 'Purchase chưa ở trạng thái purchased', HttpStatus.BAD_REQUEST);
     }
     return { providerTransactionId: body.orderId };
   }
 
   private async googleAccessToken(): Promise<string> {
-    return getGoogleServiceAccountAccessToken(this.config, 'https://www.googleapis.com/auth/androidpublisher');
+    return getGoogleServiceAccountAccessToken(this.config, ANDROID_PUBLISHER_SCOPE);
   }
 }

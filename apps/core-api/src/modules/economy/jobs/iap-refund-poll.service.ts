@@ -1,15 +1,21 @@
-import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
+import type { CoreApiEnv } from '../../../config/env.validation';
+import { ANDROID_PUBLISHER_API_BASE, ANDROID_PUBLISHER_SCOPE } from '../economy.constants';
 import { IapProvider, IapReceipt, IapReceiptStatus } from '../entities/iap.entities';
-import { appleServerApiBaseUrl, getAppleServerApiToken } from './apple-server-api';
-import { getGoogleServiceAccountAccessToken } from './google-service-account';
-import { RefundService } from './refund.service';
+import { appleServerApiBaseUrl, getAppleServerApiToken } from '../clients/apple-server-api';
+import { getGoogleServiceAccountAccessToken } from '../clients/google-service-account';
+import { RefundService } from '../services/refund.service';
 
 const JOB = 'economy-iap-refund-poll';
+/** Batch vận hành nội bộ mỗi tick — không phải rule nghiệp vụ (cùng phong cách SESSION_SWEEP_BATCH). */
+const REFUND_POLL_BATCH = 200;
+/** maxResults tối đa của Google Voided Purchases API. */
+const VOIDED_PURCHASES_PAGE_SIZE = 1000;
 
 export interface RefundPollReport {
   checked: number;
@@ -37,15 +43,15 @@ export class IapRefundPollService implements OnApplicationBootstrap, OnApplicati
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly refundService: RefundService,
-    private readonly config: ConfigService,
+    private readonly config: ConfigService<CoreApiEnv, true>,
     private readonly scheduler: SchedulerRegistry,
   ) {}
 
   onApplicationBootstrap(): void {
-    if (!this.config.getOrThrow<boolean>('ECONOMY_REFUND_POLL_ENABLED')) return;
+    if (!this.config.getOrThrow('ECONOMY_REFUND_POLL_ENABLED', { infer: true })) return;
     const interval = setInterval(
       () => void this.runOnce().catch((err) => this.logger.error({ err: `${err}` }, 'Refund poll job lỗi')),
-      this.config.getOrThrow<number>('ECONOMY_REFUND_POLL_INTERVAL_MS'),
+      this.config.getOrThrow('ECONOMY_REFUND_POLL_INTERVAL_MS', { infer: true }),
     );
     this.scheduler.addInterval(JOB, interval);
   }
@@ -54,8 +60,8 @@ export class IapRefundPollService implements OnApplicationBootstrap, OnApplicati
     if (this.scheduler.doesExist('interval', JOB)) this.scheduler.deleteInterval(JOB);
   }
 
-  async runOnce(batchSize = 200): Promise<RefundPollReport> {
-    const windowDays = this.config.getOrThrow<number>('ECONOMY_REFUND_POLL_WINDOW_DAYS');
+  async runOnce(batchSize = REFUND_POLL_BATCH): Promise<RefundPollReport> {
+    const windowDays = this.config.getOrThrow('ECONOMY_REFUND_POLL_WINDOW_DAYS', { infer: true });
     const since = new Date(Date.now() - windowDays * 24 * 3600 * 1000);
 
     // Claim nhanh 1 lô rồi stamp watermark + COMMIT NGAY (nhả lock) trước khi làm bất cứ việc gì
@@ -112,7 +118,7 @@ export class IapRefundPollService implements OnApplicationBootstrap, OnApplicati
     const token = await getAppleServerApiToken(this.config);
     const url = `${appleServerApiBaseUrl(this.config)}/inApps/v2/refund/lookup/${encodeURIComponent(originalTransactionId)}`;
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (res.status === 404) return false; // Apple trả 404 khi chưa từng có refund cho transaction này
+    if (res.status === HttpStatus.NOT_FOUND) return false; // Apple trả 404 khi chưa từng có refund cho transaction này
     if (!res.ok) {
       this.logger.warn(`Apple Get Refund History lỗi ${res.status} cho ${originalTransactionId}`);
       return false;
@@ -123,12 +129,9 @@ export class IapRefundPollService implements OnApplicationBootstrap, OnApplicati
 
   private async pollGoogle(receipts: IapReceipt[], since: Date): Promise<number> {
     if (receipts.length === 0) return 0;
-    const packageName = this.config.getOrThrow<string>('ECONOMY_GOOGLE_PACKAGE_NAME');
-    const accessToken = await getGoogleServiceAccountAccessToken(
-      this.config,
-      'https://www.googleapis.com/auth/androidpublisher',
-    );
-    const url = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${encodeURIComponent(packageName)}/purchases/voidedpurchases?startTime=${since.getTime()}&maxResults=1000`;
+    const packageName = this.config.getOrThrow('ECONOMY_GOOGLE_PACKAGE_NAME', { infer: true });
+    const accessToken = await getGoogleServiceAccountAccessToken(this.config, ANDROID_PUBLISHER_SCOPE);
+    const url = `${ANDROID_PUBLISHER_API_BASE}/applications/${encodeURIComponent(packageName)}/purchases/voidedpurchases?startTime=${since.getTime()}&maxResults=${VOIDED_PURCHASES_PAGE_SIZE}`;
     const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
     if (!res.ok) {
       this.logger.warn(`Google Voided Purchases API lỗi ${res.status}`);

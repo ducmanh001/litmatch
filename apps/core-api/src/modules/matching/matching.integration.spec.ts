@@ -12,7 +12,7 @@ import { RefreshToken } from '../auth/entities/refresh-token.entity';
 import { User, UserService, UserStatus } from '../user';
 import { EconomyService } from '../economy/economy.service';
 import { EconomyErrors } from '../economy/economy.errors';
-import { LedgerService } from '../economy/ledger.service';
+import { LedgerService } from '../economy/services/ledger.service';
 import { LedgerAccount } from '../economy/entities/ledger-account.entity';
 import { LedgerEntry } from '../economy/entities/ledger-entry.entity';
 import { OutboxEvent } from '../economy/entities/outbox-event.entity';
@@ -23,17 +23,19 @@ import { VipPlan } from '../economy/entities/vip-plan.entity';
 
 import { MatchingService } from './matching.service';
 import { MatchingErrors } from './matching.errors';
-import { MatcherWorkerService } from './matcher-worker.service';
-import { TicketSweeperService } from './ticket-sweeper.service';
+import { MatcherWorkerService } from './jobs/matcher-worker.service';
+import { TicketSweeperService } from './jobs/ticket-sweeper.service';
 import { MatchTicket, MatchTicketStatus, MatchType } from './entities/match-ticket.entity';
 import { MatchSession, MatchSessionStatus } from './entities/match-session.entity';
 import { MATCHING_ACTIVE_SHARDS_KEY, matchingShardKey } from './redis/matching-redis.provider';
 
 import type { ConfigService } from '@nestjs/config';
 import type { SchedulerRegistry } from '@nestjs/schedule';
+
+import type { CoreApiEnv } from '../../config/env.validation';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
-import type { MatchInteractionPolicy } from './interaction-policy';
-import type { IapVerifier } from '../economy/services/iap-verifier';
+import type { MatchInteractionPolicy } from './ports/interaction-policy';
+import type { IapVerifier } from '../economy/ports/iap-verifier';
 
 /**
  * Integration test Matching trên Postgres + Redis thật (docs/05 § 5.9 — race 2 matcher,
@@ -74,7 +76,7 @@ const configStub = {
     return CONFIG[key];
   },
   get: (key: string) => CONFIG[key],
-} as unknown as ConfigService;
+} as unknown as ConfigService<CoreApiEnv, true>;
 const schedulerStub = {
   addInterval: () => undefined,
   doesExist: () => false,

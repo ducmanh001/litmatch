@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
 import type { Provider } from '@nestjs/common';
+import type { CoreApiEnv } from '../../../config/env.validation';
 import type { MatchTicket } from '../entities/match-ticket.entity';
 
 /** Client ioredis riêng của module Matching (không dùng chung connection với module khác). */
@@ -32,5 +33,5 @@ export function ticketScore(ticket: Pick<MatchTicket, 'enqueuedAt' | 'priorityBo
 export const matchingRedisProvider: Provider = {
   provide: MATCHING_REDIS,
   inject: [ConfigService],
-  useFactory: (config: ConfigService): Redis => new Redis(config.getOrThrow<string>('REDIS_URL')),
+  useFactory: (config: ConfigService<CoreApiEnv, true>): Redis => new Redis(config.getOrThrow('REDIS_URL', { infer: true })),
 };

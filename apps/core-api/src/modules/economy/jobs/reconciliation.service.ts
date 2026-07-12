@@ -4,7 +4,11 @@ import { SchedulerRegistry } from '@nestjs/schedule';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
+import type { CoreApiEnv } from '../../../config/env.validation';
+
 const JOB = 'economy-reconciliation';
+/** Số ví lấy mẫu đối chiếu snapshot↔ledger mỗi run — ngưỡng vận hành nội bộ, không phải rule nghiệp vụ. */
+const WALLET_SAMPLE_SIZE = 100;
 
 export interface ReconciliationReport {
   currencyImbalances: Array<{ currency: string; imbalance: string }>;
@@ -24,15 +28,15 @@ export class ReconciliationService implements OnApplicationBootstrap, OnApplicat
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
-    private readonly config: ConfigService,
+    private readonly config: ConfigService<CoreApiEnv, true>,
     private readonly scheduler: SchedulerRegistry,
   ) {}
 
   onApplicationBootstrap(): void {
-    if (!this.config.getOrThrow<boolean>('ECONOMY_RECONCILIATION_ENABLED')) return;
+    if (!this.config.getOrThrow('ECONOMY_RECONCILIATION_ENABLED', { infer: true })) return;
     const interval = setInterval(
       () => void this.runOnce().catch((err) => this.logger.error({ err: `${err}` }, 'Reconciliation lỗi')),
-      this.config.getOrThrow<number>('ECONOMY_RECONCILIATION_INTERVAL_MS'),
+      this.config.getOrThrow('ECONOMY_RECONCILIATION_INTERVAL_MS', { infer: true }),
     );
     this.scheduler.addInterval(JOB, interval);
   }
@@ -41,7 +45,7 @@ export class ReconciliationService implements OnApplicationBootstrap, OnApplicat
     if (this.scheduler.doesExist('interval', JOB)) this.scheduler.deleteInterval(JOB);
   }
 
-  async runOnce(sampleWallets = 100): Promise<ReconciliationReport> {
+  async runOnce(sampleWallets = WALLET_SAMPLE_SIZE): Promise<ReconciliationReport> {
     // 1. Bất biến toàn cục: tổng Nợ = tổng Có theo từng currency
     const imbalances: Array<{ currency: string; imbalance: string }> = await this.dataSource.query(`
       SELECT currency,

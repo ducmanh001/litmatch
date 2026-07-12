@@ -1,6 +1,6 @@
-import { Body, Controller, HttpCode, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
+import { Throttle, minutes } from '@nestjs/throttler';
 
 import { AuthService } from './auth.service';
 import { AuthTokensDto } from './dto/auth-tokens.dto';
@@ -14,7 +14,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('guest')
-  @HttpCode(200)
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Đăng nhập guest bằng deviceId (tài khoản dùng thử, tính năng bị giới hạn — docs/06)' })
   @ApiOkResponse({ type: AuthTokensDto })
   guest(@Body() dto: GuestLoginDto): Promise<AuthTokensDto> {
@@ -22,16 +22,16 @@ export class AuthController {
   }
 
   @Post('otp/request')
-  @HttpCode(200)
-  @Throttle({ default: { limit: 5, ttl: 60_000 } }) // theo IP; limit theo số điện thoại nằm trong OtpService
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: minutes(1) } }) // theo IP; limit theo số điện thoại nằm trong OtpService
   @ApiOperation({ summary: 'Gửi OTP tới số điện thoại' })
   requestOtp(@Body() dto: RequestOtpDto): Promise<{ ttlSeconds: number }> {
     return this.authService.requestOtp(dto.phone);
   }
 
   @Post('otp/verify')
-  @HttpCode(200)
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: minutes(1) } })
   @ApiOperation({ summary: 'Xác minh OTP và đăng nhập/tạo tài khoản' })
   @ApiOkResponse({ type: AuthTokensDto })
   verifyOtp(@Body() dto: VerifyOtpDto): Promise<AuthTokensDto> {
@@ -39,7 +39,7 @@ export class AuthController {
   }
 
   @Post('social')
-  @HttpCode(200)
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Đăng nhập bằng Google/Apple ID token (server tự verify chữ ký)' })
   @ApiOkResponse({ type: AuthTokensDto })
   social(@Body() dto: SocialLoginDto): Promise<AuthTokensDto> {
@@ -47,7 +47,7 @@ export class AuthController {
   }
 
   @Post('refresh')
-  @HttpCode(200)
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Đổi refresh token lấy cặp token mới (rotation, phát hiện reuse)' })
   @ApiOkResponse({ type: AuthTokensDto })
   refresh(@Body() dto: RefreshDto): Promise<AuthTokensDto> {
@@ -55,7 +55,7 @@ export class AuthController {
   }
 
   @Post('logout')
-  @HttpCode(204)
+  @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Thu hồi refresh token' })
   async logout(@Body() dto: RefreshDto): Promise<void> {
     await this.authService.logout(dto.refreshToken);

@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
+import { Throttle, minutes } from '@nestjs/throttler';
 
 import { MatchingService } from './matching.service';
 import { JoinQueueDto, SpeedupResultDto, TicketDto } from './dto/matching.dtos';
@@ -16,7 +16,7 @@ export class MatchingController {
   constructor(private readonly matchingService: MatchingService) {}
 
   @Post('tickets')
-  @Throttle({ default: { limit: 10, ttl: 60_000 } }) // rate limit riêng chặt hơn cho vào queue (docs/05 § 5.8)
+  @Throttle({ default: { limit: 10, ttl: minutes(1) } }) // rate limit riêng chặt hơn cho vào queue (docs/05 § 5.8)
   @ApiIdempotencyKeyHeader()
   @ApiOperation({ summary: 'Vào hàng đợi matching — 409 nếu đã có ticket đang chờ/đang ghép' })
   @ApiCreatedResponse({ type: TicketDto })
@@ -49,7 +49,7 @@ export class MatchingController {
   }
 
   @Post('tickets/:id/confirm')
-  @HttpCode(200)
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Xác nhận match — đủ 2 bên confirm thì session + 2 ticket sang confirmed' })
   @ApiOkResponse({ type: TicketDto })
   async confirmTicket(
@@ -60,7 +60,7 @@ export class MatchingController {
   }
 
   @Post('tickets/:id/speedup')
-  @HttpCode(200)
+  @HttpCode(HttpStatus.OK)
   @ApiIdempotencyKeyHeader()
   @ApiOperation({
     summary: 'Trả diamond để ưu tiên trong hàng đợi — rate limit theo giờ, chặn TRƯỚC khi trừ tiền',
