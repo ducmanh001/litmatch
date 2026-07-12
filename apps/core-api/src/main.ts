@@ -1,11 +1,16 @@
 import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory, Reflector } from '@nestjs/core';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 
 import { AppModule } from './app/app.module';
+import {
+  API_GLOBAL_PREFIX,
+  API_PREFIX_EXCLUDES,
+  buildOpenApiDocument,
+} from './app/openapi';
 
 import type { CoreApiEnv } from './config/env.validation';
 
@@ -19,8 +24,8 @@ async function bootstrap(): Promise<void> {
 
   const config = app.get<ConfigService<CoreApiEnv, true>>(ConfigService);
 
-  app.setGlobalPrefix('api/v1', {
-    exclude: ['health', 'health/live', 'health/ready'],
+  app.setGlobalPrefix(API_GLOBAL_PREFIX, {
+    exclude: API_PREFIX_EXCLUDES,
   }); // version trong URI ngay từ đầu (docs/05 § 5.4)
   app.use(helmet());
 
@@ -44,15 +49,7 @@ async function bootstrap(): Promise<void> {
     config.getOrThrow('SWAGGER_ENABLED', { infer: true }) &&
     config.get('NODE_ENV', { infer: true }) !== 'production'
   ) {
-    const doc = SwaggerModule.createDocument(
-      app,
-      new DocumentBuilder()
-        .setTitle('Litmatch core-api')
-        .setVersion('v1')
-        .addBearerAuth()
-        .build(),
-    );
-    SwaggerModule.setup('docs', app, doc);
+    SwaggerModule.setup('docs', app, buildOpenApiDocument(app));
   }
 
   app.enableShutdownHooks();

@@ -30,10 +30,14 @@ test('mỗi docsRef còn khớp nguyên văn 1 chỗ trong docs/10-code-review-c
   }
 });
 
-test('Economy và Matching (2 module đã có code thật) đều có fixture', () => {
+test('Economy, Matching và Frontend (đã có code thật) đều có fixture', () => {
   const modules = new Set(loadGoldenBugs().map((b) => b.module));
   assert.ok(modules.has('economy'), 'thiếu fixture cho economy');
   assert.ok(modules.has('matching'), 'thiếu fixture cho matching');
+  assert.ok(
+    modules.has('frontend'),
+    'thiếu fixture cho frontend (docs/10 § 10.2 Frontend)',
+  );
 });
 
 test('mỗi fixture module chỉ nhận giá trị đã biết (tránh gõ nhầm tên module)', () => {
@@ -46,6 +50,7 @@ test('mỗi fixture module chỉ nhận giá trị đã biết (tránh gõ nhầ
     'gift',
     'avatar',
     'trust-safety',
+    'frontend',
   ]);
   for (const bug of loadGoldenBugs()) {
     assert.ok(

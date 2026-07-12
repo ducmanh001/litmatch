@@ -1,0 +1,8 @@
+{
+  "id": "frontend-04-idempotency-key-per-retry",
+  "module": "frontend",
+  "docsRef": "Sinh idempotency key MỚI mỗi lần gọi (kể cả lúc retry vì lỗi mạng)",
+  "description": "Mutation tặng gift sinh `Idempotency-Key` mới bằng `crypto.randomUUID()` ngay trong `mutationFn` — mỗi lần TanStack Query tự động retry do timeout mạng lại là 1 key khác, vô hiệu hoá cơ chế idempotency của backend.",
+  "buggyCode": "const sendGift = useMutation({\n  retry: 2,\n  mutationFn: (input: SendGiftInput) =>\n    // BUG: key sinh MỚI mỗi lần mutationFn chạy, kể cả khi React Query tự retry\n    apiClient.POST('/api/v1/gifts/send', {\n      body: input,\n      headers: { 'Idempotency-Key': crypto.randomUUID() },\n    }),\n});",
+  "whyWrong": "`crypto.randomUUID()` nằm TRONG `mutationFn` nên mỗi lần gọi lại (kể cả lần retry tự động của TanStack Query sau timeout mạng) sinh ra 1 key khác — backend nhận 2 request với 2 key khác nhau, không nhận ra đây là cùng 1 ý định của user nên tạo 2 giao dịch tặng quà thật. Theo docs/13 § 13.4: key phải sinh MỘT LẦN cho mỗi intent (lúc mở form/bấm lần đầu, lưu ngoài `mutationFn`) và giữ nguyên xuyên suốt mọi lần retry của chính request đó."
+}

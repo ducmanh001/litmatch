@@ -180,5 +180,34 @@
       "pnpm agent:test",
       "pnpm format:check"
     ]
+  },
+  "frontend": {
+    "description": "Frontend browser: apps/admin (Vite+React SPA nội bộ), apps/web (Next.js end-user), libs/api-client (hợp đồng REST duy nhất)",
+    "read": [
+      "AGENTS.md",
+      "apps/admin/AGENTS.md",
+      "apps/web/AGENTS.md",
+      "docs/12-frontend-architecture.md",
+      "docs/13-frontend-coding-standards.md"
+    ],
+    "paths": [
+      "apps/admin",
+      "apps/web",
+      "libs/api-client",
+      "libs/common-dtos/src/pure.ts",
+      "openapi/core-api.json"
+    ],
+    "invariants": [
+      "FE không business logic — server là nguồn sự thật, UI là hàm của state (docs/13 § 13.1)",
+      "Mọi REST qua @litmatch/api-client; đổi API backend → pnpm openapi:emit + openapi:gen trong cùng PR",
+      "common-dtos chỉ import qua entry /pure; env chỉ đọc qua src/shared/env.ts",
+      "Không sửa backend trong task frontend — thiếu endpoint thì dừng, báo lại (docs/12 § 12.9)"
+    ],
+    "checks": [
+      "pnpm agent:check",
+      "pnpm nx lint admin web api-client",
+      "pnpm nx test admin web api-client",
+      "pnpm nx build admin web"
+    ]
   }
 }

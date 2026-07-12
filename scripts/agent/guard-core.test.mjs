@@ -97,3 +97,87 @@ test('blocks destructive migration shell commands', () => {
     /migration/u,
   );
 });
+
+test('allows frontend apps admin/web (docs/12)', () => {
+  assert.deepEqual(
+    inspectChange({
+      filePath: 'apps/admin/src/main.tsx',
+      content: 'export {}',
+      operation: 'create',
+    }),
+    [],
+  );
+  assert.deepEqual(
+    inspectChange({
+      filePath: 'apps/web/src/app/layout.tsx',
+      content: 'export {}',
+      operation: 'create',
+    }),
+    [],
+  );
+});
+
+test('FE: blocks env access outside shared/env.ts, allows env module and build config', () => {
+  assert.match(
+    inspectChange({
+      filePath: 'apps/admin/src/features/users/api.ts',
+      content: 'const u = import.meta.env.VITE_API_URL;',
+    }).join('\n'),
+    /shared\/env\.ts/u,
+  );
+  assert.deepEqual(
+    inspectChange({
+      filePath: 'apps/web/src/shared/env.ts',
+      content: 'process.env.NEXT_PUBLIC_API_URL',
+    }),
+    [],
+  );
+  assert.deepEqual(
+    inspectChange({
+      filePath: 'apps/web/next.config.js',
+      content: 'process.env.NODE_ENV',
+    }),
+    [],
+  );
+});
+
+test('FE: blocks hand-written fetch/axios — REST must go through api-client', () => {
+  assert.match(
+    inspectChange({
+      filePath: 'apps/web/src/features/feed/api.ts',
+      content: 'await fetch(`${url}/feed`)',
+    }).join('\n'),
+    /api-client/u,
+  );
+  assert.match(
+    inspectChange({
+      filePath: 'apps/admin/src/shared/lib/http.ts',
+      content: "import axios from 'axios';",
+    }).join('\n'),
+    /api-client/u,
+  );
+});
+
+test('FE: blocks main common-dtos entry and core-api imports', () => {
+  assert.match(
+    inspectChange({
+      filePath: 'apps/web/src/shared/realtime/socket.ts',
+      content: "import { RealtimeEvents } from '@litmatch/common-dtos';",
+    }).join('\n'),
+    /pure/u,
+  );
+  assert.deepEqual(
+    inspectChange({
+      filePath: 'apps/web/src/shared/realtime/socket.ts',
+      content: "import { RealtimeEvents } from '@litmatch/common-dtos/pure';",
+    }),
+    [],
+  );
+  assert.match(
+    inspectChange({
+      filePath: 'apps/admin/src/shared/api/client.ts',
+      content: "import { x } from '../../../core-api/src/modules/user';",
+    }).join('\n'),
+    /apps\/core-api/u,
+  );
+});
