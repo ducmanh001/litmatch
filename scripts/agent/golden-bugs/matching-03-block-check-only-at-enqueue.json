@@ -1,0 +1,8 @@
+{
+  "id": "matching-03-block-check-only-at-enqueue",
+  "module": "matching",
+  "docsRef": "không check lại tại thời điểm ghép thật",
+  "description": "Chỉ kiểm tra 2 user có block/report lẫn nhau không lúc VÀO QUEUE, không kiểm tra lại tại thời điểm ghép thật — trong lúc chờ trong queue, 1 bên có thể vừa report/block bên kia.",
+  "buggyCode": "async function joinQueue(userId: string) {\n  const canJoin = await interactionPolicy.canPair(userId, /* không có ai để so lúc này */);\n  // check ở đây không có ý nghĩa vì lúc join chưa biết sẽ ghép với ai\n  ticketRepo.save({ userId, status: 'queued' });\n}\n\nasync function tryPair(ticketA, ticketB) {\n  // BUG: KHÔNG gọi lại interactionPolicy.canPair(ticketA.userId, ticketB.userId) ở đây\n  // trước khi tạo session — nếu 1 bên vừa report/block bên kia trong lúc chờ, vẫn bị ghép\n  await createSession(ticketA, ticketB);\n}",
+  "whyWrong": "Trạng thái block/report có thể thay đổi BẤT KỲ LÚC NÀO trong lúc 2 ticket đang nằm chờ trong queue (docs/10 § 10.0.C — xác minh lại đúng thời điểm hành động, không chỉ lúc bắt đầu). Chỉ check lúc vào queue là vô nghĩa vì lúc đó còn chưa biết sẽ ghép với ai; phải gọi `interactionPolicy.canPair(userAId, userBId)` NGAY TẠI THỜI ĐIỂM `tryPair` chuẩn bị tạo session — đúng vị trí `MatcherWorkerService` thật đặt guard này, trong cùng transaction verify Postgres trước khi ghép."
+}

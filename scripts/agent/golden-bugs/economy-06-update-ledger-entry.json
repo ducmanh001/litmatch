@@ -1,0 +1,8 @@
+{
+  "id": "economy-06-update-ledger-entry",
+  "module": "economy",
+  "docsRef": "Transaction/ledger cho phép update/xoá dòng cũ thay vì append-only",
+  "description": "Sửa số tiền sai bằng cách UPDATE thẳng dòng ledger_entries cũ, thay vì ghi bút toán đảo mới.",
+  "buggyCode": "async function fixWrongAmount(entryId: string, correctAmount: bigint) {\n  // BUG: update thẳng dòng ledger cũ để 'sửa lại cho đúng' — mất dấu vết amount sai ban đầu\n  await manager.update(LedgerEntry, { id: entryId }, { amount: correctAmount.toString() });\n}",
+  "whyWrong": "`ledger_entries` là nguồn sự thật duy nhất (luật 2, append-only tuyệt đối — DB trigger còn chặn cứng UPDATE/DELETE ở migration). Sửa thẳng dòng cũ xoá mất bằng chứng giao dịch gốc từng có giá trị gì — khi có tranh chấp (user khiếu nại), không còn cách nào chứng minh lịch sử thật. Phải tạo GIAO DỊCH MỚI với bút toán đảo (reversal) trỏ `reversalOf` về giao dịch gốc, giữ nguyên dòng cũ."
+}

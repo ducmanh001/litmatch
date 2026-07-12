@@ -1,0 +1,8 @@
+{
+  "id": "economy-01-float-currency",
+  "module": "economy",
+  "docsRef": "Dùng kiểu số thực (float) cho diamond/tiền thay vì integer/decimal chuẩn",
+  "description": "Ledger entry dùng `number` (float) thay vì `bigint` cho amount — sai số làm tròn tích luỹ qua hàng triệu giao dịch.",
+  "buggyCode": "export interface LedgerEntryInput {\n  accountKind: LedgerAccountKind;\n  userId?: string;\n  direction: LedgerDirection;\n  amount: number; // BUG: float, không phải bigint — 0.1 + 0.2 !== 0.3\n  currency: LedgerCurrency;\n}\n\nasync function applyDelta(entry: LedgerEntryInput) {\n  wallet.balance = wallet.balance + entry.amount; // cộng dồn float qua thời gian sẽ lệch\n}",
+  "whyWrong": "float không biểu diễn chính xác số thập phân trong hệ nhị phân — cộng trừ hàng triệu lần sẽ lệch dần khỏi giá trị thật, không có cách nào phát hiện bằng bất biến double-entry vì bản thân phép cộng đã sai. Phải dùng bigint (số nguyên, đơn vị nhỏ nhất — diamond không có phần thập phân) như LedgerEntryInput.amount thật trong repo."
+}

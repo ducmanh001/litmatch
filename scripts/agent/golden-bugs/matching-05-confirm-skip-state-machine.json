@@ -1,0 +1,8 @@
+{
+  "id": "matching-05-confirm-skip-state-machine",
+  "module": "matching",
+  "docsRef": "dễ xảy ra trạng thái mơ hồ khi 2 sự kiện đến gần như đồng thời",
+  "description": "API confirm ticket không validate transition hợp lệ theo state machine — có thể gọi confirm trên ticket đang ở trạng thái bất kỳ (kể cả chưa từng được ghép, hoặc đã cancelled).",
+  "buggyCode": "@Post('tickets/:id/confirm')\nasync confirmTicket(@Param('id') ticketId: string, @CurrentUser() user) {\n  const ticket = await this.ticketRepo.findOneBy({ id: ticketId });\n  // BUG: không kiểm tra ticket.status có đúng là 'matched' trước khi confirm —\n  // gọi thẳng API này trên ticket đang 'queued' hoặc đã 'cancelled' vẫn chạy qua\n  ticket.status = 'confirmed';\n  await this.ticketRepo.save(ticket);\n  return ticket;\n}",
+  "whyWrong": "Ticket phải đi qua đúng chuỗi trạng thái `queued → matched → confirmed → expired/cancelled` — thiếu validate transition thì client tự viết gọi thẳng API confirm trên ID đoán được hoặc cũ, bỏ qua hoàn toàn bước 'được ghép', gây trạng thái mơ hồ (đặc biệt khi 2 sự kiện gần như đồng thời: user vừa cancel vừa được match, hoặc sweeper vừa expire session giữa lúc user bấm confirm). Đúng ra phải có `MATCH_TICKET_TRANSITIONS` bảng chuyển trạng thái hợp lệ + `assertTransition()` throw lỗi nếu request không đúng trạng thái hiện tại (docs/10 § 10.1.H — state machine không được validate transition hợp lệ ở server)."
+}
