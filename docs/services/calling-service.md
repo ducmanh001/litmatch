@@ -80,7 +80,7 @@ durationSeconds}` cho cả 2 qua kênh `realtime:user:{userId}` (hợp đồng
 
 ## 6. Config (Joi + `.env.example`) & quyết định mở
 
-`CALLING_LIVEKIT_URL` (ws URL client nối), `CALLING_LIVEKIT_API_KEY/SECRET` (khớp
+`LIVEKIT_URL` (ws URL client nối), `LIVEKIT_API_KEY/SECRET` (khớp
 `livekit.yaml`; dev = devkey), `CALLING_FREE_CALL_SECONDS` (default 420 — docs/06 ~7 phút),
 `CALLING_PRICE_PER_MINUTE_DIAMOND` (default **0** = free + tự end), `CALLING_PENDING_TIMEOUT_SECONDS`
 (default 60), `CALLING_TICKER_INTERVAL_MS` (default 1000), `CALLING_TOKEN_TTL_SECONDS` (default 120).

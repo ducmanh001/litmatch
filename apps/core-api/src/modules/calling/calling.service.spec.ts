@@ -19,7 +19,7 @@ import type { LivekitRoomPort } from './ports/livekit-room';
 
 const CONFIG: Record<string, unknown> = {
   CALLING_TOKEN_TTL_SECONDS: 120,
-  CALLING_LIVEKIT_URL: 'ws://localhost:7880',
+  LIVEKIT_URL: 'ws://localhost:7880',
 };
 const configStub = {
   getOrThrow: (key: string) => {
