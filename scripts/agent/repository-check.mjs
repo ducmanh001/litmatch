@@ -13,6 +13,7 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { inspectChange } from './guard-core.mjs';
+import { findBrokenMarkdownLinks } from './markdown-links.mjs';
 import {
   SUPPRESS_MARKER,
   findVendorNameViolations,
@@ -200,12 +201,35 @@ function validateSymlinks() {
   }
 }
 
+function validateMarkdownLinks() {
+  const markdownFiles = new Set([
+    ...trackedFiles,
+    ...git(['ls-files', '--others', '--exclude-standard', '*.md'])
+      .split('\n')
+      .filter(Boolean),
+  ]);
+  for (const path of markdownFiles) {
+    if (!path.endsWith('.md')) continue;
+    const absolute = join(root, path);
+    if (!existsSync(absolute)) continue;
+    const content = readFileSync(absolute, 'utf8');
+    for (const violation of findBrokenMarkdownLinks(
+      absolute,
+      content,
+      existsSync,
+    )) {
+      addError(`${path}: ${violation}`);
+    }
+  }
+}
+
 validateContextMap();
 validateSkill('.agents/skills/new-module/SKILL.md');
 validateSkill('.agents/skills/review-module/SKILL.md');
 validateDiff();
 validateNeutralWording();
 validateSymlinks();
+validateMarkdownLinks();
 
 if (errors.length) {
   console.error(`Agent repository check FAILED (${errors.length}):`);

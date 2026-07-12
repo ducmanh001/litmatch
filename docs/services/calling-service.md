@@ -2,7 +2,7 @@
 
 > Phạm vi: 2 mục Giai đoạn 2 "Tích hợp SFU cho phòng 2 người" + "Calling module" —
 > `CallSession` lifecycle, mint token LiveKit, free-call timer server-enforce, billing theo
-> phút (tắt mặc định). **Ngoài phạm vi**: Party Room/multi-party (GĐ3), cascade node LiveKit,
+> phút (tắt mặc định). **Ngoài phạm vi**: Party Room/multi-party (GĐ3), vận hành LiveKit multi-node,
 > luồng "extend call" chủ động trả tiền. SFU đã chốt LiveKit self-host (ADR 0001) —
 > `apps/media-server` chỉ là config/deployment, không business logic (docs/03 § 3.3).
 

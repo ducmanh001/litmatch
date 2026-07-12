@@ -9,7 +9,7 @@
 
 <!-- Chuỗi bước đầy đủ, vd: vào queue → được ghép → confirm → call start → tick trừ tiền → settle -->
 
-## Bảng giả định & chỗ chặn (§ 10.0 — bắt buộc nếu chạm Economy/Matching/Calling/Gift/Party Room)
+## Bảng giả định & chỗ chặn (§ 10.0 — bắt buộc nếu chạm Economy/Matching/Calling/Gift/Party Room/Soul/Friend/Feed/Trust & Safety)
 
 <!-- Dán nguyên mục 2 từ output `/review-module verify`. Verdict: ✅ chặn đúng · ❌ không chặn · ⚠️ cần quyết định -->
 
@@ -25,6 +25,7 @@
 - [ ] Không hardcode giá/threshold — đưa vào `.env` + `ConfigModule`, cập nhật `.env.example`
 - [ ] Schema đổi bằng migration MỚI — không sửa/xoá migration đã commit
 - [ ] API mới có decorator OpenAPI ngay tại endpoint; lỗi theo taxonomy `*.errors.ts` (docs/05 § 5.4–5.5)
+- [ ] Frontend: OpenAPI/generated client không drift, không copy server state và reconnect có resync
 - [ ] Phát hiện docs sai/thiếu trong lúc làm → đã sửa thẳng file `docs/` tương ứng
 - [ ] Tick `[x]` mục tương ứng trong `docs/07-roadmap.md` (nếu hoàn thành 1 mục roadmap)
 

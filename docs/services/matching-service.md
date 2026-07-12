@@ -38,8 +38,11 @@ Mọi transition khác throw `MATCHING_TICKET_INVALID_TRANSITION`.
 
 ## 3. Matcher worker & sweeper
 
-- `MatcherWorkerService`: `@Interval(MATCHING_MATCHER_INTERVAL_MS)`, mỗi tick quét `matching:shards:active`, mỗi shard thử ghép tối đa `MATCHING_MATCHER_BATCH_SIZE` cặp.
-- `TicketSweeperService`: `@Interval(MATCHING_SWEEPER_INTERVAL_MS)`:
+- `MatcherWorkerService`: đăng ký interval động bằng `SchedulerRegistry`, đọc
+  `MATCHING_MATCHER_INTERVAL_MS`; mỗi tick quét `matching:shards:active`, mỗi shard thử ghép tối
+  đa `MATCHING_MATCHER_BATCH_SIZE` cặp.
+- `TicketSweeperService`: đăng ký interval động bằng `SchedulerRegistry`, đọc
+  `MATCHING_SWEEPER_INTERVAL_MS`:
   - `queued` quá `MATCHING_QUEUE_MAX_WAIT_SECONDS` kể từ `createdAt` → `expired`, xoá khỏi Redis (dùng `ZREM`, ticketId không còn thì bỏ qua — idempotent).
   - `matched` (qua `MatchSession.status = pending_confirm`) quá `MATCHING_CONFIRM_TIMEOUT_SECONDS` kể từ lúc match mà chưa đủ 2 confirm → session `expired`; ticket đã confirm → `queued` lại (enqueue mới, priority mới); ticket chưa confirm → `expired`.
 
@@ -79,6 +82,11 @@ Mọi transition khác throw `MATCHING_TICKET_INVALID_TRANSITION`.
 
 Check block/report **không chỉ lúc vào queue** — bắt buộc verify lại đúng lúc matcher ghép (§ 2), vì trạng thái block có thể đổi giữa lúc ticket nằm chờ trong queue.
 
-## 8. Config (đã có sẵn `.env.example`, chỉ thiếu Joi validation)
+## 8. Config
 
-`MATCHING_MATCHER_INTERVAL_MS`, `MATCHING_MATCHER_BATCH_SIZE`, `MATCHING_SWEEPER_INTERVAL_MS`, `MATCHING_QUEUE_MAX_WAIT_SECONDS`, `MATCHING_CONFIRM_TIMEOUT_SECONDS`, `MATCHING_AGE_BAND_SIZE`, `MATCHING_SPEEDUP_PRICE_DIAMOND`, `MATCHING_SPEEDUP_MAX_PER_HOUR`, `MATCHING_PRIORITY_BOOST_MS` — thêm vào `coreApiEnvSchema` (Joi), hiện đang thiếu (chỉ có trong `.env.example`, chưa validate).
+`MATCHING_MATCHER_INTERVAL_MS`, `MATCHING_MATCHER_BATCH_SIZE`,
+`MATCHING_SWEEPER_INTERVAL_MS`, `MATCHING_QUEUE_MAX_WAIT_SECONDS`,
+`MATCHING_CONFIRM_TIMEOUT_SECONDS`, `MATCHING_AGE_BAND_SIZE`,
+`MATCHING_SPEEDUP_PRICE_DIAMOND`, `MATCHING_SPEEDUP_MAX_PER_HOUR`,
+`MATCHING_PRIORITY_BOOST_MS` đã có đủ trong `.env.example`, `CoreApiEnv` và
+`coreApiEnvSchema` (Joi); code đọc qua `ConfigService<CoreApiEnv, true>`.

@@ -6,8 +6,13 @@ Mục tiêu thiết kế: quy mô Litmatch thật (hàng trăm nghìn – hàng 
 
 ## Trạng thái hiện tại
 
-- **Giai đoạn 0 (Nền móng) — xong**: monorepo Nx + pnpm + Node 22, 3 app (`core-api`, `signaling-gateway`, `media-server`), docker-compose local (Postgres/Redis/Kafka), Auth + User module, CI, shared libs.
-- **Giai đoạn 1 (Economy) — đang triển khai**: đã có khung double-entry ledger trong `apps/core-api/src/modules/economy` (LedgerAccount/LedgerEntry/Transaction/Wallet/IAP/Outbox); đặc tả chi tiết ở [`docs/services/economy-service.md`](./docs/services/economy-service.md), gồm refund/chargeback, gift 2-chân, versioned pricing, idempotency.
+- **Backend Giai đoạn 0–3 — xong**: nền móng, Economy double-entry, Matching/Soul/Calling,
+  Signaling realtime, Friend chat, Party Room và Gift đã có code + integration test. IAP/webhook
+  store thật vẫn cần credential sandbox trước khi bật production.
+- **Frontend core/base — xong**: `apps/admin` (Vite + React), `apps/web` (Next.js) và generated
+  `libs/api-client`; feature UI thật tiếp tục theo frontend track trong roadmap.
+- **Đang chờ**: Giai đoạn 4 Social/T&S, Task 0 backend cho admin và security gate browser trước
+  public launch.
 
 Xem trạng thái chi tiết theo giai đoạn ở [`docs/07-roadmap.md`](./docs/07-roadmap.md) (tick `[x]` thủ công khi hoàn thành).
 
@@ -30,11 +35,16 @@ Xem trạng thái chi tiết theo giai đoạn ở [`docs/07-roadmap.md`](./docs
 │   ├── 09-practical-notes.md
 │   ├── 10-code-review-checklist.md ← quan trọng nhất: tự review trước khi báo "xong"
 │   ├── 11-engineering-principles.md ← la bàn thiết kế cho người đọc
+│   ├── 12-frontend-architecture.md
+│   ├── 13-frontend-coding-standards.md
+│   ├── 14-rule-enforcement-matrix.md ← rule nào được chặn bằng máy, rule nào review tay
 │   └── sources.md
 ├── apps/
 │   ├── core-api/            ← modular monolith chứa toàn bộ business logic (auth, user, matching, economy, social, content, moderation, notification, gift...)
 │   ├── signaling-gateway/   ← WebSocket, connection-bound, tách riêng để scale ngang
-│   └── media-server/        ← mediasoup/LiveKit, sidecar, không business logic
+│   ├── media-server/        ← LiveKit self-host config/deployment, không business logic
+│   ├── admin/               ← Vite + React SPA cho vận hành nội bộ
+│   └── web/                 ← Next.js app cho end user
 └── libs/                    ← shared libraries dùng chung giữa các app (common-exceptions, common-dtos, logger, config-validator...)
 ```
 
@@ -58,9 +68,8 @@ Các lệnh hạ tầng thường dùng:
 
 ## Nguyên tắc cốt lõi (chi tiết đầy đủ trong `docs/`, xem `AGENTS.md` cho bản tóm tắt agent dùng)
 
-- **Modular monolith trước**: chỉ 3 thành phần deploy riêng (`core-api`, `signaling-gateway`, `media-server`), mọi domain khác là module bên trong `core-api`.
+- **Modular monolith trước**: baseline chỉ 3 backend deployable; thay baseline cần số liệu + ADR
+  cập nhật invariant/guard, không phải quyết định cục bộ của feature.
 - **Economy = double-entry ledger**: `LedgerEntry` là nguồn sự thật, `Wallet.balance` chỉ là snapshot dẫn xuất.
 - **Review theo phương pháp luận, không chỉ theo checklist kỹ thuật**: `docs/10-code-review-checklist.md` § 10.0 dạy cách tìm lỗi logic nghiệp vụ (business logic vulnerability) — loại lỗi mà linter/scanner không bắt được.
 - **Thiết kế theo ownership và boundary**: đọc [`docs/11-engineering-principles.md`](./docs/11-engineering-principles.md) trước khi thêm abstraction, module hoặc đề xuất tách service.
-
-# litmatch

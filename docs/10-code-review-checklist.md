@@ -158,7 +158,9 @@
 - Không giải phóng room trên SFU khi call kết thúc → leak resource, media server quá tải dần
 - Billing tick vẫn tiếp tục trừ tiền vài giây sau khi call đã thực sự kết thúc (race giữa event `call.ended` và job trừ tiền định kỳ)
 - Không có timeout cho WebSocket signaling → client đơ giữa chừng làm cả 2 bên treo mãi không thoát được phòng
-- **Ở quy mô lớn** ([03-architecture.md § 3.8.A](./03-architecture.md)): 1 SFU node nhận quá nhiều consumer (Party Room đông người) mà không cascade/route sang node khác → nghẽn hoặc rớt media; cần giới hạn cứng số speaker/phòng cho tới khi có cơ chế cascade
+- **Ở quy mô lớn** ([03-architecture.md § 3.8.A](./03-architecture.md)): Party Room vượt capacity
+  một LiveKit node → nghẽn/rớt media; multi-node không tự chia một room, nên giữ cap speaker/member
+  theo load test và mở ADR nếu một room cần vượt biên đó
 - Signaling gửi lệnh điều khiển media (mute, kick, đổi quyền) mà không đợi ACK từ Media Server → state ở signaling nói "đã mute" nhưng thực tế Media Server chưa xử lý xong, gây lệch trạng thái UI/thực tế
 - Free-call timer (7 phút/2-3 phút) tính ở client, server chỉ tin báo cáo từ client → user sửa client để gọi miễn phí vô hạn; timer bắt buộc phải tính và enforce ở server
 

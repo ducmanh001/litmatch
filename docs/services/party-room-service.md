@@ -70,7 +70,8 @@ Webhook KHÔNG được là đường duy nhất đóng phòng. `PartyRoomSweepe
 
 ## 7. Config (env — [.env.example](../../.env.example))
 
-`PARTY_MAX_SPEAKERS` (giới hạn CỨNG § 3.8.A, chỉ nới khi có cascade SFU — GĐ7), `PARTY_MAX_MEMBERS`,
+`PARTY_MAX_SPEAKERS` (giới hạn CỨNG § 3.8.A, chỉ nới sau load test đúng workload + headroom),
+`PARTY_MAX_MEMBERS`,
 `PARTY_TOKEN_TTL_SECONDS`, `PARTY_EMPTY_ROOM_TIMEOUT_SECONDS`, `PARTY_SWEEPER_INTERVAL_MS`,
 `PARTY_STALE_ROOM_SECONDS`, `PARTY_TITLE_MAX_LENGTH`. LiveKit dùng chung `LIVEKIT_URL/API_KEY/API_SECRET`
 với calling (1 cụm LiveKit — đổi tên từ `CALLING_LIVEKIT_*` ở GĐ3).

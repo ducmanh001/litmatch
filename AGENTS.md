@@ -6,11 +6,12 @@ tương thích theo từng công cụ chỉ được trỏ về đây, không đ
 
 ## Ba luật không được vi phạm
 
-1. **Chỉ ba thành phần deploy riêng phía backend**: `apps/core-api`, `apps/signaling-gateway`,
-   `apps/media-server`. Mọi domain khác là module NestJS bên trong `core-api`; không tự tạo
-   app/service backend thứ tư. Frontend client (`apps/admin`, `apps/web`) không thuộc luật này
-   nhưng không được chứa business logic — xem `docs/12-frontend-architecture.md`. Xem
-   `docs/03-architecture.md`.
+1. **Baseline chỉ có ba thành phần deploy riêng phía backend**: `apps/core-api`,
+   `apps/signaling-gateway`, `apps/media-server`. Mọi domain mới mặc định là module NestJS bên
+   trong `core-api`; không tự tạo app/service backend thứ tư. Chỉ được thay baseline này khi số
+   liệu vận hành đạt tiêu chí `docs/03 § 3.4` **và** một ADR mới cập nhật đồng thời file này,
+   architecture, guard và deployment. Frontend client (`apps/admin`, `apps/web`) không thuộc luật
+   này nhưng không được chứa business logic — xem `docs/12-frontend-architecture.md`.
 2. **Economy/diamond**: `LedgerEntry` double-entry, append-only là nguồn sự thật;
    `Wallet.balance` chỉ là snapshot. Idempotency key unique ở DB trên `Transaction`. Không
    sửa/xoá ledger cũ; sửa sai bằng reversal entry mới. Xem `docs/03-architecture.md § 3.8.C`.

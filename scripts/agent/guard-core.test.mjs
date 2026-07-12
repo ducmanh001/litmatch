@@ -98,6 +98,26 @@ test('blocks destructive migration shell commands', () => {
   );
 });
 
+test('blocks passWithNoTests trong E2E project', () => {
+  assert.match(
+    inspectChange({
+      filePath: 'apps/core-api-e2e/project.json',
+      content: '{ "passWithNoTests": true }',
+    }).join('\n'),
+    /không có test/u,
+  );
+});
+
+test('allows E2E project khi test bắt buộc phải tồn tại', () => {
+  assert.deepEqual(
+    inspectChange({
+      filePath: 'apps/core-api-e2e/project.json',
+      content: '{ "targets": { "e2e": {} } }',
+    }),
+    [],
+  );
+});
+
 test('allows frontend apps admin/web (docs/12)', () => {
   assert.deepEqual(
     inspectChange({

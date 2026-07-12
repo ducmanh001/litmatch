@@ -6,7 +6,10 @@
 
 ## Bối cảnh
 
-Mục tiêu dự án là Litmatch-scale (hàng trăm nghìn – hàng triệu CCU), không phải MVP. SFU là thành phần khó đổi nhất giữa chừng: chuyển SFU khi đã có hàng trăm phòng sống là việc cực tốn công. Party Room (N người) làm số consumer tăng theo N×(N-1) nên chạm ngưỡng 1 node rất sớm — bắt buộc cần cascade/distributed mesh.
+Mục tiêu dự án là Litmatch-scale (hàng trăm nghìn – hàng triệu CCU), không phải MVP. SFU là
+thành phần khó đổi giữa chừng. Dự án cần một media server có control API/SDK, webhook và cách
+scale ngang nhiều room bằng các node đồng nhất; đồng thời domain không được phụ thuộc trực tiếp
+type của provider.
 
 ## Quyết định
 
@@ -14,11 +17,18 @@ Dùng **LiveKit self-host** làm Media Server chính ngay từ Giai đoạn 2, k
 
 ## Phương án đã loại & lý do
 
-- **mediasoup** — là thư viện xây SFU, không phải sản phẩm: toàn bộ phần distributed (quản lý worker, route signaling, `pipeToRouter` đa host) phải tự viết; đúng phần Litmatch-scale cần thì mediasoup không cho sẵn. Giữ làm phương án dự phòng nếu LiveKit gặp trở ngại lớn.
+- **mediasoup** — là thư viện mức thấp hơn; team phải tự sở hữu thêm control plane, lifecycle và
+  routing. Giữ làm phương án dự phòng nếu LiveKit gặp trở ngại lớn.
 - **LiveKit Cloud** — chưa loại hẳn; self-host trước để tự chủ chi phí/dữ liệu, cân nhắc lại ở Giai đoạn 7 khi có số liệu vận hành thật.
 
 ## Hệ quả
 
-- Trả trước chi phí học LiveKit (rẻ hơn nhiều chi phí đổi SFU giữa chừng).
-- `apps/media-server` là LiveKit sidecar, không business logic (docs/03 § 3.3).
+- Trả trước chi phí học/vận hành LiveKit để tránh đổi provider sau khi domain đã tích hợp sâu.
+- `apps/media-server` là deployable LiveKit không business logic (docs/03 § 3.3).
+- Redis/multi-node scale theo số room; **một room self-host vẫn phải vừa một node**. Party Room
+  cần cap + load test; nếu phải vượt biên này thì tạo ADR mới về topology/provider.
 - Đổi lại quyết định này thì phải tạo ADR mới + sửa docs/03 và docs/04 **trước khi** code.
+
+> **Đính chính 2026-07-13**: bỏ giả định “distributed mesh tự chia một room qua nhiều node”.
+> Tài liệu LiveKit self-host hiện hành nêu rõ multi-node chọn node host room và một room phải vừa
+> trên một node. Đính chính không đổi quyết định chọn LiveKit, nhưng đổi capacity model bắt buộc.
