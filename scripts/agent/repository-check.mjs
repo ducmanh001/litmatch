@@ -1,11 +1,22 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+} from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { inspectChange } from './guard-core.mjs';
+import {
+  SUPPRESS_MARKER,
+  findVendorNameViolations,
+} from './vendor-wording.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const errors = [];
@@ -130,23 +141,17 @@ const ignoredDirectories = new Set([
   'coverage',
   'dist',
   'node_modules',
+  // Thư mục cấu hình riêng 1 công cụ (đặt tên theo đúng công cụ đó, chỉ công cụ đó đọc) —
+  // được phép nêu tên công cụ trong nội dung (vd $schema URL, ghi chú quirk riêng).
+  // Nguyên tắc trung lập áp cho bề mặt DÙNG CHUNG (AGENTS.md, docs/, scripts/agent/),
+  // không áp cho adapter đặt tên tường minh theo vendor.
+  '.claude', // agent-check:allow-vendor-name — tên thư mục đúng là tên công cụ, không tránh được
 ]);
 const ignoredFiles = new Set([
   'pnpm-lock.yaml',
   'apps/core-api/src/database/migrations/1752000000000-economy-ledger.ts',
 ]);
 const textFile = /(?:\.(md|mjs|cjs|js|ts|cts|json|ya?ml|toml)|Dockerfile)$/u;
-// Codepoint thay vì literal: rule tự cấm plaintext của chính nó, nên chuỗi cấm
-// không được xuất hiện dạng chuỗi thường trong file nguồn (mới `grep` không ăn thua,
-// đọc code này để biết đang cấm từ gì).
-const providerSpecificWords = [
-  [99, 108, 97, 117, 100, 101],
-  [99, 111, 100, 101, 120],
-].map((points) => String.fromCodePoint(...points));
-const providerSpecificPattern = new RegExp(
-  `\\b(${providerSpecificWords.join('|')})\\b`,
-  'iu',
-);
 
 function validateNeutralWording(directory = root) {
   for (const name of readdirSync(directory)) {
@@ -159,9 +164,38 @@ function validateNeutralWording(directory = root) {
       validateNeutralWording(absolute);
     } else if (textFile.test(name) && (!stagedMode || trackedFiles.has(path))) {
       const content = readFileSync(absolute, 'utf8');
-      if (providerSpecificPattern.test(content)) {
-        addError(`${path}: dùng tên nền tảng riêng; dùng từ "agent" thay thế.`);
+      for (const line of findVendorNameViolations(content)) {
+        addError(
+          `${path}:${line}: dùng tên nền tảng riêng; dùng từ "agent" thay thế, hoặc thêm ` +
+            `'${SUPPRESS_MARKER}' trên dòng này/dòng trước nếu bắt buộc phải nêu tên cụ thể.`,
+        );
       }
+    }
+  }
+}
+
+/**
+ * File tương thích của từng công cụ là symlink trỏ về canonical (AGENTS.md,
+ * .agents/skills/*) — không có bản sao nội dung nào có thể trôi khỏi canonical.
+ * Nếu ai đó đổi tên/xoá file canonical mà quên cập nhật symlink, bắt lỗi ở đây
+ * thay vì để adapter âm thầm biến mất.
+ */
+function validateSymlinks() {
+  for (const path of trackedFiles) {
+    const absolute = join(root, path);
+    let stat;
+    try {
+      stat = lstatSync(absolute);
+    } catch {
+      continue;
+    }
+    if (!stat.isSymbolicLink()) continue;
+    try {
+      realpathSync(absolute);
+    } catch {
+      addError(
+        `${path}: symlink gãy — target không tồn tại, sửa hoặc xoá symlink này.`,
+      );
     }
   }
 }
@@ -171,6 +205,7 @@ validateSkill('.agents/skills/new-module/SKILL.md');
 validateSkill('.agents/skills/review-module/SKILL.md');
 validateDiff();
 validateNeutralWording();
+validateSymlinks();
 
 if (errors.length) {
   console.error(`Agent repository check FAILED (${errors.length}):`);
