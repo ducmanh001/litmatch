@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 
 import { AppModule } from './app/app.module';
+import { CorsIoAdapter } from './app/cors-io.adapter';
 
 import type { SignalingEnv } from './config/env.validation';
 
@@ -13,6 +14,13 @@ async function bootstrap(): Promise<void> {
   app.use(helmet());
 
   const config = app.get<ConfigService<SignalingEnv, true>>(ConfigService);
+  const corsOrigins = config
+    .getOrThrow('CORS_ORIGINS', { infer: true })
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  app.enableCors({ origin: corsOrigins.length > 0 ? corsOrigins : false });
+  app.useWebSocketAdapter(new CorsIoAdapter(app, corsOrigins));
   app.enableShutdownHooks();
   await app.listen(config.getOrThrow('SIGNALING_PORT', { infer: true }));
 }

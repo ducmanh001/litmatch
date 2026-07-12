@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, RequestMethod } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -37,6 +37,8 @@ import { ReadinessService } from './readiness.service';
           level: config.getOrThrow('LOG_LEVEL', { infer: true }),
           pretty: config.get('NODE_ENV', { infer: true }) === 'development',
         }),
+        // Express 5/path-to-regexp yêu cầu wildcard có tên; nestjs-pino default `*` là legacy.
+        forRoutes: [{ path: '{*splat}', method: RequestMethod.ALL }],
       }),
     }),
     TypeOrmModule.forRootAsync({

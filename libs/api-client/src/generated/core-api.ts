@@ -791,7 +791,7 @@ export interface components {
       items: components['schemas']['MessageDto'][];
       meta: Record<string, never>;
     };
-    SendMessageDto: {
+    SendFriendMessageDto: {
       content: string;
     };
     SoulSessionViewDto: {
@@ -817,6 +817,9 @@ export interface components {
     SoulMessagesPageDto: {
       items: components['schemas']['SoulMessageDto'][];
       meta: Record<string, never>;
+    };
+    SendSoulMessageDto: {
+      content: string;
     };
     RateSessionDto: {
       /** @enum {string} */
@@ -1529,7 +1532,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        'application/json': components['schemas']['SendMessageDto'];
+        'application/json': components['schemas']['SendFriendMessageDto'];
       };
     };
     responses: {
@@ -1614,7 +1617,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        'application/json': components['schemas']['SendMessageDto'];
+        'application/json': components['schemas']['SendSoulMessageDto'];
       };
     };
     responses: {

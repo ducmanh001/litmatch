@@ -35,6 +35,7 @@ export interface CoreApiEnv {
   ECONOMY_GOOGLE_PACKAGE_NAME: string;
   ECONOMY_GOOGLE_SA_EMAIL: string;
   ECONOMY_GOOGLE_SA_PRIVATE_KEY: string;
+  ECONOMY_STORE_HTTP_TIMEOUT_MS: number;
   ECONOMY_OUTBOX_RELAY_ENABLED: boolean;
   ECONOMY_OUTBOX_RELAY_INTERVAL_MS: number;
   ECONOMY_RECONCILIATION_ENABLED: boolean;
@@ -122,6 +123,10 @@ export const coreApiEnvSchema = Joi.object({
   ECONOMY_GOOGLE_PACKAGE_NAME: Joi.string().allow('').default(''),
   ECONOMY_GOOGLE_SA_EMAIL: Joi.string().allow('').default(''),
   ECONOMY_GOOGLE_SA_PRIVATE_KEY: Joi.string().allow('').default(''),
+  ECONOMY_STORE_HTTP_TIMEOUT_MS: Joi.number()
+    .integer()
+    .min(100)
+    .default(10_000),
   ECONOMY_OUTBOX_RELAY_ENABLED: Joi.boolean().default(false),
   ECONOMY_OUTBOX_RELAY_INTERVAL_MS: Joi.number()
     .integer()
@@ -218,7 +223,7 @@ export const coreApiEnvSchema = Joi.object({
 
   // Gift — Giai đoạn 3 (docs/services/gift-service.md); tỉ lệ quy đổi DIA→PTS cho người nhận,
   // PHẢI < 100 (docs/06 § Gift: nhận 1:1 biến gift thành kênh chuyển tiền ngang hàng)
-  GIFT_POINTS_RATE_PERCENT: Joi.number().integer().min(0).max(100).default(40),
+  GIFT_POINTS_RATE_PERCENT: Joi.number().integer().min(0).max(99).default(40),
 
   THROTTLE_TTL_SECONDS: Joi.number().integer().min(1).default(60),
   THROTTLE_LIMIT: Joi.number().integer().min(1).default(100),

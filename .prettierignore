@@ -4,3 +4,6 @@
 /.nx/cache
 /.nx/workspace-data
 pnpm-lock.yaml
+
+# Next.js tự sinh file này khi build; không format lại output của framework.
+apps/web/next-env.d.ts

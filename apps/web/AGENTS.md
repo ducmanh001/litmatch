@@ -8,6 +8,7 @@
 
 ```bash
 pnpm nx dev web          # dev server http://localhost:4300 (cần core-api local đang chạy)
+pnpm nx test web         # Vitest + Testing Library
 pnpm nx build web        # next build (NODE_ENV=production ép trong project.json —
                          #   .env gốc repo có NODE_ENV=development, không được để lọt vào build)
 pnpm nx lint web

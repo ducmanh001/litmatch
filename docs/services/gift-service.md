@@ -58,5 +58,5 @@ giao dịch vẫn hợp lệ.
 
 ## 7. Config
 
-`GIFT_POINTS_RATE_PERCENT` (int 0–100, default 40; docs/06 đề xuất 30–50, **phải < 100 ở
+`GIFT_POINTS_RATE_PERCENT` (int 0–99, default 40; docs/06 đề xuất 30–50, **phải < 100 ở
 production**). Validation ở `env.validation.ts`, mẫu ở `.env.example`.

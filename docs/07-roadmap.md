@@ -79,13 +79,18 @@
 
 > `apps/admin` và `apps/web` là client, không phải domain service ([12-frontend-architecture.md](./12-frontend-architecture.md)) — track này chạy **song song** với các Giai đoạn backend ở trên, không chiếm số Giai đoạn riêng (giữ đúng quy ước "không đánh lại số cũ"). Mỗi mục phụ thuộc backend nào được ghi rõ; mục không ghi phụ thuộc là làm được ngay.
 
-- [x] Hợp đồng REST: OpenAPI emit/gen + `libs/api-client` (ApiError, refresh rotation, token store) — xong 2026-07-13
-- [x] Scaffold core/base `apps/admin` (Vite+React) + `apps/web` (Next.js): env, providers, auth OTP, layout shell, realtime/media wiring — xong 2026-07-13
+- [x] Hợp đồng REST: `openapi:sync` + `libs/api-client` (ApiError, refresh rotation, token store) — xong 2026-07-13
+- [x] Scaffold core/base `apps/admin` (Vite+React) + `apps/web` (Next.js): env, providers, auth OTP, layout shell, realtime/media wiring; DoD máy qua `pnpm agent:verify frontend` — xong 2026-07-13
 - [ ] **Task 0 backend** (chặn mọi feature UI thật của admin): role enum + `RolesGuard` + admin endpoints + CORS — [12 § 12.7](./12-frontend-architecture.md)
 - [ ] Admin: users, moderation queue, economy ops, gift catalog (phụ thuộc Task 0 backend ở trên)
 - [ ] Web: matching, chat 1-1, party room UI (phụ thuộc Giai đoạn 2/3 backend — đã xong, làm được độc lập với Task 0 admin)
-- [ ] CI gate chống lệch OpenAPI spec (`openapi:emit` + `git diff --exit-code`) — [12 § 12.3](./12-frontend-architecture.md)
+- [x] CI gate chống lệch cả OpenAPI spec + generated client (`openapi:sync` + git status) — xong 2026-07-13, [12 § 12.3](./12-frontend-architecture.md)
 - [ ] Coverage ratchet riêng cho `admin`/`web`/`api-client` khi feature thật đầu tiên vào (cùng cơ chế chỉ-nâng-không-hạ như core-api)
+- [ ] **Security gate trước public launch (ADR 0003)**: chốt httpOnly cookie + CSRF/CORS
+      (ưu tiên), hoặc nonce CSP sau benchmark dynamic rendering; hiện refresh token localStorage
+      chỉ được coi là scaffold/dev, chưa production-ready.
+- [ ] Migrate hai E2E project khỏi executor Jest deprecated sang Nx inferred target trước khi
+      nâng Nx 24; cảnh báo hiện không chặn test nhưng sẽ thành breaking change ở major kế tiếp.
 
 ---
 

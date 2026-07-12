@@ -5,11 +5,7 @@
       "get": {
         "operationId": "HealthController_liveCompatibility",
         "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
+        "responses": { "200": { "description": "" } },
         "summary": "Liveness check tương thích endpoint cũ",
         "tags": ["health"]
       }
@@ -18,11 +14,7 @@
       "get": {
         "operationId": "HealthController_live",
         "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
+        "responses": { "200": { "description": "" } },
         "summary": "Liveness: process đang chạy, không gọi dependency",
         "tags": ["health"]
       }
@@ -31,11 +23,7 @@
       "get": {
         "operationId": "HealthController_ready",
         "parameters": [],
-        "responses": {
-          "503": {
-            "description": "Dependency chưa sẵn sàng"
-          }
-        },
+        "responses": { "503": { "description": "Dependency chưa sẵn sàng" } },
         "summary": "Readiness: Postgres và Redis sẵn sàng nhận traffic",
         "tags": ["health"]
       }
@@ -53,24 +41,15 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/MyProfileDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/MyProfileDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Profile của chính mình",
         "tags": ["users"]
       },
@@ -81,9 +60,7 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateProfileDto"
-              }
+              "schema": { "$ref": "#/components/schemas/UpdateProfileDto" }
             }
           }
         },
@@ -96,24 +73,15 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/MyProfileDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/MyProfileDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Cập nhật profile của chính mình",
         "tags": ["users"]
       }
@@ -126,9 +94,7 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -140,24 +106,15 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicProfileDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/PublicProfileDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Profile công khai (tối thiểu, giữ ẩn danh) của user khác",
         "tags": ["users"]
       }
@@ -170,9 +127,7 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GuestLoginDto"
-              }
+              "schema": { "$ref": "#/components/schemas/GuestLoginDto" }
             }
           }
         },
@@ -185,13 +140,8 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/AuthTokensDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/AuthTokensDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
@@ -210,15 +160,25 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RequestOtpDto"
-              }
+              "schema": { "$ref": "#/components/schemas/RequestOtpDto" }
             }
           }
         },
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/OtpRequestedDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Gửi OTP tới số điện thoại",
@@ -233,9 +193,7 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VerifyOtpDto"
-              }
+              "schema": { "$ref": "#/components/schemas/VerifyOtpDto" }
             }
           }
         },
@@ -248,13 +206,8 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/AuthTokensDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/AuthTokensDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
@@ -273,9 +226,7 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SocialLoginDto"
-              }
+              "schema": { "$ref": "#/components/schemas/SocialLoginDto" }
             }
           }
         },
@@ -288,13 +239,8 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/AuthTokensDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/AuthTokensDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
@@ -313,9 +259,7 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RefreshDto"
-              }
+              "schema": { "$ref": "#/components/schemas/RefreshDto" }
             }
           }
         },
@@ -328,13 +272,8 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/AuthTokensDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/AuthTokensDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
@@ -353,17 +292,11 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RefreshDto"
-              }
+              "schema": { "$ref": "#/components/schemas/RefreshDto" }
             }
           }
         },
-        "responses": {
-          "204": {
-            "description": ""
-          }
-        },
+        "responses": { "204": { "description": "" } },
         "summary": "Thu hồi refresh token",
         "tags": ["auth"]
       }
@@ -381,24 +314,15 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/WalletDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/WalletDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Ví của tôi — balance + VIP (đã derive hết hạn)",
         "tags": ["economy"]
       }
@@ -411,22 +335,12 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VerifyIapDto"
-              }
+              "schema": { "$ref": "#/components/schemas/VerifyIapDto" }
             }
           }
         },
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "responses": { "200": { "description": "" } },
+        "security": [{ "bearer": [] }],
         "summary": "Verify receipt IAP và credit diamond — idempotent theo provider transaction id, gửi lại không credit đôi",
         "tags": ["economy"]
       }
@@ -440,31 +354,19 @@
             "in": "header",
             "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PurchaseVipDto"
-              }
+              "schema": { "$ref": "#/components/schemas/PurchaseVipDto" }
             }
           }
         },
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "responses": { "200": { "description": "" } },
+        "security": [{ "bearer": [] }],
         "summary": "Mua VIP bằng diamond — gia hạn cộng dồn nếu đang active",
         "tags": ["economy"]
       }
@@ -473,16 +375,8 @@
       "get": {
         "operationId": "EconomyController_listTransactions",
         "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "responses": { "200": { "description": "" } },
+        "security": [{ "bearer": [] }],
         "summary": "Lịch sử giao dịch — cursor pagination",
         "tags": ["economy"]
       }
@@ -496,18 +390,14 @@
             "in": "header",
             "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/JoinQueueDto"
-              }
+              "schema": { "$ref": "#/components/schemas/JoinQueueDto" }
             }
           }
         },
@@ -520,24 +410,15 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/TicketDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/TicketDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Vào hàng đợi matching — 409 nếu đã có ticket đang chờ/đang ghép",
         "tags": ["matching"]
       }
@@ -550,9 +431,7 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -564,24 +443,15 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/TicketDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/TicketDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Trạng thái ticket (poll) — chỉ chủ ticket xem được",
         "tags": ["matching"]
       },
@@ -592,9 +462,7 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -606,24 +474,15 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/TicketDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/TicketDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Huỷ ticket của chính mình — chỉ khi đang queued",
         "tags": ["matching"]
       }
@@ -636,9 +495,7 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -650,24 +507,15 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/TicketDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/TicketDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Xác nhận match — đủ 2 bên confirm thì session + 2 ticket sang confirmed",
         "tags": ["matching"]
       }
@@ -680,18 +528,14 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           },
           {
             "name": "Idempotency-Key",
             "in": "header",
             "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -703,24 +547,15 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/SpeedupResultDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/SpeedupResultDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Trả diamond để ưu tiên trong hàng đợi — rate limit theo giờ, chặn TRƯỚC khi trừ tiền",
         "tags": ["matching"]
       }
@@ -740,25 +575,16 @@
                   "properties": {
                     "data": {
                       "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/FriendDto"
-                      }
+                      "items": { "$ref": "#/components/schemas/FriendDto" }
                     },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Danh sách bạn (profile + conversationId), sort theo chat gần nhất",
         "tags": ["friends"]
       }
@@ -771,9 +597,7 @@
             "name": "friendUserId",
             "required": true,
             "in": "path",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -785,24 +609,15 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/ConversationDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/ConversationDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Conversation với 1 bạn cụ thể — nhảy thẳng từ unlock-profile sang chat",
         "tags": ["friends"]
       }
@@ -815,9 +630,7 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -829,24 +642,15 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/MessagesPageDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/MessagesPageDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "List message (cursor) — chỉ 2 thành viên",
         "tags": ["friends"]
       },
@@ -857,27 +661,21 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           },
           {
             "name": "Idempotency-Key",
             "in": "header",
             "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SendMessageDto"
-              }
+              "schema": { "$ref": "#/components/schemas/SendFriendMessageDto" }
             }
           }
         },
@@ -890,24 +688,15 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/MessageDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/MessageDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Gửi message — chỉ 2 thành viên của conversation",
         "tags": ["friends"]
       }
@@ -920,9 +709,7 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -937,21 +724,14 @@
                     "data": {
                       "$ref": "#/components/schemas/SoulSessionViewDto"
                     },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Trạng thái phòng chat ẩn danh (poll) — chỉ verdict của mình + cờ matched",
         "tags": ["soul-match"]
       }
@@ -964,9 +744,7 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -981,21 +759,14 @@
                     "data": {
                       "$ref": "#/components/schemas/SoulMessagesPageDto"
                     },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "List message ẩn danh (cursor) — khoá khi phòng đã đóng",
         "tags": ["soul-match"]
       },
@@ -1006,27 +777,21 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           },
           {
             "name": "Idempotency-Key",
             "in": "header",
             "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SendMessageDto"
-              }
+              "schema": { "$ref": "#/components/schemas/SendSoulMessageDto" }
             }
           }
         },
@@ -1039,24 +804,15 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/SoulMessageDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/SoulMessageDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Gửi message ẩn danh — chỉ khi phòng đang mở chat (server enforce giờ)",
         "tags": ["soul-match"]
       }
@@ -1069,18 +825,14 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RateSessionDto"
-              }
+              "schema": { "$ref": "#/components/schemas/RateSessionDto" }
             }
           }
         },
@@ -1093,24 +845,15 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/RatingResultDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/RatingResultDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Đánh giá đối phương (rude|boring|like) — immutable; cả 2 like → thành bạn + unlock profile",
         "tags": ["soul-match"]
       }
@@ -1123,9 +866,7 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -1137,24 +878,15 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicProfileDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/PublicProfileDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Profile đối phương — 403 khi chưa match (Friendship là nguồn sự thật unlock)",
         "tags": ["soul-match"]
       }
@@ -1167,9 +899,7 @@
             "name": "matchSessionId",
             "required": true,
             "in": "path",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -1181,24 +911,15 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/JoinCallDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/JoinCallDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Tạo/lấy call của voice session đã confirmed + mint LiveKit token (re-join hợp lệ khi chưa ended)",
         "tags": ["calling"]
       }
@@ -1211,9 +932,7 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -1225,24 +944,15 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/CallDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/CallDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Trạng thái call (poll fallback của realtime call.ended) — chỉ member",
         "tags": ["calling"]
       }
@@ -1255,9 +965,7 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -1269,24 +977,15 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/CallDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/CallDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Chủ động kết thúc call — idempotent, đã ended thì trả trạng thái hiện tại",
         "tags": ["calling"]
       }
@@ -1299,9 +998,7 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreatePartyRoomDto"
-              }
+              "schema": { "$ref": "#/components/schemas/CreatePartyRoomDto" }
             }
           }
         },
@@ -1314,24 +1011,15 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/JoinPartyRoomDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/JoinPartyRoomDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Tạo phòng party (caller là host) + mint LiveKit token publish",
         "tags": ["party-room"]
       },
@@ -1343,18 +1031,12 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PartyRoomListDto"
-                }
+                "schema": { "$ref": "#/components/schemas/PartyRoomListDto" }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "List phòng đang mở — cursor pagination",
         "tags": ["party-room"]
       }
@@ -1367,9 +1049,7 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -1384,21 +1064,14 @@
                     "data": {
                       "$ref": "#/components/schemas/PartyRoomDetailDto"
                     },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Chi tiết phòng + member active",
         "tags": ["party-room"]
       }
@@ -1411,9 +1084,7 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -1425,24 +1096,15 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/JoinPartyRoomDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/JoinPartyRoomDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Join phòng làm audience + mint LiveKit token (canPublish=false)",
         "tags": ["party-room"]
       }
@@ -1455,21 +1117,11 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "responses": { "200": { "description": "" } },
+        "security": [{ "bearer": [] }],
         "summary": "Rời phòng — idempotent; host rời thì phòng đóng với mọi người (GĐ3 không transfer host)",
         "tags": ["party-room"]
       }
@@ -1482,26 +1134,20 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           },
           {
             "name": "userId",
             "required": true,
             "in": "path",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ChangePartyRoleDto"
-              }
+              "schema": { "$ref": "#/components/schemas/ChangePartyRoleDto" }
             }
           }
         },
@@ -1517,21 +1163,14 @@
                     "data": {
                       "$ref": "#/components/schemas/PartyRoomMemberDto"
                     },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Host cấp/thu quyền speaker — cap speaker enforce dưới lock phòng, grant SFU đổi ngay",
         "tags": ["party-room"]
       }
@@ -1551,25 +1190,16 @@
                   "properties": {
                     "data": {
                       "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/GiftDto"
-                      }
+                      "items": { "$ref": "#/components/schemas/GiftDto" }
                     },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Catalog quà đang bật — giá server là nguồn sự thật",
         "tags": ["gift"]
       }
@@ -1582,27 +1212,21 @@
             "name": "roomId",
             "required": true,
             "in": "path",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           },
           {
             "name": "Idempotency-Key",
             "in": "header",
             "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SendGiftDto"
-              }
+              "schema": { "$ref": "#/components/schemas/SendGiftDto" }
             }
           }
         },
@@ -1615,24 +1239,15 @@
                   "type": "object",
                   "required": ["data"],
                   "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/GiftEventDto"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": true
-                    }
+                    "data": { "$ref": "#/components/schemas/GiftEventDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
                   }
                 }
               }
             }
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
+        "security": [{ "bearer": [] }],
         "summary": "Tặng quà trong phòng — trừ DIA người tặng + cộng PTS người nhận atomic; client chỉ bắn hiệu ứng sau khi nhận 200",
         "tags": ["gift"]
       }
@@ -1648,40 +1263,22 @@
   "servers": [],
   "components": {
     "securitySchemes": {
-      "bearer": {
-        "scheme": "bearer",
-        "bearerFormat": "JWT",
-        "type": "http"
-      }
+      "bearer": { "scheme": "bearer", "bearerFormat": "JWT", "type": "http" }
     },
     "schemas": {
       "MyProfileDto": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string"
-          },
-          "nickname": {
-            "type": "string"
-          },
+          "id": { "type": "string" },
+          "nickname": { "type": "string" },
           "gender": {
             "type": "string",
             "enum": ["unknown", "male", "female", "other"]
           },
-          "birthDate": {
-            "type": "string",
-            "nullable": true
-          },
-          "region": {
-            "type": "string",
-            "nullable": true
-          },
-          "avatarId": {
-            "type": "string"
-          },
-          "isGuest": {
-            "type": "boolean"
-          }
+          "birthDate": { "type": "string", "nullable": true },
+          "region": { "type": "string", "nullable": true },
+          "avatarId": { "type": "string" },
+          "isGuest": { "type": "boolean" }
         },
         "required": [
           "id",
@@ -1696,10 +1293,7 @@
       "UpdateProfileDto": {
         "type": "object",
         "properties": {
-          "nickname": {
-            "type": "string",
-            "example": "Mưa Đêm"
-          },
+          "nickname": { "type": "string", "example": "Mưa Đêm" },
           "gender": {
             "type": "string",
             "enum": ["unknown", "male", "female", "other"]
@@ -1719,19 +1313,13 @@
       "PublicProfileDto": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string"
-          },
-          "nickname": {
-            "type": "string"
-          },
+          "id": { "type": "string" },
+          "nickname": { "type": "string" },
           "gender": {
             "type": "string",
             "enum": ["unknown", "male", "female", "other"]
           },
-          "avatarId": {
-            "type": "string"
-          }
+          "avatarId": { "type": "string" }
         },
         "required": ["id", "nickname", "gender", "avatarId"]
       },
@@ -1749,22 +1337,14 @@
       "AuthTokensDto": {
         "type": "object",
         "properties": {
-          "accessToken": {
-            "type": "string"
-          },
-          "refreshToken": {
-            "type": "string"
-          },
+          "accessToken": { "type": "string" },
+          "refreshToken": { "type": "string" },
           "expiresIn": {
             "type": "number",
             "description": "TTL access token (giây)"
           },
-          "userId": {
-            "type": "string"
-          },
-          "isGuest": {
-            "type": "boolean"
-          }
+          "userId": { "type": "string" },
+          "isGuest": { "type": "boolean" }
         },
         "required": [
           "accessToken",
@@ -1785,27 +1365,28 @@
         },
         "required": ["phone"]
       },
+      "OtpRequestedDto": {
+        "type": "object",
+        "properties": {
+          "ttlSeconds": {
+            "type": "number",
+            "description": "TTL của OTP vừa gửi (giây) — client hiển thị đếm ngược"
+          }
+        },
+        "required": ["ttlSeconds"]
+      },
       "VerifyOtpDto": {
         "type": "object",
         "properties": {
-          "phone": {
-            "type": "string",
-            "example": "+84912345678"
-          },
-          "code": {
-            "type": "string",
-            "example": "123456"
-          }
+          "phone": { "type": "string", "example": "+84912345678" },
+          "code": { "type": "string", "example": "123456" }
         },
         "required": ["phone", "code"]
       },
       "SocialLoginDto": {
         "type": "object",
         "properties": {
-          "provider": {
-            "type": "string",
-            "enum": ["google", "apple"]
-          },
+          "provider": { "type": "string", "enum": ["google", "apple"] },
           "idToken": {
             "type": "string",
             "description": "ID token từ SDK của provider — server tự verify, không tin client"
@@ -1815,11 +1396,7 @@
       },
       "RefreshDto": {
         "type": "object",
-        "properties": {
-          "refreshToken": {
-            "type": "string"
-          }
-        },
+        "properties": { "refreshToken": { "type": "string" } },
         "required": ["refreshToken"]
       },
       "WalletDto": {
@@ -1852,10 +1429,7 @@
       "VerifyIapDto": {
         "type": "object",
         "properties": {
-          "provider": {
-            "type": "string",
-            "enum": ["apple", "google"]
-          },
+          "provider": { "type": "string", "enum": ["apple", "google"] },
           "productId": {
             "type": "string",
             "example": "com.litmatch.diamond.100"
@@ -1869,12 +1443,7 @@
       },
       "PurchaseVipDto": {
         "type": "object",
-        "properties": {
-          "planId": {
-            "type": "string",
-            "example": "vip-30d"
-          }
-        },
+        "properties": { "planId": { "type": "string", "example": "vip-30d" } },
         "required": ["planId"]
       },
       "JoinQueueDto": {
@@ -1897,13 +1466,8 @@
       "TicketDto": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string"
-          },
-          "matchType": {
-            "type": "string",
-            "enum": ["soul", "voice"]
-          },
+          "id": { "type": "string" },
+          "matchType": { "type": "string", "enum": ["soul", "voice"] },
           "status": {
             "type": "string",
             "enum": ["queued", "matched", "confirmed", "expired", "cancelled"]
@@ -1920,18 +1484,9 @@
             "type": "string",
             "enum": ["any", "male", "female"]
           },
-          "sessionId": {
-            "type": "string",
-            "nullable": true
-          },
-          "enqueuedAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "createdAt": {
-            "format": "date-time",
-            "type": "string"
-          }
+          "sessionId": { "type": "string", "nullable": true },
+          "enqueuedAt": { "format": "date-time", "type": "string" },
+          "createdAt": { "format": "date-time", "type": "string" }
         },
         "required": [
           "id",
@@ -1956,25 +1511,16 @@
             "type": "boolean",
             "description": "true = retry cùng Idempotency-Key, không trừ tiền/boost thêm"
           },
-          "ticket": {
-            "$ref": "#/components/schemas/TicketDto"
-          }
+          "ticket": { "$ref": "#/components/schemas/TicketDto" }
         },
         "required": ["transactionId", "replayed", "ticket"]
       },
       "FriendDto": {
         "type": "object",
         "properties": {
-          "profile": {
-            "$ref": "#/components/schemas/PublicProfileDto"
-          },
-          "conversationId": {
-            "type": "string"
-          },
-          "friendSince": {
-            "format": "date-time",
-            "type": "string"
-          },
+          "profile": { "$ref": "#/components/schemas/PublicProfileDto" },
+          "conversationId": { "type": "string" },
+          "friendSince": { "format": "date-time", "type": "string" },
           "lastMessageAt": {
             "format": "date-time",
             "type": "string",
@@ -1990,32 +1536,17 @@
       },
       "ConversationDto": {
         "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          }
-        },
+        "properties": { "id": { "type": "string" } },
         "required": ["id"]
       },
       "MessageDto": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string"
-          },
-          "conversationId": {
-            "type": "string"
-          },
-          "senderUserId": {
-            "type": "string"
-          },
-          "content": {
-            "type": "string"
-          },
-          "sentAt": {
-            "format": "date-time",
-            "type": "string"
-          }
+          "id": { "type": "string" },
+          "conversationId": { "type": "string" },
+          "senderUserId": { "type": "string" },
+          "content": { "type": "string" },
+          "sentAt": { "format": "date-time", "type": "string" }
         },
         "required": [
           "id",
@@ -2030,52 +1561,33 @@
         "properties": {
           "items": {
             "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MessageDto"
-            }
+            "items": { "$ref": "#/components/schemas/MessageDto" }
           },
-          "meta": {
-            "type": "object"
-          }
+          "meta": { "type": "object" }
         },
         "required": ["items", "meta"]
       },
-      "SendMessageDto": {
+      "SendFriendMessageDto": {
         "type": "object",
-        "properties": {
-          "content": {
-            "type": "string",
-            "maxLength": 2000
-          }
-        },
+        "properties": { "content": { "type": "string", "maxLength": 4000 } },
         "required": ["content"]
       },
       "SoulSessionViewDto": {
         "type": "object",
         "properties": {
-          "sessionId": {
-            "type": "string"
-          },
+          "sessionId": { "type": "string" },
           "phase": {
             "type": "string",
             "enum": ["chatting", "rating", "closed"]
           },
-          "chatEndsAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "ratingEndsAt": {
-            "format": "date-time",
-            "type": "string"
-          },
+          "chatEndsAt": { "format": "date-time", "type": "string" },
+          "ratingEndsAt": { "format": "date-time", "type": "string" },
           "myVerdict": {
             "type": "string",
             "enum": ["rude", "boring", "like"],
             "nullable": true
           },
-          "matched": {
-            "type": "boolean"
-          }
+          "matched": { "type": "boolean" }
         },
         "required": [
           "sessionId",
@@ -2089,20 +1601,10 @@
       "SoulMessageDto": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string"
-          },
-          "senderRole": {
-            "type": "string",
-            "enum": ["me", "partner"]
-          },
-          "content": {
-            "type": "string"
-          },
-          "sentAt": {
-            "format": "date-time",
-            "type": "string"
-          }
+          "id": { "type": "string" },
+          "senderRole": { "type": "string", "enum": ["me", "partner"] },
+          "content": { "type": "string" },
+          "sentAt": { "format": "date-time", "type": "string" }
         },
         "required": ["id", "senderRole", "content", "sentAt"]
       },
@@ -2111,48 +1613,37 @@
         "properties": {
           "items": {
             "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SoulMessageDto"
-            }
+            "items": { "$ref": "#/components/schemas/SoulMessageDto" }
           },
-          "meta": {
-            "type": "object"
-          }
+          "meta": { "type": "object" }
         },
         "required": ["items", "meta"]
+      },
+      "SendSoulMessageDto": {
+        "type": "object",
+        "properties": { "content": { "type": "string", "maxLength": 2000 } },
+        "required": ["content"]
       },
       "RateSessionDto": {
         "type": "object",
         "properties": {
-          "verdict": {
-            "type": "string",
-            "enum": ["rude", "boring", "like"]
-          }
+          "verdict": { "type": "string", "enum": ["rude", "boring", "like"] }
         },
         "required": ["verdict"]
       },
       "RatingResultDto": {
         "type": "object",
         "properties": {
-          "verdict": {
-            "type": "string",
-            "enum": ["rude", "boring", "like"]
-          },
-          "matched": {
-            "type": "boolean"
-          }
+          "verdict": { "type": "string", "enum": ["rude", "boring", "like"] },
+          "matched": { "type": "boolean" }
         },
         "required": ["verdict", "matched"]
       },
       "CallDto": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string"
-          },
-          "matchSessionId": {
-            "type": "string"
-          },
+          "id": { "type": "string" },
+          "matchSessionId": { "type": "string" },
           "status": {
             "type": "string",
             "enum": ["pending", "active", "ended"]
@@ -2177,13 +1668,8 @@
             ],
             "nullable": true
           },
-          "durationSeconds": {
-            "type": "number",
-            "nullable": true
-          },
-          "billedMinutes": {
-            "type": "number"
-          }
+          "durationSeconds": { "type": "number", "nullable": true },
+          "billedMinutes": { "type": "number" }
         },
         "required": [
           "id",
@@ -2199,56 +1685,31 @@
       "JoinCallDto": {
         "type": "object",
         "properties": {
-          "call": {
-            "$ref": "#/components/schemas/CallDto"
-          },
-          "token": {
-            "type": "string"
-          },
-          "livekitUrl": {
-            "type": "string"
-          }
+          "call": { "$ref": "#/components/schemas/CallDto" },
+          "token": { "type": "string" },
+          "livekitUrl": { "type": "string" }
         },
         "required": ["call", "token", "livekitUrl"]
       },
       "CreatePartyRoomDto": {
         "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 500
-          }
-        },
+        "properties": { "title": { "type": "string", "maxLength": 500 } },
         "required": ["title"]
       },
       "PartyRoomDto": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string"
-          },
-          "hostUserId": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string",
-            "enum": ["active", "closed"]
-          },
-          "speakerLimit": {
-            "type": "number"
-          },
+          "id": { "type": "string" },
+          "hostUserId": { "type": "string" },
+          "title": { "type": "string" },
+          "status": { "type": "string", "enum": ["active", "closed"] },
+          "speakerLimit": { "type": "number" },
           "closeReason": {
             "type": "string",
             "enum": ["host_left", "finished", "swept", "error"],
             "nullable": true
           },
-          "createdAt": {
-            "format": "date-time",
-            "type": "string"
-          }
+          "createdAt": { "format": "date-time", "type": "string" }
         },
         "required": [
           "id",
@@ -2263,35 +1724,19 @@
       "PartyRoomMemberDto": {
         "type": "object",
         "properties": {
-          "userId": {
-            "type": "string"
-          },
-          "role": {
-            "type": "string",
-            "enum": ["host", "speaker", "audience"]
-          },
-          "joinedAt": {
-            "format": "date-time",
-            "type": "string"
-          }
+          "userId": { "type": "string" },
+          "role": { "type": "string", "enum": ["host", "speaker", "audience"] },
+          "joinedAt": { "format": "date-time", "type": "string" }
         },
         "required": ["userId", "role", "joinedAt"]
       },
       "JoinPartyRoomDto": {
         "type": "object",
         "properties": {
-          "room": {
-            "$ref": "#/components/schemas/PartyRoomDto"
-          },
-          "membership": {
-            "$ref": "#/components/schemas/PartyRoomMemberDto"
-          },
-          "token": {
-            "type": "string"
-          },
-          "livekitUrl": {
-            "type": "string"
-          }
+          "room": { "$ref": "#/components/schemas/PartyRoomDto" },
+          "membership": { "$ref": "#/components/schemas/PartyRoomMemberDto" },
+          "token": { "type": "string" },
+          "livekitUrl": { "type": "string" }
         },
         "required": ["room", "membership", "token", "livekitUrl"]
       },
@@ -2300,27 +1745,19 @@
         "properties": {
           "data": {
             "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PartyRoomDto"
-            }
+            "items": { "$ref": "#/components/schemas/PartyRoomDto" }
           },
-          "meta": {
-            "type": "object"
-          }
+          "meta": { "type": "object" }
         },
         "required": ["data", "meta"]
       },
       "PartyRoomDetailDto": {
         "type": "object",
         "properties": {
-          "room": {
-            "$ref": "#/components/schemas/PartyRoomDto"
-          },
+          "room": { "$ref": "#/components/schemas/PartyRoomDto" },
           "members": {
             "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PartyRoomMemberDto"
-            }
+            "items": { "$ref": "#/components/schemas/PartyRoomMemberDto" }
           }
         },
         "required": ["room", "members"]
@@ -2328,78 +1765,44 @@
       "ChangePartyRoleDto": {
         "type": "object",
         "properties": {
-          "role": {
-            "type": "string",
-            "enum": ["speaker", "audience"]
-          }
+          "role": { "type": "string", "enum": ["speaker", "audience"] }
         },
         "required": ["role"]
       },
       "GiftDto": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string"
-          },
-          "code": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "priceDiamond": {
-            "type": "number"
-          }
+          "id": { "type": "string" },
+          "code": { "type": "string" },
+          "name": { "type": "string" },
+          "priceDiamond": { "type": "number" }
         },
         "required": ["id", "code", "name", "priceDiamond"]
       },
       "SendGiftDto": {
         "type": "object",
         "properties": {
-          "giftId": {
-            "type": "string"
-          },
-          "receiverUserId": {
-            "type": "string"
-          }
+          "giftId": { "type": "string" },
+          "receiverUserId": { "type": "string" }
         },
         "required": ["giftId", "receiverUserId"]
       },
       "GiftEventDto": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string"
-          },
-          "giftId": {
-            "type": "string"
-          },
-          "giftCode": {
-            "type": "string"
-          },
-          "roomId": {
-            "type": "string"
-          },
-          "senderUserId": {
-            "type": "string"
-          },
-          "receiverUserId": {
-            "type": "string"
-          },
-          "priceDiamond": {
-            "type": "number"
-          },
+          "id": { "type": "string" },
+          "giftId": { "type": "string" },
+          "giftCode": { "type": "string" },
+          "roomId": { "type": "string" },
+          "senderUserId": { "type": "string" },
+          "receiverUserId": { "type": "string" },
+          "priceDiamond": { "type": "number" },
           "pointsAwarded": {
             "type": "number",
             "description": "0 nếu người nhận là guest (docs/06 § Gift)"
           },
-          "createdAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "replayed": {
-            "type": "boolean"
-          }
+          "createdAt": { "format": "date-time", "type": "string" },
+          "replayed": { "type": "boolean" }
         },
         "required": [
           "id",

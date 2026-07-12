@@ -16,7 +16,7 @@ export enum SoulSenderRole {
   Partner = 'partner',
 }
 
-export class SendMessageDto {
+export class SendSoulMessageDto {
   @ApiProperty({ maxLength: MESSAGE_CONTENT_HARD_CAP })
   @IsString()
   // Sanity cap transport — giới hạn nghiệp vụ thật là config SOUL_CHAT_MESSAGE_MAX_LENGTH (service check)

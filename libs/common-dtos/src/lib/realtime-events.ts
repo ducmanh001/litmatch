@@ -14,6 +14,11 @@ export const REALTIME_USER_CHANNEL_PREFIX = 'realtime:user:';
 /** Pattern cho PSUBSCRIBE phía gateway. */
 export const REALTIME_USER_CHANNEL_PATTERN = `${REALTIME_USER_CHANNEL_PREFIX}*`;
 
+/** Contract lỗi handshake mà browser dùng để refresh access token rồi reconnect đúng một lần. */
+export const RealtimeConnectionErrors = {
+  Unauthorized: 'UNAUTHORIZED',
+} as const;
+
 export function realtimeUserChannel(userId: string): string {
   return `${REALTIME_USER_CHANNEL_PREFIX}${userId}`;
 }

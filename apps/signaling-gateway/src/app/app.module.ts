@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, RequestMethod } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { buildPinoHttpOptions } from '@litmatch/logger';
@@ -21,6 +21,7 @@ import type { SignalingEnv } from '../config/env.validation';
           level: config.getOrThrow('LOG_LEVEL', { infer: true }),
           pretty: config.get('NODE_ENV', { infer: true }) === 'development',
         }),
+        forRoutes: [{ path: '{*splat}', method: RequestMethod.ALL }],
       }),
     }),
     // Chỉ VERIFY access token của core-api (cùng JWT_SECRET) — gateway không bao giờ ký token

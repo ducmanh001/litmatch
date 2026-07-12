@@ -39,7 +39,6 @@ import type { IapVerifier } from './ports/iap-verifier';
 const INTEGRATION_DB_URL = process.env['INTEGRATION_DB_URL'];
 const d = INTEGRATION_DB_URL ? describe : describe.skip;
 if (!INTEGRATION_DB_URL) {
-  // eslint-disable-next-line no-console
   console.warn(
     '[economy.integration] BỎ QUA — set INTEGRATION_DB_URL để chạy bộ test race trên Postgres thật',
   );

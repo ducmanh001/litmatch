@@ -37,7 +37,7 @@ import type {
 import type Redis from 'ioredis';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import type { CoreApiEnv } from '../../config/env.validation';
-import type { RateSessionDto, SendMessageDto } from './dto/soul-match.dtos';
+import type { RateSessionDto, SendSoulMessageDto } from './dto/soul-match.dtos';
 
 /** Phase phòng chat — derive từ timestamp DB + giờ server (docs/services/soul-match-service.md § 1). */
 export enum SoulRoomPhase {
@@ -109,7 +109,7 @@ export class SoulMatchService {
   async sendMessage(
     user: AuthenticatedUser,
     sessionId: string,
-    dto: SendMessageDto,
+    dto: SendSoulMessageDto,
     idempotencyKey: string,
   ): Promise<SoulChatMessage> {
     const room = await this.getRoomForMember(user, sessionId);

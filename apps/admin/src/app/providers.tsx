@@ -1,5 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+
+import { tokenStore } from '../shared/api/client';
 
 import type { ReactNode } from 'react';
 
@@ -18,6 +20,13 @@ function createQueryClient(): QueryClient {
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(createQueryClient);
+  useEffect(
+    () =>
+      tokenStore.subscribe(() => {
+        if (tokenStore.getStatus() === 'unauthenticated') queryClient.clear();
+      }),
+    [queryClient],
+  );
   return (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );

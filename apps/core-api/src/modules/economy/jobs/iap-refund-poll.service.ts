@@ -25,6 +25,7 @@ import {
   getAppleServerApiToken,
 } from '../clients/apple-server-api';
 import { getGoogleServiceAccountAccessToken } from '../clients/google-service-account';
+import { storeApiAbortSignal } from '../clients/store-api-http';
 import { RefundService } from '../services/refund.service';
 
 const JOB = 'economy-iap-refund-poll';
@@ -159,6 +160,7 @@ export class IapRefundPollService
     const url = `${appleServerApiBaseUrl(this.config)}/inApps/v2/refund/lookup/${encodeURIComponent(originalTransactionId)}`;
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
+      signal: storeApiAbortSignal(this.config),
     });
     if (res.status === HttpStatus.NOT_FOUND) return false; // Apple trả 404 khi chưa từng có refund cho transaction này
     if (!res.ok) {
@@ -186,6 +188,7 @@ export class IapRefundPollService
     const url = `${ANDROID_PUBLISHER_API_BASE}/applications/${encodeURIComponent(packageName)}/purchases/voidedpurchases?startTime=${since.getTime()}&maxResults=${VOIDED_PURCHASES_PAGE_SIZE}`;
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${accessToken}` },
+      signal: storeApiAbortSignal(this.config),
     });
     if (!res.ok) {
       this.logger.warn(`Google Voided Purchases API lỗi ${res.status}`);

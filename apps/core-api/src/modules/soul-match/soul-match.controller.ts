@@ -23,7 +23,7 @@ import { SoulMatchService } from './soul-match.service';
 import {
   RateSessionDto,
   RatingResultDto,
-  SendMessageDto,
+  SendSoulMessageDto,
   SoulMessageDto,
   SoulMessagesPageDto,
   SoulSessionViewDto,
@@ -92,7 +92,7 @@ export class SoulMatchController {
   async sendMessage(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: SendMessageDto,
+    @Body() dto: SendSoulMessageDto,
     @IdempotencyKey() idempotencyKey: string,
   ): Promise<SoulMessageDto> {
     const message = await this.soulMatchService.sendMessage(

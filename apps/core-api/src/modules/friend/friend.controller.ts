@@ -24,7 +24,7 @@ import {
   FriendDto,
   MessageDto,
   MessagesPageDto,
-  SendMessageDto,
+  SendFriendMessageDto,
 } from './dto/friend.dtos';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import {
@@ -111,7 +111,7 @@ export class FriendController {
   async sendMessage(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: SendMessageDto,
+    @Body() dto: SendFriendMessageDto,
     @IdempotencyKey() idempotencyKey: string,
   ): Promise<MessageDto> {
     const message = await this.friendService.sendMessage(

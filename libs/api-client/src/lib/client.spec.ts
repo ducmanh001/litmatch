@@ -1,6 +1,7 @@
 import { createApiClient } from './client';
 import { ApiError, CLIENT_NETWORK_ERROR, isApiError } from './api-error';
 import { createTokenStore, memoryRefreshTokenStorage } from './token-store';
+import { vi } from 'vitest';
 
 import type { TokenStore } from './token-store';
 
@@ -103,6 +104,75 @@ describe('createApiClient', () => {
     expect((err as ApiError).status).toBe(0);
   });
 
+  it('restoreSession dùng refresh token để khôi phục access token sau reload', async () => {
+    const { fetch, calls } = fetchStub([
+      jsonResponse(200, {
+        data: { accessToken: 'access-new', refreshToken: 'refresh-new' },
+      }),
+    ]);
+    const store = createTokenStore(memoryRefreshTokenStorage());
+    store.setSession({
+      accessToken: 'access-old',
+      refreshToken: 'refresh-old',
+    });
+    // Mô phỏng reload: memory access token mất nhưng refresh token bền vẫn còn.
+    const reloadedStore = createTokenStore({
+      get: store.getRefreshToken,
+      set: () => undefined,
+    });
+    const client = createApiClient({
+      baseUrl: BASE_URL,
+      tokenStore: reloadedStore,
+      fetch,
+    });
+
+    await expect(client.restoreSession()).resolves.toBe(true);
+    expect(reloadedStore.getAccessToken()).toBe('access-new');
+    expect(calls.map((call) => call.url)).toEqual(['/api/v1/auth/refresh']);
+  });
+
+  it('response refresh đến muộn không được hồi sinh session đã logout', async () => {
+    let resolveRefresh: ((response: Response) => void) | undefined;
+    const fetch = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveRefresh = resolve;
+        }),
+    ) as unknown as typeof globalThis.fetch;
+    const store = storeWithSession();
+    const client = createApiClient({
+      baseUrl: BASE_URL,
+      tokenStore: store,
+      fetch,
+    });
+
+    const refreshing = client.refreshSession();
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    store.setSession(null);
+    resolveRefresh?.(
+      jsonResponse(200, {
+        data: { accessToken: 'late-access', refreshToken: 'late-refresh' },
+      }),
+    );
+
+    await expect(refreshing).resolves.toBe(false);
+    expect(store.getStatus()).toBe('unauthenticated');
+    expect(store.getAccessToken()).toBeNull();
+  });
+
+  it('refresh response sai contract làm session fail closed', async () => {
+    const { fetch } = fetchStub([jsonResponse(200, { data: {} })]);
+    const store = storeWithSession();
+    const client = createApiClient({
+      baseUrl: BASE_URL,
+      tokenStore: store,
+      fetch,
+    });
+
+    await expect(client.refreshSession()).resolves.toBe(false);
+    expect(store.getStatus()).toBe('unauthenticated');
+  });
+
   it('401 → refresh rotation 1 lần rồi retry với token mới', async () => {
     const { fetch, calls } = fetchStub([
       jsonResponse(401, errorBody('AUTH_TOKEN_EXPIRED')),
@@ -131,13 +201,33 @@ describe('createApiClient', () => {
     expect(store.getRefreshToken()).toBe('refresh-new');
   });
 
+  it('retry sau refresh mất mạng vẫn ném ApiError chuẩn hóa', async () => {
+    const { fetch } = fetchStub([
+      jsonResponse(401, errorBody('AUTH_TOKEN_EXPIRED')),
+      jsonResponse(200, {
+        data: { accessToken: 'access-new', refreshToken: 'refresh-new' },
+      }),
+      new TypeError('retry fetch failed'),
+    ]);
+    const client = createApiClient({
+      baseUrl: BASE_URL,
+      tokenStore: storeWithSession(),
+      fetch,
+    });
+
+    const err = await client.GET('/api/v1/users/me').catch((e: unknown) => e);
+
+    expect(isApiError(err)).toBe(true);
+    expect((err as ApiError).code).toBe(CLIENT_NETWORK_ERROR);
+  });
+
   it('refresh fail → xoá session + onSessionExpired, KHÔNG retry vòng lặp', async () => {
     const { fetch, calls } = fetchStub([
       jsonResponse(401, errorBody('AUTH_TOKEN_EXPIRED')),
       jsonResponse(401, errorBody('AUTH_REFRESH_REUSED')),
     ]);
     const store = storeWithSession();
-    const onSessionExpired = jest.fn();
+    const onSessionExpired = vi.fn();
     const client = createApiClient({
       baseUrl: BASE_URL,
       tokenStore: store,

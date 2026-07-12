@@ -19,6 +19,7 @@ export {
 export type {
   AuthSession,
   RefreshTokenStorage,
+  SessionStatus,
   TokenStore,
 } from './lib/token-store';
 export type { paths, components } from './generated/core-api';
