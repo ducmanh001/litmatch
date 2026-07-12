@@ -31,16 +31,14 @@ export function AppShell() {
   const logout = useMutation({
     mutationFn: async () => {
       const refreshToken = tokenStore.getRefreshToken();
+      tokenStore.setSession(null);
+      navigate('/login', { replace: true });
       if (refreshToken !== null) {
-        // Thu hồi server-side best-effort — thất bại vẫn logout local
+        // Local logout thắng mọi response refresh cũ; revoke server chạy best-effort sau đó.
         await apiClient
           .POST('/api/v1/auth/logout', { body: { refreshToken } })
           .catch(() => undefined);
       }
-    },
-    onSettled: () => {
-      tokenStore.setSession(null);
-      navigate('/login', { replace: true });
     },
   });
 

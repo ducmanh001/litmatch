@@ -42,7 +42,6 @@ import type {
 const INTEGRATION_DB_URL = process.env['INTEGRATION_DB_URL'];
 const d = INTEGRATION_DB_URL ? describe : describe.skip;
 if (!INTEGRATION_DB_URL) {
-  // eslint-disable-next-line no-console
   console.warn(
     '[party-room.integration] BỎ QUA — set INTEGRATION_DB_URL để chạy trên Postgres thật',
   );

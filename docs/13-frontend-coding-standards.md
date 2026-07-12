@@ -7,15 +7,21 @@ nằm ở [12-frontend-architecture.md](./12-frontend-architecture.md); file nà
 viết code cụ thể. Nguyên tắc gốc (ownership, abstraction, comment) vẫn là
 [11-engineering-principles.md](./11-engineering-principles.md) — FE không có bộ triết lý riêng.
 
+Mức độ quy tắc: **MUST/BẮT BUỘC** là invariant hoặc có gate; **SHOULD/MẶC ĐỊNH** là lựa chọn
+chuẩn, lệch phải ghi lý do; **MAY/CHO PHÉP** là phương án hợp lệ theo điều kiện được nêu. Từ
+"cấm" tương đương MUST NOT. Quy trình xin ngoại lệ ở § 13.15.
+
 ## 13.1 Nguyên tắc chung
 
-- **Kim chỉ nam: ưu tiên tính scale trong mọi quyết định** — hệ thống này xây cho quy mô lớn
-  thật ([docs/00](./00-overview-and-index.md)), FE không ngoại lệ: cấu trúc phải chịu được
+- **Kim chỉ nam: correctness và boundary trước; scale codebase bằng vị trí deterministic** —
+  hệ thống này xây cho quy mô lớn ([docs/00](./00-overview-and-index.md)), FE phải chịu được
   N feature và N agent làm song song. Hệ quả bắt buộc: mọi quy tắc đặt vị trí/tách file trong
   bộ chuẩn này là **deterministic theo ngữ nghĩa** — 2 người (hoặc 2 agent) quyết định độc lập
   phải ra cùng 1 kết quả. Không tồn tại ngưỡng "linh động" kiểu đợi-lặp-đủ-N-lần hay
   đợi-file-đủ-dài: tiêu chí theo số đếm phụ thuộc thời điểm nhìn vào code, nên 2 thời điểm
-  khác nhau cho 2 câu trả lời khác nhau — đó không phải là chuẩn.
+  khác nhau cho 2 câu trả lời khác nhau — đó không phải là chuẩn. Runtime optimization và
+  abstraction vẫn theo thứ tự ưu tiên docs/11 § 11.1: chỉ thêm khi contract hoặc số liệu buộc
+  phải có.
 - **Server là nguồn sự thật, UI là hàm của state**. FE không tự tính toán lại giá trị nghiệp vụ
   (giá gift, số dư, trạng thái matching) — hiển thị đúng cái server trả, kể cả khi "tự tính
   cũng ra". Hai công thức ở 2 nơi là bug chờ ngày lệch.
@@ -52,11 +58,17 @@ env ngoài `shared/env.ts`, fetch/axios tay, import entry chính `common-dtos`, 
   ở backend).
 - `import type` cho import chỉ dùng ở type-position — đặc biệt với `common-dtos` để chắc chắn
   không kéo runtime vào bundle.
-- **Boundary enforce bằng lint, không bằng lòng tin**: gắn Nx tag trong `project.json`
-  (`scope:frontend` cho admin/web, `scope:shared` cho api-client/common-dtos, `scope:backend`
-  cho 3 app backend) + rule `@nx/enforce-module-boundaries` ở eslint root: `scope:frontend`
-  chỉ được depend `scope:shared`. Vi phạm quy tắc 12.9-2 phải là lỗi lint, không đợi reviewer
-  soi.
+- **Boundary enforce bằng lint, không bằng lòng tin**: admin/web có `scope:frontend`; chỉ
+  `api-client` và `common-dtos` mang capability `platform:browser`. Rule áp dụng cho cả `.ts`
+  và `.tsx`: source `scope:frontend` chỉ depend project `platform:browser`. Scope backend giữ
+  tên domain hiện hành (`scope:core`, `scope:signaling`, `scope:media`), không tạo alias tài
+  liệu khác code.
+
+| Source     | Internal project được import                  | Cấm                   |
+| ---------- | --------------------------------------------- | --------------------- |
+| admin/web  | `api-client`, entry `/pure` của `common-dtos` | app/backend lib khác  |
+| api-client | browser-safe contract lib                     | React/Next/app source |
+| feature    | `shared/` cùng app + browser-safe libs        | feature khác          |
 
 ## 13.3 Cấu trúc feature & naming
 
@@ -91,8 +103,9 @@ env ngoài `shared/env.ts`, fetch/axios tay, import entry chính `common-dtos`, 
   `providers.tsx`; per-query chỉ override khi có lý do ghi tại chỗ.
 - Sau mutation: `invalidateQueries` theo key factory, để server trả trạng thái mới. **Không
   `setQueryData` tự dựng kết quả nghiệp vụ** (tự cộng số dư, tự đổi trạng thái ticket) — đó là
-  business logic trong FE. Optimistic update chỉ cho tương tác thuần UI (like, đánh dấu đã
-  đọc) và task phải nói rõ.
+  business logic trong FE. Optimistic update chỉ MAY khi server contract idempotent, update
+  reversible, có rollback + invalidate và task/acceptance criteria nói rõ; like/read vẫn là
+  server state, không mặc định coi là UI thuần.
 - **Cấm copy data từ query vào `useState`/store rồi render từ bản copy** — 2 nguồn sự thật,
   refetch xong UI vẫn cũ. Cần derive thì derive lúc render hoặc `select` của query.
 - Endpoint có `Idempotency-Key` (economy, gift...): FE sinh UUID **một lần cho mỗi intent của
@@ -109,8 +122,10 @@ feature sở hữu nó, mỗi store 1 concern — không store "app state" tổn
 
 ## 13.6 Form
 
-- React Hook Form + Zod resolver cho **mọi** form. Schema Zod đặt cạnh form, là nơi duy nhất
-  khai rule format phía client — nhưng validate thật vẫn ở backend, client chỉ đỡ UX.
+- React Hook Form + Zod resolver cho **mọi form nhập dữ liệu**. Nút confirm/action không có
+  field không phải dựng form library; filter chỉ phản ánh URL/query params dùng schema parser
+  tại boundary phù hợp. Schema Zod đặt cạnh form, là nơi duy nhất khai rule format phía client
+  — nhưng validate thật vẫn ở backend, client chỉ đỡ UX.
 - Lỗi từ backend hiển thị **nguyên message của envelope**, không dịch lại/không nuốt; lỗi
   validate field-level (nếu backend trả) map vào đúng field qua `setError`.
 - Nút submit disable trong lúc mutation pending — chống double-submit ở UI; chống thật vẫn là
@@ -120,8 +135,9 @@ feature sở hữu nó, mỗi store 1 concern — không store "app state" tổn
 
 - `libs/api-client` parse envelope lỗi thống nhất của backend
   (`{ error: { code, message, traceId } }` — § 5.4) và throw đúng **một** class `ApiError`
-  chứa `code`, `message`, `traceId`, `status`. Mọi nơi bắt lỗi API đều switch theo `code`
-  (UPPER_SNAKE của § 5.5), không parse message string.
+  chứa `code`, `message`, `traceId`, `status`. Chỉ behavior đặc thù mới switch theo `code`
+  (UPPER_SNAKE của § 5.5); renderer chung hiển thị envelope trực tiếp, không tạo switch giả
+  hoặc parse message string.
 - 401: api-client tự refresh rotation **một lần** rồi retry; refresh fail → logout + về login.
   Logic này ở 1 chỗ trong api-client, không rải ra từng hook.
 - Mỗi màn hình gắn dữ liệu phải có đủ 4 trạng thái: loading / empty / error / data — error
@@ -138,9 +154,9 @@ feature sở hữu nó, mỗi store 1 concern — không store "app state" tổn
   event tự chế là vi phạm boundary (12.9-3).
 - Đăng ký listener trong hook, **luôn cleanup** khi unmount — listener rò là bug mặc định
   của FE realtime.
-- Reconnect: sau khi socket nối lại, **refetch state nền qua REST** (invalidate query liên
-  quan) rồi mới nghe tiếp delta — socket là kênh delta, không phải nguồn sự thật; đoán state
-  từ event bị miss là tự chế business logic.
+- Reconnect: listener vẫn đăng ký; sau khi xác thực lại socket, **refetch state nền qua REST
+  ngay lập tức** và reconcile với delta đến trong lúc resync. Socket là kênh delta, không phải
+  nguồn sự thật; tháo listener để "refetch xong mới nghe" có thể làm mất event mới.
 - LiveKit: mint token qua endpoint core-api như mobile; wrapper trong `shared/media/` sở hữu
   connect/disconnect lifecycle, component chỉ consume.
 
@@ -151,8 +167,9 @@ feature sở hữu nó, mỗi store 1 concern — không store "app state" tổn
 - Design token (màu, radius, spacing đặc thù) khai bằng CSS variables tại 1 file theme per
   app — không rải mã hex trong className khi giá trị đó có ngữ nghĩa dùng lại.
 - Admin: shadcn/ui generate vào `shared/ui/` — file generate được sửa tại chỗ (đó là mô hình
-  của shadcn), nhưng sửa gì thì ghi comment tại dòng sửa. Icon: `lucide-react` (đi cùng
-  shadcn) — 1 bộ icon, không trộn.
+  của shadcn). Chỉ comment khi thay đổi có WHY không tự thể hiện qua code, theo docs/11 § 11.2;
+  không comment mọi chỉnh sửa cơ học. Icon: `lucide-react` (đi cùng shadcn) — 1 bộ icon,
+  không trộn.
 - A11y baseline không thương lượng: đúng element ngữ nghĩa (`button` cho hành động, không
   `div onClick`), mọi input có label, focus-visible không bị tắt, ảnh có `alt`.
 
@@ -173,14 +190,15 @@ feature sở hữu nó, mỗi store 1 concern — không store "app state" tổn
   tại chỗ dùng.
 - Cấm log token/OTP/PII ra console kể cả khi debug; cấm gửi chúng vào bất kỳ analytics nào.
 - `localStorage` chỉ chứa refresh token theo quyết định 12.6 — không nhét thêm PII/cache
-  dữ liệu người khác vào storage bền.
+  dữ liệu người khác vào storage bền. Áp dụng mitigation và production gate trong ADR 0003;
+  session multi-tab phải đồng bộ logout/rotation, không coi mỗi tab là phiên độc lập.
 - Ẩn/hiện theo role là UX; mọi enforcement thật ở backend guard (12.9-9). Không bao giờ coi
   "UI không có nút đó" là chốt chặn.
 
 ## 13.12 Testing
 
-- **Vitest + @testing-library/react cho cả 2 app** — FE thống nhất 1 runner (backend giữ
-  Jest); 2 runner trong cùng tầng FE là 2 chuẩn song song không có lý do.
+- **Vitest cho admin, web và api-client; Testing Library cho React behavior** — backend giữ
+  Jest. Mọi project frontend phải có target `test` thật; verify fail nếu Nx chỉ skip project.
 - Test cái gì (theo thứ tự giá trị): logic hook (guard route theo role, key sinh idempotency,
   reconnect refetch) → schema Zod của form (case biên) → component có branch logic (4 trạng
   thái § 13.7) → wrapper api-client (refresh 1 lần rồi logout). KHÔNG snapshot test cả trang
@@ -200,6 +218,9 @@ feature sở hữu nó, mỗi store 1 concern — không store "app state" tổn
 - Mỗi PR scaffold/thêm dependency: kiểm bundle không chứa `class-validator`/`@nestjs/*`
   (bằng chứng theo 12.11). Thêm dependency FE mới phải nêu lý do trong PR — mặc định là không
   thêm khi stack đã chốt (§ 12.4, § 12.5) cover được.
+- Full verify giữ ratchet entry admin ở `180 KiB gzip` (baseline đo, không phải mục tiêu cảm
+  tính). Vượt budget phải đo module đóng góp rồi giảm/tách có chủ đích; không chỉ nâng ngưỡng
+  hoặc chia vendor chunk để che warning mà tổng byte không đổi.
 
 ## 13.14 Git/PR & definition of done mỗi phase
 
@@ -207,11 +228,20 @@ feature sở hữu nó, mỗi store 1 concern — không store "app state" tổn
   `feat(api-client): ...`.
 - PR theo feature dọc (route + api + component + test của 1 việc), không PR "toàn bộ phase"
   một cục.
-- DoD mỗi PR: `pnpm format:check`, `pnpm lint`, `nx build <app>`, `nx test <app>` pass;
-  `.env.example` đủ key mới; không sửa tay file trong `generated/`; app serve được và flow
-  vừa làm bấm được bằng tay với backend local.
+- DoD máy: `pnpm agent:verify frontend` pass. `.env.example` đủ key mới; không sửa tay file
+  trong `generated/`; app serve được và flow vừa làm có manual/E2E evidence tương ứng.
 - Phát hiện chuẩn trong file này sai/thiếu khi làm thật → sửa file này trong cùng PR, như
   luật docs sống của repo.
+
+## 13.15 Ngoại lệ và thay đổi chuẩn
+
+Không bypass guard/lint bằng disable comment hoặc import vòng. Khi rule không phù hợp use case:
+
+1. Ghi use case, invariant cần giữ và lý do phương án chuẩn không đáp ứng.
+2. Nêu boundary/security/compatibility bị ảnh hưởng và test chứng minh.
+3. Nếu chỉ đặc thù app, cập nhật app `AGENTS.md` bằng delta **chặt hơn**. Nếu nới/chuyển core
+   rule, cập nhật docs 12/13 và ADR khi có trade-off dài hạn trước hoặc cùng code.
+4. Reviewer chốt quyết định; chưa chốt thì giữ chuẩn hiện hành, không tự tạo escape hatch.
 
 ---
 

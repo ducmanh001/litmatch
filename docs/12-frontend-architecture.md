@@ -2,202 +2,205 @@
 
 # 12 · Kiến trúc Frontend — admin (Vite + React) và web (Next.js)
 
-Tài liệu này là **khung triển khai + quy tắc bắt buộc** cho hai app frontend. Mọi agent nhận
-task frontend phải đọc hết file này trước khi scaffold. Quy tắc ở đây có hiệu lực ngang
-`AGENTS.md`; xung đột thì `AGENTS.md` thắng.
+Tài liệu này mô tả **kiến trúc hiện hành và boundary lâu dài** của hai app frontend. Trạng
+thái triển khai nằm ở [07-roadmap.md](./07-roadmap.md); route/current limitation của từng app
+nằm trong `apps/<app>/AGENTS.md`. Thứ tự ưu tiên nguồn theo `AGENTS.md` gốc; phát hiện xung
+đột thì sửa nguồn canonical, không tự chọn một bản.
 
 ## 12.1 Phạm vi và quan hệ với Luật 1
 
 Luật 1 trong `AGENTS.md` ("chỉ 3 thành phần deploy riêng") nói về **backend domain service** —
-không tự tạo app NestJS thứ 4. `apps/admin` và `apps/web` là **client** gọi API, không sở hữu
+không tự tạo app NestJS thứ tư. `apps/admin` và `apps/web` là **client** gọi API, không sở hữu
 domain logic hay dữ liệu, nên không vi phạm luật đó. Hệ quả bắt buộc:
 
-- Frontend **không bao giờ** chứa business logic quyết định tiền/matching/trust. Mọi enforcement
-  thật nằm ở core-api; UI chỉ phản ánh kết quả.
-- Next.js server code (RSC, route handler) **chỉ để render/SEO**. Không gọi DB, không giữ secret
-  nghiệp vụ, không làm BFF tổng hợp dữ liệu. Nguồn dữ liệu duy nhất là core-api.
+- Frontend không chứa business logic quyết định tiền, matching hoặc trust. Enforcement thật
+  nằm ở core-api; UI chỉ validate format, điều phối intent và phản ánh kết quả server.
+- Next.js server code chỉ render/SEO và gọi contract công khai của core-api khi thật cần cho
+  render. Không gọi DB, không giữ secret nghiệp vụ và không làm BFF tổng hợp dữ liệu.
+- Deep link, client tự viết hoặc UI bị sửa không được làm thay đổi quyền; backend luôn kiểm
+  tra authentication, authorization, ownership và state transition.
 
 ## 12.2 Vị trí trong monorepo
 
 ```text
 apps/
-  core-api/            (đã có — NestJS)
-  signaling-gateway/   (đã có — Socket.IO)
-  media-server/        (đã có — LiveKit)
-  admin/               (MỚI — Vite + React SPA, tool nội bộ)
-  web/                 (MỚI — Next.js App Router, end-user)
+  core-api/            NestJS — nguồn sự thật REST/business
+  signaling-gateway/   Socket.IO — realtime delta
+  media-server/        LiveKit integration
+  admin/               Vite + React SPA — tool nội bộ
+  web/                 Next.js App Router — end-user browser
 libs/
-  common-dtos/         (đã có — hợp đồng chung)
-  api-client/          (MỚI — typed client generate từ OpenAPI)
+  common-dtos/         contract thuần dùng chung khi OpenAPI/event không đủ
+  api-client/          typed REST client generate từ OpenAPI
 openapi/
-  core-api.json        (MỚI — spec emit từ Swagger, commit vào repo)
+  core-api.json        spec emit từ Swagger, commit vào repo
 ```
 
-Nx plugin cần thêm (cùng major 23 với plugin hiện có): `@nx/react`, `@nx/vite`, `@nx/next`.
+Frontend không import source từ `apps/*` khác. Contract REST đi qua `api-client`; event đi
+qua entry browser-safe của `common-dtos`.
 
 ## 12.3 Hợp đồng API — một nguồn sự thật
 
-core-api đã có `SwaggerModule`. Luồng hợp đồng:
+Luồng canonical là `pnpm openapi:sync`:
 
-1. `pnpm openapi:emit` — bootstrap Nest app rồi ghi spec ra `openapi/core-api.json`
-   (cần hạ tầng local `docker compose` đang chạy vì AppModule kết nối lúc init). Spec được
-   **bọc envelope `{ data, meta? }` cho mọi response 2xx** ngay lúc emit
-   (`apps/core-api/src/app/openapi.ts`) — mirror `ResponseEnvelopeInterceptor` để spec và
-   type codegen nói đúng hình dạng body thật.
-2. `pnpm openapi:gen` — chạy `openapi-typescript` sinh type vào
-   `libs/api-client/src/generated/` (file generate, **cấm sửa tay**).
-3. `libs/api-client/src/index.ts` — wrapper mỏng trên `openapi-fetch`:
-   `createApiClient({ baseUrl, tokenStore, onSessionExpired })` + `createTokenStore`.
-   Framework-agnostic, không import React/Next.
+1. Bootstrap Nest app và emit `openapi/core-api.json` đã phản ánh global prefix/envelope.
+2. Generate `libs/api-client/src/generated/core-api.ts` bằng `openapi-typescript`.
+3. Format cả hai output theo chuẩn repo.
 
-Quy tắc:
+Hai lệnh thấp hơn `openapi:emit` và `openapi:gen` chỉ phục vụ debug; thay đổi API phải chạy
+`openapi:sync` trong cùng PR. `openapi:check` sinh vào thư mục tạm và chỉ so sánh byte, nên
+verify/CI không được làm bẩn worktree. CI kiểm cả spec lẫn generated client để không có trạng
+thái một đầu mới, một đầu stale. File trong `generated/` không sửa tay.
 
-- **Mọi REST call từ frontend đi qua `libs/api-client`.** Không viết `fetch`/`axios` tay cho
-  endpoint của core-api.
-- Đổi API ở backend → chạy emit + gen **trong cùng PR**; CI/reviewer coi diff `openapi/` và
-  `generated/` là bằng chứng hợp đồng đổi.
-- `libs/common-dtos`: frontend import qua entry **`@litmatch/common-dtos/pure`**
-  (re-export `api-response.ts`, `auth-token.ts`, `realtime-events.ts` — thuần TypeScript).
-  **Cấm import entry chính** — kéo `class-validator`/Nest vào bundle (guard + lint chặn).
-  Cần type pagination thì lấy từ api-client generated.
+`libs/api-client` là wrapper framework-agnostic trên `openapi-fetch`; nó sở hữu base URL,
+Authorization, refresh rotation và chuẩn hóa `ApiError`. Mọi REST call từ frontend đi qua
+client này, không gọi `fetch`/`axios` trực tiếp cho core-api.
+
+`@litmatch/common-dtos/pure` là entry browser-safe cho response primitives, auth payload và
+realtime events. Entry chính của `common-dtos` dành cho backend và có thể kéo decorator/runtime
+backend vào bundle.
 
 ## 12.4 apps/admin — Vite + React SPA
 
-Tool nội bộ CRUD-heavy, không cần SSR/SEO.
+Admin là tool nội bộ CRUD-heavy, không cần SSR/SEO.
 
-**Stack chốt**: React Router (data router), TanStack Query (server state), React Hook Form +
-Zod (form), shadcn/ui + Tailwind (UI), Zustand chỉ khi state client vượt quá component
-(không Redux).
+**Stack chốt**: React Router data router, TanStack Query, React Hook Form + Zod cho form nhập
+dữ liệu, shadcn/ui + Tailwind; Zustand chỉ khi client state vượt quá component/context nhỏ.
 
 ```text
-apps/admin/
-  index.html
-  vite.config.ts
-  project.json
-  src/
-    main.tsx
-    app/
-      router.tsx          # route tree, lazy() theo feature
-      providers.tsx       # QueryClientProvider, AuthProvider, Toaster
-    features/             # soi gương module backend, mỗi feature tự đóng gói
-      users/              #   api.ts (hooks trên api-client) + components/ + pages/
-      moderation/         #   queue Report/Block
-      economy/            #   ops: refund, VIP plan — CHỈ gọi endpoint admin, không tính toán
-      gifts/              #   catalog CRUD
-    shared/
-      auth/               # token store, login page, RequireRole route guard
-      ui/                 # shadcn components (generate tại chỗ, không lib chung)
-      lib/
+apps/admin/src/
+  app/                    router, providers, shell
+  features/<domain>/      api, pages, components, hooks của domain
+  shared/
+    auth/                 session và route UX guard
+    ui/                   primitives riêng admin
+    lib/                  helper trung lập cấp app
+    env.ts                public build-time env đã validate
 ```
 
-- Route guard theo `role` trong `AccessTokenPayload`; **ẩn UI không phải bảo mật** — backend
-  guard mới là chốt chặn, frontend chỉ đỡ UX.
-- Feature mới = thư mục mới trong `features/`, không nhét chéo. Feature không import lẫn nhau;
-  cần chung thì đưa xuống `shared/`.
+Feature không import feature khác. Khái niệm thật sự cấp app mới đi vào `shared/`. Route guard
+theo role chỉ phục vụ UX; `/admin/*` ở core-api phải có guard tương ứng.
+
+Current route map và backend capability còn thiếu xem `apps/admin/AGENTS.md`.
 
 ## 12.5 apps/web — Next.js App Router
 
-**Stack chốt**: Next.js App Router, TanStack Query cho phần sau login, `socket.io-client`
-(realtime), `livekit-client` (Party Room/Calling), Tailwind.
+**Stack chốt**: Next.js App Router, TanStack Query cho server state tương tác,
+`socket.io-client`, `livekit-client` và Tailwind.
 
 ```text
-apps/web/
-  next.config.js
-  project.json
-  src/
-    app/
-      (public)/           # landing, about — SSR/SSG, SEO
-      (app)/              # sau login — client component là chính
-        matching/
-        chat/
-        party/[roomId]/
-      layout.tsx
-    features/             # cùng triết lý với admin
-    shared/
-      auth/               # token store + refresh rotation, dùng chung logic với api-client
-      realtime/           # socket wrapper: connect signaling-gateway, typed theo
-                          #   realtime-events.ts của common-dtos — cấm string event tự chế
-      media/              # livekit-client wrapper; token mint từ core-api y như mobile
+apps/web/src/
+  app/
+    (public)/             SSR/SSG/SEO
+    (app)/                route sau login; vẫn là Server Component theo mặc định của Next
+  features/<domain>/      client feature được route gọi vào
+  shared/
+    auth/                 session lifecycle
+    realtime/             một Socket.IO instance
+    media/                lifecycle LiveKit
+    env.ts                NEXT_PUBLIC env đã validate
 ```
 
-Ranh giới server/client trong Next:
+`page.tsx`/`layout.tsx` giữ Server Component khi không cần browser API. Chỉ đặt `'use client'`
+tại boundary nhỏ nhất cần hook, event hoặc browser state; component client dùng TanStack Query
+để lấy server state. Route handler bị cấm, ngoại trừ adapter auth mỏng nếu ADR mới chuyển sang
+cookie mode.
 
-- `(public)` được SSR/SSG; `(app)` mặc định client component, data qua TanStack Query.
-- Route handler duy nhất được phép: adapter auth mỏng (nhận token từ core-api, set cookie)
-  **nếu** chọn nâng cấp cookie ở 12.6 — ngoài ra không có route handler nào khác.
+## 12.6 Auth — lifecycle và quyết định lưu token
 
-## 12.6 Auth — quyết định chốt
+Cả hai app dùng đúng JWT flow của core-api, không dựng hệ auth riêng. V1 giữ access token trong
+memory và refresh token trong `localStorage` theo ADR lịch sử
+[0002](./adr/0002-browser-refresh-token-local-storage.md) và production gate hiện hành
+[0003](./adr/0003-browser-auth-production-gate.md). Cách này chỉ hợp lệ cho scaffold/dev, chưa
+được phép public production trước khi đóng security gate trong ADR 0003.
 
-- Cả 2 app dùng **đúng JWT flow của core-api** (phone OTP + social login), không hệ auth riêng.
-- V1: access token giữ **in-memory**, refresh token trong `localStorage`, rotation y hệt
-  mobile. Chấp nhận trade-off XSS để không phải sửa backend; ghi rõ đây là quyết định có chủ đích.
-- Nâng cấp sau (khi có nhu cầu thật): refresh token sang httpOnly cookie — cần backend hỗ trợ
-  cookie mode, làm thành task riêng qua `review-module`, không tiện tay làm trong PR scaffold.
+Session lifecycle bắt buộc:
 
-## 12.7 Việc backend phải xong TRƯỚC (Task 0 — không giao cho agent frontend)
+```text
+bootstrapping
+  → không có refresh token → unauthenticated
+  → có refresh token → restoring (single-flight refresh)
+      → thành công → authenticated
+      → thất bại/reuse/ban → clear local session → unauthenticated
+authenticated
+  → API 401 → refreshing một lần → retry request một lần
+  → logout/session-expired/storage event → clear token + query cache + realtime → unauthenticated
+```
 
-Làm trong core-api theo đúng quy trình `AGENTS.md` (đây là thay đổi Auth → bắt buộc
-`review-module` plan/verify):
+- Protected UI và realtime **không** khởi động trước khi `restoring` kết thúc.
+- Refresh rotation phải single-flight trong một tab và phối hợp giữa tab để không dùng lại cùng
+  refresh token; logout/rotation ở tab khác phải làm snapshot UI hiện tại cập nhật.
+- Nâng cấp sang httpOnly cookie là quyết định kiến trúc mới: thêm ADR, backend cookie mode và
+  migration/rollback plan; không tiện tay đổi trong feature PR.
 
-1. **Role**: enum `user | moderator | admin` trên `User` (migration, default `user`), đưa
-   `role` vào `AccessTokenPayload` (cập nhật `libs/common-dtos/src/lib/auth-token.ts`),
-   `@Roles()` decorator + `RolesGuard`. Seed admin đầu tiên bằng script/env, không hardcode.
-2. **Admin endpoints**: prefix `/admin/*`, guard role, chỉ expose những gì admin panel V1 cần
-   (users, report/block queue, refund, VIP plan, gift catalog).
-3. **CORS**: config-driven qua env `CORS_ORIGINS` (danh sách origin, có validation), cập nhật
-   `.env.example`. Không `origin: true`.
-4. **`pnpm openapi:emit`** như 12.3, commit spec đầu tiên.
+## 12.7 Backend capabilities frontend được phép phụ thuộc
 
-## 12.8 Thứ tự triển khai
+Frontend không tự bổ sung endpoint khi task không cho phép sửa backend. Capability còn thiếu
+được ghi thành task backend trong roadmap. Admin feature thật chỉ bắt đầu khi core-api có:
 
-| Bước | Việc                                                     | Ai                         |
-| ---- | -------------------------------------------------------- | -------------------------- |
-| 0    | Task 0 backend (12.7)                                    | agent backend, repo này    |
-| 1    | `libs/api-client` + scripts openapi                      | agent backend hoặc FE lead |
-| 2a   | Scaffold `apps/admin` + auth + users/moderation          | agent FE (song song 2b)    |
-| 2b   | Scaffold `apps/web` + auth + (public) landing            | agent FE (song song 2a)    |
-| 3    | admin: economy ops, gift catalog · web: realtime + media | agent FE                   |
+1. Role `user | moderator | admin` trong access-token contract và `RolesGuard`.
+2. `/admin/*` endpoints tối thiểu, deny-by-default và audit hành động nhạy cảm.
+3. CORS allow-list từ `CORS_ORIGINS`, có validation, không dùng `origin: true`.
+4. OpenAPI response/error contract đủ để generate client, cập nhật qua `openapi:sync`.
 
-Bước 2a/2b độc lập hoàn toàn (khác thư mục, khác app) — chạy song song được.
+## 12.8 Realtime và media lifecycle
 
-## 12.9 Quy tắc bắt buộc cho agent frontend
+Socket là kênh delta, REST/core-api là nguồn sự thật. Lifecycle chuẩn:
 
-1. **Không sửa backend.** Ngoại lệ duy nhất: file được task liệt kê sẵn. Thiếu endpoint →
-   dừng, báo lại, không tự thêm vào core-api.
-2. Không import từ `apps/core-api/**`. Chỉ `libs/api-client` và 2 file thuần của
-   `common-dtos` (12.3).
-3. Mọi REST call qua api-client; mọi realtime event qua constants/types của
-   `realtime-events.ts`.
-4. Không hardcode URL/port/threshold — env (`VITE_*`, `NEXT_PUBLIC_*`), cập nhật
-   `.env.example` của app.
-5. Server state = TanStack Query; không tự viết cache/polling tay. Client state = component
-   state trước, Zustand khi thật cần, không Redux.
-6. Không tạo `libs/ui` dùng chung hay abstraction "để dành" — hai app tự giữ UI của mình.
-   Mở lib dùng chung mới là quyết định kiến trúc: cập nhật doc này trước rồi mới code, không
-   tự quyết trong PR feature.
-7. Next server code: chỉ render/SEO (12.1, 12.5). Secret không bao giờ vào `NEXT_PUBLIC_*`.
-8. Form phải validate bằng Zod schema; message lỗi từ backend hiển thị nguyên vẹn, không nuốt.
-9. Trước khi báo xong: `pnpm format:check`, `pnpm lint`, `pnpm build` (affected) pass; app
-   chạy được bằng lệnh serve của Nx và đăng nhập được với backend local.
-10. Phát hiện docs/spec sai trong lúc làm → sửa docs trong cùng thay đổi, như luật chung.
+```text
+session authenticated
+  → đăng ký listener có cleanup
+  → connect bằng access token hiện hành
+  → nhận delta và invalidate query phù hợp
+disconnect
+  → giữ listener cần thiết, đánh dấu state cần resync
+reconnect authenticated
+  → refetch/invalidate REST ngay lập tức
+  → reconcile response nền với delta đến trong lúc resync
+logout/session expired
+  → disconnect + remove listener + clear user-scoped cache
+```
 
-## 12.10 Phân tầng tài liệu FE — chung 1 bộ core, mỗi app chỉ giữ delta
+Không tháo listener trong lúc resync rồi mới nghe lại vì có thể mất delta mới. Reconnect do token
+hết hạn phải đi qua session refresh một lần trước khi connect lại. LiveKit token luôn mint từ
+core-api; wrapper `shared/media/` sở hữu connect/disconnect và cleanup track/room.
 
-- **Bộ core dùng chung cho cả admin lẫn web**: file này (kiến trúc/boundary) +
-  [13-frontend-coding-standards.md](./13-frontend-coding-standards.md) (convention). KHÔNG
-  tách thành "chuẩn riêng của admin" và "chuẩn riêng của web" — 2 bộ chuẩn song song sẽ lệch
-  nhau dần và agent không biết tin bản nào (đúng bệnh mà § 5.1 backend đã cấm).
-- **Mỗi app có 1 file `apps/<app>/AGENTS.md`** (tạo trong PR scaffold), chỉ chứa **delta**
-  riêng của app đó: lệnh chạy/dev/test, route map hiện có, quyết định chỉ áp cho app này
-  (vd admin hiện traceId trong error state, web có nhóm route `(public)`/`(app)`). File này
-  link về 12 + 13, **không copy lại luật chung** — copy là tạo bản thứ 2 để lệch.
-- Chuẩn mới phát sinh khi code thật: mặc định thêm vào 13 (áp cả 2 app); chỉ khi thật sự
-  đặc thù 1 app mới ghi vào `AGENTS.md` của app đó.
+## 12.9 Quy tắc bắt buộc cho task frontend
 
-## 12.11 Definition of done cho scaffold V1
+1. Không sửa backend ngoài file/scope task đã liệt kê. Thiếu contract thì dừng và tạo dependency
+   backend, không tự thêm endpoint.
+2. Không import source `apps/core-api/**` hoặc app khác. Internal library browser chỉ dùng
+   `@litmatch/api-client` và `@litmatch/common-dtos/pure`.
+3. REST qua api-client; realtime event qua constants/types canonical.
+4. URL/port/threshold theo môi trường đi qua env module đã validate và `.env.example`.
+5. Server state dùng TanStack Query; client state đi theo ladder ở docs 13.
+6. Không tạo `libs/ui` hay abstraction để dành. Lib mới cần cập nhật architecture trước.
+7. Next server code tuân boundary 12.5; secret không bao giờ dùng prefix public.
+8. Form nhập dữ liệu validate bằng Zod; backend vẫn validate và quyết định nghiệp vụ.
+9. Trước khi báo xong chạy `pnpm agent:verify frontend`; command PASS mới là bằng chứng máy.
+10. Phát hiện docs/spec sai thì sửa nguồn canonical trong cùng thay đổi.
 
-- `nx serve admin` / `nx serve web` chạy, login flow hoạt động với core-api local.
-- admin: xem danh sách user + queue report (read trước, mutation sau).
-- web: landing SSR + đăng nhập + màn hình matching gọi được API.
-- Không có `fetch` tay, không có string event tự chế, không secret trong bundle
-  (`grep` bundle output là bằng chứng).
+## 12.10 Phân tầng tài liệu FE
+
+- File này giữ architecture/boundary evergreen; docs 13 giữ coding rule.
+- `apps/<app>/AGENTS.md` chỉ giữ dev commands, current route/capability và delta chặt hơn. Nó
+  không được sao chép hoặc nới core rule.
+- `docs/07-roadmap.md` giữ dependency và trạng thái hoàn thành; không dùng roadmap để giải thích
+  kiến trúc.
+- Quyết định có trade-off dài hạn đi vào ADR. Thay quyết định bằng ADR mới, không sửa lịch sử.
+
+## 12.11 Verification contract
+
+Nguồn duy nhất cho frontend DoD bằng máy là:
+
+```bash
+pnpm agent:verify frontend
+```
+
+Command phải fail khi project thiếu lint/test/build target, OpenAPI/generated drift, format sai
+hoặc guard vi phạm. Manual smoke/E2E của flow vừa đổi vẫn phải ghi bằng chứng trong review;
+command tự động không thay thế acceptance criteria nghiệp vụ.
+
+Trong vòng lặp phát triển có thể chạy `pnpm agent:verify frontend --tier=fast` (guard, contract,
+lint và test, có dùng Nx cache). Không truyền tier là `full`: thêm format toàn repo, build sạch
+không cache và bundle audit; chỉ tier này là bằng chứng DoD.

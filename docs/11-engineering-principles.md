@@ -8,6 +8,16 @@ nghiệp vụ cụ thể nằm ở [06-domain-rules.md](./06-domain-rules.md).
 
 ## 11.1. Nguyên tắc nền tảng
 
+Khi hai mục tiêu kéo theo hai hướng khác nhau, dùng thứ tự ưu tiên sau thay vì chọn theo cảm
+tính:
+
+`correctness + security → domain ownership + boundary → explicit contract → simplicity/YAGNI
+→ khả năng mở rộng codebase/team → runtime performance khi có bằng chứng`.
+
+"Scale" không tự động thắng KISS/YAGNI. Cấu trúc deterministic giúp nhiều người/agent làm
+song song được ưu tiên từ đầu; tối ưu runtime, abstraction và extension point chỉ thêm khi
+contract hiện tại hoặc số liệu vận hành thực sự đòi hỏi.
+
 ### Domain giữ ý nghĩa của chính nó
 
 Module sở hữu business rule, dữ liệu, type và quyền ghi của domain đó.

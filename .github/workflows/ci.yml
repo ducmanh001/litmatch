@@ -85,19 +85,11 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: OpenAPI spec drift check (docs/12 § 12.3)
-        run: |
-          pnpm openapi:emit
-          # git diff --exit-code KHÔNG bắt được file mới (untracked) — dùng status --porcelain
-          # để bắt cả 2 trường hợp: spec đã có nhưng lệch, và spec quên add lần đầu.
-          if [ -n "$(git status --porcelain -- openapi/)" ]; then
-            echo "::error::openapi/core-api.json lệch với code — chạy 'pnpm openapi:emit && pnpm openapi:gen' rồi commit lại." >&2
-            git status --porcelain -- openapi/ >&2
-            exit 1
-          fi
+      - name: Frontend contract, tests, builds and bundle audit
+        run: pnpm agent:verify frontend
       - name: Unit and integration tests with coverage gate
-        run: pnpm nx run-many -t test --coverage
-      - run: pnpm nx run-many -t build
+        run: pnpm nx run-many -t test --coverage --exclude=admin,web,api-client
+      - run: pnpm nx run-many -t build --exclude=admin,web,api-client
       - name: End-to-end smoke tests
         run: pnpm nx run-many -t e2e --parallel=2
       - name: Upload coverage report

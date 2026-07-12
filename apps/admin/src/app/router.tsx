@@ -1,24 +1,43 @@
 import { createBrowserRouter } from 'react-router-dom';
 
-import { AppShell } from './app-shell';
 import { RouteError } from './route-error';
-import { LoginPage } from '../shared/auth/login-page';
 import { RequireAuth } from '../shared/auth/require-auth';
-import { DashboardPage } from '../features/dashboard/pages/dashboard-page';
+import { SessionBootstrap } from '../shared/auth/session-bootstrap';
 
 /**
  * Route tree duy nhất của app. Feature mới = 1 nhánh mới dưới RequireAuth, lazy() theo
  * feature khi màn có bundle riêng đáng kể (docs/13 § 13.13).
  */
 export const router = createBrowserRouter([
-  { path: '/login', element: <LoginPage />, errorElement: <RouteError /> },
   {
-    element: <RequireAuth />,
+    element: <SessionBootstrap />,
     errorElement: <RouteError />,
     children: [
       {
-        element: <AppShell />,
-        children: [{ index: true, element: <DashboardPage /> }],
+        path: '/login',
+        lazy: async () => ({
+          Component: (await import('../shared/auth/login-page')).LoginPage,
+        }),
+      },
+      {
+        element: <RequireAuth />,
+        children: [
+          {
+            lazy: async () => ({
+              Component: (await import('./app-shell')).AppShell,
+            }),
+            children: [
+              {
+                index: true,
+                lazy: async () => ({
+                  Component: (
+                    await import('../features/dashboard/pages/dashboard-page')
+                  ).DashboardPage,
+                }),
+              },
+            ],
+          },
+        ],
       },
     ],
   },

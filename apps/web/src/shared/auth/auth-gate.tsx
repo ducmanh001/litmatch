@@ -3,7 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-import { useIsAuthenticated } from './use-session';
+import { apiClient } from '../api/client';
+import { useSessionStatus } from './use-session';
 
 import type { ReactNode } from 'react';
 
@@ -13,16 +14,21 @@ import type { ReactNode } from 'react';
  * bảo mật (docs/13 § 13.11) — enforcement thật ở backend.
  */
 export function AuthGate({ children }: { children: ReactNode }) {
-  const isAuthenticated = useIsAuthenticated();
+  const status = useSessionStatus();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
   useEffect(() => {
-    if (mounted && !isAuthenticated) router.replace('/login');
-  }, [mounted, isAuthenticated, router]);
+    if (!mounted) return;
+    if (status === 'restorable') {
+      void apiClient.restoreSession();
+    } else if (status === 'unauthenticated') {
+      router.replace('/login');
+    }
+  }, [mounted, status, router]);
 
-  if (!mounted || !isAuthenticated) {
+  if (!mounted || status !== 'authenticated') {
     return (
       <div className="flex min-h-screen items-center justify-center text-muted-foreground">
         Đang kiểm tra phiên đăng nhập…

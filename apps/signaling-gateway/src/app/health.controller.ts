@@ -1,7 +1,13 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
+
+import { SignalingGateway } from './signaling.gateway';
+
+import type { Response } from 'express';
 
 @Controller('health')
 export class HealthController {
+  constructor(private readonly signaling: SignalingGateway) {}
+
   @Get()
   liveCompatibility(): { status: string; uptimeSeconds: number } {
     return this.live();
@@ -13,8 +19,15 @@ export class HealthController {
   }
 
   @Get('ready')
-  ready(): { status: string } {
-    // Gateway chưa có dependency bắt buộc; khi thêm Redis adapter/LiveKit, kiểm tra tại đây.
-    return { status: 'ok' };
+  ready(@Res({ passthrough: true }) response: Response): {
+    status: 'ok' | 'unavailable';
+    checks: { redisSubscription: string };
+  } {
+    const ready = this.signaling.isReady();
+    if (!ready) response.status(HttpStatus.SERVICE_UNAVAILABLE);
+    return {
+      status: ready ? 'ok' : 'unavailable',
+      checks: { redisSubscription: ready ? 'up' : 'down' },
+    };
   }
 }

@@ -20,6 +20,7 @@ import {
 import { EconomyErrors } from '../economy.errors';
 import { IapProvider } from '../entities/iap.entities';
 import { getGoogleServiceAccountAccessToken } from '../clients/google-service-account';
+import { storeApiAbortSignal } from '../clients/store-api-http';
 
 export interface VerifiedPurchase {
   providerTransactionId: string;
@@ -156,7 +157,9 @@ export class StoreIapVerifier extends IapVerifier {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 'receipt-data': receipt, password: sharedSecret }),
+      signal: storeApiAbortSignal(this.config),
     });
+    if (!res.ok) throw new Error(`Apple store API lỗi ${res.status}`);
     return (await res.json()) as {
       status: number;
       receipt?: { in_app?: unknown[] };
@@ -183,6 +186,7 @@ export class StoreIapVerifier extends IapVerifier {
     const url = `${ANDROID_PUBLISHER_API_BASE}/applications/${encodeURIComponent(packageName)}/purchases/products/${encodeURIComponent(productId)}/tokens/${encodeURIComponent(purchaseToken)}`;
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${accessToken}` },
+      signal: storeApiAbortSignal(this.config),
     });
     if (!res.ok) {
       throw new DomainException(

@@ -4,6 +4,7 @@ import { Throttle, minutes } from '@nestjs/throttler';
 
 import { AuthService } from './auth.service';
 import { AuthTokensDto } from './dto/auth-tokens.dto';
+import { OtpRequestedDto } from './dto/otp-requested.dto';
 import {
   GuestLoginDto,
   RefreshDto,
@@ -34,6 +35,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: minutes(1) } }) // theo IP; limit theo số điện thoại nằm trong OtpService
   @ApiOperation({ summary: 'Gửi OTP tới số điện thoại' })
+  @ApiOkResponse({ type: OtpRequestedDto })
   requestOtp(@Body() dto: RequestOtpDto): Promise<{ ttlSeconds: number }> {
     return this.authService.requestOtp(dto.phone);
   }

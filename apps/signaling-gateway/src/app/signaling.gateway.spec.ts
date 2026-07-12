@@ -68,6 +68,15 @@ describe('SignalingGateway (unit — fanout thuần, không business logic)', ()
       );
       expect((socket.data as { userId?: string }).userId).toBeUndefined();
     });
+
+    it('JWT ký hợp lệ nhưng thiếu sub → UNAUTHORIZED', async () => {
+      const { gateway } = makeGateway(
+        jest.fn(async () => ({ isGuest: false })),
+      );
+      await expect(
+        gateway.authenticate(makeSocket('signed-token')),
+      ).rejects.toThrow('UNAUTHORIZED');
+    });
   });
 
   describe('relay — Redis pmessage → đúng room user, payload nguyên văn', () => {

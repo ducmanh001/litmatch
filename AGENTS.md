@@ -37,6 +37,20 @@ Chạy `pnpm agent:context <scope>` trước khi sửa. Scope hỗ trợ: `core`
 | Review bắt buộc          | `docs/10-code-review-checklist.md`                                          |
 | La bàn thiết kế          | `docs/11-engineering-principles.md`                                         |
 
+## Thứ tự nguồn hướng dẫn
+
+Các nguồn không được tự ý ghi đè nhau. Mỗi nguồn có một trách nhiệm:
+
+1. `AGENTS.md` gốc giữ invariant và quy trình không được vi phạm trong toàn repo.
+2. Architecture hiện hành (`docs/03`, `docs/12`) và ADR giữ quyết định thiết kế/boundary.
+3. Coding standards (`docs/05`, `docs/13`) giữ cách hiện thực mặc định.
+4. `AGENTS.md` gần app/module chỉ giữ current state, lệnh chạy và delta **chặt hơn**; không
+   được nới lỏng các nguồn phía trên nếu chưa cập nhật architecture/ADR tương ứng.
+5. Roadmap mô tả tiến độ, không phải nguồn luật kỹ thuật.
+
+Nếu hai nguồn mâu thuẫn, dừng và sửa nguồn canonical trong cùng thay đổi; không âm thầm chọn
+một bên và không dùng file scope để lách invariant toàn repo.
+
 ## Quy trình mặc định
 
 1. Xác nhận objective, out-of-scope và acceptance criteria từ task; không tự mở rộng phạm vi.
@@ -68,6 +82,7 @@ Skill là quy trình dùng chung, không phụ thuộc model, IDE hay nhà cung 
 ```bash
 pnpm doctor
 pnpm agent:context <scope>
+pnpm agent:verify <scope>
 pnpm agent:check
 pnpm agent:test
 pnpm format:check

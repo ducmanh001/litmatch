@@ -8,7 +8,7 @@ import type { CursorPageMeta } from '@litmatch/common-dtos';
 import type { FriendListEntry } from '../friend.service';
 import type { Message } from '../entities/message.entity';
 
-export class SendMessageDto {
+export class SendFriendMessageDto {
   @ApiProperty({ maxLength: MESSAGE_CONTENT_HARD_CAP })
   @IsString()
   // Sanity cap transport — giới hạn nghiệp vụ thật là config FRIEND_MESSAGE_MAX_LENGTH (service check)

@@ -15,5 +15,5 @@
       }
     }
   },
-  "tags": ["type:lib", "scope:shared"]
+  "tags": ["type:lib", "scope:shared", "platform:browser"]
 }

@@ -1,8 +1,9 @@
 'use client';
 
+import { RealtimeConnectionErrors } from '@litmatch/common-dtos/pure';
 import { io } from 'socket.io-client';
 
-import { tokenStore } from '../api/client';
+import { apiClient, tokenStore } from '../api/client';
 import { env } from '../env';
 
 import type {
@@ -17,13 +18,28 @@ import type { Socket } from 'socket.io-client';
  * nền qua REST (onReconnected → invalidate query), không đoán state từ event bị miss.
  */
 let socket: Socket | null = null;
+let authRefreshInFlight: Promise<void> | null = null;
 
 function getSocket(): Socket {
-  socket ??= io(env.NEXT_PUBLIC_SOCKET_URL, {
-    // Gateway verify JWT lúc handshake (docs/03 § 3.3) — token lấy tươi mỗi lần (re)connect
-    auth: (cb) => cb({ token: tokenStore.getAccessToken() }),
-    autoConnect: false,
-  });
+  if (socket === null) {
+    socket = io(env.NEXT_PUBLIC_SOCKET_URL, {
+      // Gateway verify JWT lúc handshake — callback lấy token tươi mỗi lần (re)connect.
+      auth: (cb) => cb({ token: tokenStore.getAccessToken() }),
+      autoConnect: false,
+    });
+    const current = socket;
+    current.on('connect_error', (error: Error) => {
+      if (error.message !== RealtimeConnectionErrors.Unauthorized) return;
+      authRefreshInFlight ??= apiClient
+        .refreshSession()
+        .then((restored) => {
+          if (restored && socket === current) current.connect();
+        })
+        .finally(() => {
+          authRefreshInFlight = null;
+        });
+    });
+  }
   return socket;
 }
 
@@ -37,6 +53,7 @@ export function connectRealtime(): void {
 export function disconnectRealtime(): void {
   socket?.disconnect();
   socket = null;
+  authRefreshInFlight = null;
 }
 
 /** Đăng ký listener theo event đã khai trong common-dtos — trả cleanup, hook PHẢI gọi khi unmount. */

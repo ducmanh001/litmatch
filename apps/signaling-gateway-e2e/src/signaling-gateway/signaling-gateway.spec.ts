@@ -16,6 +16,9 @@ describe('GET /health', () => {
     const ready = await axios.get('/health/ready');
 
     expect(live.status).toBe(200);
-    expect(ready.data).toEqual({ status: 'ok' });
+    expect(ready.data).toEqual({
+      status: 'ok',
+      checks: { redisSubscription: 'up' },
+    });
   });
 });

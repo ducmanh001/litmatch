@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 
 import { RequireAuth } from './require-auth';
@@ -19,7 +19,9 @@ function renderGuarded() {
 }
 
 describe('RequireAuth', () => {
-  afterEach(() => tokenStore.setSession(null));
+  afterEach(() => {
+    act(() => tokenStore.setSession(null));
+  });
 
   it('chưa đăng nhập → redirect về /login', () => {
     renderGuarded();
@@ -27,7 +29,7 @@ describe('RequireAuth', () => {
   });
 
   it('có session → render trang private', () => {
-    tokenStore.setSession({ accessToken: 'a', refreshToken: 'r' });
+    act(() => tokenStore.setSession({ accessToken: 'a', refreshToken: 'r' }));
     renderGuarded();
     expect(screen.getByText('private-page')).toBeDefined();
   });

@@ -19,12 +19,7 @@
       "docs/10-code-review-checklist.md"
     ],
     "paths": ["apps/core-api/src", "libs"],
-    "checks": [
-      "pnpm agent:check",
-      "pnpm nx run core-api:lint",
-      "pnpm nx test core-api",
-      "pnpm nx build core-api"
-    ]
+    "checks": ["pnpm agent:verify core --tier=fast", "pnpm agent:verify core"]
   },
   "economy": {
     "description": "Ledger, wallet, IAP, refund và mọi luồng chạm diamond",
@@ -46,12 +41,7 @@
       "Idempotency unique ở Transaction",
       "Check và ghi tiền atomic trong DB transaction"
     ],
-    "checks": [
-      "pnpm agent:check",
-      "INTEGRATION_DB_URL=postgresql://litmatch:litmatch_local@localhost:5432/litmatch_test pnpm nx test core-api --skip-nx-cache",
-      "pnpm nx run core-api:lint",
-      "pnpm nx build core-api"
-    ]
+    "checks": ["pnpm agent:verify economy"]
   },
   "matching": {
     "description": "Ticket state machine, Redis shards, pairing, race conditions + Soul Match (chat ẩn danh, rating, Friendship) + Friend Chat 1-1",
@@ -78,12 +68,7 @@
       "Friendship 1 dòng/cặp canonical, tạo trong cùng transaction với rating",
       "Conversation tạo atomically cùng Friendship — tồn tại Friendship ⟺ tồn tại Conversation"
     ],
-    "checks": [
-      "pnpm agent:check",
-      "INTEGRATION_DB_URL=postgresql://litmatch:litmatch_local@localhost:5432/litmatch_test pnpm nx test core-api --skip-nx-cache",
-      "pnpm nx run core-api:lint",
-      "pnpm nx build core-api"
-    ]
+    "checks": ["pnpm agent:verify matching"]
   },
   "calling": {
     "description": "Voice call 2 người trên LiveKit — CallSession lifecycle, token, free-call timer, billing theo phút",
@@ -108,12 +93,7 @@
       "Billing tick idempotent theo (call, user, phút) — unique DB trên Transaction",
       "Mọi nhánh end đều deleteRoom LiveKit (không leak room)"
     ],
-    "checks": [
-      "pnpm agent:check",
-      "INTEGRATION_DB_URL=postgresql://litmatch:litmatch_local@localhost:5432/litmatch_test pnpm nx test core-api --skip-nx-cache",
-      "pnpm nx run core-api:lint",
-      "pnpm nx build core-api"
-    ]
+    "checks": ["pnpm agent:verify calling"]
   },
   "signaling": {
     "description": "WebSocket, room state và realtime signaling (fanout theo user — gateway không business logic)",
@@ -135,13 +115,7 @@
       "Socket chỉ join room user của chính JWT đã verify, không nhận room từ client",
       "Publish best-effort SAU commit; REST polling là fallback"
     ],
-    "checks": [
-      "pnpm agent:check",
-      "pnpm nx run signaling-gateway:lint",
-      "pnpm nx test signaling-gateway",
-      "pnpm nx build signaling-gateway",
-      "pnpm nx e2e signaling-gateway-e2e"
-    ]
+    "checks": ["pnpm agent:verify signaling"]
   },
   "media": {
     "description": "LiveKit/SFU và media runtime",
@@ -154,10 +128,7 @@
       "docs/adr/0001-livekit-self-host-lam-media-server.md"
     ],
     "paths": ["apps/media-server"],
-    "checks": [
-      "pnpm agent:check",
-      "docker compose -f apps/media-server/docker-compose.yml config --quiet"
-    ]
+    "checks": ["pnpm agent:verify media"]
   },
   "infra": {
     "description": "CI, container, local tooling, security và agent infrastructure",
@@ -174,12 +145,7 @@
       "docker-compose.yml",
       "package.json"
     ],
-    "checks": [
-      "pnpm doctor",
-      "pnpm agent:check",
-      "pnpm agent:test",
-      "pnpm format:check"
-    ]
+    "checks": ["pnpm agent:verify infra"]
   },
   "frontend": {
     "description": "Frontend browser: apps/admin (Vite+React SPA nội bộ), apps/web (Next.js end-user), libs/api-client (hợp đồng REST duy nhất)",
@@ -199,15 +165,13 @@
     ],
     "invariants": [
       "FE không business logic — server là nguồn sự thật, UI là hàm của state (docs/13 § 13.1)",
-      "Mọi REST qua @litmatch/api-client; đổi API backend → pnpm openapi:emit + openapi:gen trong cùng PR",
+      "Mọi REST qua @litmatch/api-client; đổi API backend → pnpm openapi:sync trong cùng PR",
       "common-dtos chỉ import qua entry /pure; env chỉ đọc qua src/shared/env.ts",
       "Không sửa backend trong task frontend — thiếu endpoint thì dừng, báo lại (docs/12 § 12.9)"
     ],
     "checks": [
-      "pnpm agent:check",
-      "pnpm nx lint admin web api-client",
-      "pnpm nx test admin web api-client",
-      "pnpm nx build admin web"
+      "pnpm agent:verify frontend --tier=fast",
+      "pnpm agent:verify frontend"
     ]
   }
 }

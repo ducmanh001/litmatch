@@ -115,4 +115,7 @@ Cả hai chân nằm trong **cùng 1 DB transaction** (nếu 1 chân fail thì r
 
 ## 7. Giới hạn đã biết, cần đóng trước khi bật `store` thật (không chặn code Giai đoạn 1, nhưng phải nhớ)
 
+Mọi request Apple/Google có deadline `ECONOMY_STORE_HTTP_TIMEOUT_MS` (mặc định 10 giây);
+timeout được coi là lỗi dependency, không được đổi thành "receipt không hợp lệ" của client.
+
 - **`StoreIapVerifier.verifyApple()` khớp `product_id` bằng `find()` — lấy phần tử ĐẦU TIÊN trùng product trong mảng `in_app` của receipt.** Với product tiêu dùng nhiều lần (consumable, user mua lại cùng `productId` nhiều lần), receipt hợp nhất của Apple chứa NHIỀU giao dịch cùng `product_id` — `providerTransactionId` lưu lại có thể không phải giao dịch user vừa mua, và khác với `transactionId` mà Apple gửi trong App Store Server Notification khi refund giao dịch cụ thể đó → `RefundService.refundIapPurchase()` có thể trả `unknown_receipt` dù thực ra có receipt tương ứng. Cần đóng trước khi bật `ECONOMY_IAP_VERIFIER=store`/`ECONOMY_APPLE_WEBHOOK_VERIFIER=store` ở production: client nên gửi kèm `transactionId` cụ thể (StoreKit 2 cung cấp sẵn) thay vì chỉ `productId`, server khớp đúng theo id đó.

@@ -3,6 +3,7 @@ import { SignJWT, importPKCS8 } from 'jose';
 
 import type { CoreApiEnv } from '../../../config/env.validation';
 import { GOOGLE_OAUTH_TOKEN_URL } from '../economy.constants';
+import { storeApiAbortSignal } from './store-api-http';
 
 /**
  * OAuth2 JWT-bearer access token cho Google service account (Play Developer API).
@@ -32,8 +33,12 @@ export async function getGoogleServiceAccountAccessToken(
       grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
       assertion,
     }),
+    signal: storeApiAbortSignal(config),
   });
   if (!res.ok) throw new Error(`Google OAuth lỗi ${res.status}`);
-  const body = (await res.json()) as { access_token: string };
+  const body = (await res.json()) as { access_token?: unknown };
+  if (typeof body.access_token !== 'string' || body.access_token === '') {
+    throw new Error('Google OAuth response thiếu access_token');
+  }
   return body.access_token;
 }

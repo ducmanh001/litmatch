@@ -16,7 +16,7 @@ export default [
     ],
   },
   {
-    files: ['**/*.ts'],
+    files: ['**/*.ts', '**/*.tsx'],
     rules: {
       // Boundary tầng project (docs/03 § 3.2): app chỉ phụ thuộc lib, lib không phụ thuộc app.
       // Boundary giữa các module BÊN TRONG core-api: xem arch test apps/core-api/src/arch/.
@@ -31,7 +31,7 @@ export default [
             // FE chỉ được depend libs trung lập (docs/12 § 12.9-2) — vi phạm là lỗi lint
             {
               sourceTag: 'scope:frontend',
-              onlyDependOnLibsWithTags: ['scope:shared'],
+              onlyDependOnLibsWithTags: ['platform:browser'],
             },
           ],
         },

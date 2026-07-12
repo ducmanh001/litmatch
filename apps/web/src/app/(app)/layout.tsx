@@ -25,19 +25,20 @@ function AppChrome({ children }: { children: ReactNode }) {
   // Vùng (app) là vùng realtime: connect khi vào, disconnect khi rời hẳn (logout)
   useEffect(() => {
     connectRealtime();
+    return disconnectRealtime;
   }, []);
 
-  const logout = async (): Promise<void> => {
+  const logout = (): void => {
     const refreshToken = tokenStore.getRefreshToken();
-    if (refreshToken !== null) {
-      // Thu hồi server-side best-effort — thất bại vẫn logout local
-      await apiClient
-        .POST('/api/v1/auth/logout', { body: { refreshToken } })
-        .catch(() => undefined);
-    }
     disconnectRealtime();
     tokenStore.setSession(null);
     router.replace('/login');
+    if (refreshToken !== null) {
+      // Local logout thắng mọi response refresh cũ; revoke server chạy best-effort sau đó.
+      void apiClient
+        .POST('/api/v1/auth/logout', { body: { refreshToken } })
+        .catch(() => undefined);
+    }
   };
 
   return (
@@ -63,7 +64,7 @@ function AppChrome({ children }: { children: ReactNode }) {
           </nav>
           <button
             type="button"
-            onClick={() => void logout()}
+            onClick={logout}
             className="text-sm text-muted-foreground hover:text-foreground"
           >
             Đăng xuất
