@@ -25,32 +25,29 @@ Chia 8 service từ ngày 0 nghĩa là: 8 lần deploy, 8 lần theo dõi log, 8
 │   Mỗi module: boundary rõ, chỉ giao tiếp qua interface export, │
 │   có ArchUnit-style test chặn import chéo trái phép            │
 └───────────────┬─────────────────────────────────────┬────────┘
-                │ internal API (REST/gRPC nội bộ)       │
-                ▼                                       ▼
-     ┌────────────────────┐                  ┌──────────────────┐
-     │  Signaling Gateway  │                  │  (gọi Economy để  │
-     │  (WebSocket, tách   │                  │   check/trừ tiền  │
-     │   riêng vì connection│                  │   trước khi match)│
-     │   -bound, không CPU) │                  └──────────────────┘
-     └──────────┬──────────┘
-                │ internal control API (không public)
-                ▼
-     ┌────────────────────┐
-     │   Media Server      │
-     │  (LiveKit self-host  │
-     │   — tách riêng bắt   │
-     │   buộc, sidecar,     │
-     │   không business logic)│
-     └────────────────────┘
+                │ Redis pub/sub delta                 │ LiveKit server SDK/control API
+                ▼                                     ▼
+     ┌────────────────────┐                 ┌────────────────────┐
+     │ Signaling Gateway  │                 │ Media Server       │
+     │ Socket.IO fanout,  │                 │ LiveKit self-host, │
+     │ không business     │                 │ không business/DB  │
+     └────────────────────┘                 └────────────────────┘
 ```
 
-**Chỉ 3 thành phần deploy riêng ngay từ đầu**: **core-api** (modular monolith chứa toàn bộ business logic), **Signaling Gateway**, **Media Server**. Còn lại tất cả tính năng (Auth, User, Matching, Economy, Social, Content, Moderation, Notification, Gift) sống chung trong `core-api` dưới dạng module NestJS tách biệt rõ ràng. **Đây là quy tắc quan trọng nhất trong toàn bộ tài liệu — nếu 1 đoạn code nào đó tạo ra 1 app/service thứ 4, dừng lại và hỏi lại trước khi tiếp tục.**
+**Baseline chỉ có 3 thành phần deploy riêng**: **core-api** (modular monolith chứa toàn bộ
+business logic), **Signaling Gateway**, **Media Server**. Còn lại tất cả tính năng sống trong
+`core-api` dưới dạng module NestJS. Nếu số liệu vận hành sau này đạt § 3.4, việc tạo deployable
+thứ tư là thay đổi architecture: phải có ADR mới cập nhật `AGENTS.md`, file này, guard và
+deployment trong cùng thay đổi; không được tạo app trước rồi hợp thức hoá tài liệu sau.
 
 ## 3.3 Vì sao Signaling Gateway + Media Server luôn phải tách riêng (2 ngoại lệ bắt buộc)
 
 Đây không phải chọn theo sở thích — 2 lý do kỹ thuật rõ ràng:
 
-- **Media Server (mediasoup)** vốn dĩ chạy dưới dạng subprocess C++ riêng biệt theo thiết kế của chính thư viện — không thể chung process với NestJS. Đây gọi là **Sidecar Pattern**: tầng signaling (biết ai đang ở phòng nào, quyền gì, gọi Economy Service để trừ tiền) tách khỏi tầng media (chỉ "cơ bắp" chuyển tiếp gói RTP, không có business logic, không query DB) — 2 tầng deploy như 2 container riêng nhưng luôn đi cùng nhau.
+- **Media Server (LiveKit self-host)** có lifecycle, tài nguyên và quy luật scale riêng với
+  NestJS. `core-api` giữ business state/quyền và gọi LiveKit qua port bọc server SDK; LiveKit chỉ
+  chuyển tiếp media, không chứa business logic hoặc query DB. Signaling Gateway không nằm trên
+  đường điều khiển media hiện tại — nó fanout delta sau khi core-api đã quyết định/commit.
 - **Signaling Gateway** cần scale theo số lượng **kết nối đồng thời** (connection-bound), khác hẳn quy luật scale của phần business logic (CPU/DB-bound) — nên tách riêng để scale ngang độc lập mà không kéo theo cả monolith.
 
 ## 3.4 Tiêu chí tách 1 module ra thành service riêng (dùng khi cần mở rộng sau này)
@@ -62,16 +59,25 @@ Chỉ tách 1 module ra khỏi `core-api` khi có **ít nhất 1** lý do cụ t
 3. Cần cô lập bảo mật/tuân thủ riêng (vd Economy cần audit riêng theo luật tài chính)
 4. Có 1 team khác sở hữu và cần chu kỳ deploy độc lập
 
+Đạt một tiêu chí chỉ cho phép **đề xuất** tách; quyết định cuối phải có số liệu, ADR và kế hoạch
+migration/rollback. Cho tới khi ADR đó được accept, guard "ba deployable" vẫn là luật cứng.
+
 Feed, Content, Avatar, Moderation, Notification gần như chắc chắn **không cần tách** cho tới khi có traffic thật đủ lớn.
 
-## 3.5 mediasoup — cách scale đúng ngay từ đầu (tránh thiết kế sai)
+## 3.5 Capacity model của LiveKit self-host
 
-> **Ghi chú**: SFU đã chốt là **LiveKit self-host** (xem § 3.8.A) — mục này giữ lại làm tài liệu tham khảo về cách tính tải SFU: khái niệm worker/consumer và công thức N×(N-1) áp dụng nguyên cho LiveKit.
-
-- 1 **Worker** = 1 CPU core. 1 **Router** thường tương ứng 1 "room". Một worker chịu tải được khoảng 500 **consumer** (không phải 500 participant — mỗi participant trong phòng N người tạo ra N-1 consumer).
-- Voice Match 1-1 rất nhẹ: mỗi người chỉ nhận từ 1 người kia → 2 consumer/room → 1 worker chứa được hàng trăm phòng 1-1 cùng lúc, không cần lo scale phức tạp ở giai đoạn đầu.
-- Party Room (N người) nặng hơn nhiều vì consumer tăng theo N×(N-1) — cần giới hạn số speaker tối đa/phòng (config được) để 1 router không quá tải.
-- Khi cần vượt quá 1 worker/host, dùng `pipeToRouter` để nối các router qua nhiều core hoặc nhiều host — đây là việc **vận hành ở quy mô lớn khi số liệu xác nhận cần** ([07-roadmap.md § Giai đoạn 7](./07-roadmap.md), § 3.8.A dưới đây), không phải việc dựng nền tảng ban đầu (Giai đoạn 0-2).
+- Khi cấu hình Redis, các node LiveKit chia sẻ room data/message bus và chọn node còn tải để host
+  **room mới**. Cách này scale ngang tốt theo số lượng room và cho phép drain node an toàn.
+- Giới hạn quan trọng: với LiveKit self-host hiện hành, **một room phải nằm vừa trên một node**.
+  Thêm node không tự chia một Party Room lớn thành nhiều SFU. Signaling có thể đi qua node khác,
+  nhưng media room vẫn do node được chọn host.
+- Voice Match 1-1 tạo nhiều room nhỏ nên hưởng lợi trực tiếp từ scale ngang theo room. Party Room
+  có fan-out lớn hơn; tải phụ thuộc số publisher/subscriber, số track, codec, bitrate và egress,
+  không được dùng một con số participant/consumer chung cho mọi cấu hình.
+- Vì vậy `PARTY_MAX_SPEAKERS` và `PARTY_MAX_MEMBERS` là giới hạn an toàn bắt buộc. Chỉ nới sau
+  load test với đúng profile production và headroom đã định; nếu một room vượt khả năng một node,
+  cần ADR chọn node lớn hơn, đổi topology/provider hoặc giới hạn sản phẩm — không gọi việc thêm
+  node là "cascade room".
 
 ## 3.6 Xử lý giao dịch xuyên module (Match → Call → Billing) — Saga, không dùng 2PC
 
@@ -85,7 +91,11 @@ Luồng `Matching → Calling → Economy` chạm vào nhiều module, không th
 ## 3.7 Giao tiếp giữa các phần
 
 - **Trong `core-api`** (giữa các module Auth/User/Matching/Economy...): gọi thẳng qua NestJS Dependency Injection (function call trong cùng process) — không cần REST/gRPC nội bộ vì cùng process, tiết kiệm rất nhiều độ phức tạp.
-- **`core-api` ↔ Signaling Gateway ↔ Media Server**: internal API (REST hoặc gRPC nội bộ), không public ra ngoài internet.
+- **`core-api` → Signaling Gateway**: publish realtime delta qua Redis pub/sub sau commit;
+  gateway xác thực socket và fanout, không quyết định business.
+- **`core-api` → Media Server**: gọi LiveKit control API qua port dùng server SDK để mint token,
+  tạo/xoá room và đổi grant; client nối trực tiếp LiveKit bằng token TTL ngắn. API key/secret
+  không public ra internet.
 - **Check/trừ diamond luôn đồng bộ + transaction DB**, không bao giờ qua async fire-and-forget.
 - Khi 1 module thực sự cần tách thành service riêng sau này: vì đã thiết kế boundary/interface rõ từ đầu, chỉ cần đổi phần gọi trong-process thành gọi qua network — không phải viết lại logic nghiệp vụ.
 
@@ -93,12 +103,21 @@ Luồng `Matching → Calling → Economy` chạm vào nhiều module, không th
 
 > Mục 3.1–3.7 vẫn đúng làm **điểm khởi đầu** (modular monolith, chỉ tách Signaling + Media Server). Nhưng mục tiêu ở đây là chịu tải **hàng trăm nghìn – hàng triệu người dùng đồng thời** như Litmatch thật, nên có 3 quyết định cần chốt **ngay từ giai đoạn thiết kế**, vì đổi sau này tốn kém hơn nhiều so với đổi bây giờ. Phân biệt 2 việc khác nhau, để không mâu thuẫn với nguyên tắc MonolithFirst ở § 3.1: **quyết định thiết kế** (chọn đúng mô hình dữ liệu/kiến trúc ngay từ Giai đoạn 1-2 — xem [07-roadmap.md](./07-roadmap.md)) khác với **vận hành thật ở quy mô lớn** (bung thêm node/shard/region — chỉ làm khi số liệu traffic xác nhận cần, xem Giai đoạn 7). Cả 3 mục A/B/C dưới đây đều thuộc nhóm "quyết định thiết kế nên chọn đúng từ đầu":
 
-### A. Lựa chọn SFU — cân nhắc LiveKit thay vì tự ghép mediasoup thô, nếu quy mô thật sự lớn
+### A. Lựa chọn và biên scale của SFU
 
-- mediasoup là **thư viện xây SFU**, không phải sản phẩm hoàn chỉnh: tự quản lý worker sống/chết, tự viết logic route signaling tới đúng worker cho từng phòng, tự viết cơ chế nối nhiều router qua nhiều host (`pipeToRouter`) khi vượt quá 1 máy — toàn bộ phần "distributed" này Litmatch-scale thật sự cần, mediasoup không cho sẵn.
-- LiveKit đã đóng gói sẵn đúng bài toán này: cụm node LiveKit giống hệt nhau, đồng bộ qua Redis, 1 phòng có thể trải trên nhiều server vật lý, người dùng luôn nối vào node gần nhất — đây gọi là **cascading SFU / distributed mesh**, cùng ý tưởng với Octo của Jitsi nhưng LiveKit làm nó thành hành vi mặc định chứ không phải tính năng phải tự lắp. Một cụm LiveKit chạy được từ 1 tới hàng trăm node cùng cấu hình, và tài liệu LiveKit ghi nhận việc scale tới hàng triệu cuộc gọi đồng thời khi triển khai đúng theo mô hình mesh này.
-- **Khuyến nghị**: bắt đầu vẫn có thể dùng mediasoup (rẻ, tự chủ) cho các giai đoạn đầu. Nhưng vì roadmap đã xác định rõ mục tiêu Litmatch-scale, nên **đánh giá lại và chọn LiveKit self-host (hoặc LiveKit Cloud) làm nền Media Server chính** trước khi viết nhiều logic phụ thuộc vào cấu trúc mediasoup — chuyển SFU giữa chừng khi đã có hàng trăm phòng sống là việc cực tốn công. Quy tắc chọn nhanh: 1 node SFU xử lý tốt tới vài nghìn publisher; vượt ngưỡng đó bắt buộc cascade nhiều node theo vùng — Party Room (multi-party, N người) chạm ngưỡng này sớm hơn Voice Match 1-1 rất nhiều vì số consumer tăng theo N×(N-1).
-- **ĐÃ CHỐT (2026-07-10): dùng LiveKit self-host làm Media Server chính ngay từ Giai đoạn 2**, không bắt đầu bằng mediasoup rồi chuyển sau — đúng theo lập luận trên (mục tiêu Litmatch-scale đã xác định từ đầu, nên trả trước chi phí học LiveKit rẻ hơn nhiều chi phí đổi SFU giữa chừng). mediasoup chỉ còn là phương án dự phòng nếu LiveKit gặp trở ngại lớn không lường trước — đổi lại quyết định này thì sửa file này + [04-tech-stack.md](./04-tech-stack.md) trước khi code.
+- **Đã chốt (ADR 0001): LiveKit self-host là Media Server chính từ Giai đoạn 2.** `core-api`
+  chỉ phụ thuộc port của media provider; không rò type SDK vào domain để vẫn có đường đổi provider.
+- Cụm nhiều node dùng Redis để chia sẻ room state/message bus. Khi tạo room, LiveKit chọn một node
+  đủ tải; node nhận signal có thể làm bridge tới node đang host room. Điều này scale số room và
+  tăng redundancy, nhưng không xoá biên một room/một node nêu ở § 3.5.
+- Multi-region cần đo latency và placement thực tế: room mới ưu tiên node phù hợp theo region/load;
+  người vào room đang tồn tại phải đi tới room đó, không được hứa mọi participant luôn có media
+  path gần nhất.
+- Capacity phải được chứng minh bằng benchmark theo workload của dự án và dashboard production.
+  Không dùng con số marketing hoặc benchmark khác codec/bitrate làm SLO. Party Room phải giữ cap
+  cứng cho tới khi có bằng chứng tải; nhu cầu room lớn hơn một node là một quyết định kiến trúc mới.
+- Đổi provider hoặc topology phải tạo ADR mới và sửa file này + [04-tech-stack.md](./04-tech-stack.md)
+  trước khi code.
 
 ### B. Matching Queue phải shard theo tiêu chí + region ngay từ đầu, không chỉ 1 queue Redis duy nhất
 

@@ -21,6 +21,8 @@
 | 11  | [11-engineering-principles.md](./11-engineering-principles.md)       | **La bàn thiết kế: ownership, boundary, coupling, abstraction, correctness, security, vận hành và tiêu chí tách service**                         |
 | 12  | [12-frontend-architecture.md](./12-frontend-architecture.md)         | **Khung 2 app frontend (admin Vite+React, web Next.js)**: hợp đồng OpenAPI → api-client, quy tắc bắt buộc cho agent frontend, Task 0 backend      |
 | 13  | [13-frontend-coding-standards.md](./13-frontend-coding-standards.md) | **Coding standard FE dùng chung cho admin + web**: TypeScript/lint, feature folder, TanStack Query, form, error/UX states, realtime, env, testing |
+| 14  | [14-rule-enforcement-matrix.md](./14-rule-enforcement-matrix.md)     | **Bản đồ rule → enforcement → test → owner**; phân biệt gate máy với mục bắt buộc review tay                                                      |
+| 15  | [15-commit-guidelines.md](./15-commit-guidelines.md)                 | **Chuẩn commit dùng chung**: Conventional Commits, scope, atomicity, verification và ví dụ                                                        |
 | —   | [services/economy-service.md](./services/economy-service.md)         | **Đặc tả chi tiết Economy module**: schema ledger, loại tài khoản, bất biến, luồng IAP/VIP, quy tắc concurrency                                   |
 | —   | [services/matching-service.md](./services/matching-service.md)       | **Đặc tả slice M1 Matching**: state machine ticket, shard Redis, double-lock ghép cặp, speed-up qua Economy                                       |
 | —   | [services/party-room-service.md](./services/party-room-service.md)   | **Đặc tả Party Room**: role host/speaker/audience enforce ở SFU, cap speaker dưới lock, lifecycle phòng + sweeper backstop                        |
@@ -30,7 +32,8 @@
 
 ## Đường dẫn đọc gợi ý theo tình huống
 
-- **Mới vào dự án / chưa code gì**: đọc theo thứ tự 1 → 11 một lượt (khoảng 20-25 phút), đúng như file spec gốc mở rộng.
+- **Mới vào dự án / chưa code gì**: đọc 1 → 11 để hiểu sản phẩm/backend; làm frontend đọc thêm
+  12–13; sửa rule/CI đọc thêm 14; trước khi commit đọc 15.
 - **Bắt đầu 1 giai đoạn mới trong roadmap**: đọc `07-roadmap.md` (mục đang làm) + file mục tương ứng nếu giai đoạn đó động tới kiến trúc/domain rule mới.
 - **Sắp merge 1 PR / vừa viết xong 1 module**: bắt buộc đọc `10-code-review-checklist.md`, chạy qua § 10.0 trước khi đọc lại code.
 - **Không chắc 1 quyết định kiến trúc có đúng không**: đọc `03-architecture.md`, đặc biệt § 3.8 nếu liên quan tới SFU/matching scale/ledger.

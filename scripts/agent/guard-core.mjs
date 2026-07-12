@@ -85,6 +85,15 @@ export function inspectChange({
     );
   }
 
+  if (
+    /(?:^|\/)apps\/[^/]+-e2e\/project\.json$/u.test(normalized) &&
+    /"passWithNoTests"\s*:\s*true/u.test(content)
+  ) {
+    violations.push(
+      'E2E không được pass khi không có test; thiếu test phải fail CI.',
+    );
+  }
+
   // ── Rule riêng cho frontend app (enforce docs/12 § 12.9 + docs/13 bằng máy) ──
   // File config build-time (vite/next/postcss...) không phải code bundle — miễn rule env
   const isBuildConfig =

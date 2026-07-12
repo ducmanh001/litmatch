@@ -5,4 +5,5 @@
 - SFU đã chốt là LiveKit self-host; muốn đổi phải cập nhật quyết định kiến trúc trước.
 - Giới hạn speaker/phòng lấy từ config, không hardcode.
 - Giải phóng room/resource khi call hoặc party kết thúc.
-- Cascade nhiều node chỉ triển khai khi số liệu vận hành chứng minh nhu cầu.
+- Multi-node scale được theo số room; một room vẫn phải vừa một node. Nới cap Party Room chỉ sau
+  load test đúng workload; vượt biên này cần ADR, không giả định thêm node sẽ tự chia room.

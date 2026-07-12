@@ -156,10 +156,21 @@ Khung chỉ cứng ở tầng hình thái này — business logic trong service 
 
 ## 5.9 Testing & git convention
 
-- Coverage đích **80% cho service layer**, enforce bằng `coverageThreshold` trong `apps/core-api/jest.config.cts` chạy ở CI với `--coverage` — ngưỡng là **ratchet chỉ nâng không hạ** (sàn hiện tại thấp hơn 80 vì `iap-refund-poll`/`outbox-relay` chưa có test, xem comment trong file config; bổ sung test thì nâng ngưỡng lên trong cùng PR). Lưu ý: đo coverage phải kèm `INTEGRATION_DB_URL` (Economy test chủ yếu là integration) và `--skip-nx-cache` khi cần số thật. Riêng Economy/Matching bắt buộc thêm **test race-condition** (2 request song song cùng trừ tiền / cùng lấy 1 user khỏi queue) — xem [10-code-review-checklist.md § 10.1.E](./10-code-review-checklist.md).
-- e2e bắt buộc cho: mua diamond, gift, matching → call → billing, refund/reversal (chạy với Postgres/Redis thật qua testcontainers hoặc docker-compose CI).
+- Coverage service layer: statements/lines phải từ **80%**; branches/functions có ratchet riêng
+  theo baseline thật trong `apps/core-api/jest.config.cts`. CI chạy `--coverage`; mọi threshold
+  chỉ được nâng, không hạ để hợp thức hoá code thiếu test. Khi đo phải kèm `INTEGRATION_DB_URL`
+  (Economy chủ yếu là integration) và `--skip-nx-cache`. Riêng Economy/Matching bắt buộc có
+  **test race-condition** (2 request song song cùng trừ tiền / cùng lấy 1 user khỏi queue) — xem
+  [10-code-review-checklist.md § 10.1.E](./10-code-review-checklist.md).
+- Verification nhiều tầng cho flow nhạy cảm: integration test trên Postgres/Redis thật bắt buộc
+  cho mua diamond, gift, matching → call → billing và refund/reversal; HTTP E2E bắt buộc giữ ít
+  nhất health/readiness + một vertical Economy flow qua auth/controller/ledger. Flow cần
+  dependency ngoài (LiveKit/store) dùng port fake trong integration test và có sandbox smoke
+  riêng trước production — không biến CI thành test giả hoặc phụ thuộc mạng không ổn định.
 - Event schema có field `version`; consumer phải chịu được version cũ — thêm field là non-breaking, đổi/xoá field phải lên version mới.
 - Commit theo Conventional Commits, scope là tên module: `feat(economy): ...`, `fix(matching): ...`.
+  Cú pháp, type/scope, atomicity và gate trước commit theo
+  [15-commit-guidelines.md](./15-commit-guidelines.md).
 
 ## 5.10 Idempotency & ghi tiền (convention dùng chung, không riêng Economy)
 

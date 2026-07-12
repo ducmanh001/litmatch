@@ -7,7 +7,9 @@
 - **Matching lúc đầu không cần AI phức tạp** — đây là 2 trục khác nhau: hạ tầng (ticket/shard, [03-architecture.md § 3.8.B](./03-architecture.md)) nên đúng ngay từ đầu vì đổi sau tốn kém, nhưng _thuật toán_ chọn ai ghép với ai thì random trong pool đã lọc tiêu chí cơ bản (tuổi/giới tính/region) là đủ để khởi động — mô hình ghép cặp phức tạp hơn (dựa trên hành vi, mức độ tương thích...) nên để sau khi có dữ liệu thật, không đoán trước.
 - **IAP (Apple/Google) mất thời gian duyệt và có quy tắc riêng** — nên làm sandbox và tìm hiểu chính sách store sớm.
 - Nếu lên iOS, nhớ Apple giới hạn tính năng random live call/group — kiểm tra chính sách App Store review guideline trước khi build Party Room cho iOS để tránh bị từ chối duyệt app.
-- **Chỉ 3 thành phần deploy riêng biệt xuyên suốt dự án**: `core-api`, Signaling Gateway, Media Server (đúng [03-architecture.md § 3.2](./03-architecture.md)) — Auth/User/Economy/Matching/Calling/Social/Content/Moderation/Notification/Gift đều là **module bên trong `core-api`**, không phải service riêng.
+- **Baseline chỉ 3 backend deployable**: `core-api`, Signaling Gateway, Media Server. Domain mới
+  luôn bắt đầu là module trong `core-api`; deployable thứ tư chỉ xuất hiện sau số liệu + ADR cập
+  nhật invariant/guard theo [03 § 3.4](./03-architecture.md), không phải quyết định của feature PR.
 
 ---
 

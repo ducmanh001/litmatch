@@ -113,9 +113,13 @@ export class LedgerService {
           }),
         );
 
-        const accounts = await Promise.all(
-          input.entries.map((e) => this.resolveAccount(manager, e)),
-        );
+        // TypeORM transaction dùng một pg connection: không chạy query song song trên cùng
+        // connection (`client.query()` concurrent bị deprecate ở pg@9). Thứ tự entry cũng cần
+        // giữ nguyên để map account ↔ ledger entry deterministic.
+        const accounts: LedgerAccount[] = [];
+        for (const entry of input.entries) {
+          accounts.push(await this.resolveAccount(manager, entry));
+        }
 
         // Điểm tuần tự hoá per-user: lock các ví theo thứ tự userId cố định (tránh deadlock)
         const userIds = [

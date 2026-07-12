@@ -2,7 +2,10 @@
 
 # 7. Checklist triển khai theo giai đoạn
 
-> **Ghi chú thuật ngữ**: trong toàn bộ file này, tên gọi "... Service" (Auth Service, Matching Service, Economy Service...) nghĩa là **module NestJS bên trong `apps/core-api`** (đúng cấu trúc [03-architecture.md § 3.2](./03-architecture.md) và [05-coding-standards.md § 5.3](./05-coding-standards.md)), KHÔNG phải service deploy riêng — chỉ `core-api`, Signaling Gateway, Media Server mới là 3 thành phần deploy độc lập xuyên suốt dự án (trừ khi 1 module đã đủ tiêu chí tách ở [03-architecture.md § 3.4](./03-architecture.md), ghi rõ ở Giai đoạn 7 bên dưới).
+> **Ghi chú thuật ngữ**: trong toàn bộ file này, tên gọi "... Service" nghĩa là **module NestJS
+> bên trong `apps/core-api`**, không phải service deploy riêng. Baseline có đúng ba backend
+> deployable; tách module ở Giai đoạn 7 chỉ hợp lệ sau số liệu + ADR cập nhật toàn bộ invariant
+> và guard theo [03 § 3.4](./03-architecture.md).
 >
 > **Trạng thái hiện tại của dự án**: xem đầu file này hoặc hỏi lại nếu không rõ đang ở giai đoạn nào — file này không tự động cập nhật trạng thái, người dùng/agent cần tick `[x]` thủ công khi hoàn thành và commit lại.
 
@@ -67,10 +70,13 @@
 
 > Vì ledger double-entry (Giai đoạn 1) và ticket/shard cho Matching (Giai đoạn 2) đã được **thiết kế đúng ngay từ đầu**, Giai đoạn 7 không phải là sửa lại thiết kế — mà là **vận hành/mở rộng thực sự** những gì đã thiết kế sẵn, khi số liệu traffic thật xác nhận cần (đúng tinh thần MonolithFirst ở § 3.1: quyết định _thiết kế_ chọn sớm, quyết định _khi nào bung ra hạ tầng thật_ thì chờ số liệu).
 
-- [ ] Bật cascade SFU thật (LiveKit mesh nhiều node) khi số liệu xác nhận Party Room chạm ngưỡng vài nghìn consumer/node — xem § 3.8.A
+- [ ] Benchmark LiveKit bằng profile Party Room production, đặt SLO/headroom và cảnh báo theo node;
+      nếu một room chạm trần một node thì lập ADR chọn vertical scale, giới hạn sản phẩm hoặc đổi
+      topology/provider — không giả định thêm node sẽ tự chia một room (§ 3.8.A)
 - [ ] Bung thêm shard/matcher worker instance cho Matching Queue theo region mới hoặc tiêu chí mới khi traffic khu vực đó đủ lớn — xem § 3.8.B
 - [ ] Mở rộng job đối soát (reconciliation) ledger chạy tần suất cao hơn + cảnh báo tự động khi phát hiện lệch Nợ/Có — xem § 3.8.C
-- [ ] Tách các module đã đủ tiêu chí ở § 3.4 ra khỏi `core-api` thành service riêng (đo bằng số liệu thật: CPU/DB load, không đoán)
+- [ ] Khi module đạt tiêu chí § 3.4, lập ADR + số liệu + migration/rollback plan; chỉ sau khi ADR
+      cập nhật invariant/guard mới tách khỏi `core-api` thành deployable riêng
 - [ ] Multi-region deployment cho Signaling Gateway + Media Server, routing user tới region gần nhất (giảm latency thoại)
 - [ ] CQRS/read-replica cho Feed khi lượng đọc vượt xa lượng ghi (fanout-on-write hoặc fanout-on-read tuỳ tỉ lệ follower trung bình)
 - [ ] Chaos testing cho luồng tiền (kill Economy giữa transaction, kill matcher giữa lúc ghép cặp) để xác nhận idempotency/outbox hoạt động đúng dưới lỗi thật, không chỉ đúng trên giấy
@@ -89,8 +95,8 @@
 - [ ] **Security gate trước public launch (ADR 0003)**: chốt httpOnly cookie + CSRF/CORS
       (ưu tiên), hoặc nonce CSP sau benchmark dynamic rendering; hiện refresh token localStorage
       chỉ được coi là scaffold/dev, chưa production-ready.
-- [ ] Migrate hai E2E project khỏi executor Jest deprecated sang Nx inferred target trước khi
-      nâng Nx 24; cảnh báo hiện không chặn test nhưng sẽ thành breaking change ở major kế tiếp.
+- [x] Migrate hai E2E project khỏi executor Jest deprecated sang Nx inferred target; bỏ
+      `passWithNoTests`, thêm startup timeout và Economy HTTP E2E — xong 2026-07-13.
 
 ---
 

@@ -27,7 +27,7 @@ Không nạp toàn bộ repo theo thói quen. Chạy `pnpm agent:context <scope>
 boundary và test bắt buộc. Context map nằm ở `.agents/context-map.json` và được validate trong
 `pnpm agent:check` để đường dẫn không bị stale.
 
-Scope chuẩn: `core`, `economy`, `matching`, `signaling`, `media`, `infra`.
+Scope chuẩn: `core`, `economy`, `matching`, `calling`, `signaling`, `media`, `frontend`, `infra`.
 
 ## 8.3 Skills dùng chung
 
@@ -46,7 +46,8 @@ nằm trong `.agents/skills/`.
   cùng guardrail.
 
 Các luật cứng hiện tại: app deploy thứ tư, `synchronize: true`, sửa/xoá migration đã commit,
-và mutate `ledger_entries` ngoài test.
+mutate `ledger_entries` ngoài test, E2E cho phép pass khi không có test, và các boundary FE được
+liệt kê trong [14-rule-enforcement-matrix.md](./14-rule-enforcement-matrix.md).
 
 ## 8.5 Vòng lặp mặc định
 
