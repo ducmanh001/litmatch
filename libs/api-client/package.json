@@ -1,0 +1,11 @@
+{
+  "name": "@litmatch/api-client",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "dependencies": {
+    "openapi-fetch": "*",
+    "tslib": "^2.3.0"
+  }
+}

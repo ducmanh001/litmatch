@@ -1,0 +1,86 @@
+'use client';
+
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+
+import { apiClient, tokenStore } from '../../shared/api/client';
+import { AuthGate } from '../../shared/auth/auth-gate';
+import {
+  connectRealtime,
+  disconnectRealtime,
+} from '../../shared/realtime/socket';
+
+import type { ReactNode } from 'react';
+
+/**
+ * Nav sau login khai 1 chỗ — matching/chat/party là placeholder cho phase tính năng
+ * (docs/12 § 12.8 bước 3), route chưa tồn tại thì chưa thêm link.
+ */
+const NAV_ITEMS = [{ href: '/home', label: 'Trang chủ' }] as const;
+
+function AppChrome({ children }: { children: ReactNode }) {
+  const router = useRouter();
+
+  // Vùng (app) là vùng realtime: connect khi vào, disconnect khi rời hẳn (logout)
+  useEffect(() => {
+    connectRealtime();
+  }, []);
+
+  const logout = async (): Promise<void> => {
+    const refreshToken = tokenStore.getRefreshToken();
+    if (refreshToken !== null) {
+      // Thu hồi server-side best-effort — thất bại vẫn logout local
+      await apiClient
+        .POST('/api/v1/auth/logout', { body: { refreshToken } })
+        .catch(() => undefined);
+    }
+    disconnectRealtime();
+    tokenStore.setSession(null);
+    router.replace('/login');
+  };
+
+  return (
+    <div className="flex min-h-screen flex-col">
+      <header className="border-b border-border">
+        <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between px-4">
+          <nav
+            className="flex items-center gap-6"
+            aria-label="Điều hướng chính"
+          >
+            <Link href="/home" className="font-bold text-primary">
+              Litmatch
+            </Link>
+            {NAV_ITEMS.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
+            Đăng xuất
+          </button>
+        </div>
+      </header>
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">
+        {children}
+      </main>
+    </div>
+  );
+}
+
+export default function AppLayout({ children }: { children: ReactNode }) {
+  return (
+    <AuthGate>
+      <AppChrome>{children}</AppChrome>
+    </AuthGate>
+  );
+}

@@ -6,25 +6,27 @@
 
 ## Mục lục — mục số ↔ file (giữ nguyên số mục cũ để mọi tham chiếu "mục X.Y" ở bất kỳ đâu vẫn tìm đúng)
 
-| Mục | File                                                               | Nội dung                                                                                                                                       |
-| --- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | [01-product-features.md](./01-product-features.md)                 | Danh sách tính năng thật của Litmatch                                                                                                          |
-| 2   | [02-domain-model.md](./02-domain-model.md)                         | Domain Model tổng thể (entity chính)                                                                                                           |
-| 3   | [03-architecture.md](./03-architecture.md)                         | Kiến trúc: modular monolith, 3.1-3.7 nền tảng, **3.8 = quyết định thiết kế cho quy mô lớn (SFU, shard matching, ledger)**                      |
-| 4   | [04-tech-stack.md](./04-tech-stack.md)                             | Tech stack đề xuất                                                                                                                             |
-| 5   | [05-coding-standards.md](./05-coding-standards.md)                 | Coding standard NestJS + cấu trúc thư mục                                                                                                      |
-| 6   | [06-domain-rules.md](./06-domain-rules.md)                         | Domain rules bắt buộc (đừng để agent tự đoán)                                                                                                  |
-| 7   | [07-roadmap.md](./07-roadmap.md)                                   | Checklist triển khai theo giai đoạn (Giai đoạn 0-7)                                                                                            |
-| 8   | [08-working-with-agents.md](./08-working-with-agents.md)           | Quy trình làm việc dùng chung cho mọi agent                                                                                                    |
-| 9   | [09-practical-notes.md](./09-practical-notes.md)                   | Lưu ý thực tế, tránh vỡ trận giữa đường                                                                                                        |
-| 10  | [10-code-review-checklist.md](./10-code-review-checklist.md)       | **Checklist review code — 10.0 phương pháp luận lỗi logic nghiệp vụ, 10.1 lỗi chung, 10.2 lỗi đặc thù từng domain, 10.3 cách áp dụng**         |
-| 11  | [11-engineering-principles.md](./11-engineering-principles.md)     | **La bàn thiết kế: ownership, boundary, coupling, abstraction, correctness, security, vận hành và tiêu chí tách service**                      |
-| —   | [services/economy-service.md](./services/economy-service.md)       | **Đặc tả chi tiết Economy module**: schema ledger, loại tài khoản, bất biến, luồng IAP/VIP, quy tắc concurrency                                |
-| —   | [services/matching-service.md](./services/matching-service.md)     | **Đặc tả slice M1 Matching**: state machine ticket, shard Redis, double-lock ghép cặp, speed-up qua Economy                                    |
-| —   | [services/party-room-service.md](./services/party-room-service.md) | **Đặc tả Party Room**: role host/speaker/audience enforce ở SFU, cap speaker dưới lock, lifecycle phòng + sweeper backstop                     |
-| —   | [services/gift-service.md](./services/gift-service.md)             | **Đặc tả Gift**: transaction 2 chân DIA+PTS, catalog giá server, guest không nhận PTS, realtime sau commit                                     |
-| —   | [adr/](./adr/README.md)                                            | Architecture Decision Records — lịch sử các quyết định đã chốt (bối cảnh, phương án loại, hệ quả); 03 là trạng thái đích, ADR là lý do lịch sử |
-| —   | [sources.md](./sources.md)                                         | Nguồn tham khảo đã dùng để nghiên cứu bộ docs này                                                                                              |
+| Mục | File                                                                 | Nội dung                                                                                                                                          |
+| --- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | [01-product-features.md](./01-product-features.md)                   | Danh sách tính năng thật của Litmatch                                                                                                             |
+| 2   | [02-domain-model.md](./02-domain-model.md)                           | Domain Model tổng thể (entity chính)                                                                                                              |
+| 3   | [03-architecture.md](./03-architecture.md)                           | Kiến trúc: modular monolith, 3.1-3.7 nền tảng, **3.8 = quyết định thiết kế cho quy mô lớn (SFU, shard matching, ledger)**                         |
+| 4   | [04-tech-stack.md](./04-tech-stack.md)                               | Tech stack đề xuất                                                                                                                                |
+| 5   | [05-coding-standards.md](./05-coding-standards.md)                   | Coding standard NestJS + cấu trúc thư mục                                                                                                         |
+| 6   | [06-domain-rules.md](./06-domain-rules.md)                           | Domain rules bắt buộc (đừng để agent tự đoán)                                                                                                     |
+| 7   | [07-roadmap.md](./07-roadmap.md)                                     | Checklist triển khai theo giai đoạn (Giai đoạn 0-7)                                                                                               |
+| 8   | [08-working-with-agents.md](./08-working-with-agents.md)             | Quy trình làm việc dùng chung cho mọi agent                                                                                                       |
+| 9   | [09-practical-notes.md](./09-practical-notes.md)                     | Lưu ý thực tế, tránh vỡ trận giữa đường                                                                                                           |
+| 10  | [10-code-review-checklist.md](./10-code-review-checklist.md)         | **Checklist review code — 10.0 phương pháp luận lỗi logic nghiệp vụ, 10.1 lỗi chung, 10.2 lỗi đặc thù từng domain, 10.3 cách áp dụng**            |
+| 11  | [11-engineering-principles.md](./11-engineering-principles.md)       | **La bàn thiết kế: ownership, boundary, coupling, abstraction, correctness, security, vận hành và tiêu chí tách service**                         |
+| 12  | [12-frontend-architecture.md](./12-frontend-architecture.md)         | **Khung 2 app frontend (admin Vite+React, web Next.js)**: hợp đồng OpenAPI → api-client, quy tắc bắt buộc cho agent frontend, Task 0 backend      |
+| 13  | [13-frontend-coding-standards.md](./13-frontend-coding-standards.md) | **Coding standard FE dùng chung cho admin + web**: TypeScript/lint, feature folder, TanStack Query, form, error/UX states, realtime, env, testing |
+| —   | [services/economy-service.md](./services/economy-service.md)         | **Đặc tả chi tiết Economy module**: schema ledger, loại tài khoản, bất biến, luồng IAP/VIP, quy tắc concurrency                                   |
+| —   | [services/matching-service.md](./services/matching-service.md)       | **Đặc tả slice M1 Matching**: state machine ticket, shard Redis, double-lock ghép cặp, speed-up qua Economy                                       |
+| —   | [services/party-room-service.md](./services/party-room-service.md)   | **Đặc tả Party Room**: role host/speaker/audience enforce ở SFU, cap speaker dưới lock, lifecycle phòng + sweeper backstop                        |
+| —   | [services/gift-service.md](./services/gift-service.md)               | **Đặc tả Gift**: transaction 2 chân DIA+PTS, catalog giá server, guest không nhận PTS, realtime sau commit                                        |
+| —   | [adr/](./adr/README.md)                                              | Architecture Decision Records — lịch sử các quyết định đã chốt (bối cảnh, phương án loại, hệ quả); 03 là trạng thái đích, ADR là lý do lịch sử    |
+| —   | [sources.md](./sources.md)                                           | Nguồn tham khảo đã dùng để nghiên cứu bộ docs này                                                                                                 |
 
 ## Đường dẫn đọc gợi ý theo tình huống
 

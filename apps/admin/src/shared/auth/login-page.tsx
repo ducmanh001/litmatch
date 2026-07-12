@@ -1,0 +1,157 @@
+import { zodResolver } from '@hookform/resolvers/zod';
+import { isApiError } from '@litmatch/api-client';
+import { useMutation } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { z } from 'zod';
+
+import { apiClient, tokenStore } from '../api/client';
+import { Button } from '../ui/button';
+import { Card } from '../ui/card';
+import { Field } from '../ui/field';
+import { Input } from '../ui/input';
+import { useIsAuthenticated } from './use-session';
+
+const phoneSchema = z.object({
+  // Format E.164 — validate thật ở backend, client chỉ đỡ UX (docs/13 § 13.6)
+  phone: z.string().regex(/^\+?[0-9]{8,15}$/u, 'Số điện thoại không hợp lệ'),
+});
+const codeSchema = z.object({
+  code: z.string().regex(/^[0-9]{6}$/u, 'Mã OTP gồm 6 chữ số'),
+});
+
+type PhoneForm = z.infer<typeof phoneSchema>;
+type CodeForm = z.infer<typeof codeSchema>;
+
+export function LoginPage() {
+  const isAuthenticated = useIsAuthenticated();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [phase, setPhase] = useState<
+    { step: 'phone' } | { step: 'code'; phone: string }
+  >({
+    step: 'phone',
+  });
+
+  const phoneForm = useForm<PhoneForm>({ resolver: zodResolver(phoneSchema) });
+  const codeForm = useForm<CodeForm>({ resolver: zodResolver(codeSchema) });
+
+  const requestOtp = useMutation({
+    mutationFn: async (phone: string) => {
+      await apiClient.POST('/api/v1/auth/otp/request', { body: { phone } });
+      return phone;
+    },
+    onSuccess: (phone) => setPhase({ step: 'code', phone }),
+  });
+
+  const verifyOtp = useMutation({
+    mutationFn: async (input: { phone: string; code: string }) => {
+      const res = await apiClient.POST('/api/v1/auth/otp/verify', {
+        body: input,
+      });
+      return res.data?.data;
+    },
+    onSuccess: (tokens) => {
+      if (tokens === undefined) return;
+      tokenStore.setSession(tokens);
+      const from = (location.state as { from?: string } | null)?.from;
+      navigate(from ?? '/', { replace: true });
+    },
+  });
+
+  if (isAuthenticated) return <Navigate to="/" replace />;
+
+  const mutationError = (error: unknown): string | undefined =>
+    error === null
+      ? undefined
+      : isApiError(error)
+        ? error.message
+        : 'Có lỗi xảy ra, thử lại.';
+
+  return (
+    <main className="flex min-h-screen items-center justify-center p-4">
+      <Card className="w-full max-w-sm space-y-6">
+        <div className="space-y-1">
+          <h1 className="text-xl font-semibold">Litmatch Admin</h1>
+          <p className="text-sm text-muted-foreground">
+            {phase.step === 'phone'
+              ? 'Đăng nhập bằng số điện thoại'
+              : `Nhập mã OTP đã gửi tới ${phase.phone}`}
+          </p>
+        </div>
+
+        {phase.step === 'phone' ? (
+          <form
+            className="space-y-4"
+            onSubmit={phoneForm.handleSubmit((v) => requestOtp.mutate(v.phone))}
+            noValidate
+          >
+            <Field
+              htmlFor="phone"
+              label="Số điện thoại"
+              error={
+                phoneForm.formState.errors.phone?.message ??
+                mutationError(requestOtp.error)
+              }
+            >
+              <Input
+                id="phone"
+                type="tel"
+                autoComplete="tel"
+                placeholder="+84xxxxxxxxx"
+                {...phoneForm.register('phone')}
+              />
+            </Field>
+            <Button
+              className="w-full"
+              type="submit"
+              disabled={requestOtp.isPending}
+            >
+              {requestOtp.isPending ? 'Đang gửi…' : 'Gửi mã OTP'}
+            </Button>
+          </form>
+        ) : (
+          <form
+            className="space-y-4"
+            onSubmit={codeForm.handleSubmit((v) =>
+              verifyOtp.mutate({ phone: phase.phone, code: v.code }),
+            )}
+            noValidate
+          >
+            <Field
+              htmlFor="code"
+              label="Mã OTP"
+              error={
+                codeForm.formState.errors.code?.message ??
+                mutationError(verifyOtp.error)
+              }
+            >
+              <Input
+                id="code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                {...codeForm.register('code')}
+              />
+            </Field>
+            <Button
+              className="w-full"
+              type="submit"
+              disabled={verifyOtp.isPending}
+            >
+              {verifyOtp.isPending ? 'Đang xác minh…' : 'Đăng nhập'}
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full"
+              onClick={() => setPhase({ step: 'phone' })}
+            >
+              Đổi số điện thoại
+            </Button>
+          </form>
+        )}
+      </Card>
+    </main>
+  );
+}

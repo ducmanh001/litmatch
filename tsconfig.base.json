@@ -17,6 +17,8 @@
     "paths": {
       "@litmatch/common-exceptions": ["./libs/common-exceptions/src/index.ts"],
       "@litmatch/common-dtos": ["./libs/common-dtos/src/index.ts"],
+      "@litmatch/common-dtos/pure": ["./libs/common-dtos/src/pure.ts"],
+      "@litmatch/api-client": ["./libs/api-client/src/index.ts"],
       "@litmatch/logger": ["./libs/logger/src/index.ts"],
       "@litmatch/config-validator": ["./libs/config-validator/src/index.ts"]
     }
