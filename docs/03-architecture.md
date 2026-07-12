@@ -2,6 +2,9 @@
 
 # 3. Kiến trúc nền tảng — Modular Monolith trước, tách microservice theo tiêu chí rõ ràng
 
+Các nguyên tắc ownership, boundary, dependency direction và tiêu chí tách service
+được tóm tắt tại [11-engineering-principles.md](./11-engineering-principles.md).
+
 > Nguyên tắc "MonolithFirst" của Martin Fowler, cách các hệ thống video/voice thật sự scale, saga pattern cho giao dịch phân tán. KHÔNG chia 7-8 microservice ngay từ đầu — đó là premature optimization.
 
 ## 3.1 Vì sao không chia nhiều microservice ngay từ đầu

@@ -25,6 +25,7 @@ Hệ thống social-entertainment kiểu Litmatch: voice/text matching ẩn danh
 | Quy trình giao việc/review theo giai đoạn                                 | `docs/08-working-with-claude-code.md` |
 | Lỗi hay gặp cần tránh khi triển khai                                      | `docs/09-practical-notes.md`          |
 | **Tự review trước khi báo "xong"**                                        | `docs/10-code-review-checklist.md`    |
+| **La bàn thiết kế và quyết định tách module/service**                     | `docs/11-engineering-principles.md`   |
 
 ## Quy trình làm việc mặc định
 
@@ -33,6 +34,23 @@ Hệ thống social-entertainment kiểu Litmatch: voice/text matching ẩn danh
 - Mọi API động tới diamond: idempotency key bắt buộc + transaction DB (`SELECT ... FOR UPDATE` hoặc optimistic lock). Không hardcode giá/threshold — đưa vào `.env` + `ConfigModule`.
 - Nếu 1 quyết định cần thiết chưa có trong `docs/`, đề xuất phương án + lý do, hỏi lại thay vì tự ý quyết rồi im lặng — đặc biệt với bất cứ điều gì ảnh hưởng tới 3 luật ở trên.
 - Khi phát hiện `docs/` sai hoặc thiếu 1 domain rule quan trọng trong lúc code thật: sửa trực tiếp vào file `docs/` tương ứng (không chỉ sửa trong hội thoại rồi để trôi mất), rồi tiếp tục.
+
+## La bàn thiết kế bắt buộc
+
+Đọc `docs/11-engineering-principles.md` trước khi tạo module, abstraction hoặc
+đề xuất tách service. Khi code/review, luôn kiểm tra ngắn gọn:
+
+- Domain sở hữu logic, dữ liệu, type và quyền ghi của chính nó; module khác đi qua
+  public API/DTO/event, không import nội tạng.
+- `common/` phải trung lập; dependency đi một chiều; không tạo vòng lặp.
+- Một rule/config/key/error/type contract chỉ có một nơi chủ quản.
+- Code nói WHAT bằng tên/type/cấu trúc; comment chỉ giải thích WHY, bất biến,
+  security, concurrency hoặc giới hạn third-party.
+- Side effect phải idempotent và atomic; correctness trước cache/performance.
+- Security/privacy, backward compatibility, failure isolation và observability là
+  một phần của thiết kế, không phải việc bổ sung sau.
+- Không tạo abstraction/folder/microservice để dành. Chỉ tách khi có boundary rõ
+  và nhu cầu hoặc số liệu vận hành chứng minh.
 
 ## Lệnh build/test (Giai đoạn 0 đã xong — Nx + pnpm + Node 22)
 
