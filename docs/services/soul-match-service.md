@@ -88,9 +88,12 @@ Mọi endpoint: 404 nếu session không tồn tại **hoặc không phải thà
 `SOUL_CHAT_DURATION_SECONDS` (mặc định 150 — docs/06: 2-3 phút), `SOUL_RATING_WINDOW_SECONDS`
 (mặc định 120), `SOUL_CHAT_MESSAGE_MAX_LENGTH` (mặc định 500).
 
-## 7. Realtime (slice sau — mục "Signaling Gateway" của roadmap)
+## 7. Realtime (đã có — xem [realtime-gateway.md](./realtime-gateway.md))
 
-Polling REST là transport của slice này. Khi Signaling Gateway thật ra đời: gửi message vẫn
-đi REST vào core-api (business + persist ở core-api), sau commit publish Redis pub/sub
-`soul:chat:{sessionId}`; gateway subscribe và fanout xuống socket room — gateway không chứa
-business logic (docs/03 § 3.3), message store/API này giữ nguyên.
+Gửi message vẫn đi REST vào core-api (business + persist ở core-api); sau commit, core-api
+publish Redis pub/sub theo **channel người nhận** `realtime:user:{userId}` (payload tính sẵn
+per-recipient — `senderRole` đã là `me|partner`, không leak userId); gateway chỉ verify JWT và
+fanout, không business logic (docs/03 § 3.3). Best-effort: publish fail → client vẫn còn REST
+polling. Event: `soul.message` (message mới, không bắn lại khi replay idempotency) và
+`soul.matched` (mutual like MỚI tạo Friendship). Hợp đồng: `@litmatch/common-dtos`
+`realtime-events.ts`.

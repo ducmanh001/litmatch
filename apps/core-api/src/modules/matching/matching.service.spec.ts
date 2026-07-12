@@ -61,6 +61,7 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
     zrem: jest.Mock;
     sadd: jest.Mock;
     decr: jest.Mock;
+    publish: jest.Mock;
   };
   let economy: { spendDiamond: jest.Mock; hasTransaction: jest.Mock };
   let userService: { getByIdOrThrow: jest.Mock };
@@ -86,6 +87,7 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
       zrem: jest.fn(async () => 1),
       sadd: jest.fn(async () => 1),
       decr: jest.fn(async () => 0),
+      publish: jest.fn(async () => 1),
     };
     economy = {
       spendDiamond: jest.fn(async () => ({

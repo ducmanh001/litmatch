@@ -10,7 +10,7 @@ import { JwtService } from '@nestjs/jwt';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 
 import type { AuthenticatedUser } from '../decorators/current-user.decorator';
-import type { AccessTokenPayload } from '../types/access-token-payload';
+import type { AccessTokenPayload } from '@litmatch/common-dtos';
 import type { Request } from 'express';
 
 /**

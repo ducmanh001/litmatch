@@ -1,6 +1,7 @@
-import { HttpStatus, Inject, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { RealtimeEvents } from '@litmatch/common-dtos';
 import { DomainException } from '@litmatch/common-exceptions';
 import { DataSource, Repository } from 'typeorm';
 
@@ -8,6 +9,7 @@ import {
   isUniqueViolation,
   violatedConstraint,
 } from '../../database/postgres-errors';
+import { publishRealtimeEvent } from '../../common/realtime/publish-realtime';
 import {
   DEFAULT_REGION,
   SPEEDUP_RATE_WINDOW_SECONDS,
@@ -37,6 +39,10 @@ import {
 import { EconomyService, TransactionType } from '../economy';
 import { UserService, UserStatus } from '../user';
 
+import type {
+  MatchConfirmedEventData,
+  RealtimeEnvelope,
+} from '@litmatch/common-dtos';
 import type { EntityManager } from 'typeorm';
 import type Redis from 'ioredis';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
@@ -65,6 +71,8 @@ return c
  */
 @Injectable()
 export class MatchingService {
+  private readonly logger = new Logger(MatchingService.name);
+
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     @InjectRepository(MatchTicket)
@@ -207,7 +215,10 @@ export class MatchingService {
     }
     const sessionId = pre.sessionId;
 
-    return this.dataSource.transaction(async (manager) => {
+    // Set khi CHÍNH lời gọi này chốt đủ 2 confirm — publish realtime sau commit, replay không bắn lại
+    let completedPair: Array<{ userId: string; ticketId: string }> | null =
+      null;
+    const confirmed = await this.dataSource.transaction(async (manager) => {
       const session = await manager.findOne(MatchSession, {
         where: { id: sessionId },
         lock: { mode: 'pessimistic_write' },
@@ -254,10 +265,35 @@ export class MatchingService {
         other.status = MatchTicketStatus.Confirmed;
         session.status = MatchSessionStatus.Confirmed;
         await manager.save(other);
+        completedPair = [
+          { userId: ticket.userId, ticketId: ticket.id },
+          { userId: other.userId, ticketId: other.id },
+        ];
       }
       await manager.save(session);
       return manager.save(ticket);
     });
+
+    if (completedPair) {
+      // Realtime SAU commit — best-effort, client vẫn còn GET /matching/tickets/:id poll fallback
+      await Promise.all(
+        (completedPair as Array<{ userId: string; ticketId: string }>).map(
+          ({ userId, ticketId }) => {
+            const envelope: RealtimeEnvelope<MatchConfirmedEventData> = {
+              event: RealtimeEvents.MatchConfirmed,
+              data: { ticketId, sessionId },
+            };
+            return publishRealtimeEvent(
+              this.redis,
+              this.logger,
+              userId,
+              envelope,
+            );
+          },
+        ),
+      );
+    }
+    return confirmed;
   }
 
   /**

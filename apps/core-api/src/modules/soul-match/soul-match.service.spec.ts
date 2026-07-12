@@ -77,11 +77,18 @@ describe('SoulMatchService (unit — mock repo/matching/friend)', () => {
     create: jest.Mock;
   };
   let dataSource: { transaction: jest.Mock };
+  let redis: { publish: jest.Mock };
   let service: SoulMatchService;
 
   beforeEach(() => {
     messageRepo = {
-      save: jest.fn(async (m) => m),
+      // như DB thật: cấp id + createdAt lúc insert (publish realtime dùng createdAt)
+      save: jest.fn(async (m) =>
+        Object.assign(m, {
+          id: (m as { id?: string }).id ?? 'msg-new',
+          createdAt: (m as { createdAt?: Date }).createdAt ?? new Date(),
+        }),
+      ),
       create: jest.fn((input) => Object.assign(new SoulChatMessage(), input)),
       findOneBy: jest.fn(),
       createQueryBuilder: jest.fn(),
@@ -119,6 +126,7 @@ describe('SoulMatchService (unit — mock repo/matching/friend)', () => {
         cb(manager as unknown as EntityManager),
       ),
     };
+    redis = { publish: jest.fn(async () => 1) };
     service = new SoulMatchService(
       dataSource as never,
       messageRepo as unknown as Repository<SoulChatMessage>,
@@ -127,6 +135,7 @@ describe('SoulMatchService (unit — mock repo/matching/friend)', () => {
       friendService as never,
       userService as never,
       configStub,
+      redis as never,
     );
   });
 
@@ -218,6 +227,41 @@ describe('SoulMatchService (unit — mock repo/matching/friend)', () => {
       expectDomainError(err, SoulMatchErrors.MESSAGE_TOO_LONG);
     });
 
+    it('message MỚI → publish realtime cho cả 2 với senderRole per-recipient; replay KHÔNG bắn lại', async () => {
+      await service.sendMessage(me, 'session-1', dto, 'k1');
+      expect(redis.publish).toHaveBeenCalledTimes(2);
+      const calls = redis.publish.mock.calls.map(
+        ([channel, raw]: [string, string]) => ({
+          channel,
+          envelope: JSON.parse(raw) as {
+            event: string;
+            data: { senderRole: string };
+          },
+        }),
+      );
+      const toMe = calls.find((c) => c.channel === 'realtime:user:user-me');
+      const toPartner = calls.find(
+        (c) => c.channel === `realtime:user:${PARTNER_ID}`,
+      );
+      expect(toMe?.envelope.event).toBe('soul.message');
+      expect(toMe?.envelope.data.senderRole).toBe('me');
+      expect(toPartner?.envelope.data.senderRole).toBe('partner');
+
+      redis.publish.mockClear();
+      messageRepo.save.mockRejectedValue(uniqueViolation());
+      messageRepo.findOneBy.mockResolvedValue(
+        Object.assign(new SoulChatMessage(), {
+          id: 'msg-1',
+          sessionId: 'session-1',
+          senderUserId: me.userId,
+          content: 'hello',
+          createdAt: new Date(),
+        }),
+      );
+      await service.sendMessage(me, 'session-1', dto, 'k1');
+      expect(redis.publish).not.toHaveBeenCalled();
+    });
+
     it('retry cùng key cùng nội dung → replay message cũ, không nhân đôi', async () => {
       const existing = Object.assign(new SoulChatMessage(), {
         id: 'msg-1',
@@ -302,6 +346,30 @@ describe('SoulMatchService (unit — mock repo/matching/friend)', () => {
         PARTNER_ID,
         'soul_match',
       );
+    });
+
+    it('mutual like MỚI → publish soul.matched cho CẢ 2 sau commit', async () => {
+      manager.findOneBy.mockResolvedValueOnce(null).mockResolvedValueOnce(
+        Object.assign(new SoulMatchRating(), {
+          verdict: SoulMatchVerdict.Like,
+        }),
+      );
+      await service.rate(me, 'session-1', like);
+      expect(redis.publish).toHaveBeenCalledTimes(2);
+      const channels = redis.publish.mock.calls.map(
+        ([channel]: [string]) => channel,
+      );
+      expect(channels).toEqual(
+        expect.arrayContaining([
+          'realtime:user:user-me',
+          `realtime:user:${PARTNER_ID}`,
+        ]),
+      );
+      for (const [, raw] of redis.publish.mock.calls as [string, string][]) {
+        expect((JSON.parse(raw) as { event: string }).event).toBe(
+          'soul.matched',
+        );
+      }
     });
 
     it('đối phương rate boring → không tạo friendship', async () => {

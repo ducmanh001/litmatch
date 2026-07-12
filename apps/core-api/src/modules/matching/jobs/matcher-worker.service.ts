@@ -8,8 +8,10 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { InjectDataSource } from '@nestjs/typeorm';
+import { RealtimeEvents } from '@litmatch/common-dtos';
 import { DataSource, In } from 'typeorm';
 
+import { publishRealtimeEvent } from '../../../common/realtime/publish-realtime';
 import {
   MatchTicket,
   MatchTicketStatus,
@@ -26,6 +28,10 @@ import {
 } from '../redis/matching-redis.provider';
 import { User, UserStatus } from '../../user';
 
+import type {
+  MatchMatchedEventData,
+  RealtimeEnvelope,
+} from '@litmatch/common-dtos';
 import type Redis from 'ioredis';
 import type { CoreApiEnv } from '../../../config/env.validation';
 import type { MatchInteractionPolicy } from '../ports/interaction-policy';
@@ -201,7 +207,14 @@ export class MatcherWorkerService
         ta.sessionId = session.id;
         tb.sessionId = session.id;
         await manager.save([ta, tb]);
-        return { kind: 'matched' as const, requeue: [] as PoppedTicket[] };
+        return {
+          kind: 'matched' as const,
+          requeue: [] as PoppedTicket[],
+          matchedPair: [
+            { userId: ta.userId, ticketId: ta.id, sessionId: session.id },
+            { userId: tb.userId, ticketId: tb.id, sessionId: session.id },
+          ],
+        };
       }
 
       // Không ghép được — xử lý từng ticket (spec § 2):
@@ -227,6 +240,7 @@ export class MatcherWorkerService
             ? ('requeued_pair' as const)
             : ('dropped' as const),
         requeue,
+        matchedPair: undefined,
       };
     });
 
@@ -236,6 +250,23 @@ export class MatcherWorkerService
         await this.redis.zadd(shard, 'NX', String(r.score), r.id);
       }
       await this.redis.sadd(MATCHING_ACTIVE_SHARDS_KEY, shard);
+    }
+    if (result.matchedPair) {
+      // Realtime SAU commit — best-effort, client vẫn còn GET /matching/tickets/:id poll fallback
+      await Promise.all(
+        result.matchedPair.map(({ userId, ticketId, sessionId }) => {
+          const envelope: RealtimeEnvelope<MatchMatchedEventData> = {
+            event: RealtimeEvents.MatchMatched,
+            data: { ticketId, sessionId },
+          };
+          return publishRealtimeEvent(
+            this.redis,
+            this.logger,
+            userId,
+            envelope,
+          );
+        }),
+      );
     }
     return result.kind;
   }
