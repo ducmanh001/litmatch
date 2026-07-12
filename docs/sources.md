@@ -6,9 +6,8 @@
 - Matchmaking/matching queue quy mô lớn: Prachub — "Design game matchmaking and waiting queue" (Roblox interview question); Hello Interview — "System Design Interview Patterns" (contention/race condition)
 - SFU quy mô lớn (mediasoup vs LiveKit): mediasoup official docs — "Scalability"; LiveKit Docs — "LiveKit SFU"; Forasoft — "mediasoup, Janus, LiveKit, Jitsi Videobridge, Pion: Choosing an SFU"
 - Lỗi logic nghiệp vụ (business logic vulnerability) làm nền cho § 10.0: PortSwigger Web Security Academy — "Business logic vulnerabilities"; Pynt — "What Are Business Logic Vulnerabilities & How to Prevent Them"
-- CLAUDE.md / memory hierarchy cho Claude Code: Claude Code Docs — "How Claude remembers your project" (code.claude.com/docs/en/memory)
 
-> Ghi chú: đây là tài liệu kỹ thuật tổng hợp từ nghiên cứu thực tế + kinh nghiệm ngành, không phải bản sao chép nguyên văn từ bất kỳ nguồn nào — dùng làm định hướng, khi triển khai chi tiết từng phần nên đọc thêm tài liệu chính thức tương ứng (mediasoup docs, LiveKit docs, OWASP, Claude Code docs).
+> Ghi chú: đây là tài liệu kỹ thuật tổng hợp từ nghiên cứu thực tế + kinh nghiệm ngành, không phải bản sao chép nguyên văn từ bất kỳ nguồn nào — dùng làm định hướng, khi triển khai chi tiết từng phần nên đọc thêm tài liệu chính thức tương ứng (mediasoup docs, LiveKit docs, OWASP).
 
 ---
 

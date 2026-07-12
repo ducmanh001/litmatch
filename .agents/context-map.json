@@ -1,0 +1,135 @@
+{
+  "default": {
+    "description": "Định vị repo và chọn scope trước khi sửa",
+    "read": [
+      "AGENTS.md",
+      "docs/00-overview-and-index.md",
+      "docs/07-roadmap.md",
+      "docs/11-engineering-principles.md"
+    ],
+    "checks": ["pnpm agent:check", "pnpm format:check", "pnpm lint"]
+  },
+  "core": {
+    "description": "Modular monolith, module boundary và API backend",
+    "read": [
+      "AGENTS.md",
+      "apps/core-api/AGENTS.md",
+      "docs/03-architecture.md",
+      "docs/05-coding-standards.md",
+      "docs/10-code-review-checklist.md"
+    ],
+    "paths": ["apps/core-api/src", "libs"],
+    "checks": [
+      "pnpm agent:check",
+      "pnpm nx run core-api:lint",
+      "pnpm nx test core-api",
+      "pnpm nx build core-api"
+    ]
+  },
+  "economy": {
+    "description": "Ledger, wallet, IAP, refund và mọi luồng chạm diamond",
+    "read": [
+      "AGENTS.md",
+      "apps/core-api/AGENTS.md",
+      "docs/02-domain-model.md",
+      "docs/03-architecture.md",
+      "docs/06-domain-rules.md",
+      "docs/services/economy-service.md",
+      "docs/10-code-review-checklist.md"
+    ],
+    "paths": [
+      "apps/core-api/src/modules/economy",
+      "apps/core-api/src/database/migrations"
+    ],
+    "invariants": [
+      "LedgerEntry append-only là nguồn sự thật",
+      "Idempotency unique ở Transaction",
+      "Check và ghi tiền atomic trong DB transaction"
+    ],
+    "checks": [
+      "pnpm agent:check",
+      "INTEGRATION_DB_URL=postgresql://litmatch:litmatch_local@localhost:5432/litmatch_test pnpm nx test core-api --skip-nx-cache",
+      "pnpm nx run core-api:lint",
+      "pnpm nx build core-api"
+    ]
+  },
+  "matching": {
+    "description": "Ticket state machine, Redis shards, pairing và race conditions",
+    "read": [
+      "AGENTS.md",
+      "apps/core-api/AGENTS.md",
+      "docs/03-architecture.md",
+      "docs/06-domain-rules.md",
+      "docs/services/matching-service.md",
+      "docs/10-code-review-checklist.md"
+    ],
+    "paths": ["apps/core-api/src/modules/matching"],
+    "invariants": [
+      "State transition hợp lệ và atomic",
+      "Một user không được ghép vào hai session",
+      "Redis là queue/index, Postgres giữ durable state"
+    ],
+    "checks": [
+      "pnpm agent:check",
+      "INTEGRATION_DB_URL=postgresql://litmatch:litmatch_local@localhost:5432/litmatch_test pnpm nx test core-api --skip-nx-cache",
+      "pnpm nx run core-api:lint",
+      "pnpm nx build core-api"
+    ]
+  },
+  "signaling": {
+    "description": "WebSocket, room state và realtime signaling",
+    "read": [
+      "AGENTS.md",
+      "apps/signaling-gateway/AGENTS.md",
+      "docs/03-architecture.md",
+      "docs/06-domain-rules.md",
+      "docs/10-code-review-checklist.md"
+    ],
+    "paths": ["apps/signaling-gateway", "apps/signaling-gateway-e2e"],
+    "checks": [
+      "pnpm agent:check",
+      "pnpm nx run signaling-gateway:lint",
+      "pnpm nx test signaling-gateway",
+      "pnpm nx build signaling-gateway",
+      "pnpm nx e2e signaling-gateway-e2e"
+    ]
+  },
+  "media": {
+    "description": "LiveKit/SFU và media runtime",
+    "read": [
+      "AGENTS.md",
+      "apps/media-server/AGENTS.md",
+      "docs/03-architecture.md",
+      "docs/04-tech-stack.md",
+      "docs/10-code-review-checklist.md",
+      "docs/adr/0001-livekit-self-host-lam-media-server.md"
+    ],
+    "paths": ["apps/media-server"],
+    "checks": [
+      "pnpm agent:check",
+      "docker compose -f apps/media-server/docker-compose.yml config --quiet"
+    ]
+  },
+  "infra": {
+    "description": "CI, container, local tooling, security và agent infrastructure",
+    "read": [
+      "AGENTS.md",
+      "docs/04-tech-stack.md",
+      "docs/08-working-with-agents.md",
+      "docs/11-engineering-principles.md"
+    ],
+    "paths": [
+      ".github",
+      ".agents",
+      "scripts",
+      "docker-compose.yml",
+      "package.json"
+    ],
+    "checks": [
+      "pnpm doctor",
+      "pnpm agent:check",
+      "pnpm agent:test",
+      "pnpm format:check"
+    ]
+  }
+}

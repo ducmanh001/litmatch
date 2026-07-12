@@ -78,7 +78,7 @@
 
 `economy.diamond.credited` / `economy.diamond.debited` / `economy.vip.purchased` / `economy.diamond.refunded` — payload `{version: 1, transactionId, userId, amount, transactionType}`. Ghi vào `outbox_events` cùng DB transaction; relay (interval, `FOR UPDATE SKIP LOCKED`) publish Kafka topic `litmatch.economy.events`, bật/tắt bằng env.
 
-> **Event là hợp đồng liên module**: mọi module khác tiêu thụ diamond (Matching speed-up, Calling per-phút, Gift) gọi Economy **qua DI trong process** (không qua network — [CLAUDE.md luật 1](../../CLAUDE.md)), nhưng các phản ứng phụ (notification, analytics, trust score) chỉ được nghe **qua event outbox này**, không đọc thẳng bảng của Economy. Thêm loại event mới là non-breaking; đổi/xoá field phải lên `version` mới ([05 § 5.9](../05-coding-standards.md)).
+> **Event là hợp đồng liên module**: mọi module khác tiêu thụ diamond (Matching speed-up, Calling per-phút, Gift) gọi Economy **qua DI trong process** (không qua network — [AGENTS.md luật 1](../../AGENTS.md)), nhưng các phản ứng phụ (notification, analytics, trust score) chỉ được nghe **qua event outbox này**, không đọc thẳng bảng của Economy. Thêm loại event mới là non-breaking; đổi/xoá field phải lên `version` mới ([05 § 5.9](../05-coding-standards.md)).
 
 ## 5. Refund / Chargeback từ store (chốt ở Giai đoạn 1 vì ảnh hưởng schema)
 

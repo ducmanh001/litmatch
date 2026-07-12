@@ -21,7 +21,7 @@ export enum TransactionStatus {
 
 /**
  * Metadata 1 giao dịch nghiệp vụ — KHÔNG chứa số tiền (số tiền nằm ở ledger_entries,
- * tránh 2 nguồn sự thật — docs/02). Mang idempotency_key unique ở DB (luật 2 CLAUDE.md).
+ * tránh 2 nguồn sự thật — docs/02). Mang idempotency_key unique ở DB (luật 2 AGENTS.md).
  */
 @Entity({ name: 'transactions' })
 export class LedgerTransaction {

@@ -1,4 +1,4 @@
-[← 06 · Domain Rules](./06-domain-rules.md) · **07 · Roadmap** · [08 · Working with Claude Code →](./08-working-with-claude-code.md)
+[← 06 · Domain Rules](./06-domain-rules.md) · **07 · Roadmap** · [08 · Working with Agents →](./08-working-with-agents.md)
 
 # 7. Checklist triển khai theo giai đoạn
 
@@ -77,4 +77,4 @@
 
 ---
 
-[← 06 · Domain Rules](./06-domain-rules.md) · [08 · Working with Claude Code →](./08-working-with-claude-code.md)
+[← 06 · Domain Rules](./06-domain-rules.md) · [08 · Working with Agents →](./08-working-with-agents.md)

@@ -1,4 +1,4 @@
-<!-- Template này khớp với output của skill /review-module (.claude/skills/review-module/)
+<!-- Template này khớp với output của skill review-module (.agents/skills/review-module/)
      và docs/10-code-review-checklist.md § 10.0.E — reviewer đọc BẢNG GIẢ ĐỊNH trước, diff sau. -->
 
 ## Mô tả

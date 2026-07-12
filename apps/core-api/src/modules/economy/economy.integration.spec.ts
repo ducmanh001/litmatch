@@ -34,7 +34,7 @@ import type { IapVerifier } from './ports/iap-verifier';
 /**
  * Integration test TIỀN BẠC trên Postgres thật (docs/05 § 5.9 — bắt buộc cho Economy):
  * race 2 request song song, idempotent replay, CHECK không âm, trigger append-only, đối soát.
- * Chạy khi có INTEGRATION_DB_URL (CI luôn set; local: xem CLAUDE.md).
+ * Chạy khi có INTEGRATION_DB_URL (CI luôn set; local: xem AGENTS.md).
  */
 const INTEGRATION_DB_URL = process.env['INTEGRATION_DB_URL'];
 const d = INTEGRATION_DB_URL ? describe : describe.skip;
