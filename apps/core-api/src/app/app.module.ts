@@ -18,7 +18,9 @@ import { AuthModule } from '../modules/auth';
 import { CallingModule } from '../modules/calling';
 import { EconomyModule } from '../modules/economy';
 import { FriendModule } from '../modules/friend';
+import { GiftModule } from '../modules/gift';
 import { MatchingModule } from '../modules/matching';
+import { PartyRoomModule } from '../modules/party-room';
 import { SoulMatchModule } from '../modules/soul-match';
 import { UserModule } from '../modules/user';
 
@@ -67,6 +69,8 @@ import { ReadinessService } from './readiness.service';
     FriendModule,
     SoulMatchModule,
     CallingModule,
+    PartyRoomModule,
+    GiftModule,
   ],
   controllers: [HealthController],
   providers: [

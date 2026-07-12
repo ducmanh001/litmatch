@@ -38,9 +38,9 @@
 
 ## Giai đoạn 3 — Party Room + Gift
 
-- [ ] Party Room module: tạo phòng, quản lý role host/speaker/audience, **giới hạn cứng số speaker/phòng theo config** (Party Room chạm ngưỡng tải SFU sớm hơn Voice Match rất nhiều vì consumer tăng theo N×(N-1) — xem § 3.8.A)
-- [ ] Mở rộng SFU cho multi-party
-- [ ] Gift module: catalog quà, tặng quà realtime, trừ diamond + cộng **điểm quy đổi** (KHÔNG phải diamond 1:1 — xem [06-domain-rules.md](./06-domain-rules.md)) trong cùng 1 transaction/saga (xem lỗi thường gặp ở [10-code-review-checklist.md § Gift Service](./10-code-review-checklist.md))
+- [x] Party Room module: tạo phòng, quản lý role host/speaker/audience, **giới hạn cứng số speaker/phòng theo config** (`PARTY_MAX_SPEAKERS`, snapshot lên phòng lúc tạo; cap check DƯỚI lock FOR UPDATE row phòng — chặn race 2 request promote đồng thời, § 3.8.A) — [services/party-room-service.md](./services/party-room-service.md). Host rời → **đóng phòng** (không transfer host ở GĐ3); membership enforce ở DB bằng partial unique (1 user 1 phòng active); sweeper đối chiếu DB↔SFU làm backstop khi webhook rớt
+- [x] Mở rộng SFU cho multi-party: port riêng grant theo role (audience `canPublish=false` NGAY TỪ TOKEN), đổi grant runtime qua `updateParticipant` đợi ACK trong transaction, tạo room tường minh với `maxParticipants`/`emptyTimeout`, webhook URL thứ 2 `party/webhooks/livekit` (livekit.yaml); env LiveKit đổi thành `LIVEKIT_*` dùng chung calling + party
+- [x] Gift module: catalog quà (giá là data DB, server re-check tại thời điểm tặng), tặng quà realtime (`gift.sent` publish SAU commit), trừ diamond + cộng **điểm quy đổi** (`GIFT_POINTS_RATE_PERCENT`, guest nhận 0 điểm — docs/06) trong **cùng 1 DB transaction** qua `EconomyService.sendGift` (2 chân độc lập tự cân theo currency, GiftEvent ghi qua withinTransaction) — [services/gift-service.md](./services/gift-service.md). Hoàn tiền gift CHƯA làm (quyết định mở ở [services/economy-service.md § 6](./services/economy-service.md)). **Giai đoạn 3 hoàn tất.**
 
 ## Giai đoạn 4 — Social layer
 
