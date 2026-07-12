@@ -7,6 +7,7 @@ import { EconomyRefund1752100000000 } from '../../database/migrations/1752100000
 import { MatchingCore1752200000000 } from '../../database/migrations/1752200000000-matching-core';
 import { MatchingGenderPreference1752300000000 } from '../../database/migrations/1752300000000-matching-gender-preference';
 import { SoulMatch1752400000000 } from '../../database/migrations/1752400000000-soul-match';
+import { FriendChat1752600000000 } from '../../database/migrations/1752600000000-friend-chat';
 
 import { SoulMatchService } from './soul-match.service';
 import { SoulMatchErrors } from './soul-match.errors';
@@ -15,7 +16,14 @@ import {
   SoulMatchRating,
   SoulMatchVerdict,
 } from './entities/soul-match-rating.entity';
-import { FriendService, Friendship, FriendshipSource } from '../friend';
+import {
+  Conversation,
+  FriendService,
+  Friendship,
+  FriendshipSource,
+  Message,
+} from '../friend';
+import { ConversationService } from '../friend/services/conversation.service';
 import { MatchingService } from '../matching';
 import {
   MatchTicket,
@@ -170,6 +178,8 @@ d('Soul Match integration (Postgres thật)', () => {
         SoulChatMessage,
         SoulMatchRating,
         Friendship,
+        Conversation,
+        Message,
       ],
       migrations: [
         InitAuthUser1751900000000,
@@ -178,6 +188,7 @@ d('Soul Match integration (Postgres thật)', () => {
         MatchingCore1752200000000,
         MatchingGenderPreference1752300000000,
         SoulMatch1752400000000,
+        FriendChat1752600000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -187,7 +198,17 @@ d('Soul Match integration (Postgres thật)', () => {
     await ds.runMigrations();
 
     const userService = new UserService(ds.getRepository(User), configStub);
-    friendService = new FriendService(ds.getRepository(Friendship));
+    const conversationService = new ConversationService(
+      ds.getRepository(Conversation),
+      ds.getRepository(Message),
+    );
+    friendService = new FriendService(
+      ds.getRepository(Friendship),
+      conversationService,
+      configStub,
+      // stub publish — luồng realtime friend.message test riêng ở suite friend.integration
+      { publish: async () => 1 } as never,
+    );
     // MatchingService chỉ dùng findSessionById ở đây — các dependency khác không chạm tới
     const matchingService = new MatchingService(
       ds,

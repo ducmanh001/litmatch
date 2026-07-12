@@ -64,6 +64,7 @@ export interface CoreApiEnv {
   SOUL_CHAT_DURATION_SECONDS: number;
   SOUL_RATING_WINDOW_SECONDS: number;
   SOUL_CHAT_MESSAGE_MAX_LENGTH: number;
+  FRIEND_MESSAGE_MAX_LENGTH: number;
   CALLING_LIVEKIT_URL: string;
   CALLING_LIVEKIT_API_KEY: string;
   CALLING_LIVEKIT_API_SECRET: string;
@@ -170,6 +171,14 @@ export const coreApiEnvSchema = Joi.object({
     .min(1)
     .max(2000)
     .default(500),
+
+  // Friend Chat 1-1 — Giai đoạn 2 (docs/services/friend-service.md § 7); chat lâu dài, không giới hạn ngắn như Soul Match
+  // .max khớp MESSAGE_CONTENT_HARD_CAP (sanity cap transport — friend.constants.ts)
+  FRIEND_MESSAGE_MAX_LENGTH: Joi.number()
+    .integer()
+    .min(1)
+    .max(4000)
+    .default(2000),
 
   // Calling — Giai đoạn 2 (docs/services/calling-service.md § 6); key/secret khớp livekit.yaml
   CALLING_LIVEKIT_URL: Joi.string()

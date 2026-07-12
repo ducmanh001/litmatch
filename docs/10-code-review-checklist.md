@@ -146,6 +146,13 @@
 - **Chat ẩn danh không giữ bằng chứng cho report**: xoá message khi phòng đóng → report "thô lỗ" không còn evidence cho T&S xử lý; message append-only, khoá truy cập qua API thay vì xoá dữ liệu
 - **Match lại cặp đã là bạn làm vỡ unique Friendship**: tạo bản ghi trùng/lỗi 500 thay vì idempotent ON CONFLICT DO NOTHING
 
+**Friend Chat 1-1 — chat lâu dài, dễ nhầm lẫn với chat ẩn danh Soul Match**
+
+- **Tạo Conversation lazy ở lần gửi message đầu** thay vì cùng transaction với Friendship → 2 người bạn mới cùng bấm gửi tin đầu tiên gần như đồng thời phải tự lo race tạo phòng chat, lặp lại đúng bug đã giải ở Soul Match; tạo Conversation ATOMICALLY cùng Friendship (ON CONFLICT DO NOTHING) để bất biến "có Friendship ⟺ có Conversation" luôn đúng
+- **Nhầm áp dụng che danh tính của Soul Match sang đây**: 2 bên đã unlock profile (đã là bạn) nên senderUserId lộ ra là ĐÚNG, không phải bug — nếu code cũng ẩn `senderRole me|partner` như Soul Match là thừa/sai ngữ cảnh
+- **Quên guard membership theo conversationId**: endpoint list/send message không check caller có phải 1 trong 2 user của conversation → IDOR đọc/gửi vào chat của người khác (docs/10 § 10.1.D); conversation không tồn tại và caller không phải thành viên phải trả **cùng 1 mã lỗi**, không làm oracle dò conversationId
+- **Coi block/report là guard bắt buộc trước khi Safety module tồn tại**: thêm 1 policy interface/bảng giả để "chừa chỗ" cho tính năng chưa có bảng dữ liệu thật là over-engineering (docs/11) — ghi rõ thành nợ kỹ thuật tường minh trong docs thay vì tự chế guard rỗng
+
 **Calling/Signaling/SFU — nơi dễ leak tài nguyên**
 
 - Không giải phóng room trên SFU khi call kết thúc → leak resource, media server quá tải dần
