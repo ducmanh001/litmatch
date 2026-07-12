@@ -6,9 +6,11 @@ tương thích theo từng công cụ chỉ được trỏ về đây, không đ
 
 ## Ba luật không được vi phạm
 
-1. **Chỉ ba thành phần deploy riêng**: `apps/core-api`, `apps/signaling-gateway`,
+1. **Chỉ ba thành phần deploy riêng phía backend**: `apps/core-api`, `apps/signaling-gateway`,
    `apps/media-server`. Mọi domain khác là module NestJS bên trong `core-api`; không tự tạo
-   app/service thứ tư. Xem `docs/03-architecture.md`.
+   app/service backend thứ tư. Frontend client (`apps/admin`, `apps/web`) không thuộc luật này
+   nhưng không được chứa business logic — xem `docs/12-frontend-architecture.md`. Xem
+   `docs/03-architecture.md`.
 2. **Economy/diamond**: `LedgerEntry` double-entry, append-only là nguồn sự thật;
    `Wallet.balance` chỉ là snapshot. Idempotency key unique ở DB trên `Transaction`. Không
    sửa/xoá ledger cũ; sửa sai bằng reversal entry mới. Xem `docs/03-architecture.md § 3.8.C`.
@@ -19,20 +21,21 @@ tương thích theo từng công cụ chỉ được trỏ về đây, không đ
 ## Nạp đúng context
 
 Chạy `pnpm agent:context <scope>` trước khi sửa. Scope hỗ trợ: `core`, `economy`, `matching`,
-`signaling`, `media`, `infra`. Nếu chưa rõ scope, chạy `pnpm agent:context`.
+`calling`, `signaling`, `media`, `frontend`, `infra`. Nếu chưa rõ scope, chạy `pnpm agent:context`.
 
-| Khi cần                  | Đọc                                 |
-| ------------------------ | ----------------------------------- |
-| Toàn cảnh                | `docs/00-overview-and-index.md`     |
-| Domain model             | `docs/02-domain-model.md`           |
-| Kiến trúc/boundary/scale | `docs/03-architecture.md`           |
-| Tech stack               | `docs/04-tech-stack.md`             |
-| Coding convention        | `docs/05-coding-standards.md`       |
-| Domain rules             | `docs/06-domain-rules.md`           |
-| Roadmap hiện tại         | `docs/07-roadmap.md`                |
-| Quy trình agent          | `docs/08-working-with-agents.md`    |
-| Review bắt buộc          | `docs/10-code-review-checklist.md`  |
-| La bàn thiết kế          | `docs/11-engineering-principles.md` |
+| Khi cần                  | Đọc                                                                         |
+| ------------------------ | --------------------------------------------------------------------------- |
+| Toàn cảnh                | `docs/00-overview-and-index.md`                                             |
+| Domain model             | `docs/02-domain-model.md`                                                   |
+| Kiến trúc/boundary/scale | `docs/03-architecture.md`                                                   |
+| Tech stack               | `docs/04-tech-stack.md`                                                     |
+| Coding convention        | `docs/05-coding-standards.md`                                               |
+| Domain rules             | `docs/06-domain-rules.md`                                                   |
+| Roadmap hiện tại         | `docs/07-roadmap.md`                                                        |
+| Quy trình agent          | `docs/08-working-with-agents.md`                                            |
+| Frontend (khung + chuẩn) | `docs/12-frontend-architecture.md` + `docs/13-frontend-coding-standards.md` |
+| Review bắt buộc          | `docs/10-code-review-checklist.md`                                          |
+| La bàn thiết kế          | `docs/11-engineering-principles.md`                                         |
 
 ## Quy trình mặc định
 

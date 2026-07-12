@@ -21,6 +21,12 @@
         }
       }
     },
+    "openapi-emit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "ts-node --project apps/core-api/tsconfig.app.json -r tsconfig-paths/register apps/core-api/src/openapi-emit.ts"
+      }
+    },
     "migration-run": {
       "executor": "nx:run-commands",
       "options": {

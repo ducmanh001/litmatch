@@ -11,6 +11,8 @@ export default [
       '**/webpack.config.js',
       '**/jest.config.cts',
       '.nx/**',
+      '**/vite.config.*.timestamp*',
+      '**/vitest.config.*.timestamp*',
     ],
   },
   {
@@ -26,6 +28,11 @@ export default [
           depConstraints: [
             { sourceTag: 'type:app', onlyDependOnLibsWithTags: ['type:lib'] },
             { sourceTag: 'type:lib', onlyDependOnLibsWithTags: ['type:lib'] },
+            // FE chỉ được depend libs trung lập (docs/12 § 12.9-2) — vi phạm là lỗi lint
+            {
+              sourceTag: 'scope:frontend',
+              onlyDependOnLibsWithTags: ['scope:shared'],
+            },
           ],
         },
       ],
