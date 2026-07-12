@@ -1,14 +1,28 @@
-import { Body, Controller, Headers, HttpCode, HttpStatus, Logger, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  Logger,
+  Post,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiExcludeController } from '@nestjs/swagger';
 import { Throttle, minutes } from '@nestjs/throttler';
 
 import type { CoreApiEnv } from '../../../config/env.validation';
 import { Public } from '../../../common/decorators/public.decorator';
-import { AppleServerNotificationDto, GoogleRtdnEnvelopeDto } from '../dto/webhook.dtos';
+import {
+  AppleServerNotificationDto,
+  GoogleRtdnEnvelopeDto,
+} from '../dto/webhook.dtos';
 import { IapProvider } from '../entities/iap.entities';
 import { RefundService } from '../services/refund.service';
-import { AppleNotificationVerifier, GoogleRtdnVerifier } from '../ports/notification-verifier';
+import {
+  AppleNotificationVerifier,
+  GoogleRtdnVerifier,
+} from '../ports/notification-verifier';
 
 // Notification type gây hoàn tiền (Apple App Store Server Notifications V2).
 const APPLE_REFUND_NOTIFICATION_TYPES = new Set(['REFUND', 'REVOKE']);
@@ -37,21 +51,32 @@ export class EconomyWebhooksController {
   @Post('apple')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 60, ttl: minutes(1) } })
-  async appleNotification(@Body() dto: AppleServerNotificationDto): Promise<{ received: boolean }> {
+  async appleNotification(
+    @Body() dto: AppleServerNotificationDto,
+  ): Promise<{ received: boolean }> {
     const payload = await this.appleVerifier.verify(dto.signedPayload);
 
     // Defense-in-depth: chain hợp lệ chỉ chứng minh "Apple ký", chưa chứng minh "ký cho app này"
     // (mọi app dùng chung 1 chain chứng chỉ Apple) — phải tự đối chiếu bundleId cấu hình.
-    const expectedBundleId = this.config.getOrThrow('ECONOMY_APPLE_BUNDLE_ID', { infer: true });
+    const expectedBundleId = this.config.getOrThrow('ECONOMY_APPLE_BUNDLE_ID', {
+      infer: true,
+    });
     if (expectedBundleId && payload.data.bundleId !== expectedBundleId) {
-      this.logger.warn(`Apple notification bundleId lạ: ${payload.data.bundleId}`);
+      this.logger.warn(
+        `Apple notification bundleId lạ: ${payload.data.bundleId}`,
+      );
       return { received: true };
     }
 
-    if (!APPLE_REFUND_NOTIFICATION_TYPES.has(payload.notificationType) || !payload.data.signedTransactionInfo) {
+    if (
+      !APPLE_REFUND_NOTIFICATION_TYPES.has(payload.notificationType) ||
+      !payload.data.signedTransactionInfo
+    ) {
       return { received: true }; // không phải notification refund — ack, không có gì để xử lý
     }
-    const txnInfo = this.appleVerifier.decodeTransactionInfo(payload.data.signedTransactionInfo);
+    const txnInfo = this.appleVerifier.decodeTransactionInfo(
+      payload.data.signedTransactionInfo,
+    );
     await this.refundService.refundIapPurchase(
       IapProvider.Apple,
       txnInfo.transactionId,
@@ -67,7 +92,10 @@ export class EconomyWebhooksController {
     @Body() dto: GoogleRtdnEnvelopeDto,
     @Headers('authorization') authorizationHeader?: string,
   ): Promise<{ received: boolean }> {
-    const notification = await this.googleVerifier.verify(dto, authorizationHeader);
+    const notification = await this.googleVerifier.verify(
+      dto,
+      authorizationHeader,
+    );
     const otp = notification['oneTimeProductNotification'] as
       | { notificationType: number; purchaseToken: string; sku: string }
       | undefined;

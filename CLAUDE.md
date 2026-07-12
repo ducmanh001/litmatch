@@ -12,19 +12,19 @@ Hệ thống social-entertainment kiểu Litmatch: voice/text matching ẩn danh
 
 ## Bản đồ docs (đọc file tương ứng trước khi động vào phần đó, đừng đoán từ trí nhớ)
 
-| Khi cần... | Đọc file |
-|---|---|
-| Toàn cảnh / mục lục đầy đủ | `docs/00-overview-and-index.md` |
-| Danh sách tính năng | `docs/01-product-features.md` |
-| Entity/domain model | `docs/02-domain-model.md` |
-| Quyết định kiến trúc, service boundary, scale (SFU/matching-shard/ledger) | `docs/03-architecture.md` |
-| Chọn công nghệ | `docs/04-tech-stack.md` |
-| Coding convention, cấu trúc thư mục | `docs/05-coding-standards.md` |
-| Domain rule cụ thể (free-call time, VIP, trust score...) | `docs/06-domain-rules.md` |
-| Đang ở giai đoạn nào, làm gì tiếp | `docs/07-roadmap.md` |
-| Quy trình giao việc/review theo giai đoạn | `docs/08-working-with-claude-code.md` |
-| Lỗi hay gặp cần tránh khi triển khai | `docs/09-practical-notes.md` |
-| **Tự review trước khi báo "xong"** | `docs/10-code-review-checklist.md` |
+| Khi cần...                                                                | Đọc file                              |
+| ------------------------------------------------------------------------- | ------------------------------------- |
+| Toàn cảnh / mục lục đầy đủ                                                | `docs/00-overview-and-index.md`       |
+| Danh sách tính năng                                                       | `docs/01-product-features.md`         |
+| Entity/domain model                                                       | `docs/02-domain-model.md`             |
+| Quyết định kiến trúc, service boundary, scale (SFU/matching-shard/ledger) | `docs/03-architecture.md`             |
+| Chọn công nghệ                                                            | `docs/04-tech-stack.md`               |
+| Coding convention, cấu trúc thư mục                                       | `docs/05-coding-standards.md`         |
+| Domain rule cụ thể (free-call time, VIP, trust score...)                  | `docs/06-domain-rules.md`             |
+| Đang ở giai đoạn nào, làm gì tiếp                                         | `docs/07-roadmap.md`                  |
+| Quy trình giao việc/review theo giai đoạn                                 | `docs/08-working-with-claude-code.md` |
+| Lỗi hay gặp cần tránh khi triển khai                                      | `docs/09-practical-notes.md`          |
+| **Tự review trước khi báo "xong"**                                        | `docs/10-code-review-checklist.md`    |
 
 ## Quy trình làm việc mặc định
 

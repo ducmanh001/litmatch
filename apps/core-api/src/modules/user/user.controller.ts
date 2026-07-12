@@ -1,5 +1,17 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch } from '@nestjs/common';
-import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 
 import { UserService } from './user.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -18,20 +30,31 @@ export class UserController {
   @ApiOperation({ summary: 'Profile của chính mình' })
   @ApiOkResponse({ type: MyProfileDto })
   async getMe(@CurrentUser() user: AuthenticatedUser): Promise<MyProfileDto> {
-    return MyProfileDto.from(await this.userService.getByIdOrThrow(user.userId));
+    return MyProfileDto.from(
+      await this.userService.getByIdOrThrow(user.userId),
+    );
   }
 
   @Patch('me')
   @ApiOperation({ summary: 'Cập nhật profile của chính mình' })
   @ApiOkResponse({ type: MyProfileDto })
-  async updateMe(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateProfileDto): Promise<MyProfileDto> {
-    return MyProfileDto.from(await this.userService.updateProfile(user.userId, dto));
+  async updateMe(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: UpdateProfileDto,
+  ): Promise<MyProfileDto> {
+    return MyProfileDto.from(
+      await this.userService.updateProfile(user.userId, dto),
+    );
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Profile công khai (tối thiểu, giữ ẩn danh) của user khác' })
+  @ApiOperation({
+    summary: 'Profile công khai (tối thiểu, giữ ẩn danh) của user khác',
+  })
   @ApiOkResponse({ type: PublicProfileDto })
-  async getPublicProfile(@Param('id', ParseUUIDPipe) id: string): Promise<PublicProfileDto> {
+  async getPublicProfile(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<PublicProfileDto> {
     return PublicProfileDto.from(await this.userService.getByIdOrThrow(id));
   }
 }

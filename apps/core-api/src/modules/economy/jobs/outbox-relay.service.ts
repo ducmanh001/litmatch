@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnApplicationBootstrap,
+  OnApplicationShutdown,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { InjectDataSource } from '@nestjs/typeorm';
@@ -17,7 +22,9 @@ const BATCH_SIZE = 100;
  * publish Kafka rồi đánh dấu. Bật/tắt bằng ECONOMY_OUTBOX_RELAY_ENABLED.
  */
 @Injectable()
-export class OutboxRelayService implements OnApplicationBootstrap, OnApplicationShutdown {
+export class OutboxRelayService
+  implements OnApplicationBootstrap, OnApplicationShutdown
+{
   private readonly logger = new Logger(OutboxRelayService.name);
   private producer: Producer | null = null;
   private running = false;
@@ -29,25 +36,36 @@ export class OutboxRelayService implements OnApplicationBootstrap, OnApplication
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
-    if (!this.config.getOrThrow('ECONOMY_OUTBOX_RELAY_ENABLED', { infer: true })) return;
+    if (
+      !this.config.getOrThrow('ECONOMY_OUTBOX_RELAY_ENABLED', { infer: true })
+    )
+      return;
 
     const kafka = new Kafka({
       clientId: 'core-api-outbox-relay',
-      brokers: this.config.getOrThrow('KAFKA_BROKERS', { infer: true }).split(','),
+      brokers: this.config
+        .getOrThrow('KAFKA_BROKERS', { infer: true })
+        .split(','),
     });
     this.producer = kafka.producer();
     await this.producer.connect();
 
     const interval = setInterval(
-      () => void this.flushOnce().catch((err) => this.logger.error({ err: `${err}` }, 'Outbox relay lỗi')),
-      this.config.getOrThrow('ECONOMY_OUTBOX_RELAY_INTERVAL_MS', { infer: true }),
+      () =>
+        void this.flushOnce().catch((err) =>
+          this.logger.error({ err: `${err}` }, 'Outbox relay lỗi'),
+        ),
+      this.config.getOrThrow('ECONOMY_OUTBOX_RELAY_INTERVAL_MS', {
+        infer: true,
+      }),
     );
     this.scheduler.addInterval(RELAY_JOB, interval);
     this.logger.log('Outbox relay đã bật');
   }
 
   async onApplicationShutdown(): Promise<void> {
-    if (this.scheduler.doesExist('interval', RELAY_JOB)) this.scheduler.deleteInterval(RELAY_JOB);
+    if (this.scheduler.doesExist('interval', RELAY_JOB))
+      this.scheduler.deleteInterval(RELAY_JOB);
     await this.producer?.disconnect();
   }
 
@@ -72,12 +90,24 @@ export class OutboxRelayService implements OnApplicationBootstrap, OnApplication
           try {
             await this.producer?.send({
               topic: event.topic,
-              messages: [{ key: event.eventType, value: JSON.stringify({ id: event.id, type: event.eventType, ...event.payload }) }],
+              messages: [
+                {
+                  key: event.eventType,
+                  value: JSON.stringify({
+                    id: event.id,
+                    type: event.eventType,
+                    ...event.payload,
+                  }),
+                },
+              ],
             });
             event.publishedAt = new Date();
           } catch (err) {
             event.attempts += 1;
-            this.logger.error({ eventId: event.id, err: `${err}` }, 'Publish event thất bại, sẽ retry');
+            this.logger.error(
+              { eventId: event.id, err: `${err}` },
+              'Publish event thất bại, sẽ retry',
+            );
           }
         }
         await manager.save(events);

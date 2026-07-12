@@ -13,7 +13,10 @@ export abstract class SmsProvider {
  * Chặn cứng ở production — bootstrap fail ngay thay vì âm thầm không gửi được SMS.
  */
 @Injectable()
-export class DevSmsProvider extends SmsProvider implements OnApplicationBootstrap {
+export class DevSmsProvider
+  extends SmsProvider
+  implements OnApplicationBootstrap
+{
   private readonly logger = new Logger(DevSmsProvider.name);
 
   constructor(private readonly config: ConfigService<CoreApiEnv, true>) {
@@ -22,7 +25,9 @@ export class DevSmsProvider extends SmsProvider implements OnApplicationBootstra
 
   onApplicationBootstrap(): void {
     if (this.config.get('NODE_ENV', { infer: true }) === 'production') {
-      throw new Error('DevSmsProvider không được dùng ở production — cấu hình SmsProvider thật trước khi deploy');
+      throw new Error(
+        'DevSmsProvider không được dùng ở production — cấu hình SmsProvider thật trước khi deploy',
+      );
     }
   }
 

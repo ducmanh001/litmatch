@@ -23,16 +23,25 @@ export const SPEEDUP_RATE_WINDOW_SECONDS = 3600;
  */
 
 /** Vào queue — theo (user, Idempotency-Key client gửi). */
-export function joinIdempotencyKey(userId: string, idempotencyKey: string): string {
+export function joinIdempotencyKey(
+  userId: string,
+  idempotencyKey: string,
+): string {
   return `matching:join:${userId}:${idempotencyKey}`;
 }
 
 /** Speed-up trả diamond — theo (user, Idempotency-Key client gửi); economy dùng nguyên chuỗi này làm key giao dịch. */
-export function speedupIdempotencyKey(userId: string, idempotencyKey: string): string {
+export function speedupIdempotencyKey(
+  userId: string,
+  idempotencyKey: string,
+): string {
   return `matching:speedup:${userId}:${idempotencyKey}`;
 }
 
 /** Sweeper requeue bên đã confirm — tất định theo (session, ticket cũ), sweeper chạy lại không tạo ticket đôi. */
-export function requeueIdempotencyKey(sessionId: string, expiredTicketId: string): string {
+export function requeueIdempotencyKey(
+  sessionId: string,
+  expiredTicketId: string,
+): string {
   return `matching:requeue:${sessionId}:${expiredTicketId}`;
 }

@@ -11,13 +11,16 @@
 export const ECONOMY_EVENTS_TOPIC = 'litmatch.economy.events';
 
 /** Unique constraint idempotency trên bảng transactions (migration economy-ledger) — chốt chặn replay (docs/05 § 5.10). */
-export const UQ_TRANSACTIONS_IDEMPOTENCY_KEY = 'uq_transactions_idempotency_key';
+export const UQ_TRANSACTIONS_IDEMPOTENCY_KEY =
+  'uq_transactions_idempotency_key';
 
 // ---------- Google (hạ tầng cố định, không đổi theo môi trường — docs/05 § 5.1 case 3) ----------
 
 /** Google Play Developer API — verify purchase + quét Voided Purchases. */
-export const ANDROID_PUBLISHER_API_BASE = 'https://androidpublisher.googleapis.com/androidpublisher/v3';
-export const ANDROID_PUBLISHER_SCOPE = 'https://www.googleapis.com/auth/androidpublisher';
+export const ANDROID_PUBLISHER_API_BASE =
+  'https://androidpublisher.googleapis.com/androidpublisher/v3';
+export const ANDROID_PUBLISHER_SCOPE =
+  'https://www.googleapis.com/auth/androidpublisher';
 
 /** Token endpoint cố định của Google OAuth2 — vừa là audience của JWT assertion, vừa là URL đổi token. */
 export const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -28,8 +31,10 @@ export const GOOGLE_PURCHASE_STATE_PURCHASED = 0;
 // ---------- Apple (hạ tầng cố định) ----------
 
 /** Endpoint verifyReceipt (legacy API) — quy tắc Apple: thử production trước, sandbox receipt thì gọi lại endpoint sandbox. */
-export const APPLE_VERIFY_RECEIPT_URL = 'https://buy.itunes.apple.com/verifyReceipt';
-export const APPLE_VERIFY_RECEIPT_SANDBOX_URL = 'https://sandbox.itunes.apple.com/verifyReceipt';
+export const APPLE_VERIFY_RECEIPT_URL =
+  'https://buy.itunes.apple.com/verifyReceipt';
+export const APPLE_VERIFY_RECEIPT_SANDBOX_URL =
+  'https://sandbox.itunes.apple.com/verifyReceipt';
 
 /** Status verifyReceipt của Apple: 0 = hợp lệ; 21007 = receipt sandbox gửi vào endpoint production. */
 export const APPLE_STATUS_OK = 0;
@@ -37,7 +42,8 @@ export const APPLE_STATUS_SANDBOX_RECEIPT = 21007;
 
 /** App Store Server API — job quét Refund History; chọn prod/sandbox theo ECONOMY_APPLE_SERVER_API_ENV. */
 export const APPLE_SERVER_API_URL = 'https://api.storekit.itunes.apple.com';
-export const APPLE_SERVER_API_SANDBOX_URL = 'https://api.storekit-sandbox.itunes.apple.com';
+export const APPLE_SERVER_API_SANDBOX_URL =
+  'https://api.storekit-sandbox.itunes.apple.com';
 
 /** Audience bắt buộc trong JWT gọi App Store Server API (theo spec Apple). */
 export const APPSTORE_CONNECT_AUDIENCE = 'appstoreconnect-v1';

@@ -22,18 +22,27 @@ export interface IssuedTokens {
 @Injectable()
 export class TokenService {
   constructor(
-    @InjectRepository(RefreshToken) private readonly refreshRepo: Repository<RefreshToken>,
+    @InjectRepository(RefreshToken)
+    private readonly refreshRepo: Repository<RefreshToken>,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService<CoreApiEnv, true>,
   ) {}
 
-  async issueForUser(userId: string, isGuest: boolean, familyId?: string): Promise<IssuedTokens> {
-    const expiresIn = this.config.getOrThrow('JWT_ACCESS_TTL_SECONDS', { infer: true });
+  async issueForUser(
+    userId: string,
+    isGuest: boolean,
+    familyId?: string,
+  ): Promise<IssuedTokens> {
+    const expiresIn = this.config.getOrThrow('JWT_ACCESS_TTL_SECONDS', {
+      infer: true,
+    });
     const payload: AccessTokenPayload = { sub: userId, isGuest };
     const accessToken = await this.jwtService.signAsync(payload, { expiresIn });
 
     const refreshPlain = randomBytes(REFRESH_TOKEN_BYTES).toString('base64url');
-    const ttlDays = this.config.getOrThrow('AUTH_REFRESH_TTL_DAYS', { infer: true });
+    const ttlDays = this.config.getOrThrow('AUTH_REFRESH_TTL_DAYS', {
+      infer: true,
+    });
     await this.refreshRepo.save(
       this.refreshRepo.create({
         userId,
@@ -51,10 +60,18 @@ export class TokenService {
    * đánh dấu rotated bằng UPDATE có điều kiện `rotated_at IS NULL` — 2 request song song
    * cùng 1 token thì chỉ 1 request thắng; request thua rơi vào nhánh reuse → revoke cả family.
    */
-  async rotate(refreshPlain: string): Promise<{ userId: string; tokens: IssuedTokens }> {
-    const token = await this.refreshRepo.findOneBy({ tokenHash: this.hash(refreshPlain) });
+  async rotate(
+    refreshPlain: string,
+  ): Promise<{ userId: string; tokens: IssuedTokens }> {
+    const token = await this.refreshRepo.findOneBy({
+      tokenHash: this.hash(refreshPlain),
+    });
     if (!token || token.revokedAt || token.expiresAt < new Date()) {
-      throw new DomainException(AuthErrors.REFRESH_TOKEN_INVALID, 'Refresh token không hợp lệ', HttpStatus.UNAUTHORIZED);
+      throw new DomainException(
+        AuthErrors.REFRESH_TOKEN_INVALID,
+        'Refresh token không hợp lệ',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
 
     const marked = await this.refreshRepo.update(
@@ -64,7 +81,11 @@ export class TokenService {
     if (!marked.affected) {
       // Token đã rotate trước đó mà lại được dùng lần nữa → nghi bị đánh cắp, revoke cả family
       await this.revokeFamily(token.familyId);
-      throw new DomainException(AuthErrors.REFRESH_TOKEN_REUSED, 'Refresh token đã bị dùng lại — phiên bị thu hồi', HttpStatus.UNAUTHORIZED);
+      throw new DomainException(
+        AuthErrors.REFRESH_TOKEN_REUSED,
+        'Refresh token đã bị dùng lại — phiên bị thu hồi',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
 
     const tokens = await this.issueForUser(token.userId, false, token.familyId);
@@ -80,7 +101,10 @@ export class TokenService {
   }
 
   async revokeFamily(familyId: string): Promise<void> {
-    await this.refreshRepo.update({ familyId, revokedAt: IsNull() }, { revokedAt: new Date() });
+    await this.refreshRepo.update(
+      { familyId, revokedAt: IsNull() },
+      { revokedAt: new Date() },
+    );
   }
 
   /** SHA-256 đủ cho token REFRESH_TOKEN_BYTES-byte entropy cao (không phải password) — không cần bcrypt. */

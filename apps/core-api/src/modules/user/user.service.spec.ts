@@ -13,7 +13,10 @@ describe('UserService', () => {
     save: jest.fn((u: User) => Promise.resolve(u)),
   };
   const config = {
-    getOrThrow: jest.fn((key: string) => ({ AUTH_MIN_AGE: 18, USER_DEFAULT_AVATAR_ID: 'default-01' })[key]),
+    getOrThrow: jest.fn(
+      (key: string) =>
+        ({ AUTH_MIN_AGE: 18, USER_DEFAULT_AVATAR_ID: 'default-01' })[key],
+    ),
   };
   let service: UserService;
 
@@ -44,7 +47,10 @@ describe('UserService', () => {
 
   it('cập nhật profile hợp lệ', async () => {
     repo.findOneBy.mockResolvedValue(activeUser());
-    const updated = await service.updateProfile('u1', { nickname: 'Mưa Đêm', birthDate: '1995-05-20' });
+    const updated = await service.updateProfile('u1', {
+      nickname: 'Mưa Đêm',
+      birthDate: '1995-05-20',
+    });
     expect(updated.nickname).toBe('Mưa Đêm');
     expect(updated.birthDate).toBe('1995-05-20');
   });
@@ -54,20 +60,29 @@ describe('UserService', () => {
     const recent = new Date();
     recent.setFullYear(recent.getFullYear() - 15);
     await expect(
-      service.updateProfile('u1', { birthDate: recent.toISOString().slice(0, 10) }),
-    ).rejects.toMatchObject({ code: UserErrors.PROFILE_AGE_BELOW_MINIMUM, httpStatus: 422 });
+      service.updateProfile('u1', {
+        birthDate: recent.toISOString().slice(0, 10),
+      }),
+    ).rejects.toMatchObject({
+      code: UserErrors.PROFILE_AGE_BELOW_MINIMUM,
+      httpStatus: 422,
+    });
     expect(repo.save).not.toHaveBeenCalled();
   });
 
   it('chặn birthDate ở tương lai', async () => {
     repo.findOneBy.mockResolvedValue(activeUser());
-    await expect(service.updateProfile('u1', { birthDate: '2999-01-01' })).rejects.toMatchObject({
+    await expect(
+      service.updateProfile('u1', { birthDate: '2999-01-01' }),
+    ).rejects.toMatchObject({
       code: UserErrors.PROFILE_BIRTH_DATE_INVALID,
     });
   });
 
   it('user không tồn tại → 404 domain error', async () => {
     repo.findOneBy.mockResolvedValue(null);
-    await expect(service.getByIdOrThrow('nope')).rejects.toBeInstanceOf(DomainException);
+    await expect(service.getByIdOrThrow('nope')).rejects.toBeInstanceOf(
+      DomainException,
+    );
   });
 });

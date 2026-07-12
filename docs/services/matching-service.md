@@ -59,13 +59,13 @@ Mọi transition khác throw `MATCHING_TICKET_INVALID_TRANSITION`.
 
 ## 6. API (`api/v1/matching`)
 
-| Endpoint | Idempotency-Key | Mô tả |
-|---|---|---|
-| `POST /matching/tickets` | có | Vào hàng đợi — 409 `MATCHING_TICKET_ALREADY_QUEUED` nếu đã có ticket active (khớp partial unique index) |
-| `DELETE /matching/tickets/:id` | không | Huỷ ticket của chính mình (check ownership — IDOR, docs/10 § 10.1.D) |
-| `GET /matching/tickets/:id` | không | Trạng thái ticket (poll) |
-| `POST /matching/tickets/:id/confirm` | không | Xác nhận match — check ownership + đúng session đang `pending_confirm` |
-| `POST /matching/tickets/:id/speedup` | có | Trừ diamond ưu tiên — xem § 4 |
+| Endpoint                             | Idempotency-Key | Mô tả                                                                                                   |
+| ------------------------------------ | --------------- | ------------------------------------------------------------------------------------------------------- |
+| `POST /matching/tickets`             | có              | Vào hàng đợi — 409 `MATCHING_TICKET_ALREADY_QUEUED` nếu đã có ticket active (khớp partial unique index) |
+| `DELETE /matching/tickets/:id`       | không           | Huỷ ticket của chính mình (check ownership — IDOR, docs/10 § 10.1.D)                                    |
+| `GET /matching/tickets/:id`          | không           | Trạng thái ticket (poll)                                                                                |
+| `POST /matching/tickets/:id/confirm` | không           | Xác nhận match — check ownership + đúng session đang `pending_confirm`                                  |
+| `POST /matching/tickets/:id/speedup` | có              | Trừ diamond ưu tiên — xem § 4                                                                           |
 
 ## 7. Domain rule tái xác nhận tại thời điểm ghép (docs/10 § 10.0.C)
 

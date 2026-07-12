@@ -4,7 +4,13 @@ import { Throttle, minutes } from '@nestjs/throttler';
 
 import { AuthService } from './auth.service';
 import { AuthTokensDto } from './dto/auth-tokens.dto';
-import { GuestLoginDto, RefreshDto, RequestOtpDto, SocialLoginDto, VerifyOtpDto } from './dto/auth-request.dtos';
+import {
+  GuestLoginDto,
+  RefreshDto,
+  RequestOtpDto,
+  SocialLoginDto,
+  VerifyOtpDto,
+} from './dto/auth-request.dtos';
 import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('auth')
@@ -15,7 +21,10 @@ export class AuthController {
 
   @Post('guest')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Đăng nhập guest bằng deviceId (tài khoản dùng thử, tính năng bị giới hạn — docs/06)' })
+  @ApiOperation({
+    summary:
+      'Đăng nhập guest bằng deviceId (tài khoản dùng thử, tính năng bị giới hạn — docs/06)',
+  })
   @ApiOkResponse({ type: AuthTokensDto })
   guest(@Body() dto: GuestLoginDto): Promise<AuthTokensDto> {
     return this.authService.guestLogin(dto.deviceId);
@@ -40,7 +49,9 @@ export class AuthController {
 
   @Post('social')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Đăng nhập bằng Google/Apple ID token (server tự verify chữ ký)' })
+  @ApiOperation({
+    summary: 'Đăng nhập bằng Google/Apple ID token (server tự verify chữ ký)',
+  })
   @ApiOkResponse({ type: AuthTokensDto })
   social(@Body() dto: SocialLoginDto): Promise<AuthTokensDto> {
     return this.authService.socialLogin(dto.provider, dto.idToken);
@@ -48,7 +59,9 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Đổi refresh token lấy cặp token mới (rotation, phát hiện reuse)' })
+  @ApiOperation({
+    summary: 'Đổi refresh token lấy cặp token mới (rotation, phát hiện reuse)',
+  })
   @ApiOkResponse({ type: AuthTokensDto })
   refresh(@Body() dto: RefreshDto): Promise<AuthTokensDto> {
     return this.authService.refresh(dto.refreshToken);

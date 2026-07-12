@@ -46,12 +46,14 @@ Chia 8 service từ ngày 0 nghĩa là: 8 lần deploy, 8 lần theo dõi log, 8
 ## 3.3 Vì sao Signaling Gateway + Media Server luôn phải tách riêng (2 ngoại lệ bắt buộc)
 
 Đây không phải chọn theo sở thích — 2 lý do kỹ thuật rõ ràng:
+
 - **Media Server (mediasoup)** vốn dĩ chạy dưới dạng subprocess C++ riêng biệt theo thiết kế của chính thư viện — không thể chung process với NestJS. Đây gọi là **Sidecar Pattern**: tầng signaling (biết ai đang ở phòng nào, quyền gì, gọi Economy Service để trừ tiền) tách khỏi tầng media (chỉ "cơ bắp" chuyển tiếp gói RTP, không có business logic, không query DB) — 2 tầng deploy như 2 container riêng nhưng luôn đi cùng nhau.
 - **Signaling Gateway** cần scale theo số lượng **kết nối đồng thời** (connection-bound), khác hẳn quy luật scale của phần business logic (CPU/DB-bound) — nên tách riêng để scale ngang độc lập mà không kéo theo cả monolith.
 
 ## 3.4 Tiêu chí tách 1 module ra thành service riêng (dùng khi cần mở rộng sau này)
 
 Chỉ tách 1 module ra khỏi `core-api` khi có **ít nhất 1** lý do cụ thể sau, không tách "cho giống công ty lớn":
+
 1. Cần scale độc lập với tốc độ khác hẳn phần còn lại (đo được bằng số liệu thật, không phải dự đoán)
 2. Cần công nghệ nền khác hẳn (vd cần chạy trên GPU, cần ngôn ngữ khác)
 3. Cần cô lập bảo mật/tuân thủ riêng (vd Economy cần audit riêng theo luật tài chính)
@@ -70,7 +72,7 @@ Feed, Content, Avatar, Moderation, Notification gần như chắc chắn **khôn
 
 ## 3.6 Xử lý giao dịch xuyên module (Match → Call → Billing) — Saga, không dùng 2PC
 
-Luồng `Matching → Calling → Economy` chạm vào nhiều module, không thể bọc trong 1 transaction DB chung (dù đang là modular monolith thì các module *nên* coi dữ liệu của nhau là riêng biệt, để dễ tách service sau này mà không phải viết lại logic).
+Luồng `Matching → Calling → Economy` chạm vào nhiều module, không thể bọc trong 1 transaction DB chung (dù đang là modular monolith thì các module _nên_ coi dữ liệu của nhau là riêng biệt, để dễ tách service sau này mà không phải viết lại logic).
 
 - Vì đây là luồng tuyến tính, khá ít bước (match found → call started → billing tick → call ended → settle cuối), lại là luồng đụng tới tiền cần audit rõ ràng — dùng **orchestration nhẹ**: 1 `CallOrchestratorService` gọi tuần tự từng bước, biết chính xác cách rollback (compensate) khi 1 bước fail giữa chừng. Orchestration phù hợp hơn choreography ở đây vì cho khả năng quan sát và kiểm soát rõ ràng — quan trọng khi tiền bạc liên quan.
 - Các việc phụ không ảnh hưởng tính đúng đắn của giao dịch (gửi notification, ghi analytics khi call kết thúc) thì dùng **choreography** — publish event, module nào cần thì tự subscribe, không cần orchestrator biết tới. Đây là cách kết hợp hybrid: orchestration cho luồng chính liên quan tiền, choreography cho việc phụ.
@@ -111,4 +113,5 @@ Luồng `Matching → Calling → Economy` chạm vào nhiều module, không th
 - Ở giai đoạn scale thật, cân nhắc PostgreSQL với constraint chặt + partition theo thời gian là đủ cho phần lớn trường hợp; chỉ cân nhắc engine ledger chuyên dụng (vd TigerBeetle) nếu throughput giao dịch tiền vượt quá khả năng Postgres đã tối ưu (đây là quyết định đo bằng số liệu thật, không phải mặc định).
 
 ---
+
 [← 02 · Domain Model](./02-domain-model.md) · [04 · Tech Stack →](./04-tech-stack.md)

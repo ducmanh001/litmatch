@@ -3,7 +3,12 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 
-import { buildCursorPage, CursorPageQueryDto, decodeCursor, encodeCursor } from './cursor-pagination';
+import {
+  buildCursorPage,
+  CursorPageQueryDto,
+  decodeCursor,
+  encodeCursor,
+} from './cursor-pagination';
 
 describe('CursorPageQueryDto', () => {
   it('mặc định limit = 20', () => {
@@ -18,7 +23,10 @@ describe('CursorPageQueryDto', () => {
   });
 
   it('ép kiểu limit từ query string', () => {
-    const dto = plainToInstance(CursorPageQueryDto, { limit: '50', cursor: 'abc' });
+    const dto = plainToInstance(CursorPageQueryDto, {
+      limit: '50',
+      cursor: 'abc',
+    });
     expect(validateSync(dto)).toHaveLength(0);
     expect(dto.limit).toBe(50);
   });

@@ -5,7 +5,13 @@ export default [
   ...nx.configs['flat/typescript'],
   ...nx.configs['flat/javascript'],
   {
-    ignores: ['**/dist', '**/node_modules', '**/webpack.config.js', '**/jest.config.cts', '.nx/**'],
+    ignores: [
+      '**/dist',
+      '**/node_modules',
+      '**/webpack.config.js',
+      '**/jest.config.cts',
+      '.nx/**',
+    ],
   },
   {
     files: ['**/*.ts'],

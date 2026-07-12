@@ -13,9 +13,9 @@
 
 <!-- Dán nguyên mục 2 từ output `/review-module verify`. Verdict: ✅ chặn đúng · ❌ không chặn · ⚠️ cần quyết định -->
 
-| # | Giả định | Ai phá / phá bằng cách nào | Chặn ở đâu (file:line) | Verdict |
-|---|---|---|---|---|
-|   |          |                            |                        |         |
+| #   | Giả định | Ai phá / phá bằng cách nào | Chặn ở đâu (file:line) | Verdict |
+| --- | -------- | -------------------------- | ---------------------- | ------- |
+|     |          |                            |                        |         |
 
 ## Checklist trước khi xin review
 

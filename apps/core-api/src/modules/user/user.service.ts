@@ -26,11 +26,16 @@ export class UserService {
    * Tạo user mới — nhận EntityManager để Auth module gọi trong CÙNG transaction
    * với việc tạo AuthIdentity (tránh user mồ côi khi 1 trong 2 bước fail).
    */
-  async createWithManager(manager: EntityManager, input: CreateUserInput): Promise<User> {
+  async createWithManager(
+    manager: EntityManager,
+    input: CreateUserInput,
+  ): Promise<User> {
     const user = manager.create(User, {
       nickname: input.nickname,
       gender: Gender.Unknown,
-      avatarId: this.config.getOrThrow('USER_DEFAULT_AVATAR_ID', { infer: true }),
+      avatarId: this.config.getOrThrow('USER_DEFAULT_AVATAR_ID', {
+        infer: true,
+      }),
       isGuest: input.isGuest,
       status: UserStatus.Active,
     });
@@ -40,7 +45,11 @@ export class UserService {
   async getByIdOrThrow(id: string): Promise<User> {
     const user = await this.userRepo.findOneBy({ id });
     if (!user) {
-      throw new DomainException(UserErrors.PROFILE_NOT_FOUND, 'Không tìm thấy user', HttpStatus.NOT_FOUND);
+      throw new DomainException(
+        UserErrors.PROFILE_NOT_FOUND,
+        'Không tìm thấy user',
+        HttpStatus.NOT_FOUND,
+      );
     }
     return user;
   }
@@ -68,9 +77,17 @@ export class UserService {
     const parsed = new Date(birthDate);
     const now = new Date();
     if (Number.isNaN(parsed.getTime()) || parsed > now) {
-      throw new DomainException(UserErrors.PROFILE_BIRTH_DATE_INVALID, 'Ngày sinh không hợp lệ', HttpStatus.UNPROCESSABLE_ENTITY);
+      throw new DomainException(
+        UserErrors.PROFILE_BIRTH_DATE_INVALID,
+        'Ngày sinh không hợp lệ',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
     }
-    const cutoff = new Date(now.getFullYear() - minAge, now.getMonth(), now.getDate());
+    const cutoff = new Date(
+      now.getFullYear() - minAge,
+      now.getMonth(),
+      now.getDate(),
+    );
     if (parsed > cutoff) {
       throw new DomainException(
         UserErrors.PROFILE_AGE_BELOW_MINIMUM,

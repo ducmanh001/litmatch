@@ -14,7 +14,9 @@ import type { Socket } from 'socket.io';
  * Gateway KHÔNG chứa business logic (docs/03 § 3.3) — mọi quyết định hỏi core-api.
  */
 @WebSocketGateway({ namespace: '/signaling', cors: false })
-export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class SignalingGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   private readonly logger = new Logger(SignalingGateway.name);
 
   handleConnection(client: Socket): void {

@@ -19,7 +19,8 @@ import type { AuthTokensDto } from './dto/auth-tokens.dto';
 @Injectable()
 export class AuthService {
   constructor(
-    @InjectRepository(AuthIdentity) private readonly identityRepo: Repository<AuthIdentity>,
+    @InjectRepository(AuthIdentity)
+    private readonly identityRepo: Repository<AuthIdentity>,
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly userService: UserService,
     private readonly tokenService: TokenService,
@@ -28,7 +29,10 @@ export class AuthService {
   ) {}
 
   async guestLogin(deviceId: string): Promise<AuthTokensDto> {
-    const user = await this.findOrCreateUser(AuthProvider.Guest, deviceId, { isGuest: true, nicknamePrefix: 'Khách' });
+    const user = await this.findOrCreateUser(AuthProvider.Guest, deviceId, {
+      isGuest: true,
+      nicknamePrefix: 'Khách',
+    });
     return this.issue(user);
   }
 
@@ -38,13 +42,22 @@ export class AuthService {
 
   async verifyOtpAndLogin(phone: string, code: string): Promise<AuthTokensDto> {
     await this.otpService.verifyOtp(phone, code);
-    const user = await this.findOrCreateUser(AuthProvider.Phone, phone, { isGuest: false, nicknamePrefix: 'User' });
+    const user = await this.findOrCreateUser(AuthProvider.Phone, phone, {
+      isGuest: false,
+      nicknamePrefix: 'User',
+    });
     return this.issue(user);
   }
 
-  async socialLogin(provider: AuthProvider, idToken: string): Promise<AuthTokensDto> {
+  async socialLogin(
+    provider: AuthProvider,
+    idToken: string,
+  ): Promise<AuthTokensDto> {
     const identity = await this.socialVerifier.verify(provider, idToken);
-    const user = await this.findOrCreateUser(provider, identity.uid, { isGuest: false, nicknamePrefix: 'User' });
+    const user = await this.findOrCreateUser(provider, identity.uid, {
+      isGuest: false,
+      nicknamePrefix: 'User',
+    });
     return this.issue(user);
   }
 
@@ -75,9 +88,14 @@ export class AuthService {
     providerUid: string,
     opts: { isGuest: boolean; nicknamePrefix: string },
   ): Promise<User> {
-    const existing = await this.identityRepo.findOneBy({ provider, providerUid });
+    const existing = await this.identityRepo.findOneBy({
+      provider,
+      providerUid,
+    });
     if (existing) {
-      return this.assertActive(await this.userService.getByIdOrThrow(existing.userId));
+      return this.assertActive(
+        await this.userService.getByIdOrThrow(existing.userId),
+      );
     }
 
     try {
@@ -86,13 +104,24 @@ export class AuthService {
           nickname: `${opts.nicknamePrefix}-${randomInt(100000, 999999)}`,
           isGuest: opts.isGuest,
         });
-        await manager.save(manager.create(AuthIdentity, { userId: user.id, provider, providerUid }));
+        await manager.save(
+          manager.create(AuthIdentity, {
+            userId: user.id,
+            provider,
+            providerUid,
+          }),
+        );
         return user;
       });
     } catch (err) {
       if (isUniqueViolation(err)) {
-        const identity = await this.identityRepo.findOneByOrFail({ provider, providerUid });
-        return this.assertActive(await this.userService.getByIdOrThrow(identity.userId));
+        const identity = await this.identityRepo.findOneByOrFail({
+          provider,
+          providerUid,
+        });
+        return this.assertActive(
+          await this.userService.getByIdOrThrow(identity.userId),
+        );
       }
       throw err;
     }
@@ -100,7 +129,11 @@ export class AuthService {
 
   private assertActive(user: User): User {
     if (user.status !== UserStatus.Active) {
-      throw new DomainException(AuthErrors.USER_BANNED, 'Tài khoản đã bị khoá', HttpStatus.FORBIDDEN);
+      throw new DomainException(
+        AuthErrors.USER_BANNED,
+        'Tài khoản đã bị khoá',
+        HttpStatus.FORBIDDEN,
+      );
     }
     return user;
   }

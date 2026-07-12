@@ -1,4 +1,7 @@
-import { baseEnvSchema, createConfigValidator } from '@litmatch/config-validator';
+import {
+  baseEnvSchema,
+  createConfigValidator,
+} from '@litmatch/config-validator';
 import * as Joi from 'joi';
 
 /**

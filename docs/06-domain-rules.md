@@ -16,7 +16,7 @@
 - **Hết diamond giữa call đang tính phí**: cảnh báo trước khi hết (config, vd khi còn đủ 1 phút), hết thật thì **kết thúc call ngay ở tick kế tiếp** — không cho số dư âm, không grace period trừ khi config bật riêng.
 - **Rớt kết nối giữa call**: có **reconnect window** (config, mặc định 30 giây) — trong window billing tạm dừng; quá window thì call kết thúc và settle theo thời gian đã dùng thật.
 - **Đăng ký/đăng nhập**: phone OTP hoặc social login (Google/Apple/Facebook) + **guest account** dùng thử. Guest bị giới hạn: không nạp diamond, không nhận điểm quy đổi từ gift, giới hạn match/ngày chặt hơn — cho tới khi gắn số điện thoại/social.
-- **Nâng cấp guest → tài khoản thật**: giữ **nguyên `userId`** (cùng `Wallet`, cùng lịch sử ledger, không tạo user mới) — nâng cấp là *gắn thêm* phone/social vào user đang có, không migrate dữ liệu sang user khác. Nếu số điện thoại/social đã gắn với 1 user thật khác → không cho merge tự động (tránh gộp nhầm ledger 2 người), báo lỗi để user đăng nhập vào tài khoản cũ.
+- **Nâng cấp guest → tài khoản thật**: giữ **nguyên `userId`** (cùng `Wallet`, cùng lịch sử ledger, không tạo user mới) — nâng cấp là _gắn thêm_ phone/social vào user đang có, không migrate dữ liệu sang user khác. Nếu số điện thoại/social đã gắn với 1 user thật khác → không cho merge tự động (tránh gộp nhầm ledger 2 người), báo lỗi để user đăng nhập vào tài khoản cũ.
 - **Chống farm guest**: guest tạo hàng loạt để cày free match/thưởng là vector lạm dụng — giới hạn số guest theo device fingerprint + IP (config), free match/thưởng của guest tính theo device chứ không chỉ theo userId (tạo user mới không reset được quota), xem [10 § Trust & Safety](./10-code-review-checklist.md).
 - **Refund/chargeback IAP**: user hoàn tiền qua Apple/Google sau khi đã nạp (và có thể đã tiêu) diamond → hệ thống ghi **bút toán đảo**, `Wallet.balance` có thể **âm** (user nợ diamond), bị chặn tiêu tiếp tới khi nạp bù; refund-sau-tiêu lặp lại nhiều lần là tín hiệu gian lận → hạ trust score/khoá nạp. Chi tiết [services/economy-service.md § 5](./services/economy-service.md).
 - **Tuổi tối thiểu 18** (config theo thị trường nếu luật địa phương khác), khai sinh nhật lúc đăng ký; tài khoản chưa xác minh bị giới hạn tính năng; report liên quan trẻ vị thành niên xử lý ưu tiên cao nhất (xem [10-code-review-checklist.md § Trust & Safety](./10-code-review-checklist.md)).
@@ -26,4 +26,5 @@
 > Đây là danh sách tối thiểu, không đầy đủ. Khi phát hiện thêm 1 domain rule quan trọng trong lúc build, bổ sung vào file này ngay (không để trôi mất trong lịch sử chat).
 
 ---
+
 [← 05 · Coding Standards](./05-coding-standards.md) · [07 · Roadmap →](./07-roadmap.md)

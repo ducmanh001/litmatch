@@ -21,10 +21,16 @@ export interface BuildLoggerOptionsInput {
 export function buildPinoHttpOptions(input: BuildLoggerOptionsInput) {
   return {
     level: input.level,
-    redact: { paths: [...REDACT_PATHS, ...(input.extraRedactPaths ?? [])], censor: '[REDACTED]' },
+    redact: {
+      paths: [...REDACT_PATHS, ...(input.extraRedactPaths ?? [])],
+      censor: '[REDACTED]',
+    },
     genReqId: (req: IncomingMessage, res: ServerResponse) => {
       const fromHeader = req.headers['x-request-id'];
-      const id = typeof fromHeader === 'string' && fromHeader.length > 0 ? fromHeader : randomUUID();
+      const id =
+        typeof fromHeader === 'string' && fromHeader.length > 0
+          ? fromHeader
+          : randomUUID();
       res.setHeader('x-request-id', id);
       return id;
     },

@@ -18,16 +18,30 @@ import { LedgerEntry } from '../economy/entities/ledger-entry.entity';
 import { OutboxEvent } from '../economy/entities/outbox-event.entity';
 import { LedgerTransaction } from '../economy/entities/transaction.entity';
 import { Wallet } from '../economy/entities/wallet.entity';
-import { IapProduct, IapProvider, IapReceipt } from '../economy/entities/iap.entities';
+import {
+  IapProduct,
+  IapProvider,
+  IapReceipt,
+} from '../economy/entities/iap.entities';
 import { VipPlan } from '../economy/entities/vip-plan.entity';
 
 import { MatchingService } from './matching.service';
 import { MatchingErrors } from './matching.errors';
 import { MatcherWorkerService } from './jobs/matcher-worker.service';
 import { TicketSweeperService } from './jobs/ticket-sweeper.service';
-import { MatchTicket, MatchTicketStatus, MatchType } from './entities/match-ticket.entity';
-import { MatchSession, MatchSessionStatus } from './entities/match-session.entity';
-import { MATCHING_ACTIVE_SHARDS_KEY, matchingShardKey } from './redis/matching-redis.provider';
+import {
+  MatchTicket,
+  MatchTicketStatus,
+  MatchType,
+} from './entities/match-ticket.entity';
+import {
+  MatchSession,
+  MatchSessionStatus,
+} from './entities/match-session.entity';
+import {
+  MATCHING_ACTIVE_SHARDS_KEY,
+  matchingShardKey,
+} from './redis/matching-redis.provider';
 
 import type { ConfigService } from '@nestjs/config';
 import type { SchedulerRegistry } from '@nestjs/schedule';
@@ -50,7 +64,9 @@ const INTEGRATION_DB_URL = process.env['INTEGRATION_DB_URL'];
 const d = INTEGRATION_DB_URL ? describe : describe.skip;
 if (!INTEGRATION_DB_URL) {
   // eslint-disable-next-line no-console
-  console.warn('[matching.integration] BỎ QUA — set INTEGRATION_DB_URL để chạy bộ test race trên Postgres thật');
+  console.warn(
+    '[matching.integration] BỎ QUA — set INTEGRATION_DB_URL để chạy bộ test race trên Postgres thật',
+  );
 }
 
 jest.setTimeout(60_000);
@@ -94,12 +110,19 @@ d('Matching integration (Postgres + Redis thật)', () => {
   /** Policy stub thay cho Safety module (chưa tồn tại ở M1) — set để giả lập block SAU khi enqueue. */
   const blockedPairs = new Set<string>();
   const policyStub: MatchInteractionPolicy = {
-    canPair: async (a, b) => !blockedPairs.has(`${a}|${b}`) && !blockedPairs.has(`${b}|${a}`),
+    canPair: async (a, b) =>
+      !blockedPairs.has(`${a}|${b}`) && !blockedPairs.has(`${b}|${a}`),
   };
 
-  const auth = (userId: string): AuthenticatedUser => ({ userId, isGuest: false });
+  const auth = (userId: string): AuthenticatedUser => ({
+    userId,
+    isGuest: false,
+  });
 
-  async function createUser(nickname: string, opts: { region?: string | null; birthDate?: string | null } = {}): Promise<User> {
+  async function createUser(
+    nickname: string,
+    opts: { region?: string | null; birthDate?: string | null } = {},
+  ): Promise<User> {
     const repo = ds.getRepository(User);
     return repo.save(
       repo.create({
@@ -112,8 +135,16 @@ d('Matching integration (Postgres + Redis thật)', () => {
     );
   }
 
-  async function fund(userId: string, product = 'com.litmatch.diamond.1200'): Promise<void> {
-    await economy.creditFromIap(userId, IapProvider.Google, { devTransactionId: `fund-${userId}-${Date.now()}` }, product);
+  async function fund(
+    userId: string,
+    product = 'com.litmatch.diamond.1200',
+  ): Promise<void> {
+    await economy.creditFromIap(
+      userId,
+      IapProvider.Google,
+      { devTransactionId: `fund-${userId}-${Date.now()}` },
+      product,
+    );
   }
 
   beforeAll(async () => {
@@ -126,9 +157,15 @@ d('Matching integration (Postgres + Redis thật)', () => {
 
     const adminUrl = new URL(INTEGRATION_DB_URL as string);
     adminUrl.pathname = '/postgres';
-    const admin = new DataSource({ type: 'postgres', url: adminUrl.toString() });
+    const admin = new DataSource({
+      type: 'postgres',
+      url: adminUrl.toString(),
+    });
     await admin.initialize();
-    const exists = await admin.query(`SELECT 1 FROM pg_database WHERE datname = $1`, [dbName]);
+    const exists = await admin.query(
+      `SELECT 1 FROM pg_database WHERE datname = $1`,
+      [dbName],
+    );
     if (exists.length === 0) await admin.query(`CREATE DATABASE "${dbName}"`);
     await admin.destroy();
 
@@ -136,9 +173,20 @@ d('Matching integration (Postgres + Redis thật)', () => {
       type: 'postgres',
       url: matchingDbUrl,
       entities: [
-        User, AuthIdentity, RefreshToken, PhoneOtp,
-        LedgerAccount, LedgerTransaction, LedgerEntry, Wallet, IapProduct, IapReceipt, VipPlan, OutboxEvent,
-        MatchTicket, MatchSession,
+        User,
+        AuthIdentity,
+        RefreshToken,
+        PhoneOtp,
+        LedgerAccount,
+        LedgerTransaction,
+        LedgerEntry,
+        Wallet,
+        IapProduct,
+        IapReceipt,
+        VipPlan,
+        OutboxEvent,
+        MatchTicket,
+        MatchSession,
       ],
       migrations: [
         InitAuthUser1751900000000,
@@ -153,7 +201,9 @@ d('Matching integration (Postgres + Redis thật)', () => {
     await ds.initialize();
     await ds.runMigrations();
 
-    redis = new Redis(process.env['REDIS_URL'] ?? 'redis://localhost:6379', { db: 15 });
+    redis = new Redis(process.env['REDIS_URL'] ?? 'redis://localhost:6379', {
+      db: 15,
+    });
 
     const ledger = new LedgerService(ds);
     const stubVerifier = {
@@ -170,9 +220,28 @@ d('Matching integration (Postgres + Redis thật)', () => {
       stubVerifier,
     );
     const userService = new UserService(ds.getRepository(User), configStub);
-    matching = new MatchingService(ds, ds.getRepository(MatchTicket), userService, economy, configStub, redis);
-    worker = new MatcherWorkerService(ds, configStub, schedulerStub, redis, policyStub);
-    workerB = new MatcherWorkerService(ds, configStub, schedulerStub, redis, policyStub);
+    matching = new MatchingService(
+      ds,
+      ds.getRepository(MatchTicket),
+      userService,
+      economy,
+      configStub,
+      redis,
+    );
+    worker = new MatcherWorkerService(
+      ds,
+      configStub,
+      schedulerStub,
+      redis,
+      policyStub,
+    );
+    workerB = new MatcherWorkerService(
+      ds,
+      configStub,
+      schedulerStub,
+      redis,
+      policyStub,
+    );
     sweeper = new TicketSweeperService(ds, configStub, schedulerStub, redis);
   });
 
@@ -188,22 +257,36 @@ d('Matching integration (Postgres + Redis thật)', () => {
 
   it('joinQueue: ticket vào DB + Redis đúng shard; partial unique index chặn ticket active thứ 2 ở tầng DB', async () => {
     const u = await createUser('join-1');
-    const ticket = await matching.joinQueue(auth(u.id), { matchType: MatchType.Voice }, 'key-1');
+    const ticket = await matching.joinQueue(
+      auth(u.id),
+      { matchType: MatchType.Voice },
+      'key-1',
+    );
     expect(ticket.status).toBe(MatchTicketStatus.Queued);
     expect(ticket.region).toBe('VN');
 
     const shard = matchingShardKey(MatchType.Voice, 'VN', ticket.ageBand);
-    expect(await redis.zscore(shard, ticket.id)).toBe(String(ticket.enqueuedAt.getTime()));
+    expect(await redis.zscore(shard, ticket.id)).toBe(
+      String(ticket.enqueuedAt.getTime()),
+    );
     expect(await redis.sismember(MATCHING_ACTIVE_SHARDS_KEY, shard)).toBe(1);
 
     // API lần 2 (key khác) → 409 nghiệp vụ
-    await expect(matching.joinQueue(auth(u.id), { matchType: MatchType.Voice }, 'key-2')).rejects.toMatchObject({
+    await expect(
+      matching.joinQueue(auth(u.id), { matchType: MatchType.Voice }, 'key-2'),
+    ).rejects.toMatchObject({
       code: MatchingErrors.TICKET_ALREADY_QUEUED,
     });
     // retry cùng key → replay đúng ticket cũ, không tạo mới
-    const replay = await matching.joinQueue(auth(u.id), { matchType: MatchType.Voice }, 'key-1');
+    const replay = await matching.joinQueue(
+      auth(u.id),
+      { matchType: MatchType.Voice },
+      'key-1',
+    );
     expect(replay.id).toBe(ticket.id);
-    expect(await ds.getRepository(MatchTicket).countBy({ userId: u.id })).toBe(1);
+    expect(await ds.getRepository(MatchTicket).countBy({ userId: u.id })).toBe(
+      1,
+    );
 
     // chốt chặn DB thật: INSERT thẳng (bypass service) ticket active thứ 2 → 23505
     await expect(
@@ -212,14 +295,24 @@ d('Matching integration (Postgres + Redis thật)', () => {
          VALUES ($1, 'voice', 'VN', 5, 'queued', now(), 'bypass-key')`,
         [u.id],
       ),
-    ).rejects.toMatchObject({ driverError: expect.objectContaining({ code: '23505' }) });
+    ).rejects.toMatchObject({
+      driverError: expect.objectContaining({ code: '23505' }),
+    });
   });
 
   it('2 matcher tick chạy đồng thời trên cùng shard → 2 ticket chỉ được ghép ĐÚNG 1 lần (ZPOPMIN atomic + verify DB)', async () => {
     const u1 = await createUser('race-1');
     const u2 = await createUser('race-2');
-    const t1 = await matching.joinQueue(auth(u1.id), { matchType: MatchType.Voice }, 'k');
-    const t2 = await matching.joinQueue(auth(u2.id), { matchType: MatchType.Voice }, 'k');
+    const t1 = await matching.joinQueue(
+      auth(u1.id),
+      { matchType: MatchType.Voice },
+      'k',
+    );
+    const t2 = await matching.joinQueue(
+      auth(u2.id),
+      { matchType: MatchType.Voice },
+      'k',
+    );
 
     // 2 instance matcher (2 "pod") tick song song — không được tạo 2 session / match đôi
     const [m1, m2] = await Promise.all([worker.runOnce(), workerB.runOnce()]);
@@ -228,7 +321,9 @@ d('Matching integration (Postgres + Redis thật)', () => {
     const sessions = await ds.getRepository(MatchSession).find();
     expect(sessions.length).toBe(1);
     expect(sessions[0].status).toBe(MatchSessionStatus.PendingConfirm);
-    expect([sessions[0].ticketAId, sessions[0].ticketBId].sort()).toEqual([t1.id, t2.id].sort());
+    expect([sessions[0].ticketAId, sessions[0].ticketBId].sort()).toEqual(
+      [t1.id, t2.id].sort(),
+    );
 
     for (const id of [t1.id, t2.id]) {
       const fresh = await ds.getRepository(MatchTicket).findOneByOrFail({ id });
@@ -250,13 +345,17 @@ d('Matching integration (Postgres + Redis thật)', () => {
     expect(await worker.runOnce()).toBe(0);
 
     // cả 2 vẫn hợp lệ → không được ghép (không sessionId), trả lại queue với score gốc, không mất lượt chờ
-    const tickets = await ds.getRepository(MatchTicket).findBy({ userId: In([u1.id, u2.id]) });
+    const tickets = await ds
+      .getRepository(MatchTicket)
+      .findBy({ userId: In([u1.id, u2.id]) });
     expect(tickets.length).toBe(2);
     const shard = matchingShardKey(MatchType.Voice, 'VN', tickets[0].ageBand);
     for (const t of tickets) {
       expect(t.status).toBe(MatchTicketStatus.Queued);
       expect(t.sessionId).toBeNull();
-      expect(await redis.zscore(shard, t.id)).toBe(String(t.enqueuedAt.getTime()));
+      expect(await redis.zscore(shard, t.id)).toBe(
+        String(t.enqueuedAt.getTime()),
+      );
     }
 
     // bỏ block → tick sau ghép bình thường (block chỉ chặn đúng thời điểm còn hiệu lực)
@@ -267,42 +366,86 @@ d('Matching integration (Postgres + Redis thật)', () => {
   it('ticket cancelled/banned sau enqueue (zombie Redis) → matcher loại đúng, partner giữ nguyên priority gốc', async () => {
     const u1 = await createUser('zombie-1');
     const u2 = await createUser('zombie-2');
-    const t1 = await matching.joinQueue(auth(u1.id), { matchType: MatchType.Voice }, 'k');
-    const t2 = await matching.joinQueue(auth(u2.id), { matchType: MatchType.Voice }, 'k');
+    const t1 = await matching.joinQueue(
+      auth(u1.id),
+      { matchType: MatchType.Voice },
+      'k',
+    );
+    const t2 = await matching.joinQueue(
+      auth(u2.id),
+      { matchType: MatchType.Voice },
+      'k',
+    );
 
     // giả lập crash giữa "DB cancel" và "ZREM Redis": đổi trạng thái thẳng trong DB, để nguyên Redis
-    await ds.query(`UPDATE match_tickets SET status = 'cancelled' WHERE id = $1`, [t1.id]);
+    await ds.query(
+      `UPDATE match_tickets SET status = 'cancelled' WHERE id = $1`,
+      [t1.id],
+    );
 
     expect(await worker.runOnce()).toBe(0);
 
     const shard = matchingShardKey(MatchType.Voice, 'VN', t1.ageBand);
     // ticket cancelled: không bị đổi trạng thái (đã rời queue hợp lệ), không được ghép, không còn trong Redis
-    expect((await ds.getRepository(MatchTicket).findOneByOrFail({ id: t1.id })).status).toBe(MatchTicketStatus.Cancelled);
-    expect((await ds.getRepository(MatchTicket).findOneByOrFail({ id: t2.id })).sessionId).toBeNull();
+    expect(
+      (await ds.getRepository(MatchTicket).findOneByOrFail({ id: t1.id }))
+        .status,
+    ).toBe(MatchTicketStatus.Cancelled);
+    expect(
+      (await ds.getRepository(MatchTicket).findOneByOrFail({ id: t2.id }))
+        .sessionId,
+    ).toBeNull();
     expect(await redis.zscore(shard, t1.id)).toBeNull();
     // partner còn hợp lệ: vẫn queued, score gốc (không mất lượt chờ)
-    expect((await ds.getRepository(MatchTicket).findOneByOrFail({ id: t2.id })).status).toBe(MatchTicketStatus.Queued);
-    expect(await redis.zscore(shard, t2.id)).toBe(String(t2.enqueuedAt.getTime()));
+    expect(
+      (await ds.getRepository(MatchTicket).findOneByOrFail({ id: t2.id }))
+        .status,
+    ).toBe(MatchTicketStatus.Queued);
+    expect(await redis.zscore(shard, t2.id)).toBe(
+      String(t2.enqueuedAt.getTime()),
+    );
 
     // user bị BAN sau khi enqueue → verify-lại-lúc-ghép expire ticket đó (queued→expired)
     const u3 = await createUser('zombie-3');
-    const t3 = await matching.joinQueue(auth(u3.id), { matchType: MatchType.Voice }, 'k');
-    await ds.getRepository(User).update({ id: u3.id }, { status: UserStatus.Banned });
+    const t3 = await matching.joinQueue(
+      auth(u3.id),
+      { matchType: MatchType.Voice },
+      'k',
+    );
+    await ds
+      .getRepository(User)
+      .update({ id: u3.id }, { status: UserStatus.Banned });
 
     expect(await worker.runOnce()).toBe(0);
-    expect((await ds.getRepository(MatchTicket).findOneByOrFail({ id: t3.id })).status).toBe(MatchTicketStatus.Expired);
-    expect((await ds.getRepository(MatchTicket).findOneByOrFail({ id: t2.id })).status).toBe(MatchTicketStatus.Queued);
+    expect(
+      (await ds.getRepository(MatchTicket).findOneByOrFail({ id: t3.id }))
+        .status,
+    ).toBe(MatchTicketStatus.Expired);
+    expect(
+      (await ds.getRepository(MatchTicket).findOneByOrFail({ id: t2.id }))
+        .status,
+    ).toBe(MatchTicketStatus.Queued);
   });
 
   it('confirm 2 chiều: cả 2 confirm → session + 2 ticket confirmed; confirm ticket người khác → 403', async () => {
     const u1 = await createUser('confirm-1');
     const u2 = await createUser('confirm-2');
-    const t1 = await matching.joinQueue(auth(u1.id), { matchType: MatchType.Soul }, 'k');
-    const t2 = await matching.joinQueue(auth(u2.id), { matchType: MatchType.Soul }, 'k');
+    const t1 = await matching.joinQueue(
+      auth(u1.id),
+      { matchType: MatchType.Soul },
+      'k',
+    );
+    const t2 = await matching.joinQueue(
+      auth(u2.id),
+      { matchType: MatchType.Soul },
+      'k',
+    );
     expect(await worker.runOnce()).toBe(1);
 
     // IDOR: u2 confirm hộ ticket của u1 → 403
-    await expect(matching.confirmTicket(auth(u2.id), t1.id)).rejects.toMatchObject({
+    await expect(
+      matching.confirmTicket(auth(u2.id), t1.id),
+    ).rejects.toMatchObject({
       code: MatchingErrors.TICKET_FORBIDDEN,
     });
 
@@ -312,24 +455,38 @@ d('Matching integration (Postgres + Redis thật)', () => {
     const afterSecond = await matching.confirmTicket(auth(u2.id), t2.id);
     expect(afterSecond.status).toBe(MatchTicketStatus.Confirmed);
 
-    const session = await ds.getRepository(MatchSession).findOneByOrFail({ id: afterSecond.sessionId as string });
+    const session = await ds
+      .getRepository(MatchSession)
+      .findOneByOrFail({ id: afterSecond.sessionId as string });
     expect(session.status).toBe(MatchSessionStatus.Confirmed);
-    expect((await ds.getRepository(MatchTicket).findOneByOrFail({ id: t1.id })).status).toBe(MatchTicketStatus.Confirmed);
+    expect(
+      (await ds.getRepository(MatchTicket).findOneByOrFail({ id: t1.id }))
+        .status,
+    ).toBe(MatchTicketStatus.Confirmed);
   });
 
   it('speedup: N request song song vượt MATCHING_SPEEDUP_MAX_PER_HOUR → đúng số bị chặn 409, KHÔNG trừ tiền quá giới hạn', async () => {
     const u = await createUser('speedup-1');
     await fund(u.id); // 1200 diamond
-    const t = await matching.joinQueue(auth(u.id), { matchType: MatchType.Voice }, 'k');
+    const t = await matching.joinQueue(
+      auth(u.id),
+      { matchType: MatchType.Voice },
+      'k',
+    );
     const before = BigInt((await economy.getWallet(u.id)).balance);
 
     // 6 request song song, key KHÁC nhau, max 3/giờ → đúng 3 thành công, 3 bị 409
     const results = await Promise.allSettled(
-      Array.from({ length: 6 }, (_, i) => matching.speedup(auth(u.id), t.id, `sp-${i}`)),
+      Array.from({ length: 6 }, (_, i) =>
+        matching.speedup(auth(u.id), t.id, `sp-${i}`),
+      ),
     );
     const ok = results.filter((r) => r.status === 'fulfilled');
     const limited = results.filter(
-      (r) => r.status === 'rejected' && (r.reason as { code?: string }).code === MatchingErrors.SPEEDUP_RATE_LIMITED,
+      (r) =>
+        r.status === 'rejected' &&
+        (r.reason as { code?: string }).code ===
+          MatchingErrors.SPEEDUP_RATE_LIMITED,
     );
     expect(ok.length).toBe(3);
     expect(limited.length).toBe(3);
@@ -339,22 +496,35 @@ d('Matching integration (Postgres + Redis thật)', () => {
     expect(before - after).toBe(150n);
 
     // boost thực sự được thực thi: score Redis = enqueuedAtMs - 3 × boost (trả tiền là được ưu tiên thật)
-    const fresh = await ds.getRepository(MatchTicket).findOneByOrFail({ id: t.id });
+    const fresh = await ds
+      .getRepository(MatchTicket)
+      .findOneByOrFail({ id: t.id });
     expect(fresh.priorityBoostMs).toBe(3 * 300_000);
     const shard = matchingShardKey(MatchType.Voice, 'VN', t.ageBand);
-    expect(await redis.zscore(shard, t.id)).toBe(String(fresh.enqueuedAt.getTime() - 3 * 300_000));
+    expect(await redis.zscore(shard, t.id)).toBe(
+      String(fresh.enqueuedAt.getTime() - 3 * 300_000),
+    );
 
     // retry cùng key đã dùng → replay, không trừ tiền thêm, không boost thêm
     const replay = await matching.speedup(auth(u.id), t.id, 'sp-0');
     expect(replay.replayed).toBe(true);
     expect(BigInt((await economy.getWallet(u.id)).balance)).toBe(after);
-    expect((await ds.getRepository(MatchTicket).findOneByOrFail({ id: t.id })).priorityBoostMs).toBe(3 * 300_000);
+    expect(
+      (await ds.getRepository(MatchTicket).findOneByOrFail({ id: t.id }))
+        .priorityBoostMs,
+    ).toBe(3 * 300_000);
   });
 
   it('speedup không đủ diamond → lỗi Economy, slot rate-limit được hoàn lại (không mất lượt oan)', async () => {
     const u = await createUser('speedup-poor');
-    const t = await matching.joinQueue(auth(u.id), { matchType: MatchType.Voice }, 'k');
-    await expect(matching.speedup(auth(u.id), t.id, 'sp-1')).rejects.toMatchObject({
+    const t = await matching.joinQueue(
+      auth(u.id),
+      { matchType: MatchType.Voice },
+      'k',
+    );
+    await expect(
+      matching.speedup(auth(u.id), t.id, 'sp-1'),
+    ).rejects.toMatchObject({
       code: EconomyErrors.WALLET_INSUFFICIENT_BALANCE,
     });
     // slot đã hoàn — nạp tiền rồi vẫn speedup được đủ 3 lần
@@ -362,75 +532,139 @@ d('Matching integration (Postgres + Redis thật)', () => {
     for (let i = 0; i < 3; i++) {
       await matching.speedup(auth(u.id), t.id, `sp-after-${i}`);
     }
-    expect((await ds.getRepository(MatchTicket).findOneByOrFail({ id: t.id })).priorityBoostMs).toBe(3 * 300_000);
+    expect(
+      (await ds.getRepository(MatchTicket).findOneByOrFail({ id: t.id }))
+        .priorityBoostMs,
+    ).toBe(3 * 300_000);
   });
 
   it('speedup ưu tiên thật trong ghép cặp: ticket boost được ghép trước ticket vào sớm hơn', async () => {
-    const users = await Promise.all([createUser('prio-1'), createUser('prio-2'), createUser('prio-3')]);
+    const users = await Promise.all([
+      createUser('prio-1'),
+      createUser('prio-2'),
+      createUser('prio-3'),
+    ]);
     const tickets: MatchTicket[] = [];
     for (const u of users) {
-      tickets.push(await matching.joinQueue(auth(u.id), { matchType: MatchType.Voice }, 'k'));
+      tickets.push(
+        await matching.joinQueue(
+          auth(u.id),
+          { matchType: MatchType.Voice },
+          'k',
+        ),
+      );
     }
     // user thứ 3 (vào sau cùng) mua speed-up → phải nổi lên đầu hàng đợi
     await fund(users[2].id);
     await matching.speedup(auth(users[2].id), tickets[2].id, 'sp');
 
     expect(await worker.runOnce()).toBe(1); // chỉ đủ 1 cặp, người còn lại chờ tiếp
-    const boosted = await ds.getRepository(MatchTicket).findOneByOrFail({ id: tickets[2].id });
-    const session = await ds.getRepository(MatchSession).findOneByOrFail({ id: boosted.sessionId as string });
+    const boosted = await ds
+      .getRepository(MatchTicket)
+      .findOneByOrFail({ id: tickets[2].id });
+    const session = await ds
+      .getRepository(MatchSession)
+      .findOneByOrFail({ id: boosted.sessionId as string });
     const matchedTickets = [session.ticketAId, session.ticketBId];
     // cặp được ghép phải chứa ticket đã boost (score thấp nhất) + ticket sớm nhất còn lại
     expect(matchedTickets).toContain(tickets[2].id);
     expect(matchedTickets).toContain(tickets[0].id);
-    expect((await ds.getRepository(MatchTicket).findOneByOrFail({ id: tickets[1].id })).status).toBe(
-      MatchTicketStatus.Queued,
-    );
+    expect(
+      (
+        await ds
+          .getRepository(MatchTicket)
+          .findOneByOrFail({ id: tickets[1].id })
+      ).status,
+    ).toBe(MatchTicketStatus.Queued);
   });
 
   it('sweeper: queued quá hạn → expired + rời Redis; matched quá hạn confirm → bên confirm được requeue ticket MỚI, bên im lặng expired', async () => {
     // --- queued quá hạn ---
     const u1 = await createUser('sweep-1');
-    const t1 = await matching.joinQueue(auth(u1.id), { matchType: MatchType.Voice }, 'k');
-    await ds.query(`UPDATE match_tickets SET enqueued_at = now() - interval '2 hours' WHERE id = $1`, [t1.id]);
+    const t1 = await matching.joinQueue(
+      auth(u1.id),
+      { matchType: MatchType.Voice },
+      'k',
+    );
+    await ds.query(
+      `UPDATE match_tickets SET enqueued_at = now() - interval '2 hours' WHERE id = $1`,
+      [t1.id],
+    );
 
     const swept = await sweeper.runOnce();
     expect(swept.expiredQueued).toBe(1);
-    expect((await ds.getRepository(MatchTicket).findOneByOrFail({ id: t1.id })).status).toBe(MatchTicketStatus.Expired);
+    expect(
+      (await ds.getRepository(MatchTicket).findOneByOrFail({ id: t1.id }))
+        .status,
+    ).toBe(MatchTicketStatus.Expired);
     const shard = matchingShardKey(MatchType.Voice, 'VN', t1.ageBand);
     expect(await redis.zscore(shard, t1.id)).toBeNull();
 
     // --- matched quá hạn confirm: u2 đã confirm, u3 im lặng ---
     const u2 = await createUser('sweep-2');
     const u3 = await createUser('sweep-3');
-    const t2 = await matching.joinQueue(auth(u2.id), { matchType: MatchType.Voice }, 'k');
-    const t3 = await matching.joinQueue(auth(u3.id), { matchType: MatchType.Voice }, 'k');
+    const t2 = await matching.joinQueue(
+      auth(u2.id),
+      { matchType: MatchType.Voice },
+      'k',
+    );
+    const t3 = await matching.joinQueue(
+      auth(u3.id),
+      { matchType: MatchType.Voice },
+      'k',
+    );
     expect(await worker.runOnce()).toBe(1);
     await matching.confirmTicket(auth(u2.id), t2.id);
-    const sessionId = (await ds.getRepository(MatchTicket).findOneByOrFail({ id: t2.id })).sessionId as string;
+    const sessionId = (
+      await ds.getRepository(MatchTicket).findOneByOrFail({ id: t2.id })
+    ).sessionId as string;
     // chỉ backdate đúng session này — các test trước có thể còn session pending khác trong cùng DB
-    await ds.query(`UPDATE match_sessions SET created_at = now() - interval '2 hours' WHERE id = $1`, [sessionId]);
+    await ds.query(
+      `UPDATE match_sessions SET created_at = now() - interval '2 hours' WHERE id = $1`,
+      [sessionId],
+    );
 
     const swept2 = await sweeper.runOnce();
     expect(swept2.expiredSessions).toBe(1);
 
-    const session = await ds.getRepository(MatchSession).findOneByOrFail({ id: sessionId });
+    const session = await ds
+      .getRepository(MatchSession)
+      .findOneByOrFail({ id: sessionId });
     expect(session.status).toBe(MatchSessionStatus.Expired);
     // bên im lặng: expired, không được requeue
-    expect((await ds.getRepository(MatchTicket).findOneByOrFail({ id: t3.id })).status).toBe(MatchTicketStatus.Expired);
-    expect(await ds.getRepository(MatchTicket).countBy({ userId: u3.id })).toBe(1);
+    expect(
+      (await ds.getRepository(MatchTicket).findOneByOrFail({ id: t3.id }))
+        .status,
+    ).toBe(MatchTicketStatus.Expired);
+    expect(await ds.getRepository(MatchTicket).countBy({ userId: u3.id })).toBe(
+      1,
+    );
     // bên đã confirm: ticket cũ expired + ticket MỚI queued (enqueue mới — spec § 3), có mặt trong Redis
-    expect((await ds.getRepository(MatchTicket).findOneByOrFail({ id: t2.id })).status).toBe(MatchTicketStatus.Expired);
-    const requeued = await ds.getRepository(MatchTicket).findOneByOrFail({ userId: u2.id, status: MatchTicketStatus.Queued });
+    expect(
+      (await ds.getRepository(MatchTicket).findOneByOrFail({ id: t2.id }))
+        .status,
+    ).toBe(MatchTicketStatus.Expired);
+    const requeued = await ds
+      .getRepository(MatchTicket)
+      .findOneByOrFail({ userId: u2.id, status: MatchTicketStatus.Queued });
     expect(requeued.id).not.toBe(t2.id);
-    expect(await redis.zscore(shard, requeued.id)).toBe(String(requeued.enqueuedAt.getTime()));
+    expect(await redis.zscore(shard, requeued.id)).toBe(
+      String(requeued.enqueuedAt.getTime()),
+    );
 
     // sweeper chạy lại → idempotent, không requeue đôi (idempotency key tất định theo session+ticket)
     const swept3 = await sweeper.runOnce();
     expect(swept3.expiredSessions).toBe(0);
-    expect(await ds.getRepository(MatchTicket).countBy({ userId: u2.id, status: MatchTicketStatus.Queued })).toBe(1);
+    expect(
+      await ds
+        .getRepository(MatchTicket)
+        .countBy({ userId: u2.id, status: MatchTicketStatus.Queued }),
+    ).toBe(1);
 
     // confirm muộn sau khi ticket đã expired → 409 (xác minh lại tại thời điểm hành động, docs/10 § 10.0.C)
-    await expect(matching.confirmTicket(auth(u3.id), t3.id)).rejects.toMatchObject({
+    await expect(
+      matching.confirmTicket(auth(u3.id), t3.id),
+    ).rejects.toMatchObject({
       code: MatchingErrors.TICKET_INVALID_TRANSITION,
     });
   });

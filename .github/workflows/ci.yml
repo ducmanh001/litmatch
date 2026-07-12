@@ -55,6 +55,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Format check (Prettier — docs/05 § 5.1; local đã có husky pre-commit, đây là chốt chặn cuối)
+        run: pnpm format:check
+
       - name: Lint
         run: pnpm nx run-many -t lint
 

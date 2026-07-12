@@ -20,7 +20,11 @@ export class EconomyRefund1752100000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS idx_iap_receipts_refund_checked`);
-    await queryRunner.query(`ALTER TABLE iap_receipts DROP COLUMN refund_transaction_id, DROP COLUMN refund_checked_at`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS idx_iap_receipts_refund_checked`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE iap_receipts DROP COLUMN refund_transaction_id, DROP COLUMN refund_checked_at`,
+    );
   }
 }

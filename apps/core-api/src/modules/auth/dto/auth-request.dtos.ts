@@ -6,7 +6,10 @@ import { AuthProvider } from '../entities/auth-identity.entity';
 const PHONE_E164 = /^\+[1-9]\d{7,14}$/;
 
 export class GuestLoginDto {
-  @ApiProperty({ description: 'ID thiết bị ổn định do app sinh ra', example: 'a3f1c9d2-device' })
+  @ApiProperty({
+    description: 'ID thiết bị ổn định do app sinh ra',
+    example: 'a3f1c9d2-device',
+  })
   @IsString()
   @Length(8, 128)
   deviceId!: string;
@@ -33,7 +36,10 @@ export class SocialLoginDto {
   @IsEnum(AuthProvider)
   provider!: AuthProvider;
 
-  @ApiProperty({ description: 'ID token từ SDK của provider — server tự verify, không tin client' })
+  @ApiProperty({
+    description:
+      'ID token từ SDK của provider — server tự verify, không tin client',
+  })
   @IsString()
   @IsNotEmpty()
   idToken!: string;

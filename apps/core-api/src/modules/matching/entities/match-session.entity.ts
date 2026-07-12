@@ -33,7 +33,11 @@ export class MatchSession extends BaseAppEntity {
   @Column({ type: 'uuid' })
   ticketBId!: string;
 
-  @Column({ type: 'varchar', length: 16, default: MatchSessionStatus.PendingConfirm })
+  @Column({
+    type: 'varchar',
+    length: 16,
+    default: MatchSessionStatus.PendingConfirm,
+  })
   status!: MatchSessionStatus;
 
   @Column({ type: 'timestamptz', nullable: true })

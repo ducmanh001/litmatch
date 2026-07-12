@@ -1,13 +1,30 @@
-import { Inject, Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnApplicationBootstrap,
+  OnApplicationShutdown,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, In } from 'typeorm';
 
 import { requeueIdempotencyKey } from '../matching.constants';
-import { MatchTicket, MatchTicketStatus } from '../entities/match-ticket.entity';
-import { MatchSession, MatchSessionStatus } from '../entities/match-session.entity';
-import { MATCHING_ACTIVE_SHARDS_KEY, MATCHING_REDIS, matchingShardKey, ticketScore } from '../redis/matching-redis.provider';
+import {
+  MatchTicket,
+  MatchTicketStatus,
+} from '../entities/match-ticket.entity';
+import {
+  MatchSession,
+  MatchSessionStatus,
+} from '../entities/match-session.entity';
+import {
+  MATCHING_ACTIVE_SHARDS_KEY,
+  MATCHING_REDIS,
+  matchingShardKey,
+  ticketScore,
+} from '../redis/matching-redis.provider';
 
 import type Redis from 'ioredis';
 import type { CoreApiEnv } from '../../../config/env.validation';
@@ -27,7 +44,9 @@ const SESSION_SWEEP_BATCH = 200;
  * Interval từ config → đăng ký qua SchedulerRegistry (cùng pattern OutboxRelayService).
  */
 @Injectable()
-export class TicketSweeperService implements OnApplicationBootstrap, OnApplicationShutdown {
+export class TicketSweeperService
+  implements OnApplicationBootstrap, OnApplicationShutdown
+{
   private readonly logger = new Logger(TicketSweeperService.name);
   private running = false;
 
@@ -40,14 +59,18 @@ export class TicketSweeperService implements OnApplicationBootstrap, OnApplicati
 
   onApplicationBootstrap(): void {
     const interval = setInterval(
-      () => void this.runOnce().catch((err) => this.logger.error({ err: `${err}` }, 'Sweeper tick lỗi')),
+      () =>
+        void this.runOnce().catch((err) =>
+          this.logger.error({ err: `${err}` }, 'Sweeper tick lỗi'),
+        ),
       this.config.getOrThrow('MATCHING_SWEEPER_INTERVAL_MS', { infer: true }),
     );
     this.scheduler.addInterval(SWEEPER_JOB, interval);
   }
 
   onApplicationShutdown(): void {
-    if (this.scheduler.doesExist('interval', SWEEPER_JOB)) this.scheduler.deleteInterval(SWEEPER_JOB);
+    if (this.scheduler.doesExist('interval', SWEEPER_JOB))
+      this.scheduler.deleteInterval(SWEEPER_JOB);
   }
 
   /** 1 tick — public để test/chạy tay. */
@@ -71,7 +94,10 @@ export class TicketSweeperService implements OnApplicationBootstrap, OnApplicati
    * là ticket MỚI nên enqueued_at = created_at; dùng enqueued_at để nhất quán ngữ nghĩa "chờ từ lúc vào queue".
    */
   private async expireStaleQueuedTickets(): Promise<number> {
-    const maxWaitSeconds = this.config.getOrThrow('MATCHING_QUEUE_MAX_WAIT_SECONDS', { infer: true });
+    const maxWaitSeconds = this.config.getOrThrow(
+      'MATCHING_QUEUE_MAX_WAIT_SECONDS',
+      { infer: true },
+    );
     // TypeORM query() cho UPDATE trả [rows, rowCount] (không phải rows trần như SELECT)
     const [rows] = (await this.dataSource.query(
       `UPDATE match_tickets
@@ -79,24 +105,41 @@ export class TicketSweeperService implements OnApplicationBootstrap, OnApplicati
         WHERE status = $2 AND enqueued_at < now() - make_interval(secs => $3)
         RETURNING id, match_type, region, age_band`,
       [MatchTicketStatus.Expired, MatchTicketStatus.Queued, maxWaitSeconds],
-    )) as [Array<{ id: string; match_type: string; region: string; age_band: number }>, number];
+    )) as [
+      Array<{
+        id: string;
+        match_type: string;
+        region: string;
+        age_band: number;
+      }>,
+      number,
+    ];
     for (const row of rows) {
       // ZREM idempotent — ticketId không còn trong sorted set (đã bị pop) thì bỏ qua (spec § 3)
-      await this.redis.zrem(matchingShardKey(row.match_type, row.region, row.age_band), row.id);
+      await this.redis.zrem(
+        matchingShardKey(row.match_type, row.region, row.age_band),
+        row.id,
+      );
     }
     return rows.length;
   }
 
   private async expireStalePendingSessions(): Promise<number> {
-    const timeoutSeconds = this.config.getOrThrow('MATCHING_CONFIRM_TIMEOUT_SECONDS', { infer: true });
+    const timeoutSeconds = this.config.getOrThrow(
+      'MATCHING_CONFIRM_TIMEOUT_SECONDS',
+      { infer: true },
+    );
     const stale = await this.dataSource
       .getRepository(MatchSession)
       .createQueryBuilder('s')
       .select(['s.id'])
-      .where('s.status = :status AND s.created_at < now() - make_interval(secs => :timeoutSeconds)', {
-        status: MatchSessionStatus.PendingConfirm,
-        timeoutSeconds,
-      })
+      .where(
+        's.status = :status AND s.created_at < now() - make_interval(secs => :timeoutSeconds)',
+        {
+          status: MatchSessionStatus.PendingConfirm,
+          timeoutSeconds,
+        },
+      )
       .orderBy('s.created_at', 'ASC')
       .limit(SESSION_SWEEP_BATCH)
       .getMany();
@@ -117,7 +160,8 @@ export class TicketSweeperService implements OnApplicationBootstrap, OnApplicati
         lock: { mode: 'pessimistic_write' },
       });
       // user có thể vừa confirm đủ 2 bên giữa lúc sweeper quét — re-check dưới lock (docs/10 § 10.0.C)
-      if (!session || session.status !== MatchSessionStatus.PendingConfirm) return false;
+      if (!session || session.status !== MatchSessionStatus.PendingConfirm)
+        return false;
 
       const tickets = await manager.find(MatchTicket, {
         where: { id: In([session.ticketAId, session.ticketBId]) },
@@ -161,8 +205,17 @@ export class TicketSweeperService implements OnApplicationBootstrap, OnApplicati
 
     // Redis SAU khi DB commit — nếu fail, ticket requeue là zombie DB, chính sweeper này expire nó khi quá hạn
     for (const ticket of toEnqueue) {
-      const shard = matchingShardKey(ticket.matchType, ticket.region, ticket.ageBand);
-      await this.redis.zadd(shard, 'NX', String(ticketScore(ticket)), ticket.id);
+      const shard = matchingShardKey(
+        ticket.matchType,
+        ticket.region,
+        ticket.ageBand,
+      );
+      await this.redis.zadd(
+        shard,
+        'NX',
+        String(ticketScore(ticket)),
+        ticket.id,
+      );
       await this.redis.sadd(MATCHING_ACTIVE_SHARDS_KEY, shard);
     }
     return done;

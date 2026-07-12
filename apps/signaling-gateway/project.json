@@ -25,9 +25,7 @@
       "continuous": true,
       "executor": "@nx/js:node",
       "defaultConfiguration": "development",
-      "dependsOn": [
-        "build"
-      ],
+      "dependsOn": ["build"],
       "options": {
         "buildTarget": "signaling-gateway:build",
         "runBuildTargetDependencies": false
@@ -42,8 +40,5 @@
       }
     }
   },
-  "tags": [
-    "type:app",
-    "scope:signaling"
-  ]
+  "tags": ["type:app", "scope:signaling"]
 }

@@ -40,8 +40,12 @@ export class MatchingCore1752200000000 implements MigrationInterface {
       `CREATE INDEX idx_match_tickets_status_shard ON match_tickets(status, match_type, region, age_band)`,
     );
     // sweeper quét queued quá hạn theo enqueued_at
-    await queryRunner.query(`CREATE INDEX idx_match_tickets_status_enqueued ON match_tickets(status, enqueued_at)`);
-    await queryRunner.query(`CREATE INDEX idx_match_tickets_user ON match_tickets(user_id)`);
+    await queryRunner.query(
+      `CREATE INDEX idx_match_tickets_status_enqueued ON match_tickets(status, enqueued_at)`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX idx_match_tickets_user ON match_tickets(user_id)`,
+    );
 
     await queryRunner.query(`
       CREATE TABLE match_sessions (
@@ -62,7 +66,9 @@ export class MatchingCore1752200000000 implements MigrationInterface {
       )
     `);
     // sweeper quét pending_confirm quá hạn theo created_at
-    await queryRunner.query(`CREATE INDEX idx_match_sessions_status_created ON match_sessions(status, created_at)`);
+    await queryRunner.query(
+      `CREATE INDEX idx_match_sessions_status_created ON match_sessions(status, created_at)`,
+    );
 
     // FK ticket → session thêm sau khi cả 2 bảng tồn tại (tham chiếu vòng)
     await queryRunner.query(`
@@ -72,7 +78,9 @@ export class MatchingCore1752200000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE match_tickets DROP CONSTRAINT IF EXISTS fk_match_tickets_session`);
+    await queryRunner.query(
+      `ALTER TABLE match_tickets DROP CONSTRAINT IF EXISTS fk_match_tickets_session`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS match_sessions`);
     await queryRunner.query(`DROP TABLE IF EXISTS match_tickets`);
   }

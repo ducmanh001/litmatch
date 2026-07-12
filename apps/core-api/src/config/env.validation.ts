@@ -1,4 +1,7 @@
-import { baseEnvSchema, createConfigValidator } from '@litmatch/config-validator';
+import {
+  baseEnvSchema,
+  createConfigValidator,
+} from '@litmatch/config-validator';
 import * as Joi from 'joi';
 
 /**
@@ -72,8 +75,12 @@ export const coreApiEnvSchema = Joi.object({
   CORS_ORIGINS: Joi.string().allow('').default(''),
   SWAGGER_ENABLED: Joi.boolean().default(true),
 
-  DATABASE_URL: Joi.string().uri({ scheme: ['postgres', 'postgresql'] }).required(),
-  REDIS_URL: Joi.string().uri({ scheme: ['redis'] }).default('redis://localhost:6379'),
+  DATABASE_URL: Joi.string()
+    .uri({ scheme: ['postgres', 'postgresql'] })
+    .required(),
+  REDIS_URL: Joi.string()
+    .uri({ scheme: ['redis'] })
+    .default('redis://localhost:6379'),
   KAFKA_BROKERS: Joi.string().default('localhost:9092'),
 
   JWT_SECRET: Joi.string().min(32).required(),
@@ -96,25 +103,40 @@ export const coreApiEnvSchema = Joi.object({
   ECONOMY_GOOGLE_SA_EMAIL: Joi.string().allow('').default(''),
   ECONOMY_GOOGLE_SA_PRIVATE_KEY: Joi.string().allow('').default(''),
   ECONOMY_OUTBOX_RELAY_ENABLED: Joi.boolean().default(false),
-  ECONOMY_OUTBOX_RELAY_INTERVAL_MS: Joi.number().integer().min(200).default(2000),
+  ECONOMY_OUTBOX_RELAY_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(200)
+    .default(2000),
   ECONOMY_RECONCILIATION_ENABLED: Joi.boolean().default(true),
-  ECONOMY_RECONCILIATION_INTERVAL_MS: Joi.number().integer().min(10_000).default(300_000),
+  ECONOMY_RECONCILIATION_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(10_000)
+    .default(300_000),
 
   // Refund/chargeback (docs/services/economy-service.md § 5)
   // Mặc định 'store' (fail-closed) — thiếu config thì getOrThrow() chết ngay lúc verify thay vì
   // âm thầm chấp nhận webhook giả mạo nếu ai đó quên set biến này ở production (docs/10 § Economy).
-  ECONOMY_APPLE_WEBHOOK_VERIFIER: Joi.string().valid('dev', 'store').default('store'),
+  ECONOMY_APPLE_WEBHOOK_VERIFIER: Joi.string()
+    .valid('dev', 'store')
+    .default('store'),
   ECONOMY_APPLE_ROOT_CA_PEM: Joi.string().allow('').default(''),
-  ECONOMY_GOOGLE_RTDN_VERIFIER: Joi.string().valid('dev', 'store').default('store'),
+  ECONOMY_GOOGLE_RTDN_VERIFIER: Joi.string()
+    .valid('dev', 'store')
+    .default('store'),
   ECONOMY_GOOGLE_RTDN_AUDIENCE: Joi.string().allow('').default(''),
   ECONOMY_GOOGLE_RTDN_SERVICE_ACCOUNT_EMAIL: Joi.string().allow('').default(''),
   ECONOMY_APPLE_ISSUER_ID: Joi.string().allow('').default(''),
   ECONOMY_APPLE_KEY_ID: Joi.string().allow('').default(''),
   ECONOMY_APPLE_PRIVATE_KEY: Joi.string().allow('').default(''),
   ECONOMY_APPLE_BUNDLE_ID: Joi.string().allow('').default(''),
-  ECONOMY_APPLE_SERVER_API_ENV: Joi.string().valid('sandbox', 'production').default('sandbox'),
+  ECONOMY_APPLE_SERVER_API_ENV: Joi.string()
+    .valid('sandbox', 'production')
+    .default('sandbox'),
   ECONOMY_REFUND_POLL_ENABLED: Joi.boolean().default(false),
-  ECONOMY_REFUND_POLL_INTERVAL_MS: Joi.number().integer().min(60_000).default(3_600_000),
+  ECONOMY_REFUND_POLL_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(60_000)
+    .default(3_600_000),
   ECONOMY_REFUND_POLL_WINDOW_DAYS: Joi.number().integer().min(1).default(60),
 
   // Matching — Giai đoạn 2 M1 (docs/services/matching-service.md § 8); default khớp .env.example
