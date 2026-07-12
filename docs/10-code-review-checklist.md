@@ -136,6 +136,16 @@
 - Ở quy mô lớn: 1 queue Redis duy nhất không shard theo region/tiêu chí → matcher trở thành hotspot, hoặc match ra 2 người cách nhau nửa vòng trái đất (latency cao khi call)
 - Speed-up (trả diamond để ưu tiên) trừ tiền xong nhưng không có gì đảm bảo user thực sự được ưu tiên (không có priority score/queue riêng thực thi) → mất tiền mà không có tác dụng, hoặc ngược lại: có thể trả tiền speed-up nhiều lần liên tiếp để luôn đứng đầu, chèn ép user thường bất công (cần giới hạn số lần/khung giờ)
 
+**Soul Match / chat ẩn danh — giao điểm Matching + ẩn danh, dễ leak danh tính và sai race rating**
+
+- **Leak danh tính trước khi match**: message/session DTO trả userId/nickname/avatar đối phương thay vì role ẩn danh (`me|partner`) → phá toàn bộ giá trị "ẩn danh" của tính năng; profile thật chỉ được trả qua endpoint riêng có guard "đã là bạn"
+- **Leak verdict đối phương trước khi chốt**: API session cho biết bên kia đã rate gì (`rude`/`boring`) theo thời gian thực → vector harassment ngược; chỉ expose verdict của chính mình + cờ `matched` sau khi cả 2 `like`
+- **2 rating `like` song song không tạo Friendship (hoặc tạo 2 bản)**: READ COMMITTED — mỗi transaction không thấy insert chưa commit của bên kia → cả 2 cùng kết luận "chưa đủ 2 like"; phải serialize 2 rater bằng lock trên session row + unique constraint canonical `(user_low, user_high)` ở DB làm chốt cuối, tạo Friendship trong **cùng transaction** với insert rating
+- **Timer phòng chat tính ở client**: hết giờ 2-3 phút nhưng server không tự enforce → sửa client chat vô hạn/rate ngoài cửa sổ; phase phải derive từ timestamp DB + giờ server tại thời điểm hành động (§ 10.0.C)
+- **Đổi verdict sau khi đã rate**: rating phải immutable với unique DB `(session, rater)` — replay cùng verdict idempotent, khác verdict → conflict; cho đổi ý = mở đường thăm dò ("like thử xem bên kia like chưa rồi đổi lại")
+- **Chat ẩn danh không giữ bằng chứng cho report**: xoá message khi phòng đóng → report "thô lỗ" không còn evidence cho T&S xử lý; message append-only, khoá truy cập qua API thay vì xoá dữ liệu
+- **Match lại cặp đã là bạn làm vỡ unique Friendship**: tạo bản ghi trùng/lỗi 500 thay vì idempotent ON CONFLICT DO NOTHING
+
 **Calling/Signaling/SFU — nơi dễ leak tài nguyên**
 
 - Không giải phóng room trên SFU khi call kết thúc → leak resource, media server quá tải dần

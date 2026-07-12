@@ -61,6 +61,9 @@ export interface CoreApiEnv {
   MATCHING_SPEEDUP_PRICE_DIAMOND: number;
   MATCHING_SPEEDUP_MAX_PER_HOUR: number;
   MATCHING_PRIORITY_BOOST_MS: number;
+  SOUL_CHAT_DURATION_SECONDS: number;
+  SOUL_RATING_WINDOW_SECONDS: number;
+  SOUL_CHAT_MESSAGE_MAX_LENGTH: number;
   THROTTLE_TTL_SECONDS: number;
   THROTTLE_LIMIT: number;
 }
@@ -149,6 +152,16 @@ export const coreApiEnvSchema = Joi.object({
   MATCHING_SPEEDUP_PRICE_DIAMOND: Joi.number().integer().min(1).default(50),
   MATCHING_SPEEDUP_MAX_PER_HOUR: Joi.number().integer().min(1).default(3),
   MATCHING_PRIORITY_BOOST_MS: Joi.number().integer().min(0).default(300_000),
+
+  // Soul Match — Giai đoạn 2 (docs/services/soul-match-service.md § 6); default 2-3 phút theo docs/06
+  SOUL_CHAT_DURATION_SECONDS: Joi.number().integer().min(30).default(150),
+  SOUL_RATING_WINDOW_SECONDS: Joi.number().integer().min(30).default(120),
+  // .max khớp MESSAGE_CONTENT_HARD_CAP (sanity cap transport — soul-match.constants.ts)
+  SOUL_CHAT_MESSAGE_MAX_LENGTH: Joi.number()
+    .integer()
+    .min(1)
+    .max(2000)
+    .default(500),
 
   THROTTLE_TTL_SECONDS: Joi.number().integer().min(1).default(60),
   THROTTLE_LIMIT: Joi.number().integer().min(1).default(100),

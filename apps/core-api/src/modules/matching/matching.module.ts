@@ -35,7 +35,8 @@ import type Redis from 'ioredis';
     // Safety module (block/report) chưa tồn tại (slice M1) — khi có, override provider này qua DI
     { provide: MATCH_INTERACTION_POLICY, useClass: AllowAllInteractionPolicy },
   ],
-  exports: [], // chưa module nào cần gọi Matching — export tối thiểu (docs/05 § 5.3)
+  // Soul Match đọc MatchSession qua MatchingService.findSessionById (read-only — docs/services/soul-match-service.md § 1)
+  exports: [MatchingService],
 })
 export class MatchingModule implements OnApplicationShutdown {
   constructor(@Inject(MATCHING_REDIS) private readonly redis: Redis) {}

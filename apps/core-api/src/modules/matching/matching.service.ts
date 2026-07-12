@@ -366,6 +366,17 @@ export class MatchingService {
     };
   }
 
+  /**
+   * Đọc session cho module khác (Soul Match — docs/services/soul-match-service.md § 1).
+   * Read-only: quyền GHI MatchSession vẫn thuộc riêng Matching (boundary AGENTS.md);
+   * Soul Match chỉ được lock row này để serialize rating, không đổi trạng thái.
+   */
+  async findSessionById(sessionId: string): Promise<MatchSession | null> {
+    return this.dataSource
+      .getRepository(MatchSession)
+      .findOneBy({ id: sessionId });
+  }
+
   /** ZADD NX (không đè score đã boost) + SADD shard active — dùng chung cho join/replay. */
   async ensureEnqueued(ticket: MatchTicket): Promise<void> {
     const shard = shardKeyOfTicket(ticket);

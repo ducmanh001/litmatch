@@ -54,20 +54,27 @@
     ]
   },
   "matching": {
-    "description": "Ticket state machine, Redis shards, pairing và race conditions",
+    "description": "Ticket state machine, Redis shards, pairing, race conditions + Soul Match (chat ẩn danh, rating, Friendship)",
     "read": [
       "AGENTS.md",
       "apps/core-api/AGENTS.md",
       "docs/03-architecture.md",
       "docs/06-domain-rules.md",
       "docs/services/matching-service.md",
+      "docs/services/soul-match-service.md",
       "docs/10-code-review-checklist.md"
     ],
-    "paths": ["apps/core-api/src/modules/matching"],
+    "paths": [
+      "apps/core-api/src/modules/matching",
+      "apps/core-api/src/modules/soul-match",
+      "apps/core-api/src/modules/friend"
+    ],
     "invariants": [
       "State transition hợp lệ và atomic",
       "Một user không được ghép vào hai session",
-      "Redis là queue/index, Postgres giữ durable state"
+      "Redis là queue/index, Postgres giữ durable state",
+      "Không leak danh tính/verdict đối phương trước khi match; phase phòng derive từ giờ server",
+      "Friendship 1 dòng/cặp canonical, tạo trong cùng transaction với rating"
     ],
     "checks": [
       "pnpm agent:check",
