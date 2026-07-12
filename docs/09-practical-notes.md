@@ -1,4 +1,4 @@
-[← 08 · Working with Claude Code](./08-working-with-claude-code.md) · **09 · Practical Notes** · [10 · Code Review Checklist →](./10-code-review-checklist.md)
+[← 08 · Working with Agents](./08-working-with-agents.md) · **09 · Practical Notes** · [10 · Code Review Checklist →](./10-code-review-checklist.md)
 
 # 9. Lưu ý thực tế (để không vỡ trận giữa đường)
 
@@ -11,4 +11,4 @@
 
 ---
 
-[← 08 · Working with Claude Code](./08-working-with-claude-code.md) · [10 · Code Review Checklist →](./10-code-review-checklist.md)
+[← 08 · Working with Agents](./08-working-with-agents.md) · [10 · Code Review Checklist →](./10-code-review-checklist.md)

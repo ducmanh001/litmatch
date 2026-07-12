@@ -2,7 +2,7 @@
 
 # 10. Checklist Review Code — lỗi phổ quát + lỗi logic nghiệp vụ + lỗi đặc thù dự án
 
-> Dùng phần này làm checklist khi review PR, hoặc yêu cầu Claude Code **tự chấm lại code theo đúng các mục dưới trước khi coi 1 task là "xong"** — đây là bước bắt buộc, được nhắc lại trong `/CLAUDE.md` ở root. Mục 10.1/10.2 nghiêng nhiều về lỗi kỹ thuật (concurrency, security, performance) nhưng còn thiếu 1 lớp lỗi khác — lỗi mà code chạy hoàn toàn "đúng như đã viết", compile sạch, test pass, nhưng **luật nghiệp vụ đằng sau lại sai hoặc thiếu**. Loại lỗi này giới bảo mật gọi là **business logic vulnerability / logic flaw**: **không có scanner hay linter nào bắt được**, vì bản thân syntax và luồng thực thi không sai — chỉ có người (hoặc agent) hiểu đúng domain mới review ra được. § 10.0 dưới đây là cách tư duy để review ra loại lỗi này; 10.1 và 10.2 bổ sung nhiều mục cụ thể dựa theo cách tư duy đó.
+> Dùng phần này làm checklist khi review PR, hoặc yêu cầu agent **tự chấm lại code theo đúng các mục dưới trước khi coi 1 task là "xong"** — đây là bước bắt buộc, được nhắc lại trong `/AGENTS.md` ở root. Mục 10.1/10.2 nghiêng nhiều về lỗi kỹ thuật (concurrency, security, performance) nhưng còn thiếu 1 lớp lỗi khác — lỗi mà code chạy hoàn toàn "đúng như đã viết", compile sạch, test pass, nhưng **luật nghiệp vụ đằng sau lại sai hoặc thiếu**. Loại lỗi này giới bảo mật gọi là **business logic vulnerability / logic flaw**: **không có scanner hay linter nào bắt được**, vì bản thân syntax và luồng thực thi không sai — chỉ có người hoặc agent hiểu đúng domain mới review ra được. § 10.0 dưới đây là cách tư duy để review ra loại lỗi này; 10.1 và 10.2 bổ sung nhiều mục cụ thể dựa theo cách tư duy đó.
 
 ## 10.0 Phương pháp luận review "lỗi logic nghiệp vụ" — làm trước khi đọc code chi tiết
 
@@ -190,8 +190,8 @@
 
 - **Luôn bắt đầu bằng § 10.0** (liệt kê luồng + giả định) trước khi đọc code chi tiết — đây là bước hay bị bỏ qua nhất, vì tư duy tự nhiên là đọc code trước, nhưng lỗi logic nghiệp vụ chỉ lộ ra khi tư duy theo luồng nghiệp vụ trước, code sau.
 - Dùng làm **PR review template**: mỗi PR liên quan tới Economy/Matching/Calling/Party Room/Feed/Gift/Avatar/Trust & Safety phải tick qua đúng mục tương ứng ở § 10.2 trước khi merge.
-- Yêu cầu Claude Code **tự chấm lại code theo đúng § 10.0, 10.1 và 10.2** sau khi viết xong 1 module, trước khi báo "xong" — coi đây là bước bắt buộc, không phải tuỳ chọn. Có thể yêu cầu Claude Code viết ra rõ ràng: "các giả định về hành vi user mà module này đang đặt ra là gì, và mỗi giả định được chặn ở đâu trong code."
-- Định kỳ (mỗi giai đoạn) đưa lại phần § 10.2 cho Claude Code đọc, vì mỗi giai đoạn mới sẽ có nhóm lỗi đặc thù khác nhau nổi lên.
+- Yêu cầu agent **tự chấm lại code theo đúng § 10.0, 10.1 và 10.2** sau khi viết xong 1 module, trước khi báo "xong" — coi đây là bước bắt buộc, không phải tuỳ chọn. Agent phải chỉ rõ các giả định về hành vi user và mỗi giả định được chặn ở đâu trong code.
+- Mỗi giai đoạn, agent phải đọc lại phần § 10.2 vì nhóm lỗi đặc thù thay đổi theo domain.
 
 ---
 

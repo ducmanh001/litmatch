@@ -6,7 +6,7 @@ export enum VipTier {
 }
 
 /**
- * SNAPSHOT dẫn xuất từ ledger — KHÔNG phải nguồn sự thật (luật 2 CLAUDE.md).
+ * SNAPSHOT dẫn xuất từ ledger — KHÔNG phải nguồn sự thật (luật 2 AGENTS.md).
  * Chỉ LedgerService được ghi, trong cùng DB transaction với bút toán.
  * Rebuild được bất cứ lúc nào bằng EconomyService.rebuildWallet().
  * `balance` CÓ THỂ âm sau refund/chargeback (user nợ diamond — docs/services/economy-service.md § 5);

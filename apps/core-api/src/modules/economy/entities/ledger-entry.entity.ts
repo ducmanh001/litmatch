@@ -14,7 +14,7 @@ export enum LedgerDirection {
 }
 
 /**
- * Bút toán Nợ/Có — NGUỒN SỰ THẬT DUY NHẤT của tiền (luật 2 CLAUDE.md).
+ * Bút toán Nợ/Có — NGUỒN SỰ THẬT DUY NHẤT của tiền (luật 2 AGENTS.md).
  * Append-only tuyệt đối: DB trigger chặn UPDATE/DELETE (migration 1752000000000).
  * amount là bigint dương — TypeORM trả về string cho bigint, xử lý bằng BigInt() khi tính toán.
  */

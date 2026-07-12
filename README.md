@@ -15,7 +15,7 @@ Xem trạng thái chi tiết theo giai đoạn ở [`docs/07-roadmap.md`](./docs
 
 ```
 .
-├── CLAUDE.md              ← Claude Code tự đọc file này ở đầu mỗi session (mọi thư mục con)
+├── AGENTS.md              ← hợp đồng làm việc dùng chung cho mọi agent
 ├── README.md               ← file này
 ├── docs/                   ← toàn bộ đặc tả, bắt đầu từ docs/00-overview-and-index.md
 │   ├── 00-overview-and-index.md
@@ -26,7 +26,7 @@ Xem trạng thái chi tiết theo giai đoạn ở [`docs/07-roadmap.md`](./docs
 │   ├── 05-coding-standards.md
 │   ├── 06-domain-rules.md
 │   ├── 07-roadmap.md               ← checklist theo giai đoạn, tick khi xong
-│   ├── 08-working-with-claude-code.md
+│   ├── 08-working-with-agents.md
 │   ├── 09-practical-notes.md
 │   ├── 10-code-review-checklist.md ← quan trọng nhất: tự review trước khi báo "xong"
 │   ├── 11-engineering-principles.md ← la bàn thiết kế cho người đọc
@@ -40,11 +40,23 @@ Xem trạng thái chi tiết theo giai đoạn ở [`docs/07-roadmap.md`](./docs
 
 ## Bắt đầu
 
-1. Đọc [`docs/00-overview-and-index.md`](./docs/00-overview-and-index.md) — mục lục đầy đủ.
-2. Đọc [`docs/03-architecture.md`](./docs/03-architecture.md) — quyết định kiến trúc quan trọng nhất, đặc biệt § 3.8 (SFU, matching shard, ledger cho quy mô lớn).
-3. Giao cho Claude Code theo đúng gợi ý ở [`docs/08-working-with-claude-code.md`](./docs/08-working-with-claude-code.md), bắt đầu từ Giai đoạn 0 trong [`docs/07-roadmap.md`](./docs/07-roadmap.md).
+1. Dùng Node.js 22 + pnpm 11.9, sau đó chạy `cp .env.example .env`.
+2. Chạy `pnpm bootstrap` để cài dependency, khởi động Postgres/Redis/Kafka, chạy migration và kiểm tra môi trường. Những lần sau dùng `pnpm infra:up` và `pnpm doctor`.
+3. Đọc [`docs/00-overview-and-index.md`](./docs/00-overview-and-index.md) — mục lục đầy đủ.
+4. Đọc [`docs/03-architecture.md`](./docs/03-architecture.md) — quyết định kiến trúc quan trọng nhất, đặc biệt § 3.8 (SFU, matching shard, ledger cho quy mô lớn).
+5. Agent làm việc theo [`AGENTS.md`](./AGENTS.md) và quy trình ở [`docs/08-working-with-agents.md`](./docs/08-working-with-agents.md).
 
-## Nguyên tắc cốt lõi (chi tiết đầy đủ trong `docs/`, xem `CLAUDE.md` cho bản tóm tắt agent dùng)
+Các lệnh hạ tầng thường dùng:
+
+| Lệnh                                 | Mục đích                                                                               |
+| ------------------------------------ | -------------------------------------------------------------------------------------- |
+| `pnpm doctor`                        | Kiểm tra toolchain, `.env`, credential trong Git remote và trạng thái dependency local |
+| `pnpm infra:up` / `pnpm infra:down`  | Bật/tắt hạ tầng local                                                                  |
+| `pnpm infra:logs`                    | Theo dõi log Postgres/Redis/Kafka                                                      |
+| `pnpm infra:reset`                   | **Xoá toàn bộ volume local** và tạo lại từ đầu                                         |
+| `pnpm db:migrate` / `pnpm db:status` | Chạy hoặc xem trạng thái migration                                                     |
+
+## Nguyên tắc cốt lõi (chi tiết đầy đủ trong `docs/`, xem `AGENTS.md` cho bản tóm tắt agent dùng)
 
 - **Modular monolith trước**: chỉ 3 thành phần deploy riêng (`core-api`, `signaling-gateway`, `media-server`), mọi domain khác là module bên trong `core-api`.
 - **Economy = double-entry ledger**: `LedgerEntry` là nguồn sự thật, `Wallet.balance` chỉ là snapshot dẫn xuất.

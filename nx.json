@@ -28,8 +28,12 @@
       "inputs": [
         "default",
         "^default",
-        { "env": "INTEGRATION_DB_URL" },
-        { "env": "REDIS_URL" }
+        {
+          "env": "INTEGRATION_DB_URL"
+        },
+        {
+          "env": "REDIS_URL"
+        }
       ]
     },
     "e2e": {
@@ -66,5 +70,6 @@
         "targetName": "test"
       }
     }
-  ]
+  ],
+  "analytics": false
 }
