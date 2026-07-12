@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@litmatch/common-exceptions';
 import { Repository } from 'typeorm';
 
+import type { EntityManager } from 'typeorm';
+
 import { buildCursorPage, decodeCursor } from '@litmatch/common-dtos';
 
 import { ECONOMY_EVENTS_TOPIC } from './economy.constants';
@@ -276,6 +278,124 @@ export class EconomyService {
           currency: LedgerCurrency.Diamond,
         },
       ],
+    });
+    return { transactionId: result.transaction.id, replayed: result.replayed };
+  }
+
+  /**
+   * Tặng quà — giao dịch nhiều chân, nhiều currency (docs/services/economy-service.md § 6):
+   * - Chân DIA: Nợ user_wallet (người tặng) / Có system_gift_pool = đúng giá quà.
+   * - Chân PTS: Nợ system_points_mint / Có user_earnings (người nhận) = điểm quy đổi
+   *   (caller tính từ config — 0 được phép, vd người nhận là guest, docs/06 § Gift).
+   * Cả 2 chân + side effect của caller (`withinTransaction`, vd ghi GiftEvent) nằm trong
+   * CÙNG 1 DB transaction — 1 bước fail thì rollback tất cả (docs/10 § Gift). Diamond KHÔNG
+   * bao giờ chuyển thẳng user→user: chênh lệch giá − điểm ở lại system_gift_pool.
+   */
+  async sendGift(input: {
+    senderUserId: string;
+    receiverUserId: string;
+    priceDiamond: number;
+    pointsAwarded: number;
+    idempotencyKey: string;
+    metadata: Record<string, unknown>;
+    /** Chạy trong CÙNG DB transaction sau khi ghi sổ (gift module ghi GiftEvent tại đây). */
+    withinTransaction?: (
+      manager: EntityManager,
+      transactionId: string,
+    ) => Promise<void>;
+  }): Promise<{ transactionId: string; replayed: boolean }> {
+    const {
+      senderUserId,
+      receiverUserId,
+      priceDiamond,
+      pointsAwarded,
+      idempotencyKey,
+      metadata,
+    } = input;
+    // Các check dưới là lỗi lập trình của caller (giá từ catalog DB, điểm từ config) → Error,
+    // không DomainException — gift module đã validate input client trước khi gọi tới đây.
+    if (!Number.isSafeInteger(priceDiamond) || priceDiamond <= 0) {
+      throw new Error(
+        `sendGift: priceDiamond phải là số nguyên dương, nhận ${priceDiamond}`,
+      );
+    }
+    if (!Number.isSafeInteger(pointsAwarded) || pointsAwarded < 0) {
+      throw new Error(
+        `sendGift: pointsAwarded phải là số nguyên >= 0, nhận ${pointsAwarded}`,
+      );
+    }
+    if (pointsAwarded > priceDiamond) {
+      // Bất biến chống nhân đôi giá trị (docs/06 § Gift: tỉ lệ quy đổi < 1:1)
+      throw new Error(
+        `sendGift: pointsAwarded (${pointsAwarded}) không được vượt priceDiamond (${priceDiamond})`,
+      );
+    }
+    if (senderUserId === receiverUserId) {
+      throw new Error('sendGift: không tự tặng quà cho chính mình');
+    }
+
+    const price = BigInt(priceDiamond);
+    const points = BigInt(pointsAwarded);
+    const entries = [
+      {
+        accountKind: LedgerAccountKind.UserWallet,
+        userId: senderUserId,
+        direction: LedgerDirection.Debit,
+        amount: price,
+        currency: LedgerCurrency.Diamond,
+      },
+      {
+        accountKind: LedgerAccountKind.SystemGiftPool,
+        direction: LedgerDirection.Credit,
+        amount: price,
+        currency: LedgerCurrency.Diamond,
+      },
+      // Chân PTS chỉ tồn tại khi có điểm thưởng — amount 0 bị validateEntries chặn
+      ...(points > 0n
+        ? [
+            {
+              accountKind: LedgerAccountKind.SystemPointsMint,
+              direction: LedgerDirection.Debit,
+              amount: points,
+              currency: LedgerCurrency.Points,
+            },
+            {
+              accountKind: LedgerAccountKind.UserEarnings,
+              userId: receiverUserId,
+              direction: LedgerDirection.Credit,
+              amount: points,
+              currency: LedgerCurrency.Points,
+            },
+          ]
+        : []),
+    ];
+
+    const result = await this.ledger.record({
+      type: TransactionType.GiftSend,
+      idempotencyKey,
+      actorUserId: senderUserId,
+      metadata: { ...metadata, receiverUserId },
+      entries,
+      withinTransaction: async (manager, txn) => {
+        // Event nghiệp vụ riêng (pattern VIP) — consumer notification/analytics cần receiver,
+        // event mặc định economy.diamond.debited chỉ nói về ví người tặng
+        await manager.save(
+          manager.create(OutboxEvent, {
+            topic: ECONOMY_EVENTS_TOPIC,
+            eventType: 'economy.gift.sent',
+            payload: {
+              version: 1,
+              transactionId: txn.id,
+              senderUserId,
+              receiverUserId,
+              priceDiamond: price.toString(),
+              pointsAwarded: points.toString(),
+              ...metadata,
+            },
+          }),
+        );
+        await input.withinTransaction?.(manager, txn.id);
+      },
     });
     return { transactionId: result.transaction.id, replayed: result.replayed };
   }

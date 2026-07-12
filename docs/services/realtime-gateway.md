@@ -20,8 +20,9 @@ nguyên văn. Nhờ vậy slice này **không cần internal API** giữa gatewa
   cùng verify bằng CÙNG `JWT_SECRET`. Gateway không bao giờ ký token.
 - `realtime-events.ts`: channel builder/parser, tên event, kiểu payload
   (`RealtimeEnvelope<T>`). Event hiện có: `soul.message`, `soul.matched`, `match.matched`,
-  `match.confirmed`. Thêm event mới = thêm vào file này, 2 app cùng thấy — lệch hợp đồng là
-  lỗi compile.
+  `match.confirmed`, `call.ended`, `friend.message`, `party.member.joined`,
+  `party.member.left`, `party.role.changed`, `party.room.closed`, `gift.sent`. Thêm event
+  mới = thêm vào file này, 2 app cùng thấy — lệch hợp đồng là lỗi compile.
 
 ## 3. Ngữ nghĩa best-effort (chủ đích, không phải thiếu sót)
 
@@ -40,6 +41,10 @@ nghiệp vụ như Notification — docs/10 § Distributed).
 | `confirmTicket` chốt đủ 2 confirm (sau commit)       | `match.confirmed` | cả 2 user                    |
 | `soul-match` gửi message MỚI (sau persist)           | `soul.message`    | cả 2 (payload per-recipient) |
 | `soul-match` mutual like TẠO friendship (sau commit) | `soul.matched`    | cả 2                         |
+| `calling` end call ở MỌI nhánh (sau commit)          | `call.ended`      | cả 2 user của call           |
+| `friend` gửi message chat 1-1 (sau persist)          | `friend.message`  | cả 2 bạn                     |
+| `party-room` join/leave/đổi role/đóng phòng          | `party.*`         | member active của phòng      |
+| `gift` tặng quà thành công (SAU transaction tiền)    | `gift.sent`       | member active của phòng      |
 
 Mỗi module publish bằng Redis client riêng của mình (docs/05 § 5.3) qua helper chung
 `publishRealtimeEvent`.

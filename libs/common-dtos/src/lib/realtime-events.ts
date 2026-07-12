@@ -39,6 +39,15 @@ export const RealtimeEvents = {
   CallEnded: 'call.ended',
   /** Message mới trong chat 1-1 lâu dài giữa 2 bạn (khác chat ẩn danh Soul Match). */
   FriendMessage: 'friend.message',
+  /** Member vào/ra Party Room (fanout cho member active còn lại trong phòng). */
+  PartyMemberJoined: 'party.member.joined',
+  PartyMemberLeft: 'party.member.left',
+  /** Host cấp/thu quyền speaker — grant SFU đã đổi xong ở server trước khi publish. */
+  PartyRoleChanged: 'party.role.changed',
+  /** Phòng đóng (host rời, hết member, sweeper) — client phải rời UI phòng. */
+  PartyRoomClosed: 'party.room.closed',
+  /** Quà tặng trong Party Room — publish SAU khi transaction tiền commit (docs/10 § Gift). */
+  GiftSent: 'gift.sent',
 } as const;
 export type RealtimeEventName =
   (typeof RealtimeEvents)[keyof typeof RealtimeEvents];
@@ -86,5 +95,41 @@ export interface FriendMessageEventData {
   /** KHÔNG ẩn danh (2 bên đã unlock profile khi thành bạn) — khác SoulMessageEventData. */
   senderUserId: string;
   content: string;
+  sentAt: string;
+}
+
+export interface PartyMemberJoinedEventData {
+  roomId: string;
+  userId: string;
+  /** host | speaker | audience (party-room-service.md § 2). */
+  role: string;
+}
+
+export interface PartyMemberLeftEventData {
+  roomId: string;
+  userId: string;
+}
+
+export interface PartyRoleChangedEventData {
+  roomId: string;
+  userId: string;
+  role: string;
+}
+
+export interface PartyRoomClosedEventData {
+  roomId: string;
+  /** host_left | empty | swept (party-room-service.md § 4). */
+  reason: string;
+}
+
+export interface GiftSentEventData {
+  roomId: string;
+  giftEventId: string;
+  giftCode: string;
+  senderUserId: string;
+  receiverUserId: string;
+  priceDiamond: number;
+  /** PTS người nhận thực nhận (0 nếu receiver là guest — docs/06 § Gift). */
+  pointsAwarded: number;
   sentAt: string;
 }

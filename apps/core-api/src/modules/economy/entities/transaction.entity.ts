@@ -12,6 +12,8 @@ export enum TransactionType {
   MatchingSpeedup = 'matching_speedup',
   /** Billing voice call theo phút (docs/services/calling-service.md § 4). */
   CallingPerMinute = 'calling_per_minute',
+  /** Tặng quà: 2 chân độc lập DIA + PTS trong 1 transaction (docs/services/economy-service.md § 6). */
+  GiftSend = 'gift_send',
   Reversal = 'reversal',
   Adjustment = 'adjustment',
 }
