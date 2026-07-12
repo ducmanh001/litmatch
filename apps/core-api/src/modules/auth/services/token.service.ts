@@ -7,7 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@litmatch/common-exceptions';
 import { IsNull, Repository } from 'typeorm';
 
-import type { AccessTokenPayload } from '../../../common/types/access-token-payload';
+import type { AccessTokenPayload } from '@litmatch/common-dtos';
 import type { CoreApiEnv } from '../../../config/env.validation';
 import { REFRESH_TOKEN_BYTES } from '../auth.constants';
 import { AuthErrors } from '../auth.errors';

@@ -84,15 +84,25 @@
     ]
   },
   "signaling": {
-    "description": "WebSocket, room state và realtime signaling",
+    "description": "WebSocket, room state và realtime signaling (fanout theo user — gateway không business logic)",
     "read": [
       "AGENTS.md",
       "apps/signaling-gateway/AGENTS.md",
       "docs/03-architecture.md",
       "docs/06-domain-rules.md",
+      "docs/services/realtime-gateway.md",
       "docs/10-code-review-checklist.md"
     ],
-    "paths": ["apps/signaling-gateway", "apps/signaling-gateway-e2e"],
+    "paths": [
+      "apps/signaling-gateway",
+      "apps/signaling-gateway-e2e",
+      "libs/common-dtos/src/lib/realtime-events.ts"
+    ],
+    "invariants": [
+      "Gateway không business logic — authz/ẩn danh quyết ở core-api tại thời điểm publish",
+      "Socket chỉ join room user của chính JWT đã verify, không nhận room từ client",
+      "Publish best-effort SAU commit; REST polling là fallback"
+    ],
     "checks": [
       "pnpm agent:check",
       "pnpm nx run signaling-gateway:lint",

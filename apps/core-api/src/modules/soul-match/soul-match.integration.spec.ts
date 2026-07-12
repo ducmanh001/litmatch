@@ -205,6 +205,8 @@ d('Soul Match integration (Postgres thật)', () => {
       friendService,
       userService,
       configStub,
+      // stub publish — luồng realtime end-to-end test ở suite signaling-gateway
+      { publish: async () => 1 } as never,
     );
   });
 

@@ -1,12 +1,18 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { buildCursorPage, decodeCursor } from '@litmatch/common-dtos';
+import {
+  RealtimeEvents,
+  buildCursorPage,
+  decodeCursor,
+} from '@litmatch/common-dtos';
 import { DomainException } from '@litmatch/common-exceptions';
 import { DataSource, Repository } from 'typeorm';
 
 import { isUniqueViolation } from '../../database/postgres-errors';
+import { publishRealtimeEvent } from '../../common/realtime/publish-realtime';
 import { messageIdempotencyKey } from './soul-match.constants';
+import { SOUL_MATCH_REDIS } from './redis/soul-match-redis.provider';
 import { SoulMatchErrors } from './soul-match.errors';
 import { SoulChatMessage } from './entities/soul-chat-message.entity';
 import {
@@ -22,7 +28,13 @@ import {
 } from '../matching';
 import { PublicProfileDto, UserService, UserStatus } from '../user';
 
-import type { CursorPage } from '@litmatch/common-dtos';
+import type {
+  CursorPage,
+  RealtimeEnvelope,
+  SoulMatchedEventData,
+  SoulMessageEventData,
+} from '@litmatch/common-dtos';
+import type Redis from 'ioredis';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import type { CoreApiEnv } from '../../config/env.validation';
 import type { RateSessionDto, SendMessageDto } from './dto/soul-match.dtos';
@@ -58,6 +70,8 @@ export interface RateResult {
  */
 @Injectable()
 export class SoulMatchService {
+  private readonly logger = new Logger(SoulMatchService.name);
+
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     @InjectRepository(SoulChatMessage)
@@ -68,6 +82,7 @@ export class SoulMatchService {
     private readonly friendService: FriendService,
     private readonly userService: UserService,
     private readonly config: ConfigService<CoreApiEnv, true>,
+    @Inject(SOUL_MATCH_REDIS) private readonly redis: Redis,
   ) {}
 
   /** Trạng thái phòng cho member poll — chỉ verdict của mình + cờ matched (spec § 2). */
@@ -130,7 +145,7 @@ export class SoulMatchService {
 
     const prefixedKey = messageIdempotencyKey(user.userId, idempotencyKey);
     try {
-      return await this.messageRepo.save(
+      const message = await this.messageRepo.save(
         this.messageRepo.create({
           sessionId,
           senderUserId: user.userId,
@@ -138,6 +153,35 @@ export class SoulMatchService {
           idempotencyKey: prefixedKey,
         }),
       );
+      // Realtime SAU khi persist, chỉ cho message MỚI (replay không bắn lại) — best-effort,
+      // senderRole tính per-recipient TẠI ĐÂY để gateway không phải biết gì về ẩn danh (spec § 7)
+      const partnerId = this.partnerIdOf(room.session, user.userId);
+      await Promise.all(
+        (
+          [
+            [user.userId, 'me'],
+            [partnerId, 'partner'],
+          ] as const
+        ).map(([recipientId, senderRole]) => {
+          const envelope: RealtimeEnvelope<SoulMessageEventData> = {
+            event: RealtimeEvents.SoulMessage,
+            data: {
+              sessionId,
+              messageId: message.id,
+              senderRole,
+              content: message.content,
+              sentAt: message.createdAt.toISOString(),
+            },
+          };
+          return publishRealtimeEvent(
+            this.redis,
+            this.logger,
+            recipientId,
+            envelope,
+          );
+        }),
+      );
+      return message;
     } catch (err) {
       if (!isUniqueViolation(err)) throw err;
       const existing = await this.messageRepo.findOneBy({
@@ -224,8 +268,10 @@ export class SoulMatchService {
     }
     const partnerId = this.partnerIdOf(room.session, user.userId);
 
+    let result: RateResult;
+    let newlyMatched = false;
     try {
-      return await this.dataSource.transaction(async (manager) => {
+      result = await this.dataSource.transaction(async (manager) => {
         // Serialize 2 rater trên session row — chỉ lock, KHÔNG ghi (quyền ghi thuộc Matching)
         await manager.findOne(MatchSession, {
           where: { id: sessionId },
@@ -266,12 +312,13 @@ export class SoulMatchService {
             raterUserId: partnerId,
           });
           if (partnerRating?.verdict === SoulMatchVerdict.Like) {
-            await this.friendService.ensureFriendship(
+            const { created } = await this.friendService.ensureFriendship(
               manager,
               user.userId,
               partnerId,
               FriendshipSource.SoulMatch,
             );
+            newlyMatched = created;
             matched = true;
           }
         }
@@ -291,6 +338,20 @@ export class SoulMatchService {
         matched: await this.friendService.areFriends(user.userId, partnerId),
       };
     }
+
+    // Realtime SAU khi transaction commit — best-effort, replay không bắn lại (spec § 7)
+    if (newlyMatched) {
+      const envelope: RealtimeEnvelope<SoulMatchedEventData> = {
+        event: RealtimeEvents.SoulMatched,
+        data: { sessionId },
+      };
+      await Promise.all(
+        [user.userId, partnerId].map((uid) =>
+          publishRealtimeEvent(this.redis, this.logger, uid, envelope),
+        ),
+      );
+    }
+    return result;
   }
 
   /** Profile đối phương — CHỈ sau khi match (Friendship là nguồn sự thật unlock, spec § 2). */
