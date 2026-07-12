@@ -24,6 +24,7 @@
 - **Lint/format**: ESLint + Prettier + Husky pre-commit.
 
 ## 5.2 NestJS lifecycle convention
+
 - Dùng đúng lifecycle hook (`OnModuleInit`, `OnApplicationBootstrap`) để khởi tạo kết nối Redis/Kafka.
 - `Guard` cho auth/permission, `Interceptor` cho logging/transform response, `Pipe` cho validate.
 - Config qua `ConfigService`, không dùng `process.env` trực tiếp trong business logic.
@@ -33,6 +34,7 @@
 - **Job chạy định kỳ cần đọc interval từ config** (`.env`, không hardcode — § 5.1): không dùng decorator tĩnh `@Cron()`/`@Interval()`/`@Timeout()` (nhận giá trị cố định lúc decorate class) — đăng ký qua `SchedulerRegistry` (`@nestjs/schedule`) trong `onApplicationBootstrap`, đọc interval bằng `getOrThrow()` rồi `addInterval()`/`addCronJob()` thủ công (xem `outbox-relay.service.ts`, `ticket-sweeper.service.ts`).
 
 ## 5.3 Cấu trúc thư mục (ví dụ trong `apps/core-api`)
+
 ```
 src/
  |-- modules/
@@ -77,14 +79,14 @@ src/
 
 **Gốc module chỉ chứa đúng bộ**: `<module>.controller.ts / <module>.service.ts / <module>.module.ts / <module>.errors.ts / index.ts` (+ `<module>.constants.ts` khi module có hằng cấp module — optional, vd `user/` không có và không cần; + `<module>.integration.spec.ts` nếu có). Mọi thành phần khác xếp vào folder theo **vai trò** — bảng quyết định (chọn dòng ĐẦU TIÊN khớp):
 
-| Thành phần là gì? | Folder | Ví dụ hiện có |
-| --- | --- | --- |
-| Xử lý HTTP webhook từ bên thứ 3 (controller `@Public` + verify chữ ký) | `webhooks/` | `economy/webhooks/` |
-| **Port/Strategy**: abstract class (hoặc interface + Symbol) là boundary ổn định để cắm/đổi implementation qua env hoặc DI override — kể cả khi hiện mới có 1 impl dev, miễn là impl thật chắc chắn cắm vào đây sau (Twilio cho SMS, Safety module cho interaction-policy...) | `ports/` | `iap-verifier`, `notification-verifier`, `sms-provider`, `interaction-policy` |
-| **Job nền chạy định kỳ** (đăng ký `SchedulerRegistry` trong `onApplicationBootstrap`) | `jobs/` | `outbox-relay`, `reconciliation`, `iap-refund-poll`, `matcher-worker`, `ticket-sweeper` |
-| **Client bên thứ 3**: hàm/lớp thuần gọi API ngoài (không chứa rule nghiệp vụ, không phải port vì chỉ 1 impl) | `clients/` | `apple-server-api`, `google-service-account` |
-| Provider hạ tầng store riêng của module (Redis/queue) + key builder của nó | `redis/` (hoặc tên store) | `matching/redis/` |
-| **Sub-service nghiệp vụ** còn lại, gọi qua DI trong process | `services/` | `ledger.service`, `refund.service`, `otp.service`, `token.service` |
+| Thành phần là gì?                                                                                                                                                                                                                                                            | Folder                    | Ví dụ hiện có                                                                           |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | --------------------------------------------------------------------------------------- |
+| Xử lý HTTP webhook từ bên thứ 3 (controller `@Public` + verify chữ ký)                                                                                                                                                                                                       | `webhooks/`               | `economy/webhooks/`                                                                     |
+| **Port/Strategy**: abstract class (hoặc interface + Symbol) là boundary ổn định để cắm/đổi implementation qua env hoặc DI override — kể cả khi hiện mới có 1 impl dev, miễn là impl thật chắc chắn cắm vào đây sau (Twilio cho SMS, Safety module cho interaction-policy...) | `ports/`                  | `iap-verifier`, `notification-verifier`, `sms-provider`, `interaction-policy`           |
+| **Job nền chạy định kỳ** (đăng ký `SchedulerRegistry` trong `onApplicationBootstrap`)                                                                                                                                                                                        | `jobs/`                   | `outbox-relay`, `reconciliation`, `iap-refund-poll`, `matcher-worker`, `ticket-sweeper` |
+| **Client bên thứ 3**: hàm/lớp thuần gọi API ngoài (không chứa rule nghiệp vụ, không phải port vì chỉ 1 impl)                                                                                                                                                                 | `clients/`                | `apple-server-api`, `google-service-account`                                            |
+| Provider hạ tầng store riêng của module (Redis/queue) + key builder của nó                                                                                                                                                                                                   | `redis/` (hoặc tên store) | `matching/redis/`                                                                       |
+| **Sub-service nghiệp vụ** còn lại, gọi qua DI trong process                                                                                                                                                                                                                  | `services/`               | `ledger.service`, `refund.service`, `otp.service`, `token.service`                      |
 
 - Folder nào chưa có thành phần thì KHÔNG tạo sẵn (matching không có `services/` vì ngoài facade chưa có sub-service nào).
 - **Unit test `*.spec.ts` đặt CẠNH file nó test** (chuẩn NestJS/Jest/Nx — test sống-chết-di-chuyển cùng file nguồn, không gom `tests/` riêng); test integration cả module (`*.integration.spec.ts`, cần DB thật) đặt ở gốc module.
@@ -161,10 +163,11 @@ Khung chỉ cứng ở tầng hình thái này — business logic trong service 
 
 - **Idempotency key là unique constraint ở DB**, không bao giờ check-rồi-insert bằng code (check-then-act vẫn có race). Luồng chuẩn: cố `INSERT` → bắt **unique violation** → đọc lại row đã tồn tại → xử lý theo trạng thái của nó, KHÔNG tạo bản ghi thứ 2.
 - **Nguồn của key — 2 trường hợp, chọn theo bản chất giao dịch**: (a) hành động do client khởi tạo, không có ID ngoài nào (mua VIP, speed-up, tặng quà) → header `Idempotency-Key` qua `@IdempotencyKey()`, service prefix theo domain; (b) giao dịch có **ID bất biến từ hệ thống ngoài** (IAP: `providerTransactionId` Apple/Google, webhook notification id) → dùng chính ID đó làm key, server tự derive, KHÔNG cần header — mạnh hơn header vì client không kiểm soát được giá trị (vd `POST /economy/iap/verify` idempotent theo `iap:<provider>:<providerTransactionId>`). "Idempotency bắt buộc cho mọi API động tới diamond" nghĩa là bắt buộc CÓ key + unique constraint, không có nghĩa bắt buộc là header.
-- **2 request song song cùng key** (request đầu chưa commit): request sau bắt unique violation *trước* khi request đầu xong → **retry đọc ngắn có backoff** tới khi row hiện trạng thái cuối, rồi trả kết quả cũ. Không được tự tạo giao dịch mới.
+- **2 request song song cùng key** (request đầu chưa commit): request sau bắt unique violation _trước_ khi request đầu xong → **retry đọc ngắn có backoff** tới khi row hiện trạng thái cuối, rồi trả kết quả cũ. Không được tự tạo giao dịch mới.
 - **Cùng key nhưng payload khác** (`request_hash` khác) → trả 409 `*_IDEMPOTENCY_CONFLICT` (lỗi client, không phải retry).
 - **Check + hành động luôn atomic**: gộp trong 1 DB transaction với `SELECT ... FOR UPDATE` (hoặc optimistic lock), xác minh lại điều kiện (số dư, quyền, trạng thái) **tại thời điểm hành động**, không tin giá trị đọc trước đó ([10 § 10.0.C](./10-code-review-checklist.md)).
 - **Không diễn giải lại giao dịch cũ theo config hiện tại**: giá/tỉ lệ áp dụng phải snapshot vào bản ghi giao dịch (versioned pricing), đọc lại từ snapshot đó — đổi giá không bao giờ đụng giao dịch đã ghi.
 
 ---
+
 [← 04 · Tech Stack](./04-tech-stack.md) · [06 · Domain Rules →](./06-domain-rules.md)

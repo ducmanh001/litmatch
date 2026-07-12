@@ -48,4 +48,5 @@ Xem trạng thái chi tiết theo giai đoạn ở [`docs/07-roadmap.md`](./docs
 - **Modular monolith trước**: chỉ 3 thành phần deploy riêng (`core-api`, `signaling-gateway`, `media-server`), mọi domain khác là module bên trong `core-api`.
 - **Economy = double-entry ledger**: `LedgerEntry` là nguồn sự thật, `Wallet.balance` chỉ là snapshot dẫn xuất.
 - **Review theo phương pháp luận, không chỉ theo checklist kỹ thuật**: `docs/10-code-review-checklist.md` § 10.0 dạy cách tìm lỗi logic nghiệp vụ (business logic vulnerability) — loại lỗi mà linter/scanner không bắt được.
+
 # litmatch

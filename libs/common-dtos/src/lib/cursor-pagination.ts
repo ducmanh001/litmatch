@@ -38,10 +38,18 @@ export function encodeCursor(payload: Record<string, string | number>): string {
  * caller tự quyết (thường throw DomainException `*_CURSOR_INVALID` của module mình,
  * lib shared này không ép mã lỗi domain).
  */
-export function decodeCursor<T extends Record<string, unknown>>(cursor: string): T | null {
+export function decodeCursor<T extends Record<string, unknown>>(
+  cursor: string,
+): T | null {
   try {
-    const parsed: unknown = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? (parsed as T) : null;
+    const parsed: unknown = JSON.parse(
+      Buffer.from(cursor, 'base64url').toString('utf8'),
+    );
+    return typeof parsed === 'object' &&
+      parsed !== null &&
+      !Array.isArray(parsed)
+      ? (parsed as T)
+      : null;
   } catch {
     return null;
   }
@@ -61,6 +69,8 @@ export function buildCursorPage<T>(
   const last = items[items.length - 1];
   return {
     items,
-    meta: { nextCursor: hasMore && last ? encodeCursor(toCursorPayload(last)) : null },
+    meta: {
+      nextCursor: hasMore && last ? encodeCursor(toCursorPayload(last)) : null,
+    },
   };
 }

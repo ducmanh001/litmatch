@@ -48,7 +48,8 @@ import { HealthController } from './health.controller';
       useFactory: (config: ConfigService<CoreApiEnv, true>) => ({
         throttlers: [
           {
-            ttl: config.getOrThrow('THROTTLE_TTL_SECONDS', { infer: true }) * 1000,
+            ttl:
+              config.getOrThrow('THROTTLE_TTL_SECONDS', { infer: true }) * 1000,
             limit: config.getOrThrow('THROTTLE_LIMIT', { infer: true }),
           },
         ],

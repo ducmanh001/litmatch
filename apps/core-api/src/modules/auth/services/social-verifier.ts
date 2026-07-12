@@ -33,30 +33,53 @@ export class SocialVerifierService {
 
   constructor(private readonly config: ConfigService<CoreApiEnv, true>) {}
 
-  async verify(provider: AuthProvider, idToken: string): Promise<SocialIdentity> {
+  async verify(
+    provider: AuthProvider,
+    idToken: string,
+  ): Promise<SocialIdentity> {
     if (provider !== AuthProvider.Google && provider !== AuthProvider.Apple) {
-      throw new DomainException(AuthErrors.SOCIAL_PROVIDER_NOT_SUPPORTED, `Provider ${provider} chưa được hỗ trợ`, HttpStatus.BAD_REQUEST);
+      throw new DomainException(
+        AuthErrors.SOCIAL_PROVIDER_NOT_SUPPORTED,
+        `Provider ${provider} chưa được hỗ trợ`,
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const clientId = this.config.getOrThrow(
-      provider === AuthProvider.Google ? 'AUTH_GOOGLE_CLIENT_ID' : 'AUTH_APPLE_CLIENT_ID',
+      provider === AuthProvider.Google
+        ? 'AUTH_GOOGLE_CLIENT_ID'
+        : 'AUTH_APPLE_CLIENT_ID',
       { infer: true },
     );
     if (!clientId) {
-      throw new DomainException(AuthErrors.SOCIAL_PROVIDER_NOT_SUPPORTED, `Provider ${provider} chưa được cấu hình`, HttpStatus.BAD_REQUEST);
+      throw new DomainException(
+        AuthErrors.SOCIAL_PROVIDER_NOT_SUPPORTED,
+        `Provider ${provider} chưa được cấu hình`,
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
-    const issuer = provider === AuthProvider.Google ? [...GOOGLE_OIDC_ISSUERS] : APPLE_OIDC_ISSUER;
+    const issuer =
+      provider === AuthProvider.Google
+        ? [...GOOGLE_OIDC_ISSUERS]
+        : APPLE_OIDC_ISSUER;
 
     try {
-      const { payload } = await jwtVerify(idToken, this.jwks[provider], { issuer, audience: clientId });
+      const { payload } = await jwtVerify(idToken, this.jwks[provider], {
+        issuer,
+        audience: clientId,
+      });
       if (!payload.sub) throw new Error('missing sub');
       return { uid: payload.sub };
     } catch (err) {
       // Log lỗi gốc để phân biệt token thật sự giả mạo với lỗi mạng/JWKS rotate — response
       // cho client giữ nguyên message chung để không lộ chi tiết xác thực (docs/05 § 5.7).
       this.logger.warn(`Social token verify thất bại (${provider}): ${err}`);
-      throw new DomainException(AuthErrors.SOCIAL_TOKEN_INVALID, 'ID token không hợp lệ', HttpStatus.UNAUTHORIZED);
+      throw new DomainException(
+        AuthErrors.SOCIAL_TOKEN_INVALID,
+        'ID token không hợp lệ',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
   }
 }

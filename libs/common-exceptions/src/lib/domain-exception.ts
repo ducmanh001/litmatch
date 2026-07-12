@@ -15,7 +15,10 @@ export class DomainException extends Error {
   ) {
     super(message);
     this.name = 'DomainException';
-    if (httpStatus < HttpStatus.BAD_REQUEST || httpStatus >= HttpStatus.INTERNAL_SERVER_ERROR) {
+    if (
+      httpStatus < HttpStatus.BAD_REQUEST ||
+      httpStatus >= HttpStatus.INTERNAL_SERVER_ERROR
+    ) {
       throw new Error(
         `DomainException chỉ được dùng status 4xx, nhận ${httpStatus} cho code ${code}`,
       );

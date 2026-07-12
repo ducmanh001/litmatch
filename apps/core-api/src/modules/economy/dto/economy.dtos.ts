@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsNotEmpty, IsObject, IsString, Length } from 'class-validator';
+import {
+  IsEnum,
+  IsNotEmpty,
+  IsObject,
+  IsString,
+  Length,
+} from 'class-validator';
 
 import { IapProvider } from '../entities/iap.entities';
 import { VipTier } from '../entities/wallet.entity';
@@ -30,9 +36,18 @@ export class PurchaseVipDto {
 }
 
 export class WalletDto {
-  @ApiProperty({ example: '1200', description: 'Số dư diamond (chuỗi — bigint)' }) balance!: string;
-  @ApiProperty({ example: '0', description: 'Điểm quy đổi từ gift (PTS)' }) earnings!: string;
-  @ApiProperty({ enum: VipTier, nullable: true, description: 'Đã derive hết hạn — null nếu không còn active' })
+  @ApiProperty({
+    example: '1200',
+    description: 'Số dư diamond (chuỗi — bigint)',
+  })
+  balance!: string;
+  @ApiProperty({ example: '0', description: 'Điểm quy đổi từ gift (PTS)' })
+  earnings!: string;
+  @ApiProperty({
+    enum: VipTier,
+    nullable: true,
+    description: 'Đã derive hết hạn — null nếu không còn active',
+  })
   vipTier!: VipTier | null;
   @ApiProperty({ nullable: true, type: Date }) vipExpiresAt!: Date | null;
 }

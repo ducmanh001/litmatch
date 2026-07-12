@@ -13,7 +13,9 @@ export async function getGoogleServiceAccountAccessToken(
   scope: string,
 ): Promise<string> {
   const email = config.getOrThrow('ECONOMY_GOOGLE_SA_EMAIL', { infer: true });
-  const privateKeyPem = config.getOrThrow('ECONOMY_GOOGLE_SA_PRIVATE_KEY', { infer: true }).replace(/\\n/g, '\n');
+  const privateKeyPem = config
+    .getOrThrow('ECONOMY_GOOGLE_SA_PRIVATE_KEY', { infer: true })
+    .replace(/\\n/g, '\n');
   const key = await importPKCS8(privateKeyPem, 'RS256');
   const assertion = await new SignJWT({ scope })
     .setProtectedHeader({ alg: 'RS256' })
@@ -26,7 +28,10 @@ export async function getGoogleServiceAccountAccessToken(
   const res = await fetch(GOOGLE_OAUTH_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }),
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion,
+    }),
   });
   if (!res.ok) throw new Error(`Google OAuth lỗi ${res.status}`);
   const body = (await res.json()) as { access_token: string };

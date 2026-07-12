@@ -4,7 +4,10 @@ import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@litmatch/common-exceptions';
 import { DataSource, Repository } from 'typeorm';
 
-import { isUniqueViolation, violatedConstraint } from '../../database/postgres-errors';
+import {
+  isUniqueViolation,
+  violatedConstraint,
+} from '../../database/postgres-errors';
 import {
   DEFAULT_REGION,
   SPEEDUP_RATE_WINDOW_SECONDS,
@@ -14,8 +17,15 @@ import {
   speedupIdempotencyKey,
 } from './matching.constants';
 import { MatchingErrors } from './matching.errors';
-import { MATCH_TICKET_TRANSITIONS, MatchTicket, MatchTicketStatus } from './entities/match-ticket.entity';
-import { MatchSession, MatchSessionStatus } from './entities/match-session.entity';
+import {
+  MATCH_TICKET_TRANSITIONS,
+  MatchTicket,
+  MatchTicketStatus,
+} from './entities/match-ticket.entity';
+import {
+  MatchSession,
+  MatchSessionStatus,
+} from './entities/match-session.entity';
 import {
   MATCHING_ACTIVE_SHARDS_KEY,
   MATCHING_REDIS,
@@ -56,7 +66,8 @@ return c
 export class MatchingService {
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
-    @InjectRepository(MatchTicket) private readonly ticketRepo: Repository<MatchTicket>,
+    @InjectRepository(MatchTicket)
+    private readonly ticketRepo: Repository<MatchTicket>,
     private readonly userService: UserService,
     private readonly economy: EconomyService,
     private readonly config: ConfigService<CoreApiEnv, true>,
@@ -67,10 +78,18 @@ export class MatchingService {
    * Vào hàng đợi. Idempotent theo header Idempotency-Key (unique constraint DB — docs/05 § 5.10);
    * 1 user chỉ 1 ticket active — chặn bằng partial unique index, không check-rồi-insert.
    */
-  async joinQueue(user: AuthenticatedUser, dto: JoinQueueDto, idempotencyKey: string): Promise<MatchTicket> {
+  async joinQueue(
+    user: AuthenticatedUser,
+    dto: JoinQueueDto,
+    idempotencyKey: string,
+  ): Promise<MatchTicket> {
     const profile = await this.userService.getByIdOrThrow(user.userId);
     if (profile.status === UserStatus.Banned) {
-      throw new DomainException(MatchingErrors.USER_BANNED, 'Tài khoản bị khoá, không thể vào hàng đợi', HttpStatus.FORBIDDEN);
+      throw new DomainException(
+        MatchingErrors.USER_BANNED,
+        'Tài khoản bị khoá, không thể vào hàng đợi',
+        HttpStatus.FORBIDDEN,
+      );
     }
 
     // region/ageBand server tự derive từ profile — không tin client (docs/10 § 10.0.B)
@@ -96,9 +115,14 @@ export class MatchingService {
     } catch (err) {
       if (!isUniqueViolation(err)) throw err;
       // Replay cùng Idempotency-Key? — check TRƯỚC, vì cả 2 unique constraint có thể cùng dính
-      const existing = await this.ticketRepo.findOneBy({ idempotencyKey: prefixedKey });
+      const existing = await this.ticketRepo.findOneBy({
+        idempotencyKey: prefixedKey,
+      });
       if (existing) {
-        if (existing.userId !== user.userId || existing.matchType !== dto.matchType) {
+        if (
+          existing.userId !== user.userId ||
+          existing.matchType !== dto.matchType
+        ) {
           throw new DomainException(
             MatchingErrors.TICKET_IDEMPOTENCY_CONFLICT,
             'Idempotency-Key đã dùng cho 1 request khác nội dung',
@@ -106,7 +130,8 @@ export class MatchingService {
           );
         }
         // Replay: đảm bảo ticket còn queued vẫn có mặt trong Redis (NX — không đè score đã boost)
-        if (existing.status === MatchTicketStatus.Queued) await this.ensureEnqueued(existing);
+        if (existing.status === MatchTicketStatus.Queued)
+          await this.ensureEnqueued(existing);
         return existing;
       }
       if (violatedConstraint(err, UQ_ACTIVE_USER)) {
@@ -125,17 +150,27 @@ export class MatchingService {
     return ticket;
   }
 
-  async getTicket(user: AuthenticatedUser, ticketId: string): Promise<MatchTicket> {
+  async getTicket(
+    user: AuthenticatedUser,
+    ticketId: string,
+  ): Promise<MatchTicket> {
     const ticket = await this.ticketRepo.findOneBy({ id: ticketId });
     if (!ticket) {
-      throw new DomainException(MatchingErrors.TICKET_NOT_FOUND, 'Không tìm thấy ticket', HttpStatus.NOT_FOUND);
+      throw new DomainException(
+        MatchingErrors.TICKET_NOT_FOUND,
+        'Không tìm thấy ticket',
+        HttpStatus.NOT_FOUND,
+      );
     }
     this.assertOwnership(ticket, user); // IDOR — docs/10 § 10.1.D
     return ticket;
   }
 
   /** Huỷ ticket của chính mình — chỉ hợp lệ khi đang queued (state machine § 1). */
-  async cancelTicket(user: AuthenticatedUser, ticketId: string): Promise<MatchTicket> {
+  async cancelTicket(
+    user: AuthenticatedUser,
+    ticketId: string,
+  ): Promise<MatchTicket> {
     const cancelled = await this.dataSource.transaction(async (manager) => {
       const ticket = await this.lockTicket(manager, ticketId);
       this.assertOwnership(ticket, user);
@@ -152,7 +187,10 @@ export class MatchingService {
    * Confirm match. Lock THEO THỨ TỰ session → ticket (2 bên confirm song song đều chờ trên session,
    * không deadlock chéo ticket). Đủ 2 confirm → session + cả 2 ticket sang confirmed, atomic 1 transaction.
    */
-  async confirmTicket(user: AuthenticatedUser, ticketId: string): Promise<MatchTicket> {
+  async confirmTicket(
+    user: AuthenticatedUser,
+    ticketId: string,
+  ): Promise<MatchTicket> {
     const pre = await this.getTicket(user, ticketId); // đã check tồn tại + ownership
     if (pre.status === MatchTicketStatus.Confirmed) return pre; // confirm lặp sau khi đã chốt — idempotent
     if (pre.status !== MatchTicketStatus.Matched || !pre.sessionId) {
@@ -171,7 +209,11 @@ export class MatchingService {
       });
       if (!session || session.status !== MatchSessionStatus.PendingConfirm) {
         // sweeper có thể vừa expire session giữa lúc user bấm confirm — xác minh lại tại thời điểm hành động (docs/10 § 10.0.C)
-        throw new DomainException(MatchingErrors.SESSION_NOT_PENDING, 'Session không còn chờ confirm', HttpStatus.CONFLICT);
+        throw new DomainException(
+          MatchingErrors.SESSION_NOT_PENDING,
+          'Session không còn chờ confirm',
+          HttpStatus.CONFLICT,
+        );
       }
 
       const ticket = await this.lockTicket(manager, ticketId);
@@ -186,12 +228,20 @@ export class MatchingService {
       }
 
       const now = new Date();
-      if (ticket.id === session.ticketAId) session.confirmedAAt = session.confirmedAAt ?? now;
-      else if (ticket.id === session.ticketBId) session.confirmedBAt = session.confirmedBAt ?? now;
-      else throw new Error(`Ticket ${ticket.id} trỏ session ${session.id} nhưng session không chứa ticket này — dữ liệu hỏng`);
+      if (ticket.id === session.ticketAId)
+        session.confirmedAAt = session.confirmedAAt ?? now;
+      else if (ticket.id === session.ticketBId)
+        session.confirmedBAt = session.confirmedBAt ?? now;
+      else
+        throw new Error(
+          `Ticket ${ticket.id} trỏ session ${session.id} nhưng session không chứa ticket này — dữ liệu hỏng`,
+        );
 
       if (session.confirmedAAt && session.confirmedBAt) {
-        const otherId = ticket.id === session.ticketAId ? session.ticketBId : session.ticketAId;
+        const otherId =
+          ticket.id === session.ticketAId
+            ? session.ticketBId
+            : session.ticketAId;
         const other = await this.lockTicket(manager, otherId);
         this.assertTransition(ticket, MatchTicketStatus.Confirmed);
         this.assertTransition(other, MatchTicketStatus.Confirmed);
@@ -214,7 +264,11 @@ export class MatchingService {
     user: AuthenticatedUser,
     ticketId: string,
     idempotencyKey: string,
-  ): Promise<{ transactionId: string; replayed: boolean; ticket: MatchTicket }> {
+  ): Promise<{
+    transactionId: string;
+    replayed: boolean;
+    ticket: MatchTicket;
+  }> {
     const ticket = await this.getTicket(user, ticketId); // tồn tại + ownership
     if (ticket.status !== MatchTicketStatus.Queued) {
       throw new DomainException(
@@ -224,9 +278,15 @@ export class MatchingService {
       );
     }
 
-    const maxPerHour = this.config.getOrThrow('MATCHING_SPEEDUP_MAX_PER_HOUR', { infer: true });
-    const price = this.config.getOrThrow('MATCHING_SPEEDUP_PRICE_DIAMOND', { infer: true });
-    const boostMs = this.config.getOrThrow('MATCHING_PRIORITY_BOOST_MS', { infer: true });
+    const maxPerHour = this.config.getOrThrow('MATCHING_SPEEDUP_MAX_PER_HOUR', {
+      infer: true,
+    });
+    const price = this.config.getOrThrow('MATCHING_SPEEDUP_PRICE_DIAMOND', {
+      infer: true,
+    });
+    const boostMs = this.config.getOrThrow('MATCHING_PRIORITY_BOOST_MS', {
+      infer: true,
+    });
     const countKey = speedupCountKey(user.userId);
     const prefixedKey = speedupIdempotencyKey(user.userId, idempotencyKey);
 
@@ -237,7 +297,13 @@ export class MatchingService {
     // 1) Rate-limit TRƯỚC khi trừ tiền — vượt giới hạn thì chưa mất đồng nào (spec § 4)
     if (!isRetry) {
       const granted = Number(
-        await this.redis.eval(SPEEDUP_RATE_LIMIT_LUA, 1, countKey, String(maxPerHour), String(SPEEDUP_RATE_WINDOW_SECONDS)),
+        await this.redis.eval(
+          SPEEDUP_RATE_LIMIT_LUA,
+          1,
+          countKey,
+          String(maxPerHour),
+          String(SPEEDUP_RATE_WINDOW_SECONDS),
+        ),
       );
       if (granted < 0) {
         throw new DomainException(
@@ -252,9 +318,15 @@ export class MatchingService {
     // 2) Trừ tiền — ledger tự lo lock ví + idempotency + check số dư tại thời điểm trừ
     let spend: { transactionId: string; replayed: boolean };
     try {
-      spend = await this.economy.spendDiamond(user.userId, TransactionType.MatchingSpeedup, price, prefixedKey, {
-        ticketId,
-      });
+      spend = await this.economy.spendDiamond(
+        user.userId,
+        TransactionType.MatchingSpeedup,
+        price,
+        prefixedKey,
+        {
+          ticketId,
+        },
+      );
     } catch (err) {
       // trừ tiền fail (vd không đủ diamond) → trả lại slot rate-limit vừa chiếm
       if (!isRetry) await this.redis.decr(countKey).catch(() => undefined);
@@ -263,7 +335,11 @@ export class MatchingService {
     if (!spend.replayed) {
       // 3) Cộng dồn boost trong DB — atomic, chỉ khi ticket còn queued (vừa matched thì thôi, tiền
       // vẫn trừ đúng 1 lần theo spec § 4: completion phía Redis/boost retry được, không hoàn tiền)
-      await this.ticketRepo.increment({ id: ticket.id, status: MatchTicketStatus.Queued }, 'priorityBoostMs', boostMs);
+      await this.ticketRepo.increment(
+        { id: ticket.id, status: MatchTicketStatus.Queued },
+        'priorityBoostMs',
+        boostMs,
+      );
     } else if (!isRetry) {
       // 2 request song song CÙNG key: bên thua replay muộn — không phải lượt mới → hoàn slot
       await this.redis.decr(countKey).catch(() => undefined);
@@ -271,9 +347,18 @@ export class MatchingService {
 
     // 4) Set score Redis tuyệt đối từ tổng boost trong DB — XX: member đã rời queue thì bỏ qua
     const fresh = await this.ticketRepo.findOneByOrFail({ id: ticket.id });
-    await this.redis.zadd(shardKeyOfTicket(fresh), 'XX', String(ticketScore(fresh)), fresh.id);
+    await this.redis.zadd(
+      shardKeyOfTicket(fresh),
+      'XX',
+      String(ticketScore(fresh)),
+      fresh.id,
+    );
 
-    return { transactionId: spend.transactionId, replayed: spend.replayed, ticket: fresh };
+    return {
+      transactionId: spend.transactionId,
+      replayed: spend.replayed,
+      ticket: fresh,
+    };
   }
 
   /** ZADD NX (không đè score đã boost) + SADD shard active — dùng chung cho join/replay. */
@@ -286,20 +371,31 @@ export class MatchingService {
 
   // ---------- nội bộ ----------
 
-  private async lockTicket(manager: EntityManager, ticketId: string): Promise<MatchTicket> {
+  private async lockTicket(
+    manager: EntityManager,
+    ticketId: string,
+  ): Promise<MatchTicket> {
     const ticket = await manager.findOne(MatchTicket, {
       where: { id: ticketId },
       lock: { mode: 'pessimistic_write' },
     });
     if (!ticket) {
-      throw new DomainException(MatchingErrors.TICKET_NOT_FOUND, 'Không tìm thấy ticket', HttpStatus.NOT_FOUND);
+      throw new DomainException(
+        MatchingErrors.TICKET_NOT_FOUND,
+        'Không tìm thấy ticket',
+        HttpStatus.NOT_FOUND,
+      );
     }
     return ticket;
   }
 
   private assertOwnership(ticket: MatchTicket, user: AuthenticatedUser): void {
     if (ticket.userId !== user.userId) {
-      throw new DomainException(MatchingErrors.TICKET_FORBIDDEN, 'Ticket không thuộc về bạn', HttpStatus.FORBIDDEN);
+      throw new DomainException(
+        MatchingErrors.TICKET_FORBIDDEN,
+        'Ticket không thuộc về bạn',
+        HttpStatus.FORBIDDEN,
+      );
     }
   }
 
@@ -315,16 +411,18 @@ export class MatchingService {
 
   private ageBandOf(birthDate: string | null): number {
     if (!birthDate) return UNKNOWN_AGE_BAND;
-    const bandSize = this.config.getOrThrow('MATCHING_AGE_BAND_SIZE', { infer: true });
+    const bandSize = this.config.getOrThrow('MATCHING_AGE_BAND_SIZE', {
+      infer: true,
+    });
     const birth = new Date(birthDate);
     if (Number.isNaN(birth.getTime())) return UNKNOWN_AGE_BAND;
     const now = new Date();
     let age = now.getFullYear() - birth.getFullYear();
     const beforeBirthday =
-      now.getMonth() < birth.getMonth() || (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate());
+      now.getMonth() < birth.getMonth() ||
+      (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate());
     if (beforeBirthday) age -= 1;
     if (age < 0) return UNKNOWN_AGE_BAND;
     return Math.floor(age / bandSize);
   }
-
 }

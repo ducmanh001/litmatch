@@ -8,11 +8,17 @@ import { buildCursorPage, decodeCursor } from '@litmatch/common-dtos';
 import { ECONOMY_EVENTS_TOPIC } from './economy.constants';
 import { EconomyErrors } from './economy.errors';
 import { LedgerService } from './services/ledger.service';
-import { LedgerAccountKind, LedgerCurrency } from './entities/ledger-account.entity';
+import {
+  LedgerAccountKind,
+  LedgerCurrency,
+} from './entities/ledger-account.entity';
 import { LedgerDirection } from './entities/ledger-entry.entity';
 import { IapProduct, IapProvider, IapReceipt } from './entities/iap.entities';
 import { OutboxEvent } from './entities/outbox-event.entity';
-import { LedgerTransaction, TransactionType } from './entities/transaction.entity';
+import {
+  LedgerTransaction,
+  TransactionType,
+} from './entities/transaction.entity';
 import { VipPlan } from './entities/vip-plan.entity';
 import { VipTier, Wallet } from './entities/wallet.entity';
 import { IapVerifier } from './ports/iap-verifier';
@@ -42,16 +48,19 @@ export interface TransactionView {
 export class EconomyService {
   constructor(
     @InjectRepository(Wallet) private readonly walletRepo: Repository<Wallet>,
-    @InjectRepository(IapProduct) private readonly productRepo: Repository<IapProduct>,
+    @InjectRepository(IapProduct)
+    private readonly productRepo: Repository<IapProduct>,
     @InjectRepository(VipPlan) private readonly planRepo: Repository<VipPlan>,
-    @InjectRepository(LedgerTransaction) private readonly txnRepo: Repository<LedgerTransaction>,
+    @InjectRepository(LedgerTransaction)
+    private readonly txnRepo: Repository<LedgerTransaction>,
     private readonly ledger: LedgerService,
     private readonly iapVerifier: IapVerifier,
   ) {}
 
   async getWallet(userId: string): Promise<WalletView> {
     const wallet = await this.walletRepo.findOneBy({ userId });
-    if (!wallet) return { balance: '0', earnings: '0', vipTier: null, vipExpiresAt: null };
+    if (!wallet)
+      return { balance: '0', earnings: '0', vipTier: null, vipExpiresAt: null };
     return {
       balance: wallet.balance,
       earnings: wallet.earnings,
@@ -70,19 +79,35 @@ export class EconomyService {
     payload: Record<string, unknown>,
     productId: string,
   ): Promise<{ transactionId: string; diamonds: string; replayed: boolean }> {
-    const product = await this.productRepo.findOneBy({ productId, provider, active: true });
+    const product = await this.productRepo.findOneBy({
+      productId,
+      provider,
+      active: true,
+    });
     if (!product) {
-      throw new DomainException(EconomyErrors.IAP_PRODUCT_UNKNOWN, `Product ${productId} không tồn tại`, HttpStatus.BAD_REQUEST);
+      throw new DomainException(
+        EconomyErrors.IAP_PRODUCT_UNKNOWN,
+        `Product ${productId} không tồn tại`,
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
-    const verified = await this.iapVerifier.verify(provider, payload, productId);
+    const verified = await this.iapVerifier.verify(
+      provider,
+      payload,
+      productId,
+    );
     const diamonds = BigInt(product.diamonds);
 
     const result = await this.ledger.record({
       type: TransactionType.IapPurchase,
       idempotencyKey: `iap:${provider}:${verified.providerTransactionId}`,
       actorUserId: userId,
-      metadata: { provider, productId, providerTransactionId: verified.providerTransactionId },
+      metadata: {
+        provider,
+        productId,
+        providerTransactionId: verified.providerTransactionId,
+      },
       entries: [
         {
           accountKind: LedgerAccountKind.SystemIap,
@@ -112,7 +137,11 @@ export class EconomyService {
       },
     });
 
-    return { transactionId: result.transaction.id, diamonds: diamonds.toString(), replayed: result.replayed };
+    return {
+      transactionId: result.transaction.id,
+      diamonds: diamonds.toString(),
+      replayed: result.replayed,
+    };
   }
 
   /** Mua VIP bằng diamond — check số dư diễn ra SAU khi lock ví (trong LedgerService), không phải ở đầu luồng. */
@@ -120,10 +149,19 @@ export class EconomyService {
     userId: string,
     planId: string,
     idempotencyKey: string,
-  ): Promise<{ transactionId: string; tier: VipTier; vipExpiresAt: Date; replayed: boolean }> {
+  ): Promise<{
+    transactionId: string;
+    tier: VipTier;
+    vipExpiresAt: Date;
+    replayed: boolean;
+  }> {
     const plan = await this.planRepo.findOneBy({ id: planId, active: true });
     if (!plan) {
-      throw new DomainException(EconomyErrors.VIP_PLAN_UNKNOWN, `Gói VIP ${planId} không tồn tại`, HttpStatus.NOT_FOUND);
+      throw new DomainException(
+        EconomyErrors.VIP_PLAN_UNKNOWN,
+        `Gói VIP ${planId} không tồn tại`,
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     let newExpiry = new Date();
@@ -149,15 +187,30 @@ export class EconomyService {
       ],
       withinTransaction: async (manager) => {
         // Ví đã bị lock FOR UPDATE trong transaction này — đọc/ghi VIP là an toàn
-        const wallet = await manager.getRepository(Wallet).findOneByOrFail({ userId });
-        const base = wallet.vipExpiresAt && wallet.vipExpiresAt > new Date() ? wallet.vipExpiresAt : new Date();
+        const wallet = await manager
+          .getRepository(Wallet)
+          .findOneByOrFail({ userId });
+        const base =
+          wallet.vipExpiresAt && wallet.vipExpiresAt > new Date()
+            ? wallet.vipExpiresAt
+            : new Date();
         newExpiry = new Date(base.getTime() + plan.days * 24 * 3600 * 1000); // gia hạn cộng dồn
-        await manager.update(Wallet, { userId }, { vipTier: plan.tier, vipExpiresAt: newExpiry });
+        await manager.update(
+          Wallet,
+          { userId },
+          { vipTier: plan.tier, vipExpiresAt: newExpiry },
+        );
         await manager.save(
           manager.create(OutboxEvent, {
             topic: ECONOMY_EVENTS_TOPIC,
             eventType: 'economy.vip.purchased',
-            payload: { version: 1, userId, planId, tier: plan.tier, vipExpiresAt: newExpiry.toISOString() },
+            payload: {
+              version: 1,
+              userId,
+              planId,
+              tier: plan.tier,
+              vipExpiresAt: newExpiry.toISOString(),
+            },
           }),
         );
       },
@@ -173,7 +226,12 @@ export class EconomyService {
         replayed: true,
       };
     }
-    return { transactionId: result.transaction.id, tier: plan.tier, vipExpiresAt: newExpiry, replayed: false };
+    return {
+      transactionId: result.transaction.id,
+      tier: plan.tier,
+      vipExpiresAt: newExpiry,
+      replayed: false,
+    };
   }
 
   /**
@@ -193,7 +251,9 @@ export class EconomyService {
   ): Promise<{ transactionId: string; replayed: boolean }> {
     if (!Number.isSafeInteger(amountDiamond) || amountDiamond <= 0) {
       // Lỗi lập trình của caller (giá phải từ config, nguyên dương) — không phải lỗi client → Error, không DomainException
-      throw new Error(`spendDiamond: amountDiamond phải là số nguyên dương, nhận ${amountDiamond}`);
+      throw new Error(
+        `spendDiamond: amountDiamond phải là số nguyên dương, nhận ${amountDiamond}`,
+      );
     }
     const amount = BigInt(amountDiamond);
     const result = await this.ledger.record({
@@ -237,7 +297,12 @@ export class EconomyService {
   ): Promise<{ data: TransactionView[]; meta: CursorPageMeta }> {
     const qb = this.txnRepo
       .createQueryBuilder('t')
-      .select(['t.id AS id', 't.type AS type', 't.status AS status', 't.created_at AS created_at'])
+      .select([
+        't.id AS id',
+        't.type AS type',
+        't.status AS status',
+        't.created_at AS created_at',
+      ])
       .addSelect(
         `COALESCE(SUM(CASE WHEN la.kind = 'user_wallet' AND la.user_id = :userId
             THEN (CASE WHEN le.direction = 'credit' THEN le.amount ELSE -le.amount END) ELSE 0 END), 0)`,
@@ -255,7 +320,11 @@ export class EconomyService {
       // decode/encode qua helper chuẩn của @litmatch/common-dtos (docs/05 § 5.3) — không tự chế format cursor riêng
       const pos = decodeCursor<{ createdAt: string; id: string }>(cursor);
       if (!pos?.createdAt || !pos?.id) {
-        throw new DomainException(EconomyErrors.CURSOR_INVALID, 'Cursor không hợp lệ', HttpStatus.BAD_REQUEST);
+        throw new DomainException(
+          EconomyErrors.CURSOR_INVALID,
+          'Cursor không hợp lệ',
+          HttpStatus.BAD_REQUEST,
+        );
       }
       qb.andWhere('(t.created_at, t.id) < (:cursorCreatedAt, :cursorId)', {
         cursorCreatedAt: pos.createdAt,
@@ -263,9 +332,17 @@ export class EconomyService {
       });
     }
 
-    const rows: Array<{ id: string; type: TransactionType; status: string; created_at: Date; diamond_delta: string }> =
-      await qb.getRawMany();
-    const page = buildCursorPage(rows, limit, (last) => ({ createdAt: last.created_at.toISOString(), id: last.id }));
+    const rows: Array<{
+      id: string;
+      type: TransactionType;
+      status: string;
+      created_at: Date;
+      diamond_delta: string;
+    }> = await qb.getRawMany();
+    const page = buildCursorPage(rows, limit, (last) => ({
+      createdAt: last.created_at.toISOString(),
+      id: last.id,
+    }));
 
     return {
       data: page.items.map((r) => ({

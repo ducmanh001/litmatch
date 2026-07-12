@@ -41,7 +41,8 @@ describe('OtpService', () => {
   };
   let service: OtpService;
 
-  const hash = (code: string) => createHmac('sha256', PEPPER).update(`${PHONE}:${code}`).digest('hex');
+  const hash = (code: string) =>
+    createHmac('sha256', PEPPER).update(`${PHONE}:${code}`).digest('hex');
   const storedOtp = (over: Partial<PhoneOtp> = {}): PhoneOtp =>
     Object.assign(new PhoneOtp(), {
       id: 'otp1',
@@ -73,7 +74,10 @@ describe('OtpService', () => {
       const result = await service.requestOtp(PHONE);
       expect(result.ttlSeconds).toBe(300);
       expect(repo.update).toHaveBeenCalled(); // vô hiệu mã cũ
-      expect(sms.send).toHaveBeenCalledWith(PHONE, expect.stringMatching(/\d{6}/));
+      expect(sms.send).toHaveBeenCalledWith(
+        PHONE,
+        expect.stringMatching(/\d{6}/),
+      );
     });
 
     it('rate limit theo số điện thoại ở server — không phải chỉ ở FE (docs/10 § 10.1.H)', async () => {
@@ -96,10 +100,16 @@ describe('OtpService', () => {
 
     it('không có OTP hoặc hết hạn → AUTH_OTP_EXPIRED', async () => {
       repo.findOne.mockResolvedValue(null);
-      await expect(service.verifyOtp(PHONE, '123456')).rejects.toMatchObject({ code: AuthErrors.OTP_EXPIRED });
+      await expect(service.verifyOtp(PHONE, '123456')).rejects.toMatchObject({
+        code: AuthErrors.OTP_EXPIRED,
+      });
 
-      repo.findOne.mockResolvedValue(storedOtp({ expiresAt: new Date(Date.now() - 1000) }));
-      await expect(service.verifyOtp(PHONE, '123456')).rejects.toMatchObject({ code: AuthErrors.OTP_EXPIRED });
+      repo.findOne.mockResolvedValue(
+        storedOtp({ expiresAt: new Date(Date.now() - 1000) }),
+      );
+      await expect(service.verifyOtp(PHONE, '123456')).rejects.toMatchObject({
+        code: AuthErrors.OTP_EXPIRED,
+      });
     });
 
     it('vượt số lần thử (UPDATE có điều kiện affected=0, an toàn dưới request song song) → TOO_MANY_ATTEMPTS', async () => {
@@ -113,7 +123,9 @@ describe('OtpService', () => {
     it('mã sai → AUTH_OTP_INVALID, không consume', async () => {
       repo.findOne.mockResolvedValue(storedOtp());
       qb.execute.mockResolvedValue({ affected: 1 });
-      await expect(service.verifyOtp(PHONE, '999999')).rejects.toMatchObject({ code: AuthErrors.OTP_INVALID });
+      await expect(service.verifyOtp(PHONE, '999999')).rejects.toMatchObject({
+        code: AuthErrors.OTP_INVALID,
+      });
       expect(repo.update).not.toHaveBeenCalled();
     });
 
@@ -121,7 +133,9 @@ describe('OtpService', () => {
       repo.findOne.mockResolvedValue(storedOtp());
       qb.execute.mockResolvedValue({ affected: 1 });
       repo.update.mockResolvedValue({ affected: 0 }); // bên kia đã consume trước
-      await expect(service.verifyOtp(PHONE, '123456')).rejects.toMatchObject({ code: AuthErrors.OTP_INVALID });
+      await expect(service.verifyOtp(PHONE, '123456')).rejects.toMatchObject({
+        code: AuthErrors.OTP_INVALID,
+      });
     });
   });
 });

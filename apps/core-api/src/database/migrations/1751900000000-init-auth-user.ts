@@ -35,7 +35,9 @@ export class InitAuthUser1751900000000 implements MigrationInterface {
         CONSTRAINT uq_auth_identities_provider_uid UNIQUE (provider, provider_uid)
       )
     `);
-    await queryRunner.query(`CREATE INDEX idx_auth_identities_user_id ON auth_identities(user_id)`);
+    await queryRunner.query(
+      `CREATE INDEX idx_auth_identities_user_id ON auth_identities(user_id)`,
+    );
 
     await queryRunner.query(`
       CREATE TABLE refresh_tokens (
@@ -50,8 +52,12 @@ export class InitAuthUser1751900000000 implements MigrationInterface {
         CONSTRAINT uq_refresh_tokens_token_hash UNIQUE (token_hash)
       )
     `);
-    await queryRunner.query(`CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id)`);
-    await queryRunner.query(`CREATE INDEX idx_refresh_tokens_family_id ON refresh_tokens(family_id)`);
+    await queryRunner.query(
+      `CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id)`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX idx_refresh_tokens_family_id ON refresh_tokens(family_id)`,
+    );
 
     await queryRunner.query(`
       CREATE TABLE phone_otps (
@@ -64,7 +70,9 @@ export class InitAuthUser1751900000000 implements MigrationInterface {
         created_at    timestamptz  NOT NULL DEFAULT now()
       )
     `);
-    await queryRunner.query(`CREATE INDEX idx_phone_otps_phone_created ON phone_otps(phone, created_at DESC)`);
+    await queryRunner.query(
+      `CREATE INDEX idx_phone_otps_phone_created ON phone_otps(phone, created_at DESC)`,
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

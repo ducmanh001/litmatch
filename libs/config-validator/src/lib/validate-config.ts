@@ -22,6 +22,10 @@ export function createConfigValidator(schema: Joi.ObjectSchema) {
 
 /** Fragment schema chung cho mọi app. */
 export const baseEnvSchema = {
-  NODE_ENV: Joi.string().valid('development', 'test', 'production').default('development'),
-  LOG_LEVEL: Joi.string().valid('trace', 'debug', 'info', 'warn', 'error').default('info'),
+  NODE_ENV: Joi.string()
+    .valid('development', 'test', 'production')
+    .default('development'),
+  LOG_LEVEL: Joi.string()
+    .valid('trace', 'debug', 'info', 'warn', 'error')
+    .default('info'),
 };

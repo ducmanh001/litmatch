@@ -2,9 +2,14 @@ import { DomainException } from './domain-exception';
 
 describe('DomainException', () => {
   it('giữ code, message, httpStatus, details', () => {
-    const ex = new DomainException('ECONOMY_WALLET_INSUFFICIENT_BALANCE', 'Không đủ diamond', 422, {
-      required: 10,
-    });
+    const ex = new DomainException(
+      'ECONOMY_WALLET_INSUFFICIENT_BALANCE',
+      'Không đủ diamond',
+      422,
+      {
+        required: 10,
+      },
+    );
     expect(ex.code).toBe('ECONOMY_WALLET_INSUFFICIENT_BALANCE');
     expect(ex.message).toBe('Không đủ diamond');
     expect(ex.httpStatus).toBe(422);

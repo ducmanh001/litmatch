@@ -21,31 +21,38 @@ function importsOf(file: string): string[] {
 }
 
 describe('module boundaries (docs/03 § 3.2)', () => {
-  const moduleNames = readdirSync(MODULES_DIR).filter((n) => statSync(join(MODULES_DIR, n)).isDirectory());
+  const moduleNames = readdirSync(MODULES_DIR).filter((n) =>
+    statSync(join(MODULES_DIR, n)).isDirectory(),
+  );
 
-  it.each(moduleNames)('module "%s" không import file nội bộ của module khác', (moduleName) => {
-    const files = walk(join(MODULES_DIR, moduleName)).filter(
-      (f) => f.endsWith('.ts') && !f.endsWith('.spec.ts'),
-    );
-    const violations: string[] = [];
+  it.each(moduleNames)(
+    'module "%s" không import file nội bộ của module khác',
+    (moduleName) => {
+      const files = walk(join(MODULES_DIR, moduleName)).filter(
+        (f) => f.endsWith('.ts') && !f.endsWith('.spec.ts'),
+      );
+      const violations: string[] = [];
 
-    for (const file of files) {
-      for (const spec of importsOf(file)) {
-        if (!spec.startsWith('.')) continue; // package import — Nx boundary rule lo phần lib
-        const target = resolve(join(file, '..'), spec);
-        for (const other of moduleNames) {
-          if (other === moduleName) continue;
-          const otherRoot = join(MODULES_DIR, other);
-          if (target.startsWith(otherRoot + '/') || target === otherRoot) {
-            // hợp lệ duy nhất: trỏ đúng vào public API index của module kia
-            if (target !== join(otherRoot, 'index') && target !== otherRoot) {
-              violations.push(`${file.replace(MODULES_DIR, 'modules')} → ${spec}`);
+      for (const file of files) {
+        for (const spec of importsOf(file)) {
+          if (!spec.startsWith('.')) continue; // package import — Nx boundary rule lo phần lib
+          const target = resolve(join(file, '..'), spec);
+          for (const other of moduleNames) {
+            if (other === moduleName) continue;
+            const otherRoot = join(MODULES_DIR, other);
+            if (target.startsWith(otherRoot + '/') || target === otherRoot) {
+              // hợp lệ duy nhất: trỏ đúng vào public API index của module kia
+              if (target !== join(otherRoot, 'index') && target !== otherRoot) {
+                violations.push(
+                  `${file.replace(MODULES_DIR, 'modules')} → ${spec}`,
+                );
+              }
             }
           }
         }
       }
-    }
 
-    expect(violations).toEqual([]);
-  });
+      expect(violations).toEqual([]);
+    },
+  );
 });

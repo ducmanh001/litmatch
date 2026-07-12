@@ -26,14 +26,25 @@ async function bootstrap(): Promise<void> {
   app.enableCors({ origin: corsOrigins.length > 0 ? corsOrigins : false }); // cấm '*' (docs/05 § 5.8)
 
   app.useGlobalPipes(
-    new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
   );
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
-  if (config.getOrThrow('SWAGGER_ENABLED', { infer: true }) && config.get('NODE_ENV', { infer: true }) !== 'production') {
+  if (
+    config.getOrThrow('SWAGGER_ENABLED', { infer: true }) &&
+    config.get('NODE_ENV', { infer: true }) !== 'production'
+  ) {
     const doc = SwaggerModule.createDocument(
       app,
-      new DocumentBuilder().setTitle('Litmatch core-api').setVersion('v1').addBearerAuth().build(),
+      new DocumentBuilder()
+        .setTitle('Litmatch core-api')
+        .setVersion('v1')
+        .addBearerAuth()
+        .build(),
     );
     SwaggerModule.setup('docs', app, doc);
   }

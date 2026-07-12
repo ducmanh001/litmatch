@@ -35,6 +35,8 @@ export class Wallet {
 
   /** Hết hạn tự downgrade = derive khi đọc (docs/services/economy-service.md § 2). */
   get activeVipTier(): VipTier | null {
-    return this.vipTier && this.vipExpiresAt && this.vipExpiresAt > new Date() ? this.vipTier : null;
+    return this.vipTier && this.vipExpiresAt && this.vipExpiresAt > new Date()
+      ? this.vipTier
+      : null;
   }
 }

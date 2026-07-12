@@ -1,7 +1,10 @@
 import { DataSource } from 'typeorm';
 
 import { LedgerService } from './ledger.service';
-import { LedgerAccountKind, LedgerCurrency } from '../entities/ledger-account.entity';
+import {
+  LedgerAccountKind,
+  LedgerCurrency,
+} from '../entities/ledger-account.entity';
 import { LedgerDirection } from '../entities/ledger-entry.entity';
 import { TransactionType } from '../entities/transaction.entity';
 import { EconomyErrors } from '../economy.errors';
@@ -18,7 +21,9 @@ describe('LedgerService (validation thuần)', () => {
   } as unknown as DataSource;
   const service = new LedgerService(dataSource);
 
-  const entry = (over: Partial<Parameters<LedgerService['record']>[0]['entries'][0]> = {}) => ({
+  const entry = (
+    over: Partial<Parameters<LedgerService['record']>[0]['entries'][0]> = {},
+  ) => ({
     accountKind: LedgerAccountKind.SystemIap,
     direction: LedgerDirection.Debit,
     amount: 100n,
@@ -33,7 +38,14 @@ describe('LedgerService (validation thuần)', () => {
       service.record({
         type: TransactionType.Adjustment,
         idempotencyKey: 'k1',
-        entries: [entry(), entry({ direction: LedgerDirection.Credit, amount: 99n, accountKind: LedgerAccountKind.SystemRevenue })],
+        entries: [
+          entry(),
+          entry({
+            direction: LedgerDirection.Credit,
+            amount: 99n,
+            accountKind: LedgerAccountKind.SystemRevenue,
+          }),
+        ],
       }),
     ).rejects.toThrow(/Tổng Nợ != tổng Có/);
   });
@@ -45,7 +57,11 @@ describe('LedgerService (validation thuần)', () => {
         idempotencyKey: 'k2',
         entries: [
           entry(),
-          entry({ direction: LedgerDirection.Credit, currency: LedgerCurrency.Points, accountKind: LedgerAccountKind.SystemPointsMint }),
+          entry({
+            direction: LedgerDirection.Credit,
+            currency: LedgerCurrency.Points,
+            accountKind: LedgerAccountKind.SystemPointsMint,
+          }),
         ],
       }),
     ).rejects.toThrow(/currency/);
@@ -53,13 +69,20 @@ describe('LedgerService (validation thuần)', () => {
 
   it('từ chối amount âm/0 và giao dịch < 2 bút toán', async () => {
     await expect(
-      service.record({ type: TransactionType.Adjustment, idempotencyKey: 'k3', entries: [entry()] }),
+      service.record({
+        type: TransactionType.Adjustment,
+        idempotencyKey: 'k3',
+        entries: [entry()],
+      }),
     ).rejects.toThrow(/tối thiểu 2 bút toán/);
     await expect(
       service.record({
         type: TransactionType.Adjustment,
         idempotencyKey: 'k4',
-        entries: [entry({ amount: 0n }), entry({ amount: 0n, direction: LedgerDirection.Credit })],
+        entries: [
+          entry({ amount: 0n }),
+          entry({ amount: 0n, direction: LedgerDirection.Credit }),
+        ],
       }),
     ).rejects.toThrow(/nguyên dương/);
   });
@@ -71,7 +94,10 @@ describe('LedgerService (validation thuần)', () => {
         idempotencyKey: 'k5',
         entries: [
           entry({ accountKind: LedgerAccountKind.UserWallet }),
-          entry({ direction: LedgerDirection.Credit, accountKind: LedgerAccountKind.SystemRevenue }),
+          entry({
+            direction: LedgerDirection.Credit,
+            accountKind: LedgerAccountKind.SystemRevenue,
+          }),
         ],
       }),
     ).rejects.toThrow(/userId/);
@@ -80,13 +106,18 @@ describe('LedgerService (validation thuần)', () => {
   it('replay: cùng key + cùng nội dung → trả giao dịch cũ, không mở transaction mới', async () => {
     const balanced = [
       entry(),
-      entry({ direction: LedgerDirection.Credit, accountKind: LedgerAccountKind.SystemRevenue }),
+      entry({
+        direction: LedgerDirection.Credit,
+        accountKind: LedgerAccountKind.SystemRevenue,
+      }),
     ];
     // requestHash phải khớp — tính bằng chính service qua 1 lần record giả trước đó
     findOneBy.mockResolvedValue({ id: 't1', requestHash: expect.anything() });
     findOneBy.mockResolvedValue({
       id: 't1',
-      requestHash: (service as unknown as { hashRequest: (i: unknown) => string }).hashRequest({
+      requestHash: (
+        service as unknown as { hashRequest: (i: unknown) => string }
+      ).hashRequest({
         type: TransactionType.Adjustment,
         actorUserId: 'u1',
         entries: balanced,
@@ -109,9 +140,18 @@ describe('LedgerService (validation thuần)', () => {
         type: TransactionType.Adjustment,
         actorUserId: 'u1',
         idempotencyKey: 'k7',
-        entries: [entry(), entry({ direction: LedgerDirection.Credit, accountKind: LedgerAccountKind.SystemRevenue })],
+        entries: [
+          entry(),
+          entry({
+            direction: LedgerDirection.Credit,
+            accountKind: LedgerAccountKind.SystemRevenue,
+          }),
+        ],
       }),
-    ).rejects.toMatchObject({ code: EconomyErrors.IDEMPOTENCY_CONFLICT, httpStatus: 409 });
+    ).rejects.toMatchObject({
+      code: EconomyErrors.IDEMPOTENCY_CONFLICT,
+      httpStatus: 409,
+    });
   });
 
   it('type=adjustment bắt buộc actorUserId để audit (docs/10 § Economy) — thiếu actor phải bị chặn', async () => {
@@ -119,7 +159,13 @@ describe('LedgerService (validation thuần)', () => {
       service.record({
         type: TransactionType.Adjustment,
         idempotencyKey: 'k8',
-        entries: [entry(), entry({ direction: LedgerDirection.Credit, accountKind: LedgerAccountKind.SystemRevenue })],
+        entries: [
+          entry(),
+          entry({
+            direction: LedgerDirection.Credit,
+            accountKind: LedgerAccountKind.SystemRevenue,
+          }),
+        ],
       }),
     ).rejects.toThrow(/actorUserId/);
   });

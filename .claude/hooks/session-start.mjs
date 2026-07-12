@@ -9,7 +9,9 @@ import { join } from 'node:path';
 
 try {
   const root = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-  const roadmap = readFileSync(join(root, 'docs/07-roadmap.md'), 'utf8').split('\n');
+  const roadmap = readFileSync(join(root, 'docs/07-roadmap.md'), 'utf8').split(
+    '\n',
+  );
 
   let currentPhase = null;
   let lastHeading = null;

@@ -10,7 +10,10 @@ describe('buildPinoHttpOptions', () => {
   });
 
   it('cộng thêm redact path riêng của app, không thay thế list chung', () => {
-    const opts = buildPinoHttpOptions({ level: 'info', extraRedactPaths: ['*.deviceId'] });
+    const opts = buildPinoHttpOptions({
+      level: 'info',
+      extraRedactPaths: ['*.deviceId'],
+    });
     expect(opts.redact.paths).toContain('*.deviceId');
     expect(opts.redact.paths).toContain('req.headers.authorization');
   });

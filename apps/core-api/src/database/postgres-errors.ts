@@ -14,7 +14,11 @@ export function isUniqueViolation(err: unknown): boolean {
 
 /** So đúng tên constraint (không suy đoán qua message) — fallback message.includes cho driver cũ không trả constraint. */
 export function violatedConstraint(err: unknown, constraint: string): boolean {
-  const e = err as { driverError?: { constraint?: string }; constraint?: string; message?: string };
+  const e = err as {
+    driverError?: { constraint?: string };
+    constraint?: string;
+    message?: string;
+  };
   const name = e.driverError?.constraint ?? e.constraint;
   return name === constraint || (e.message?.includes(constraint) ?? false);
 }

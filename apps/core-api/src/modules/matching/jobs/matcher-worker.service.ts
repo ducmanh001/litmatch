@@ -1,13 +1,28 @@
-import { Inject, Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnApplicationBootstrap,
+  OnApplicationShutdown,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, In } from 'typeorm';
 
-import { MatchTicket, MatchTicketStatus } from '../entities/match-ticket.entity';
-import { MatchSession, MatchSessionStatus } from '../entities/match-session.entity';
+import {
+  MatchTicket,
+  MatchTicketStatus,
+} from '../entities/match-ticket.entity';
+import {
+  MatchSession,
+  MatchSessionStatus,
+} from '../entities/match-session.entity';
 import { MATCH_INTERACTION_POLICY } from '../ports/interaction-policy';
-import { MATCHING_ACTIVE_SHARDS_KEY, MATCHING_REDIS } from '../redis/matching-redis.provider';
+import {
+  MATCHING_ACTIVE_SHARDS_KEY,
+  MATCHING_REDIS,
+} from '../redis/matching-redis.provider';
 import { User, UserStatus } from '../../user';
 
 import type Redis from 'ioredis';
@@ -36,7 +51,9 @@ type PairOutcome = 'matched' | 'requeued_pair' | 'dropped';
  * được giá trị từ ConfigService lúc class được định nghĩa) — cùng pattern OutboxRelayService.
  */
 @Injectable()
-export class MatcherWorkerService implements OnApplicationBootstrap, OnApplicationShutdown {
+export class MatcherWorkerService
+  implements OnApplicationBootstrap, OnApplicationShutdown
+{
   private readonly logger = new Logger(MatcherWorkerService.name);
   private running = false;
 
@@ -45,19 +62,24 @@ export class MatcherWorkerService implements OnApplicationBootstrap, OnApplicati
     private readonly config: ConfigService<CoreApiEnv, true>,
     private readonly scheduler: SchedulerRegistry,
     @Inject(MATCHING_REDIS) private readonly redis: Redis,
-    @Inject(MATCH_INTERACTION_POLICY) private readonly interactionPolicy: MatchInteractionPolicy,
+    @Inject(MATCH_INTERACTION_POLICY)
+    private readonly interactionPolicy: MatchInteractionPolicy,
   ) {}
 
   onApplicationBootstrap(): void {
     const interval = setInterval(
-      () => void this.runOnce().catch((err) => this.logger.error({ err: `${err}` }, 'Matcher tick lỗi')),
+      () =>
+        void this.runOnce().catch((err) =>
+          this.logger.error({ err: `${err}` }, 'Matcher tick lỗi'),
+        ),
       this.config.getOrThrow('MATCHING_MATCHER_INTERVAL_MS', { infer: true }),
     );
     this.scheduler.addInterval(MATCHER_JOB, interval);
   }
 
   onApplicationShutdown(): void {
-    if (this.scheduler.doesExist('interval', MATCHER_JOB)) this.scheduler.deleteInterval(MATCHER_JOB);
+    if (this.scheduler.doesExist('interval', MATCHER_JOB))
+      this.scheduler.deleteInterval(MATCHER_JOB);
   }
 
   /** 1 tick — public để test/chạy tay. Trả về số cặp ghép được. */
@@ -66,7 +88,9 @@ export class MatcherWorkerService implements OnApplicationBootstrap, OnApplicati
     this.running = true;
     try {
       let matched = 0;
-      for (const shard of await this.redis.smembers(MATCHING_ACTIVE_SHARDS_KEY)) {
+      for (const shard of await this.redis.smembers(
+        MATCHING_ACTIVE_SHARDS_KEY,
+      )) {
         matched += await this.drainShard(shard);
       }
       return matched;
@@ -76,7 +100,9 @@ export class MatcherWorkerService implements OnApplicationBootstrap, OnApplicati
   }
 
   private async drainShard(shard: string): Promise<number> {
-    const batchSize = this.config.getOrThrow('MATCHING_MATCHER_BATCH_SIZE', { infer: true });
+    const batchSize = this.config.getOrThrow('MATCHING_MATCHER_BATCH_SIZE', {
+      infer: true,
+    });
     let matched = 0;
     for (let i = 0; i < batchSize; i++) {
       // ZPOPMIN key 2: atomic — không cần Lua, 2 matcher không lấy trùng (spec § 2)
@@ -108,7 +134,11 @@ export class MatcherWorkerService implements OnApplicationBootstrap, OnApplicati
    * Verify + transition queued→matched + tạo MatchSession trong 1 transaction Postgres,
    * SELECT FOR UPDATE trên cả 2 ticket (spec § 2).
    */
-  private async tryPair(shard: string, a: PoppedTicket, b: PoppedTicket): Promise<PairOutcome> {
+  private async tryPair(
+    shard: string,
+    a: PoppedTicket,
+    b: PoppedTicket,
+  ): Promise<PairOutcome> {
     const result = await this.dataSource.transaction(async (manager) => {
       const tickets = await manager.find(MatchTicket, {
         where: { id: In([a.id, b.id]) },
@@ -120,15 +150,25 @@ export class MatcherWorkerService implements OnApplicationBootstrap, OnApplicati
       const tb = byId.get(b.id);
 
       const userIds = [...new Set(tickets.map((t) => t.userId))];
-      const users = userIds.length > 0 ? await manager.find(User, { where: { id: In(userIds) } }) : [];
+      const users =
+        userIds.length > 0
+          ? await manager.find(User, { where: { id: In(userIds) } })
+          : [];
       const userById = new Map(users.map((u) => [u.id, u]));
       const isValid = (t?: MatchTicket): t is MatchTicket =>
-        !!t && t.status === MatchTicketStatus.Queued && userById.get(t.userId)?.status === UserStatus.Active;
+        !!t &&
+        t.status === MatchTicketStatus.Queued &&
+        userById.get(t.userId)?.status === UserStatus.Active;
 
       const aValid = isValid(ta);
       const bValid = isValid(tb);
 
-      if (aValid && bValid && ta.userId !== tb.userId && (await this.interactionPolicy.canPair(ta.userId, tb.userId))) {
+      if (
+        aValid &&
+        bValid &&
+        ta.userId !== tb.userId &&
+        (await this.interactionPolicy.canPair(ta.userId, tb.userId))
+      ) {
         const session = await manager.save(
           manager.create(MatchSession, {
             matchType: ta.matchType,
@@ -164,7 +204,13 @@ export class MatcherWorkerService implements OnApplicationBootstrap, OnApplicati
           await manager.save(ticket);
         }
       }
-      return { kind: requeue.length === 2 ? ('requeued_pair' as const) : ('dropped' as const), requeue };
+      return {
+        kind:
+          requeue.length === 2
+            ? ('requeued_pair' as const)
+            : ('dropped' as const),
+        requeue,
+      };
     });
 
     if (result.requeue.length > 0) {

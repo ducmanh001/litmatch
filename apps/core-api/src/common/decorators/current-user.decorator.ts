@@ -6,7 +6,9 @@ export interface AuthenticatedUser {
 }
 
 /** Lấy user đã xác thực từ request (do JwtAuthGuard gắn vào). */
-export const CurrentUser = createParamDecorator((_data: unknown, ctx: ExecutionContext): AuthenticatedUser => {
-  const req = ctx.switchToHttp().getRequest<{ user: AuthenticatedUser }>();
-  return req.user;
-});
+export const CurrentUser = createParamDecorator(
+  (_data: unknown, ctx: ExecutionContext): AuthenticatedUser => {
+    const req = ctx.switchToHttp().getRequest<{ user: AuthenticatedUser }>();
+    return req.user;
+  },
+);

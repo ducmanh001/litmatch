@@ -20,4 +20,5 @@
 - Tick `[x]` trong `07-roadmap.md` khi xong 1 mục, commit cùng code — để phiên làm việc sau (con người hoặc agent) biết chính xác đang ở đâu mà không cần hỏi lại.
 
 ---
+
 [← 07 · Roadmap](./07-roadmap.md) · [09 · Practical Notes →](./09-practical-notes.md)

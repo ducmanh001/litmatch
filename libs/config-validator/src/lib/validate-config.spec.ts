@@ -23,7 +23,11 @@ describe('createConfigValidator', () => {
 
   it('cho phép key lạ từ env của OS', () => {
     expect(() =>
-      validate({ PORT: '3000', JWT_SECRET: 'x'.repeat(32), RANDOM_OS_VAR: '1' }),
+      validate({
+        PORT: '3000',
+        JWT_SECRET: 'x'.repeat(32),
+        RANDOM_OS_VAR: '1',
+      }),
     ).not.toThrow();
   });
 });

@@ -1,8 +1,16 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 
 /** Outbox Pattern (docs/03 § 3.6): event ghi cùng DB transaction với nghiệp vụ, relay publish Kafka sau. */
 @Entity({ name: 'outbox_events' })
-@Index('idx_outbox_events_unpublished', ['createdAt'], { where: 'published_at IS NULL' })
+@Index('idx_outbox_events_unpublished', ['createdAt'], {
+  where: 'published_at IS NULL',
+})
 export class OutboxEvent {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

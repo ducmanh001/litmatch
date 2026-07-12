@@ -1,7 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEnum } from 'class-validator';
 
-import { MatchTicket, MatchTicketStatus, MatchType } from '../entities/match-ticket.entity';
+import {
+  MatchTicket,
+  MatchTicketStatus,
+  MatchType,
+} from '../entities/match-ticket.entity';
 
 /**
  * Client CHỈ được chọn matchType. region + ageBand server tự derive từ profile user
@@ -19,8 +23,13 @@ export class TicketDto {
   @ApiProperty() id!: string;
   @ApiProperty({ enum: MatchType }) matchType!: MatchType;
   @ApiProperty({ enum: MatchTicketStatus }) status!: MatchTicketStatus;
-  @ApiProperty({ description: 'Shard region server derive từ profile' }) region!: string;
-  @ApiProperty({ description: 'Dải tuổi server derive từ birthDate; -1 = chưa khai sinh nhật' }) ageBand!: number;
+  @ApiProperty({ description: 'Shard region server derive từ profile' })
+  region!: string;
+  @ApiProperty({
+    description:
+      'Dải tuổi server derive từ birthDate; -1 = chưa khai sinh nhật',
+  })
+  ageBand!: number;
   @ApiProperty({ nullable: true, type: String }) sessionId!: string | null;
   @ApiProperty() enqueuedAt!: Date;
   @ApiProperty() createdAt!: Date;
@@ -40,11 +49,21 @@ export class TicketDto {
 }
 
 export class SpeedupResultDto {
-  @ApiProperty({ description: 'Transaction id của giao dịch trừ diamond (ledger)' }) transactionId!: string;
-  @ApiProperty({ description: 'true = retry cùng Idempotency-Key, không trừ tiền/boost thêm' }) replayed!: boolean;
+  @ApiProperty({
+    description: 'Transaction id của giao dịch trừ diamond (ledger)',
+  })
+  transactionId!: string;
+  @ApiProperty({
+    description: 'true = retry cùng Idempotency-Key, không trừ tiền/boost thêm',
+  })
+  replayed!: boolean;
   @ApiProperty({ type: TicketDto }) ticket!: TicketDto;
 
-  static from(transactionId: string, replayed: boolean, ticket: MatchTicket): SpeedupResultDto {
+  static from(
+    transactionId: string,
+    replayed: boolean,
+    ticket: MatchTicket,
+  ): SpeedupResultDto {
     const dto = new SpeedupResultDto();
     dto.transactionId = transactionId;
     dto.replayed = replayed;

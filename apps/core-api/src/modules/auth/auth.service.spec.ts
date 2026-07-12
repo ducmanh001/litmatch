@@ -16,13 +16,21 @@ describe('AuthService', () => {
     save: jest.fn((e: unknown) => Promise.resolve(e)),
     create: jest.fn((_cls: unknown, obj: object) => obj),
   };
-  const dataSource = { transaction: jest.fn(async (cb: (m: typeof manager) => Promise<unknown>) => cb(manager)) };
+  const dataSource = {
+    transaction: jest.fn(async (cb: (m: typeof manager) => Promise<unknown>) =>
+      cb(manager),
+    ),
+  };
   const userService = {
     getByIdOrThrow: jest.fn(),
     createWithManager: jest.fn(),
   };
   const tokenService = {
-    issueForUser: jest.fn().mockResolvedValue({ accessToken: 'a', refreshToken: 'r', expiresIn: 900 }),
+    issueForUser: jest.fn().mockResolvedValue({
+      accessToken: 'a',
+      refreshToken: 'r',
+      expiresIn: 900,
+    }),
     rotate: jest.fn(),
     revoke: jest.fn(),
   };
@@ -61,7 +69,10 @@ describe('AuthService', () => {
     userService.createWithManager.mockResolvedValue(user());
     const tokens = await service.guestLogin('device-12345678');
     expect(dataSource.transaction).toHaveBeenCalled();
-    expect(userService.createWithManager).toHaveBeenCalledWith(manager, expect.objectContaining({ isGuest: true }));
+    expect(userService.createWithManager).toHaveBeenCalledWith(
+      manager,
+      expect.objectContaining({ isGuest: true }),
+    );
     expect(tokens.isGuest).toBe(true);
   });
 
@@ -74,7 +85,9 @@ describe('AuthService', () => {
 
   it('2 request đăng ký song song: unique violation ở DB → đọc lại identity bên thắng (docs/10 § 10.1.C)', async () => {
     identityRepo.findOneBy.mockResolvedValue(null);
-    dataSource.transaction.mockRejectedValueOnce(Object.assign(new Error('dup'), { code: '23505' }));
+    dataSource.transaction.mockRejectedValueOnce(
+      Object.assign(new Error('dup'), { code: '23505' }),
+    );
     identityRepo.findOneByOrFail.mockResolvedValue({ userId: 'u1' });
     userService.getByIdOrThrow.mockResolvedValue(user());
     const tokens = await service.guestLogin('device-12345678');
@@ -83,8 +96,12 @@ describe('AuthService', () => {
 
   it('user bị ban không login lại được', async () => {
     identityRepo.findOneBy.mockResolvedValue({ userId: 'u1' });
-    userService.getByIdOrThrow.mockResolvedValue(user({ status: UserStatus.Banned }));
-    await expect(service.guestLogin('device-12345678')).rejects.toMatchObject({ code: AuthErrors.USER_BANNED });
+    userService.getByIdOrThrow.mockResolvedValue(
+      user({ status: UserStatus.Banned }),
+    );
+    await expect(service.guestLogin('device-12345678')).rejects.toMatchObject({
+      code: AuthErrors.USER_BANNED,
+    });
   });
 
   it('refresh: user bị ban GIỮA 2 lần refresh → thu hồi token mới, chặn phiên (docs/10 § 10.0.C)', async () => {
@@ -92,8 +109,12 @@ describe('AuthService', () => {
       userId: 'u1',
       tokens: { accessToken: 'a', refreshToken: 'r2', expiresIn: 900 },
     });
-    userService.getByIdOrThrow.mockResolvedValue(user({ status: UserStatus.Banned, isGuest: false }));
-    await expect(service.refresh('r1')).rejects.toMatchObject({ code: AuthErrors.USER_BANNED });
+    userService.getByIdOrThrow.mockResolvedValue(
+      user({ status: UserStatus.Banned, isGuest: false }),
+    );
+    await expect(service.refresh('r1')).rejects.toMatchObject({
+      code: AuthErrors.USER_BANNED,
+    });
     expect(tokenService.revoke).toHaveBeenCalledWith('r2');
   });
 
@@ -102,7 +123,13 @@ describe('AuthService', () => {
     identityRepo.findOneBy.mockResolvedValue(null);
     userService.createWithManager.mockResolvedValue(user({ isGuest: false }));
     await service.socialLogin(AuthProvider.Google, 'id.token');
-    expect(socialVerifier.verify).toHaveBeenCalledWith(AuthProvider.Google, 'id.token');
-    expect(identityRepo.findOneBy).toHaveBeenCalledWith({ provider: AuthProvider.Google, providerUid: 'google-sub-1' });
+    expect(socialVerifier.verify).toHaveBeenCalledWith(
+      AuthProvider.Google,
+      'id.token',
+    );
+    expect(identityRepo.findOneBy).toHaveBeenCalledWith({
+      provider: AuthProvider.Google,
+      providerUid: 'google-sub-1',
+    });
   });
 });

@@ -19,9 +19,18 @@ export enum MatchTicketStatus {
  * Transition hợp lệ duy nhất của state machine ticket (docs/services/matching-service.md § 1).
  * Mọi chuyển trạng thái trong code PHẢI đi qua bảng này — không tin client gửi trạng thái đích.
  */
-export const MATCH_TICKET_TRANSITIONS: Readonly<Record<MatchTicketStatus, readonly MatchTicketStatus[]>> = {
-  [MatchTicketStatus.Queued]: [MatchTicketStatus.Matched, MatchTicketStatus.Expired, MatchTicketStatus.Cancelled],
-  [MatchTicketStatus.Matched]: [MatchTicketStatus.Confirmed, MatchTicketStatus.Expired],
+export const MATCH_TICKET_TRANSITIONS: Readonly<
+  Record<MatchTicketStatus, readonly MatchTicketStatus[]>
+> = {
+  [MatchTicketStatus.Queued]: [
+    MatchTicketStatus.Matched,
+    MatchTicketStatus.Expired,
+    MatchTicketStatus.Cancelled,
+  ],
+  [MatchTicketStatus.Matched]: [
+    MatchTicketStatus.Confirmed,
+    MatchTicketStatus.Expired,
+  ],
   [MatchTicketStatus.Confirmed]: [],
   [MatchTicketStatus.Expired]: [],
   [MatchTicketStatus.Cancelled]: [],
@@ -37,7 +46,12 @@ export const MATCH_TICKET_TRANSITIONS: Readonly<Record<MatchTicketStatus, readon
  *   cùng key nhận lại đúng ticket cũ, không tạo ticket thứ 2.
  */
 @Entity({ name: 'match_tickets' })
-@Index('idx_match_tickets_status_shard', ['status', 'matchType', 'region', 'ageBand'])
+@Index('idx_match_tickets_status_shard', [
+  'status',
+  'matchType',
+  'region',
+  'ageBand',
+])
 export class MatchTicket extends BaseAppEntity {
   @Index('idx_match_tickets_user')
   @Column({ type: 'uuid' })

@@ -43,7 +43,9 @@ export class EconomyLedger1752000000000 implements MigrationInterface {
         CONSTRAINT uq_transactions_idempotency_key UNIQUE (idempotency_key)
       )
     `);
-    await queryRunner.query(`CREATE INDEX idx_transactions_actor_created ON transactions(actor_user_id, created_at DESC)`);
+    await queryRunner.query(
+      `CREATE INDEX idx_transactions_actor_created ON transactions(actor_user_id, created_at DESC)`,
+    );
 
     await queryRunner.query(`
       CREATE TABLE ledger_entries (
@@ -56,8 +58,12 @@ export class EconomyLedger1752000000000 implements MigrationInterface {
         created_at      timestamptz NOT NULL DEFAULT now()
       )
     `);
-    await queryRunner.query(`CREATE INDEX idx_ledger_entries_transaction ON ledger_entries(transaction_id)`);
-    await queryRunner.query(`CREATE INDEX idx_ledger_entries_account_created ON ledger_entries(account_id, created_at DESC)`);
+    await queryRunner.query(
+      `CREATE INDEX idx_ledger_entries_transaction ON ledger_entries(transaction_id)`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX idx_ledger_entries_account_created ON ledger_entries(account_id, created_at DESC)`,
+    );
 
     // Append-only tuyệt đối: chặn ngay ở DB, mọi cách "sửa" đều phải đi qua reversal transaction
     await queryRunner.query(`
@@ -160,8 +166,12 @@ export class EconomyLedger1752000000000 implements MigrationInterface {
     await queryRunner.query(`DROP TABLE IF EXISTS vip_plans`);
     await queryRunner.query(`DROP TABLE IF EXISTS iap_products`);
     await queryRunner.query(`DROP TABLE IF EXISTS wallets`);
-    await queryRunner.query(`DROP TRIGGER IF EXISTS trg_ledger_entries_append_only ON ledger_entries`);
-    await queryRunner.query(`DROP FUNCTION IF EXISTS forbid_ledger_entry_mutation`);
+    await queryRunner.query(
+      `DROP TRIGGER IF EXISTS trg_ledger_entries_append_only ON ledger_entries`,
+    );
+    await queryRunner.query(
+      `DROP FUNCTION IF EXISTS forbid_ledger_entry_mutation`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS ledger_entries`);
     await queryRunner.query(`DROP TABLE IF EXISTS transactions`);
     await queryRunner.query(`DROP TABLE IF EXISTS ledger_accounts`);

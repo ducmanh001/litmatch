@@ -56,7 +56,7 @@ process.stdin.on('end', () => {
     const cmd = String(ti.command ?? '');
     if (/\b(rm|mv|rmdir)\b[^\n|;&]*\/migrations\//.test(cmd)) {
       deny(
-        'BLOCKED (hook): xoá/di chuyển file trong thư mục migrations bị cấm — migration đã chạy là bất biến, sửa schema bằng migration MỚI. Nếu là migration vừa tạo chưa commit/chưa chạy và thực sự cần xoá: hỏi user thao tác tay.'
+        'BLOCKED (hook): xoá/di chuyển file trong thư mục migrations bị cấm — migration đã chạy là bất biến, sửa schema bằng migration MỚI. Nếu là migration vừa tạo chưa commit/chưa chạy và thực sự cần xoá: hỏi user thao tác tay.',
       );
     }
     process.exit(0);
@@ -76,7 +76,7 @@ process.stdin.on('end', () => {
   const appMatch = filePath.match(/\/apps\/([^/]+)\//);
   if (appMatch && !ALLOWED_APPS.has(appMatch[1])) {
     deny(
-      `BLOCKED (hook): tạo file trong apps/${appMatch[1]}/ vi phạm luật "chỉ 3 app deploy riêng" (core-api, signaling-gateway, media-server + *-e2e). Domain mới phải là module NestJS trong apps/core-api/src/modules/ — xem docs/03-architecture.md § 3.2. Nếu thực sự cần app thứ 4: dừng lại và hỏi user trước.`
+      `BLOCKED (hook): tạo file trong apps/${appMatch[1]}/ vi phạm luật "chỉ 3 app deploy riêng" (core-api, signaling-gateway, media-server + *-e2e). Domain mới phải là module NestJS trong apps/core-api/src/modules/ — xem docs/03-architecture.md § 3.2. Nếu thực sự cần app thứ 4: dừng lại và hỏi user trước.`,
     );
   }
 
@@ -84,7 +84,7 @@ process.stdin.on('end', () => {
     // ── Cấm synchronize: true (TypeORM), kể cả dev ──────────────────────────
     if (/\bsynchronize\s*:\s*true\b/.test(content)) {
       deny(
-        'BLOCKED (hook): `synchronize: true` bị cấm tuyệt đối (kể cả dev) — schema chỉ được đổi qua migration TypeORM (pnpm nx run core-api:migration-run). Xem CLAUDE.md.'
+        'BLOCKED (hook): `synchronize: true` bị cấm tuyệt đối (kể cả dev) — schema chỉ được đổi qua migration TypeORM (pnpm nx run core-api:migration-run). Xem CLAUDE.md.',
       );
     }
 
@@ -100,7 +100,7 @@ process.stdin.on('end', () => {
       ];
       if (ledgerMutation.some((re) => re.test(content))) {
         deny(
-          'BLOCKED (hook): phát hiện UPDATE/DELETE/TRUNCATE trên LedgerEntry/ledger_entries — ledger là append-only, sửa sai bằng bút toán đảo (reversal entry) MỚI, không đụng dòng cũ. Xem docs/03-architecture.md § 3.8.C. False-positive (vd job đối soát chỉ đọc)? Viết lại theo hướng append-only hoặc hỏi user.'
+          'BLOCKED (hook): phát hiện UPDATE/DELETE/TRUNCATE trên LedgerEntry/ledger_entries — ledger là append-only, sửa sai bằng bút toán đảo (reversal entry) MỚI, không đụng dòng cũ. Xem docs/03-architecture.md § 3.8.C. False-positive (vd job đối soát chỉ đọc)? Viết lại theo hướng append-only hoặc hỏi user.',
         );
       }
     }
@@ -112,7 +112,7 @@ process.stdin.on('end', () => {
     const overwriting = tool === 'Edit' || existsSync(filePath);
     if (overwriting && isTrackedInGit(filePath)) {
       deny(
-        'BLOCKED (hook): sửa/ghi đè migration đã commit bị cấm — migration đã chạy trên môi trường khác là bất biến, tạo migration MỚI để sửa schema. (Migration chưa commit thì sửa thoải mái — file này đã nằm trong git.)'
+        'BLOCKED (hook): sửa/ghi đè migration đã commit bị cấm — migration đã chạy trên môi trường khác là bất biến, tạo migration MỚI để sửa schema. (Migration chưa commit thì sửa thoải mái — file này đã nằm trong git.)',
       );
     }
   }

@@ -16,7 +16,10 @@ describe('TokenService', () => {
   };
   const jwt = { signAsync: jest.fn().mockResolvedValue('access.jwt') };
   const config = {
-    getOrThrow: jest.fn((key: string) => ({ JWT_ACCESS_TTL_SECONDS: 900, AUTH_REFRESH_TTL_DAYS: 30 })[key]),
+    getOrThrow: jest.fn(
+      (key: string) =>
+        ({ JWT_ACCESS_TTL_SECONDS: 900, AUTH_REFRESH_TTL_DAYS: 30 })[key],
+    ),
   };
   let service: TokenService;
 
@@ -64,13 +67,21 @@ describe('TokenService', () => {
 
   it('token không tồn tại / hết hạn / đã revoke → AUTH_REFRESH_TOKEN_INVALID', async () => {
     repo.findOneBy.mockResolvedValue(null);
-    await expect(service.rotate('x')).rejects.toMatchObject({ code: AuthErrors.REFRESH_TOKEN_INVALID });
+    await expect(service.rotate('x')).rejects.toMatchObject({
+      code: AuthErrors.REFRESH_TOKEN_INVALID,
+    });
 
-    repo.findOneBy.mockResolvedValue(storedToken({ expiresAt: new Date(Date.now() - 1000) }));
-    await expect(service.rotate('x')).rejects.toMatchObject({ code: AuthErrors.REFRESH_TOKEN_INVALID });
+    repo.findOneBy.mockResolvedValue(
+      storedToken({ expiresAt: new Date(Date.now() - 1000) }),
+    );
+    await expect(service.rotate('x')).rejects.toMatchObject({
+      code: AuthErrors.REFRESH_TOKEN_INVALID,
+    });
 
     repo.findOneBy.mockResolvedValue(storedToken({ revokedAt: new Date() }));
-    await expect(service.rotate('x')).rejects.toMatchObject({ code: AuthErrors.REFRESH_TOKEN_INVALID });
+    await expect(service.rotate('x')).rejects.toMatchObject({
+      code: AuthErrors.REFRESH_TOKEN_INVALID,
+    });
   });
 
   it('reuse (2 request song song cùng 1 token — UPDATE có điều kiện affected=0) → revoke cả family', async () => {
@@ -78,7 +89,12 @@ describe('TokenService', () => {
     repo.update
       .mockResolvedValueOnce({ affected: 0 }) // thua race đánh dấu rotated
       .mockResolvedValueOnce({ affected: 3 }); // revokeFamily
-    await expect(service.rotate('stolen')).rejects.toMatchObject({ code: AuthErrors.REFRESH_TOKEN_REUSED });
-    expect(repo.update).toHaveBeenCalledWith({ familyId: 'fam1', revokedAt: expect.anything() }, expect.anything());
+    await expect(service.rotate('stolen')).rejects.toMatchObject({
+      code: AuthErrors.REFRESH_TOKEN_REUSED,
+    });
+    expect(repo.update).toHaveBeenCalledWith(
+      { familyId: 'fam1', revokedAt: expect.anything() },
+      expect.anything(),
+    );
   });
 });

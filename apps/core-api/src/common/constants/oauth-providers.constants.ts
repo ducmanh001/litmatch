@@ -6,7 +6,10 @@
  * đặt ở `common/` để tránh 2 module tự khai trùng, dễ lệch khi Google/Apple đổi endpoint.
  */
 export const GOOGLE_JWKS_URL = 'https://www.googleapis.com/oauth2/v3/certs';
-export const GOOGLE_OIDC_ISSUERS = ['https://accounts.google.com', 'accounts.google.com'] as const;
+export const GOOGLE_OIDC_ISSUERS = [
+  'https://accounts.google.com',
+  'accounts.google.com',
+] as const;
 
 export const APPLE_OIDC_JWKS_URL = 'https://appleid.apple.com/auth/keys';
 export const APPLE_OIDC_ISSUER = 'https://appleid.apple.com';

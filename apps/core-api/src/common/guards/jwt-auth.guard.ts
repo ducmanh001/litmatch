@@ -1,4 +1,9 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 
@@ -27,18 +32,24 @@ export class JwtAuthGuard implements CanActivate {
     ]);
     if (isPublic) return true;
 
-    const req = context.switchToHttp().getRequest<Request & { user?: AuthenticatedUser }>();
+    const req = context
+      .switchToHttp()
+      .getRequest<Request & { user?: AuthenticatedUser }>();
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
       throw new UnauthorizedException('Thiếu access token');
     }
 
     try {
-      const payload = await this.jwtService.verifyAsync<AccessTokenPayload>(authHeader.slice('Bearer '.length));
+      const payload = await this.jwtService.verifyAsync<AccessTokenPayload>(
+        authHeader.slice('Bearer '.length),
+      );
       req.user = { userId: payload.sub, isGuest: payload.isGuest === true };
       return true;
     } catch {
-      throw new UnauthorizedException('Access token không hợp lệ hoặc đã hết hạn');
+      throw new UnauthorizedException(
+        'Access token không hợp lệ hoặc đã hết hạn',
+      );
     }
   }
 }

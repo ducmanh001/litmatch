@@ -13,7 +13,11 @@ import { LedgerTransaction } from './entities/transaction.entity';
 import { Wallet } from './entities/wallet.entity';
 import { IapProduct, IapReceipt } from './entities/iap.entities';
 import { VipPlan } from './entities/vip-plan.entity';
-import { DevIapVerifier, IapVerifier, StoreIapVerifier } from './ports/iap-verifier';
+import {
+  DevIapVerifier,
+  IapVerifier,
+  StoreIapVerifier,
+} from './ports/iap-verifier';
 import {
   AppleNotificationVerifier,
   DevAppleNotificationVerifier,
@@ -54,19 +58,33 @@ import { EconomyWebhooksController } from './webhooks/economy-webhooks.controlle
     {
       provide: IapVerifier,
       inject: [ConfigService, DevIapVerifier, StoreIapVerifier],
-      useFactory: (config: ConfigService<CoreApiEnv, true>, dev: DevIapVerifier, store: StoreIapVerifier) =>
-        config.getOrThrow('ECONOMY_IAP_VERIFIER', { infer: true }) === 'store' ? store : dev,
+      useFactory: (
+        config: ConfigService<CoreApiEnv, true>,
+        dev: DevIapVerifier,
+        store: StoreIapVerifier,
+      ) =>
+        config.getOrThrow('ECONOMY_IAP_VERIFIER', { infer: true }) === 'store'
+          ? store
+          : dev,
     },
     DevAppleNotificationVerifier,
     StoreAppleNotificationVerifier,
     {
       provide: AppleNotificationVerifier,
-      inject: [ConfigService, DevAppleNotificationVerifier, StoreAppleNotificationVerifier],
+      inject: [
+        ConfigService,
+        DevAppleNotificationVerifier,
+        StoreAppleNotificationVerifier,
+      ],
       useFactory: (
         config: ConfigService<CoreApiEnv, true>,
         dev: DevAppleNotificationVerifier,
         store: StoreAppleNotificationVerifier,
-      ) => (config.getOrThrow('ECONOMY_APPLE_WEBHOOK_VERIFIER', { infer: true }) === 'store' ? store : dev),
+      ) =>
+        config.getOrThrow('ECONOMY_APPLE_WEBHOOK_VERIFIER', { infer: true }) ===
+        'store'
+          ? store
+          : dev,
     },
     DevGoogleRtdnVerifier,
     StoreGoogleRtdnVerifier,
@@ -77,7 +95,11 @@ import { EconomyWebhooksController } from './webhooks/economy-webhooks.controlle
         config: ConfigService<CoreApiEnv, true>,
         dev: DevGoogleRtdnVerifier,
         store: StoreGoogleRtdnVerifier,
-      ) => (config.getOrThrow('ECONOMY_GOOGLE_RTDN_VERIFIER', { infer: true }) === 'store' ? store : dev),
+      ) =>
+        config.getOrThrow('ECONOMY_GOOGLE_RTDN_VERIFIER', { infer: true }) ===
+        'store'
+          ? store
+          : dev,
     },
   ],
   exports: [EconomyService],

@@ -1,4 +1,11 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpException,
+  HttpStatus,
+  Logger,
+} from '@nestjs/common';
 import { CommonErrors, DomainException } from '@litmatch/common-exceptions';
 
 import type { ApiErrorBody } from '@litmatch/common-dtos';
@@ -33,7 +40,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     } else if (exception instanceof HttpException) {
       status = exception.getStatus();
       const body = exception.getResponse();
-      message = typeof body === 'string' ? body : ((body as { message?: string | string[] }).message?.toString() ?? exception.message);
+      message =
+        typeof body === 'string'
+          ? body
+          : ((body as { message?: string | string[] }).message?.toString() ??
+            exception.message);
       code = this.mapHttpStatusToCode(status);
       if (status === HttpStatus.BAD_REQUEST && typeof body === 'object') {
         const raw = (body as { message?: string | string[] }).message;
@@ -48,12 +59,17 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       code = CommonErrors.INTERNAL_ERROR;
       message = 'Lỗi hệ thống, thử lại sau';
       this.logger.error(
-        { traceId, err: exception instanceof Error ? exception.stack : String(exception) },
+        {
+          traceId,
+          err: exception instanceof Error ? exception.stack : String(exception),
+        },
         'Unhandled exception',
       );
     }
 
-    const payload: ApiErrorBody = { error: { code, message, traceId, ...(details ? { details } : {}) } };
+    const payload: ApiErrorBody = {
+      error: { code, message, traceId, ...(details ? { details } : {}) },
+    };
     res.status(status).json(payload);
   }
 

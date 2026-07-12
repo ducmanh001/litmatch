@@ -1,4 +1,10 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 
 /** OTP lưu dạng HMAC-SHA256(code, pepper) — attempt_count enforce ở server, không tin client. */
 @Entity({ name: 'phone_otps' })

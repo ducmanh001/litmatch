@@ -2,7 +2,11 @@ import { DomainException } from '@litmatch/common-exceptions';
 
 import { MatchingService } from './matching.service';
 import { MatchingErrors } from './matching.errors';
-import { MatchTicket, MatchTicketStatus, MatchType } from './entities/match-ticket.entity';
+import {
+  MatchTicket,
+  MatchTicketStatus,
+  MatchType,
+} from './entities/match-ticket.entity';
 import { TransactionType } from '../economy';
 import { UserStatus } from '../user';
 
@@ -43,8 +47,19 @@ function makeTicket(overrides: Partial<MatchTicket> = {}): MatchTicket {
 }
 
 describe('MatchingService (unit — mock repo/redis/economy)', () => {
-  let ticketRepo: jest.Mocked<Pick<Repository<MatchTicket>, 'save' | 'create' | 'findOneBy' | 'findOneByOrFail' | 'increment'>>;
-  let redis: { eval: jest.Mock; zadd: jest.Mock; zrem: jest.Mock; sadd: jest.Mock; decr: jest.Mock };
+  let ticketRepo: jest.Mocked<
+    Pick<
+      Repository<MatchTicket>,
+      'save' | 'create' | 'findOneBy' | 'findOneByOrFail' | 'increment'
+    >
+  >;
+  let redis: {
+    eval: jest.Mock;
+    zadd: jest.Mock;
+    zrem: jest.Mock;
+    sadd: jest.Mock;
+    decr: jest.Mock;
+  };
   let economy: { spendDiamond: jest.Mock; hasTransaction: jest.Mock };
   let userService: { getByIdOrThrow: jest.Mock };
   let manager: jest.Mocked<Pick<EntityManager, 'findOne' | 'save'>>;
@@ -57,7 +72,11 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
       create: jest.fn((input) => Object.assign(new MatchTicket(), input)),
       findOneBy: jest.fn(),
       findOneByOrFail: jest.fn(),
-      increment: jest.fn(async () => ({ affected: 1, raw: [], generatedMaps: [] })),
+      increment: jest.fn(async () => ({
+        affected: 1,
+        raw: [],
+        generatedMaps: [],
+      })),
     } as never;
     redis = {
       eval: jest.fn(async () => 1),
@@ -67,19 +86,29 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
       decr: jest.fn(async () => 0),
     };
     economy = {
-      spendDiamond: jest.fn(async () => ({ transactionId: 'txn-1', replayed: false })),
+      spendDiamond: jest.fn(async () => ({
+        transactionId: 'txn-1',
+        replayed: false,
+      })),
       hasTransaction: jest.fn(async () => false),
     };
     userService = {
-      getByIdOrThrow: jest.fn(async () => ({
-        id: me.userId,
-        status: UserStatus.Active,
-        region: 'VN',
-        birthDate: '2000-01-01',
-      }) as User),
+      getByIdOrThrow: jest.fn(
+        async () =>
+          ({
+            id: me.userId,
+            status: UserStatus.Active,
+            region: 'VN',
+            birthDate: '2000-01-01',
+          }) as User,
+      ),
     };
     manager = { findOne: jest.fn(), save: jest.fn(async (t) => t) } as never;
-    dataSource = { transaction: jest.fn(async (cb: (m: EntityManager) => Promise<unknown>) => cb(manager as never)) };
+    dataSource = {
+      transaction: jest.fn(async (cb: (m: EntityManager) => Promise<unknown>) =>
+        cb(manager as never),
+      ),
+    };
 
     const config = {
       getOrThrow: (key: string) => {
@@ -100,7 +129,11 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
 
   describe('joinQueue', () => {
     it('derive region + ageBand từ profile server-side, KHÔNG nhận từ client (docs/10 § 10.0.B)', async () => {
-      const ticket = await service.joinQueue(me, { matchType: MatchType.Voice }, 'k1');
+      const ticket = await service.joinQueue(
+        me,
+        { matchType: MatchType.Voice },
+        'k1',
+      );
       expect(ticket.region).toBe('VN'); // từ profile, client không gửi được
       expect(ticket.ageBand).toBe(Math.floor(26 / 5)); // sinh 2000-01-01, hôm nay 2026-07 → 26 tuổi
       expect(redis.zadd).toHaveBeenCalledWith(
@@ -109,19 +142,38 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
         String(ticket.enqueuedAt.getTime()),
         ticket.id,
       );
-      expect(redis.sadd).toHaveBeenCalledWith('matching:shards:active', 'matching:queue:voice:VN:5');
+      expect(redis.sadd).toHaveBeenCalledWith(
+        'matching:shards:active',
+        'matching:queue:voice:VN:5',
+      );
     });
 
     it('profile thiếu region/birthDate → shard GLOBAL + ageBand -1 (không chặn, không đoán)', async () => {
-      userService.getByIdOrThrow.mockResolvedValue({ id: me.userId, status: UserStatus.Active, region: null, birthDate: null } as never);
-      const ticket = await service.joinQueue(me, { matchType: MatchType.Soul }, 'k1');
+      userService.getByIdOrThrow.mockResolvedValue({
+        id: me.userId,
+        status: UserStatus.Active,
+        region: null,
+        birthDate: null,
+      } as never);
+      const ticket = await service.joinQueue(
+        me,
+        { matchType: MatchType.Soul },
+        'k1',
+      );
       expect(ticket.region).toBe('GLOBAL');
       expect(ticket.ageBand).toBe(-1);
     });
 
     it('user bị ban → MATCHING_USER_BANNED 403, không tạo ticket', async () => {
-      userService.getByIdOrThrow.mockResolvedValue({ id: me.userId, status: UserStatus.Banned, region: 'VN', birthDate: null } as never);
-      await expect(service.joinQueue(me, { matchType: MatchType.Voice }, 'k1')).rejects.toMatchObject({
+      userService.getByIdOrThrow.mockResolvedValue({
+        id: me.userId,
+        status: UserStatus.Banned,
+        region: 'VN',
+        birthDate: null,
+      } as never);
+      await expect(
+        service.joinQueue(me, { matchType: MatchType.Voice }, 'k1'),
+      ).rejects.toMatchObject({
         code: MatchingErrors.USER_BANNED,
       });
       expect(ticketRepo.save).not.toHaveBeenCalled();
@@ -129,26 +181,50 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
 
     it('retry cùng Idempotency-Key → trả lại ticket cũ + re-enqueue NX, không tạo ticket đôi', async () => {
       const existing = makeTicket();
-      ticketRepo.save.mockRejectedValueOnce({ code: '23505', message: 'uq_match_tickets_idempotency_key' });
+      ticketRepo.save.mockRejectedValueOnce({
+        code: '23505',
+        message: 'uq_match_tickets_idempotency_key',
+      });
       ticketRepo.findOneBy.mockResolvedValueOnce(existing);
 
-      const ticket = await service.joinQueue(me, { matchType: MatchType.Voice }, 'k1');
+      const ticket = await service.joinQueue(
+        me,
+        { matchType: MatchType.Voice },
+        'k1',
+      );
       expect(ticket).toBe(existing);
-      expect(redis.zadd).toHaveBeenCalledWith(expect.any(String), 'NX', expect.any(String), existing.id);
+      expect(redis.zadd).toHaveBeenCalledWith(
+        expect.any(String),
+        'NX',
+        expect.any(String),
+        existing.id,
+      );
     });
 
     it('cùng key nhưng nội dung khác (matchType đổi) → 409 IDEMPOTENCY_CONFLICT (docs/05 § 5.10)', async () => {
-      ticketRepo.save.mockRejectedValueOnce({ code: '23505', message: 'uq_match_tickets_idempotency_key' });
-      ticketRepo.findOneBy.mockResolvedValueOnce(makeTicket({ matchType: MatchType.Soul }));
-      await expect(service.joinQueue(me, { matchType: MatchType.Voice }, 'k1')).rejects.toMatchObject({
+      ticketRepo.save.mockRejectedValueOnce({
+        code: '23505',
+        message: 'uq_match_tickets_idempotency_key',
+      });
+      ticketRepo.findOneBy.mockResolvedValueOnce(
+        makeTicket({ matchType: MatchType.Soul }),
+      );
+      await expect(
+        service.joinQueue(me, { matchType: MatchType.Voice }, 'k1'),
+      ).rejects.toMatchObject({
         code: MatchingErrors.TICKET_IDEMPOTENCY_CONFLICT,
       });
     });
 
     it('đã có ticket active (partial unique index bắn 23505) → 409 ALREADY_QUEUED', async () => {
-      ticketRepo.save.mockRejectedValueOnce({ code: '23505', message: 'uq_match_tickets_active_user' });
+      ticketRepo.save.mockRejectedValueOnce({
+        code: '23505',
+        message: 'uq_match_tickets_active_user',
+      });
       ticketRepo.findOneBy.mockResolvedValueOnce(null); // không phải replay
-      await expect(service.joinQueue(me, { matchType: MatchType.Voice }, 'k-khac')).rejects.toMatchObject({
+      await expect(
+        service.joinQueue(me, { matchType: MatchType.Voice }, 'k-khac'),
+      ).rejects.toMatchObject({
         code: MatchingErrors.TICKET_ALREADY_QUEUED,
       });
     });
@@ -156,57 +232,80 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
 
   describe('ownership / IDOR (docs/10 § 10.1.D)', () => {
     it('getTicket của user khác → 403 FORBIDDEN', async () => {
-      ticketRepo.findOneBy.mockResolvedValueOnce(makeTicket({ userId: 'user-khac' }));
-      await expect(service.getTicket(me, 'ticket-1')).rejects.toMatchObject({ code: MatchingErrors.TICKET_FORBIDDEN });
+      ticketRepo.findOneBy.mockResolvedValueOnce(
+        makeTicket({ userId: 'user-khac' }),
+      );
+      await expect(service.getTicket(me, 'ticket-1')).rejects.toMatchObject({
+        code: MatchingErrors.TICKET_FORBIDDEN,
+      });
     });
 
     it('getTicket không tồn tại → 404', async () => {
       ticketRepo.findOneBy.mockResolvedValueOnce(null);
-      await expect(service.getTicket(me, 'ticket-x')).rejects.toMatchObject({ code: MatchingErrors.TICKET_NOT_FOUND });
+      await expect(service.getTicket(me, 'ticket-x')).rejects.toMatchObject({
+        code: MatchingErrors.TICKET_NOT_FOUND,
+      });
     });
 
     it('cancelTicket của user khác → 403, không đổi trạng thái', async () => {
-      manager.findOne.mockResolvedValueOnce(makeTicket({ userId: 'user-khac' }));
-      await expect(service.cancelTicket(me, 'ticket-1')).rejects.toMatchObject({ code: MatchingErrors.TICKET_FORBIDDEN });
+      manager.findOne.mockResolvedValueOnce(
+        makeTicket({ userId: 'user-khac' }),
+      );
+      await expect(service.cancelTicket(me, 'ticket-1')).rejects.toMatchObject({
+        code: MatchingErrors.TICKET_FORBIDDEN,
+      });
       expect(manager.save).not.toHaveBeenCalled();
     });
   });
 
   describe('state machine (spec § 1) — không tin client gửi trạng thái đích', () => {
-    it.each([MatchTicketStatus.Matched, MatchTicketStatus.Confirmed, MatchTicketStatus.Expired, MatchTicketStatus.Cancelled])(
-      'cancel khi ticket đang %s → 409 INVALID_TRANSITION',
-      async (status) => {
-        manager.findOne.mockResolvedValueOnce(makeTicket({ status }));
-        await expect(service.cancelTicket(me, 'ticket-1')).rejects.toMatchObject({
-          code: MatchingErrors.TICKET_INVALID_TRANSITION,
-        });
-      },
-    );
-
-    it('confirm khi ticket còn queued (chưa được ghép) → 409 INVALID_TRANSITION', async () => {
-      ticketRepo.findOneBy.mockResolvedValueOnce(makeTicket({ status: MatchTicketStatus.Queued }));
-      await expect(service.confirmTicket(me, 'ticket-1')).rejects.toMatchObject({
+    it.each([
+      MatchTicketStatus.Matched,
+      MatchTicketStatus.Confirmed,
+      MatchTicketStatus.Expired,
+      MatchTicketStatus.Cancelled,
+    ])('cancel khi ticket đang %s → 409 INVALID_TRANSITION', async (status) => {
+      manager.findOne.mockResolvedValueOnce(makeTicket({ status }));
+      await expect(service.cancelTicket(me, 'ticket-1')).rejects.toMatchObject({
         code: MatchingErrors.TICKET_INVALID_TRANSITION,
       });
+    });
+
+    it('confirm khi ticket còn queued (chưa được ghép) → 409 INVALID_TRANSITION', async () => {
+      ticketRepo.findOneBy.mockResolvedValueOnce(
+        makeTicket({ status: MatchTicketStatus.Queued }),
+      );
+      await expect(service.confirmTicket(me, 'ticket-1')).rejects.toMatchObject(
+        {
+          code: MatchingErrors.TICKET_INVALID_TRANSITION,
+        },
+      );
     });
 
     it('cancel hợp lệ: queued→cancelled + ZREM khỏi shard', async () => {
       manager.findOne.mockResolvedValueOnce(makeTicket());
       const cancelled = await service.cancelTicket(me, 'ticket-1');
       expect(cancelled.status).toBe(MatchTicketStatus.Cancelled);
-      expect(redis.zrem).toHaveBeenCalledWith('matching:queue:voice:VN:5', 'ticket-1');
+      expect(redis.zrem).toHaveBeenCalledWith(
+        'matching:queue:voice:VN:5',
+        'ticket-1',
+      );
     });
   });
 
   describe('speedup (spec § 4)', () => {
     beforeEach(() => {
       ticketRepo.findOneBy.mockResolvedValue(makeTicket());
-      ticketRepo.findOneByOrFail.mockResolvedValue(makeTicket({ priorityBoostMs: 300_000 }));
+      ticketRepo.findOneByOrFail.mockResolvedValue(
+        makeTicket({ priorityBoostMs: 300_000 }),
+      );
     });
 
     it('rate-limit vượt giới hạn → 409 RATE_LIMITED và KHÔNG gọi spendDiamond (chặn trước khi trừ tiền)', async () => {
       redis.eval.mockResolvedValueOnce(-1);
-      await expect(service.speedup(me, 'ticket-1', 'sk1')).rejects.toMatchObject({
+      await expect(
+        service.speedup(me, 'ticket-1', 'sk1'),
+      ).rejects.toMatchObject({
         code: MatchingErrors.SPEEDUP_RATE_LIMITED,
       });
       expect(economy.spendDiamond).not.toHaveBeenCalled();
@@ -238,33 +337,58 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
         300_000,
       );
       // score tuyệt đối = enqueuedAtMs - tổng boost trong DB (không ZINCRBY tương đối)
-      const expectedScore = new Date('2026-07-12T00:00:00Z').getTime() - 300_000;
-      expect(redis.zadd).toHaveBeenCalledWith('matching:queue:voice:VN:5', 'XX', String(expectedScore), 'ticket-1');
+      const expectedScore =
+        new Date('2026-07-12T00:00:00Z').getTime() - 300_000;
+      expect(redis.zadd).toHaveBeenCalledWith(
+        'matching:queue:voice:VN:5',
+        'XX',
+        String(expectedScore),
+        'ticket-1',
+      );
       expect(result.replayed).toBe(false);
     });
 
     it('replay cùng key → KHÔNG cộng boost lần 2, hoàn lại slot rate-limit (docs/10 § 10.0.D)', async () => {
-      economy.spendDiamond.mockResolvedValueOnce({ transactionId: 'txn-1', replayed: true });
+      economy.spendDiamond.mockResolvedValueOnce({
+        transactionId: 'txn-1',
+        replayed: true,
+      });
       const result = await service.speedup(me, 'ticket-1', 'sk1');
       expect(result.replayed).toBe(true);
       expect(ticketRepo.increment).not.toHaveBeenCalled();
-      expect(redis.decr).toHaveBeenCalledWith(`matching:speedup:count:${me.userId}`);
+      expect(redis.decr).toHaveBeenCalledWith(
+        `matching:speedup:count:${me.userId}`,
+      );
       // vẫn sửa lại score Redis từ tổng boost DB (retry-hoàn-tất an toàn, spec § 4)
-      expect(redis.zadd).toHaveBeenCalledWith(expect.any(String), 'XX', expect.any(String), 'ticket-1');
+      expect(redis.zadd).toHaveBeenCalledWith(
+        expect.any(String),
+        'XX',
+        expect.any(String),
+        'ticket-1',
+      );
     });
 
     it('spendDiamond fail (không đủ diamond) → hoàn slot rate-limit, không boost', async () => {
-      economy.spendDiamond.mockRejectedValueOnce(new DomainException('ECONOMY_WALLET_INSUFFICIENT_BALANCE', 'x', 422));
-      await expect(service.speedup(me, 'ticket-1', 'sk1')).rejects.toMatchObject({
+      economy.spendDiamond.mockRejectedValueOnce(
+        new DomainException('ECONOMY_WALLET_INSUFFICIENT_BALANCE', 'x', 422),
+      );
+      await expect(
+        service.speedup(me, 'ticket-1', 'sk1'),
+      ).rejects.toMatchObject({
         code: 'ECONOMY_WALLET_INSUFFICIENT_BALANCE',
       });
-      expect(redis.decr).toHaveBeenCalledWith(`matching:speedup:count:${me.userId}`);
+      expect(redis.decr).toHaveBeenCalledWith(
+        `matching:speedup:count:${me.userId}`,
+      );
       expect(ticketRepo.increment).not.toHaveBeenCalled();
     });
 
     it('RETRY request đã trả tiền (transaction tồn tại) → bỏ qua rate-limit, replay bình thường (docs/05 § 5.10)', async () => {
       economy.hasTransaction.mockResolvedValueOnce(true);
-      economy.spendDiamond.mockResolvedValueOnce({ transactionId: 'txn-1', replayed: true });
+      economy.spendDiamond.mockResolvedValueOnce({
+        transactionId: 'txn-1',
+        replayed: true,
+      });
       const result = await service.speedup(me, 'ticket-1', 'sk1');
       expect(result.replayed).toBe(true);
       expect(redis.eval).not.toHaveBeenCalled(); // retry không bị đếm/chặn như lượt mới
@@ -273,8 +397,12 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
     });
 
     it('speedup ticket không còn queued → 409, không đụng rate-limit/tiền', async () => {
-      ticketRepo.findOneBy.mockResolvedValueOnce(makeTicket({ status: MatchTicketStatus.Matched }));
-      await expect(service.speedup(me, 'ticket-1', 'sk1')).rejects.toMatchObject({
+      ticketRepo.findOneBy.mockResolvedValueOnce(
+        makeTicket({ status: MatchTicketStatus.Matched }),
+      );
+      await expect(
+        service.speedup(me, 'ticket-1', 'sk1'),
+      ).rejects.toMatchObject({
         code: MatchingErrors.TICKET_INVALID_TRANSITION,
       });
       expect(redis.eval).not.toHaveBeenCalled();

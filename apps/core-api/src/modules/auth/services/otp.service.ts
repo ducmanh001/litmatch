@@ -25,18 +25,34 @@ export class OtpService {
    * throttler theo IP đặt thêm ở controller.
    */
   async requestOtp(phone: string): Promise<{ ttlSeconds: number }> {
-    const perHour = this.config.getOrThrow('AUTH_OTP_REQUESTS_PER_HOUR', { infer: true });
+    const perHour = this.config.getOrThrow('AUTH_OTP_REQUESTS_PER_HOUR', {
+      infer: true,
+    });
     const oneHourAgo = new Date(Date.now() - OTP_RATE_WINDOW_MS);
-    const recentCount = await this.otpRepo.countBy({ phone, createdAt: MoreThan(oneHourAgo) });
+    const recentCount = await this.otpRepo.countBy({
+      phone,
+      createdAt: MoreThan(oneHourAgo),
+    });
     if (recentCount >= perHour) {
-      throw new DomainException(AuthErrors.OTP_REQUEST_RATE_LIMITED, 'Yêu cầu OTP quá nhiều, thử lại sau', HttpStatus.TOO_MANY_REQUESTS);
+      throw new DomainException(
+        AuthErrors.OTP_REQUEST_RATE_LIMITED,
+        'Yêu cầu OTP quá nhiều, thử lại sau',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
 
-    const ttlSeconds = this.config.getOrThrow('AUTH_OTP_TTL_SECONDS', { infer: true });
-    const code = randomInt(0, 10 ** OTP_CODE_DIGITS).toString().padStart(OTP_CODE_DIGITS, '0');
+    const ttlSeconds = this.config.getOrThrow('AUTH_OTP_TTL_SECONDS', {
+      infer: true,
+    });
+    const code = randomInt(0, 10 ** OTP_CODE_DIGITS)
+      .toString()
+      .padStart(OTP_CODE_DIGITS, '0');
 
     // OTP cũ chưa dùng của số này bị vô hiệu — chỉ mã mới nhất có giá trị
-    await this.otpRepo.update({ phone, consumedAt: IsNull() }, { consumedAt: new Date() });
+    await this.otpRepo.update(
+      { phone, consumedAt: IsNull() },
+      { consumedAt: new Date() },
+    );
     await this.otpRepo.save(
       this.otpRepo.create({
         phone,
@@ -60,35 +76,64 @@ export class OtpService {
       order: { createdAt: 'DESC' },
     });
     if (!otp || otp.expiresAt < new Date()) {
-      throw new DomainException(AuthErrors.OTP_EXPIRED, 'OTP đã hết hạn hoặc chưa được yêu cầu', HttpStatus.BAD_REQUEST);
+      throw new DomainException(
+        AuthErrors.OTP_EXPIRED,
+        'OTP đã hết hạn hoặc chưa được yêu cầu',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
-    const maxAttempts = this.config.getOrThrow('AUTH_OTP_MAX_ATTEMPTS', { infer: true });
+    const maxAttempts = this.config.getOrThrow('AUTH_OTP_MAX_ATTEMPTS', {
+      infer: true,
+    });
     const counted = await this.otpRepo
       .createQueryBuilder()
       .update()
       .set({ attemptCount: () => 'attempt_count + 1' })
-      .where('id = :id AND attempt_count < :max AND consumed_at IS NULL', { id: otp.id, max: maxAttempts })
+      .where('id = :id AND attempt_count < :max AND consumed_at IS NULL', {
+        id: otp.id,
+        max: maxAttempts,
+      })
       .execute();
     if (!counted.affected) {
-      throw new DomainException(AuthErrors.OTP_TOO_MANY_ATTEMPTS, 'Nhập sai quá số lần cho phép, yêu cầu mã mới', HttpStatus.TOO_MANY_REQUESTS);
+      throw new DomainException(
+        AuthErrors.OTP_TOO_MANY_ATTEMPTS,
+        'Nhập sai quá số lần cho phép, yêu cầu mã mới',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
 
     const expected = Buffer.from(otp.codeHash, 'hex');
     const actual = Buffer.from(this.hash(phone, code), 'hex');
-    if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
-      throw new DomainException(AuthErrors.OTP_INVALID, 'Mã OTP không đúng', HttpStatus.BAD_REQUEST);
+    if (
+      expected.length !== actual.length ||
+      !timingSafeEqual(expected, actual)
+    ) {
+      throw new DomainException(
+        AuthErrors.OTP_INVALID,
+        'Mã OTP không đúng',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
-    const consumed = await this.otpRepo.update({ id: otp.id, consumedAt: IsNull() }, { consumedAt: new Date() });
+    const consumed = await this.otpRepo.update(
+      { id: otp.id, consumedAt: IsNull() },
+      { consumedAt: new Date() },
+    );
     if (!consumed.affected) {
       // request song song đã consume trước — không cho dùng lại
-      throw new DomainException(AuthErrors.OTP_INVALID, 'Mã OTP không đúng', HttpStatus.BAD_REQUEST);
+      throw new DomainException(
+        AuthErrors.OTP_INVALID,
+        'Mã OTP không đúng',
+        HttpStatus.BAD_REQUEST,
+      );
     }
   }
 
   private hash(phone: string, code: string): string {
     const pepper = this.config.getOrThrow('AUTH_OTP_PEPPER', { infer: true });
-    return createHmac('sha256', pepper).update(`${phone}:${code}`).digest('hex');
+    return createHmac('sha256', pepper)
+      .update(`${phone}:${code}`)
+      .digest('hex');
   }
 }
