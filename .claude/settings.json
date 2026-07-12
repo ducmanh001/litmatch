@@ -1,11 +1,12 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "hooks": {
     "SessionStart": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "AGENT_PROJECT_DIR=\"$(git rev-parse --show-toplevel)\" node \"$(git rev-parse --show-toplevel)/scripts/agent/session-start.mjs\""
+            "command": "AGENT_PROJECT_DIR=\"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}\" node \"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}/scripts/agent/session-start.mjs\""
           }
         ]
       }
@@ -16,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "AGENT_PROJECT_DIR=\"$(git rev-parse --show-toplevel)\" node \"$(git rev-parse --show-toplevel)/scripts/agent/pre-tool-guard.mjs\""
+            "command": "AGENT_PROJECT_DIR=\"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}\" node \"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}/scripts/agent/pre-tool-guard.mjs\""
           }
         ]
       }
