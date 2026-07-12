@@ -11,7 +11,7 @@ import { User } from '../user/entities/user.entity';
 
 import { EconomyService } from './economy.service';
 import { EconomyErrors } from './economy.errors';
-import { LedgerService } from './ledger.service';
+import { LedgerService } from './services/ledger.service';
 import { LedgerAccount } from './entities/ledger-account.entity';
 import { LedgerEntry } from './entities/ledger-entry.entity';
 import { OutboxEvent } from './entities/outbox-event.entity';
@@ -19,12 +19,14 @@ import { LedgerTransaction, TransactionStatus } from './entities/transaction.ent
 import { Wallet } from './entities/wallet.entity';
 import { IapProduct, IapProvider, IapReceipt } from './entities/iap.entities';
 import { VipPlan } from './entities/vip-plan.entity';
-import { ReconciliationService } from './services/reconciliation.service';
+import { ReconciliationService } from './jobs/reconciliation.service';
 import { RefundService } from './services/refund.service';
 
 import type { ConfigService } from '@nestjs/config';
 import type { SchedulerRegistry } from '@nestjs/schedule';
-import type { IapVerifier } from './services/iap-verifier';
+
+import type { CoreApiEnv } from '../../config/env.validation';
+import type { IapVerifier } from './ports/iap-verifier';
 
 /**
  * Integration test TIỀN BẠC trên Postgres thật (docs/05 § 5.9 — bắt buộc cho Economy):
@@ -175,7 +177,7 @@ d('Economy integration (Postgres thật)', () => {
   });
 
   it('đối soát: phát hiện snapshot bị sửa lệch, rebuildWallet khôi phục từ ledger', async () => {
-    const stubConfig = { getOrThrow: () => true } as unknown as ConfigService;
+    const stubConfig = { getOrThrow: () => true } as unknown as ConfigService<CoreApiEnv, true>;
     const recon = new ReconciliationService(ds, stubConfig, { addInterval: () => undefined } as unknown as SchedulerRegistry);
 
     expect((await recon.runOnce()).ok).toBe(true);
@@ -241,7 +243,7 @@ d('Economy integration (Postgres thật)', () => {
     // Bất biến toàn cục vẫn giữ nguyên sau toàn bộ chuỗi refund/nạp bù
     const recon = new ReconciliationService(
       ds,
-      { getOrThrow: () => true } as unknown as ConfigService,
+      { getOrThrow: () => true } as unknown as ConfigService<CoreApiEnv, true>,
       { addInterval: () => undefined } as unknown as SchedulerRegistry,
     );
     expect((await recon.runOnce()).ok).toBe(true);
@@ -256,7 +258,7 @@ d('Economy integration (Postgres thật)', () => {
     );
     const recon = new ReconciliationService(
       ds,
-      { getOrThrow: () => true } as unknown as ConfigService,
+      { getOrThrow: () => true } as unknown as ConfigService<CoreApiEnv, true>,
       { addInterval: () => undefined } as unknown as SchedulerRegistry,
     );
     const products = ['com.litmatch.diamond.100', 'com.litmatch.diamond.550', 'com.litmatch.diamond.1200'];

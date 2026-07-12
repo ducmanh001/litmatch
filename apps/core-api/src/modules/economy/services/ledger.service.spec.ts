@@ -1,10 +1,10 @@
 import { DataSource } from 'typeorm';
 
 import { LedgerService } from './ledger.service';
-import { LedgerAccountKind, LedgerCurrency } from './entities/ledger-account.entity';
-import { LedgerDirection } from './entities/ledger-entry.entity';
-import { TransactionType } from './entities/transaction.entity';
-import { EconomyErrors } from './economy.errors';
+import { LedgerAccountKind, LedgerCurrency } from '../entities/ledger-account.entity';
+import { LedgerDirection } from '../entities/ledger-entry.entity';
+import { TransactionType } from '../entities/transaction.entity';
+import { EconomyErrors } from '../economy.errors';
 
 /**
  * Unit test cho bất biến thuần (không cần DB) — hành vi transactional/race thật

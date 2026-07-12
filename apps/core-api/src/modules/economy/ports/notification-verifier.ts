@@ -1,10 +1,12 @@
 import { X509Certificate } from 'node:crypto';
 
-import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DomainException } from '@litmatch/common-exceptions';
 import { createRemoteJWKSet, decodeJwt, decodeProtectedHeader, importX509, jwtVerify } from 'jose';
 
+import type { CoreApiEnv } from '../../../config/env.validation';
+import { GOOGLE_JWKS_URL, GOOGLE_OIDC_ISSUERS } from '../../../common/constants/oauth-providers.constants';
 import { EconomyErrors } from '../economy.errors';
 
 export interface AppleNotificationPayload {
@@ -38,12 +40,12 @@ export abstract class AppleNotificationVerifier {
 export class DevAppleNotificationVerifier extends AppleNotificationVerifier implements OnApplicationBootstrap {
   private readonly logger = new Logger(DevAppleNotificationVerifier.name);
 
-  constructor(private readonly config: ConfigService) {
+  constructor(private readonly config: ConfigService<CoreApiEnv, true>) {
     super();
   }
 
   onApplicationBootstrap(): void {
-    if (this.config.get<string>('NODE_ENV') === 'production') {
+    if (this.config.get('NODE_ENV', { infer: true }) === 'production') {
       throw new Error('DevAppleNotificationVerifier không được dùng ở production — set ECONOMY_APPLE_WEBHOOK_VERIFIER=store');
     }
   }
@@ -69,21 +71,21 @@ export class DevAppleNotificationVerifier extends AppleNotificationVerifier impl
  */
 @Injectable()
 export class StoreAppleNotificationVerifier extends AppleNotificationVerifier {
-  constructor(private readonly config: ConfigService) {
+  constructor(private readonly config: ConfigService<CoreApiEnv, true>) {
     super();
   }
 
   async verify(signedPayload: string): Promise<AppleNotificationPayload> {
     const header = decodeProtectedHeader(signedPayload) as { x5c?: string[] };
     if (!header.x5c || header.x5c.length === 0) {
-      throw new DomainException(EconomyErrors.WEBHOOK_SIGNATURE_INVALID, 'Thiếu x5c trong JWS header', 401);
+      throw new DomainException(EconomyErrors.WEBHOOK_SIGNATURE_INVALID, 'Thiếu x5c trong JWS header', HttpStatus.UNAUTHORIZED);
     }
 
     const certs = header.x5c.map((b64) => new X509Certificate(Buffer.from(b64, 'base64')));
-    const trustedRootPem = this.config.getOrThrow<string>('ECONOMY_APPLE_ROOT_CA_PEM').replace(/\\n/g, '\n');
+    const trustedRootPem = this.config.getOrThrow('ECONOMY_APPLE_ROOT_CA_PEM', { infer: true }).replace(/\\n/g, '\n');
     const trustedRoot = new X509Certificate(trustedRootPem);
     if (!this.chainIsTrusted(certs, trustedRoot)) {
-      throw new DomainException(EconomyErrors.WEBHOOK_SIGNATURE_INVALID, 'Chain chứng chỉ Apple không hợp lệ', 401);
+      throw new DomainException(EconomyErrors.WEBHOOK_SIGNATURE_INVALID, 'Chain chứng chỉ Apple không hợp lệ', HttpStatus.UNAUTHORIZED);
     }
 
     // Khoá cứng ES256 (không đọc `alg` từ header — đó là dữ liệu CHƯA xác thực, không dùng để
@@ -126,12 +128,12 @@ export abstract class GoogleRtdnVerifier {
 export class DevGoogleRtdnVerifier extends GoogleRtdnVerifier implements OnApplicationBootstrap {
   private readonly logger = new Logger(DevGoogleRtdnVerifier.name);
 
-  constructor(private readonly config: ConfigService) {
+  constructor(private readonly config: ConfigService<CoreApiEnv, true>) {
     super();
   }
 
   onApplicationBootstrap(): void {
-    if (this.config.get<string>('NODE_ENV') === 'production') {
+    if (this.config.get('NODE_ENV', { infer: true }) === 'production') {
       throw new Error('DevGoogleRtdnVerifier không được dùng ở production — set ECONOMY_GOOGLE_RTDN_VERIFIER=store');
     }
   }
@@ -142,7 +144,7 @@ export class DevGoogleRtdnVerifier extends GoogleRtdnVerifier implements OnAppli
   }
 }
 
-const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
+const GOOGLE_JWKS = createRemoteJWKSet(new URL(GOOGLE_JWKS_URL));
 
 /**
  * Verify JWT trong header Authorization theo hướng dẫn Pub/Sub push OIDC token của Google:
@@ -151,24 +153,24 @@ const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth
  */
 @Injectable()
 export class StoreGoogleRtdnVerifier extends GoogleRtdnVerifier {
-  constructor(private readonly config: ConfigService) {
+  constructor(private readonly config: ConfigService<CoreApiEnv, true>) {
     super();
   }
 
   async verify(envelope: GoogleRtdnEnvelope, authorizationHeader: string | undefined): Promise<Record<string, unknown>> {
     if (!authorizationHeader?.startsWith('Bearer ')) {
-      throw new DomainException(EconomyErrors.WEBHOOK_SIGNATURE_INVALID, 'Thiếu Bearer token', 401);
+      throw new DomainException(EconomyErrors.WEBHOOK_SIGNATURE_INVALID, 'Thiếu Bearer token', HttpStatus.UNAUTHORIZED);
     }
     const token = authorizationHeader.slice('Bearer '.length);
-    const audience = this.config.getOrThrow<string>('ECONOMY_GOOGLE_RTDN_AUDIENCE');
-    const expectedEmail = this.config.getOrThrow<string>('ECONOMY_GOOGLE_RTDN_SERVICE_ACCOUNT_EMAIL');
+    const audience = this.config.getOrThrow('ECONOMY_GOOGLE_RTDN_AUDIENCE', { infer: true });
+    const expectedEmail = this.config.getOrThrow('ECONOMY_GOOGLE_RTDN_SERVICE_ACCOUNT_EMAIL', { infer: true });
 
     const { payload } = await jwtVerify(token, GOOGLE_JWKS, {
-      issuer: ['accounts.google.com', 'https://accounts.google.com'],
+      issuer: [...GOOGLE_OIDC_ISSUERS],
       audience,
     });
     if (payload['email'] !== expectedEmail || payload['email_verified'] !== true) {
-      throw new DomainException(EconomyErrors.WEBHOOK_SIGNATURE_INVALID, 'OIDC token không đúng service account', 401);
+      throw new DomainException(EconomyErrors.WEBHOOK_SIGNATURE_INVALID, 'OIDC token không đúng service account', HttpStatus.UNAUTHORIZED);
     }
 
     return JSON.parse(Buffer.from(envelope.message.data, 'base64').toString('utf8'));

@@ -1,4 +1,4 @@
-import { applyDecorators, createParamDecorator } from '@nestjs/common';
+import { HttpStatus, applyDecorators, createParamDecorator } from '@nestjs/common';
 import { ApiHeader } from '@nestjs/swagger';
 import { CommonErrors, DomainException } from '@litmatch/common-exceptions';
 
@@ -15,13 +15,13 @@ export function extractIdempotencyKey(headers: Record<string, unknown>): string 
   const raw = headers[IDEMPOTENCY_KEY_HEADER];
   const key = Array.isArray(raw) ? raw[0] : raw;
   if (typeof key !== 'string' || key.trim() === '') {
-    throw new DomainException(CommonErrors.IDEMPOTENCY_KEY_MISSING, 'Thiếu header Idempotency-Key', 400);
+    throw new DomainException(CommonErrors.IDEMPOTENCY_KEY_MISSING, 'Thiếu header Idempotency-Key', HttpStatus.BAD_REQUEST);
   }
   if (key.length > MAX_KEY_LENGTH) {
     throw new DomainException(
       CommonErrors.IDEMPOTENCY_KEY_INVALID,
       `Idempotency-Key dài quá ${MAX_KEY_LENGTH} ký tự`,
-      400,
+      HttpStatus.BAD_REQUEST,
     );
   }
   return key;

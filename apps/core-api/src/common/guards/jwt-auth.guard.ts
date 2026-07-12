@@ -5,12 +5,8 @@ import { JwtService } from '@nestjs/jwt';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 
 import type { AuthenticatedUser } from '../decorators/current-user.decorator';
+import type { AccessTokenPayload } from '../types/access-token-payload';
 import type { Request } from 'express';
-
-interface AccessTokenPayload {
-  sub: string;
-  isGuest: boolean;
-}
 
 /**
  * Guard global: mọi endpoint mặc định yêu cầu Bearer access token, trừ khi có @Public().

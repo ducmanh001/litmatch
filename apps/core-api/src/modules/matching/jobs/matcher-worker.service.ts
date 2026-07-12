@@ -4,14 +4,15 @@ import { SchedulerRegistry } from '@nestjs/schedule';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, In } from 'typeorm';
 
-import { MatchTicket, MatchTicketStatus } from './entities/match-ticket.entity';
-import { MatchSession, MatchSessionStatus } from './entities/match-session.entity';
-import { MATCH_INTERACTION_POLICY } from './interaction-policy';
-import { MATCHING_ACTIVE_SHARDS_KEY, MATCHING_REDIS } from './redis/matching-redis.provider';
-import { User, UserStatus } from '../user';
+import { MatchTicket, MatchTicketStatus } from '../entities/match-ticket.entity';
+import { MatchSession, MatchSessionStatus } from '../entities/match-session.entity';
+import { MATCH_INTERACTION_POLICY } from '../ports/interaction-policy';
+import { MATCHING_ACTIVE_SHARDS_KEY, MATCHING_REDIS } from '../redis/matching-redis.provider';
+import { User, UserStatus } from '../../user';
 
 import type Redis from 'ioredis';
-import type { MatchInteractionPolicy } from './interaction-policy';
+import type { CoreApiEnv } from '../../../config/env.validation';
+import type { MatchInteractionPolicy } from '../ports/interaction-policy';
 
 const MATCHER_JOB = 'matching-matcher';
 
@@ -41,7 +42,7 @@ export class MatcherWorkerService implements OnApplicationBootstrap, OnApplicati
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
-    private readonly config: ConfigService,
+    private readonly config: ConfigService<CoreApiEnv, true>,
     private readonly scheduler: SchedulerRegistry,
     @Inject(MATCHING_REDIS) private readonly redis: Redis,
     @Inject(MATCH_INTERACTION_POLICY) private readonly interactionPolicy: MatchInteractionPolicy,
@@ -50,7 +51,7 @@ export class MatcherWorkerService implements OnApplicationBootstrap, OnApplicati
   onApplicationBootstrap(): void {
     const interval = setInterval(
       () => void this.runOnce().catch((err) => this.logger.error({ err: `${err}` }, 'Matcher tick lỗi')),
-      this.config.getOrThrow<number>('MATCHING_MATCHER_INTERVAL_MS'),
+      this.config.getOrThrow('MATCHING_MATCHER_INTERVAL_MS', { infer: true }),
     );
     this.scheduler.addInterval(MATCHER_JOB, interval);
   }
@@ -75,7 +76,7 @@ export class MatcherWorkerService implements OnApplicationBootstrap, OnApplicati
   }
 
   private async drainShard(shard: string): Promise<number> {
-    const batchSize = this.config.getOrThrow<number>('MATCHING_MATCHER_BATCH_SIZE');
+    const batchSize = this.config.getOrThrow('MATCHING_MATCHER_BATCH_SIZE', { infer: true });
     let matched = 0;
     for (let i = 0; i < batchSize; i++) {
       // ZPOPMIN key 2: atomic — không cần Lua, 2 matcher không lấy trùng (spec § 2)

@@ -1,9 +1,18 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@litmatch/common-exceptions';
 import { DataSource, Repository } from 'typeorm';
 
+import { isUniqueViolation, violatedConstraint } from '../../database/postgres-errors';
+import {
+  DEFAULT_REGION,
+  SPEEDUP_RATE_WINDOW_SECONDS,
+  UNKNOWN_AGE_BAND,
+  UQ_ACTIVE_USER,
+  joinIdempotencyKey,
+  speedupIdempotencyKey,
+} from './matching.constants';
 import { MatchingErrors } from './matching.errors';
 import { MATCH_TICKET_TRANSITIONS, MatchTicket, MatchTicketStatus } from './entities/match-ticket.entity';
 import { MatchSession, MatchSessionStatus } from './entities/match-session.entity';
@@ -20,15 +29,8 @@ import { UserService, UserStatus } from '../user';
 import type { EntityManager } from 'typeorm';
 import type Redis from 'ioredis';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
+import type { CoreApiEnv } from '../../config/env.validation';
 import type { JoinQueueDto } from './dto/matching.dtos';
-
-const PG_UNIQUE_VIOLATION = '23505';
-const UQ_ACTIVE_USER = 'uq_match_tickets_active_user';
-
-/** User chưa set region → shard chung (server derive, không nhận từ client — docs/10 § 10.0.B). */
-const DEFAULT_REGION = 'GLOBAL';
-/** User chưa khai sinh nhật → band riêng "chưa rõ tuổi", chỉ ghép với nhau. */
-const UNKNOWN_AGE_BAND = -1;
 
 /**
  * Rate-limit speed-up (spec § 4): INCR + EXPIRE-lần-đầu + check-quá-giới-hạn trong 1 Lua atomic.
@@ -57,7 +59,7 @@ export class MatchingService {
     @InjectRepository(MatchTicket) private readonly ticketRepo: Repository<MatchTicket>,
     private readonly userService: UserService,
     private readonly economy: EconomyService,
-    private readonly config: ConfigService,
+    private readonly config: ConfigService<CoreApiEnv, true>,
     @Inject(MATCHING_REDIS) private readonly redis: Redis,
   ) {}
 
@@ -68,13 +70,13 @@ export class MatchingService {
   async joinQueue(user: AuthenticatedUser, dto: JoinQueueDto, idempotencyKey: string): Promise<MatchTicket> {
     const profile = await this.userService.getByIdOrThrow(user.userId);
     if (profile.status === UserStatus.Banned) {
-      throw new DomainException(MatchingErrors.USER_BANNED, 'Tài khoản bị khoá, không thể vào hàng đợi', 403);
+      throw new DomainException(MatchingErrors.USER_BANNED, 'Tài khoản bị khoá, không thể vào hàng đợi', HttpStatus.FORBIDDEN);
     }
 
     // region/ageBand server tự derive từ profile — không tin client (docs/10 § 10.0.B)
     const region = profile.region ?? DEFAULT_REGION;
     const ageBand = this.ageBandOf(profile.birthDate);
-    const prefixedKey = `matching:join:${user.userId}:${idempotencyKey}`;
+    const prefixedKey = joinIdempotencyKey(user.userId, idempotencyKey);
 
     let ticket: MatchTicket;
     try {
@@ -92,7 +94,7 @@ export class MatchingService {
         }),
       );
     } catch (err) {
-      if (!this.isUniqueViolation(err)) throw err;
+      if (!isUniqueViolation(err)) throw err;
       // Replay cùng Idempotency-Key? — check TRƯỚC, vì cả 2 unique constraint có thể cùng dính
       const existing = await this.ticketRepo.findOneBy({ idempotencyKey: prefixedKey });
       if (existing) {
@@ -100,18 +102,18 @@ export class MatchingService {
           throw new DomainException(
             MatchingErrors.TICKET_IDEMPOTENCY_CONFLICT,
             'Idempotency-Key đã dùng cho 1 request khác nội dung',
-            409,
+            HttpStatus.CONFLICT,
           );
         }
         // Replay: đảm bảo ticket còn queued vẫn có mặt trong Redis (NX — không đè score đã boost)
         if (existing.status === MatchTicketStatus.Queued) await this.ensureEnqueued(existing);
         return existing;
       }
-      if (this.violatedConstraint(err, UQ_ACTIVE_USER)) {
+      if (violatedConstraint(err, UQ_ACTIVE_USER)) {
         throw new DomainException(
           MatchingErrors.TICKET_ALREADY_QUEUED,
           'Đã có 1 ticket đang chờ/đang ghép — 1 user chỉ ở trong 1 queue tại 1 thời điểm (docs/06)',
-          409,
+          HttpStatus.CONFLICT,
         );
       }
       throw err;
@@ -126,7 +128,7 @@ export class MatchingService {
   async getTicket(user: AuthenticatedUser, ticketId: string): Promise<MatchTicket> {
     const ticket = await this.ticketRepo.findOneBy({ id: ticketId });
     if (!ticket) {
-      throw new DomainException(MatchingErrors.TICKET_NOT_FOUND, 'Không tìm thấy ticket', 404);
+      throw new DomainException(MatchingErrors.TICKET_NOT_FOUND, 'Không tìm thấy ticket', HttpStatus.NOT_FOUND);
     }
     this.assertOwnership(ticket, user); // IDOR — docs/10 § 10.1.D
     return ticket;
@@ -157,7 +159,7 @@ export class MatchingService {
       throw new DomainException(
         MatchingErrors.TICKET_INVALID_TRANSITION,
         `Ticket đang '${pre.status}', chỉ confirm được khi đang 'matched'`,
-        409,
+        HttpStatus.CONFLICT,
       );
     }
     const sessionId = pre.sessionId;
@@ -169,7 +171,7 @@ export class MatchingService {
       });
       if (!session || session.status !== MatchSessionStatus.PendingConfirm) {
         // sweeper có thể vừa expire session giữa lúc user bấm confirm — xác minh lại tại thời điểm hành động (docs/10 § 10.0.C)
-        throw new DomainException(MatchingErrors.SESSION_NOT_PENDING, 'Session không còn chờ confirm', 409);
+        throw new DomainException(MatchingErrors.SESSION_NOT_PENDING, 'Session không còn chờ confirm', HttpStatus.CONFLICT);
       }
 
       const ticket = await this.lockTicket(manager, ticketId);
@@ -179,7 +181,7 @@ export class MatchingService {
         throw new DomainException(
           MatchingErrors.TICKET_INVALID_TRANSITION,
           `Ticket đang '${ticket.status}', chỉ confirm được khi đang 'matched'`,
-          409,
+          HttpStatus.CONFLICT,
         );
       }
 
@@ -218,15 +220,15 @@ export class MatchingService {
       throw new DomainException(
         MatchingErrors.TICKET_INVALID_TRANSITION,
         `Ticket đang '${ticket.status}', chỉ speed-up được khi đang 'queued'`,
-        409,
+        HttpStatus.CONFLICT,
       );
     }
 
-    const maxPerHour = this.config.getOrThrow<number>('MATCHING_SPEEDUP_MAX_PER_HOUR');
-    const price = this.config.getOrThrow<number>('MATCHING_SPEEDUP_PRICE_DIAMOND');
-    const boostMs = this.config.getOrThrow<number>('MATCHING_PRIORITY_BOOST_MS');
+    const maxPerHour = this.config.getOrThrow('MATCHING_SPEEDUP_MAX_PER_HOUR', { infer: true });
+    const price = this.config.getOrThrow('MATCHING_SPEEDUP_PRICE_DIAMOND', { infer: true });
+    const boostMs = this.config.getOrThrow('MATCHING_PRIORITY_BOOST_MS', { infer: true });
     const countKey = speedupCountKey(user.userId);
-    const prefixedKey = `matching:speedup:${user.userId}:${idempotencyKey}`;
+    const prefixedKey = speedupIdempotencyKey(user.userId, idempotencyKey);
 
     // 0) Retry của request ĐÃ trả tiền → phải replay kết quả cũ (docs/05 § 5.10), không phải
     // "lượt mới" — bỏ qua rate-limit, nếu không client retry lúc counter đầy sẽ ăn 409 oan.
@@ -234,12 +236,14 @@ export class MatchingService {
 
     // 1) Rate-limit TRƯỚC khi trừ tiền — vượt giới hạn thì chưa mất đồng nào (spec § 4)
     if (!isRetry) {
-      const granted = Number(await this.redis.eval(SPEEDUP_RATE_LIMIT_LUA, 1, countKey, String(maxPerHour), '3600'));
+      const granted = Number(
+        await this.redis.eval(SPEEDUP_RATE_LIMIT_LUA, 1, countKey, String(maxPerHour), String(SPEEDUP_RATE_WINDOW_SECONDS)),
+      );
       if (granted < 0) {
         throw new DomainException(
           MatchingErrors.SPEEDUP_RATE_LIMITED,
           `Vượt giới hạn ${maxPerHour} lần speed-up/giờ`,
-          409,
+          HttpStatus.CONFLICT,
           { maxPerHour },
         );
       }
@@ -288,14 +292,14 @@ export class MatchingService {
       lock: { mode: 'pessimistic_write' },
     });
     if (!ticket) {
-      throw new DomainException(MatchingErrors.TICKET_NOT_FOUND, 'Không tìm thấy ticket', 404);
+      throw new DomainException(MatchingErrors.TICKET_NOT_FOUND, 'Không tìm thấy ticket', HttpStatus.NOT_FOUND);
     }
     return ticket;
   }
 
   private assertOwnership(ticket: MatchTicket, user: AuthenticatedUser): void {
     if (ticket.userId !== user.userId) {
-      throw new DomainException(MatchingErrors.TICKET_FORBIDDEN, 'Ticket không thuộc về bạn', 403);
+      throw new DomainException(MatchingErrors.TICKET_FORBIDDEN, 'Ticket không thuộc về bạn', HttpStatus.FORBIDDEN);
     }
   }
 
@@ -304,14 +308,14 @@ export class MatchingService {
       throw new DomainException(
         MatchingErrors.TICKET_INVALID_TRANSITION,
         `Không thể chuyển ticket từ '${ticket.status}' sang '${to}'`,
-        409,
+        HttpStatus.CONFLICT,
       );
     }
   }
 
   private ageBandOf(birthDate: string | null): number {
     if (!birthDate) return UNKNOWN_AGE_BAND;
-    const bandSize = this.config.getOrThrow<number>('MATCHING_AGE_BAND_SIZE');
+    const bandSize = this.config.getOrThrow('MATCHING_AGE_BAND_SIZE', { infer: true });
     const birth = new Date(birthDate);
     if (Number.isNaN(birth.getTime())) return UNKNOWN_AGE_BAND;
     const now = new Date();
@@ -323,14 +327,4 @@ export class MatchingService {
     return Math.floor(age / bandSize);
   }
 
-  private isUniqueViolation(err: unknown): boolean {
-    const e = err as { code?: string; driverError?: { code?: string } };
-    return (e.driverError?.code ?? e.code) === PG_UNIQUE_VIOLATION;
-  }
-
-  private violatedConstraint(err: unknown, constraint: string): boolean {
-    const e = err as { driverError?: { constraint?: string }; constraint?: string; message?: string };
-    const name = e.driverError?.constraint ?? e.constraint;
-    return name === constraint || (e.message?.includes(constraint) ?? false);
-  }
 }

@@ -3,11 +3,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { MatchingController } from './matching.controller';
 import { MatchingService } from './matching.service';
-import { MatcherWorkerService } from './matcher-worker.service';
-import { TicketSweeperService } from './ticket-sweeper.service';
+import { MatcherWorkerService } from './jobs/matcher-worker.service';
+import { TicketSweeperService } from './jobs/ticket-sweeper.service';
 import { MatchTicket } from './entities/match-ticket.entity';
 import { MatchSession } from './entities/match-session.entity';
-import { AllowAllInteractionPolicy, MATCH_INTERACTION_POLICY } from './interaction-policy';
+import { AllowAllInteractionPolicy, MATCH_INTERACTION_POLICY } from './ports/interaction-policy';
 import { MATCHING_REDIS, matchingRedisProvider } from './redis/matching-redis.provider';
 import { EconomyModule } from '../economy';
 import { UserModule } from '../user';

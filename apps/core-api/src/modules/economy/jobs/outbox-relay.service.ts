@@ -5,6 +5,7 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import { Kafka, Producer } from 'kafkajs';
 import { DataSource } from 'typeorm';
 
+import type { CoreApiEnv } from '../../../config/env.validation';
 import { OutboxEvent } from '../entities/outbox-event.entity';
 
 const RELAY_JOB = 'economy-outbox-relay';
@@ -23,23 +24,23 @@ export class OutboxRelayService implements OnApplicationBootstrap, OnApplication
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
-    private readonly config: ConfigService,
+    private readonly config: ConfigService<CoreApiEnv, true>,
     private readonly scheduler: SchedulerRegistry,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
-    if (!this.config.getOrThrow<boolean>('ECONOMY_OUTBOX_RELAY_ENABLED')) return;
+    if (!this.config.getOrThrow('ECONOMY_OUTBOX_RELAY_ENABLED', { infer: true })) return;
 
     const kafka = new Kafka({
       clientId: 'core-api-outbox-relay',
-      brokers: this.config.getOrThrow<string>('KAFKA_BROKERS').split(','),
+      brokers: this.config.getOrThrow('KAFKA_BROKERS', { infer: true }).split(','),
     });
     this.producer = kafka.producer();
     await this.producer.connect();
 
     const interval = setInterval(
       () => void this.flushOnce().catch((err) => this.logger.error({ err: `${err}` }, 'Outbox relay lỗi')),
-      this.config.getOrThrow<number>('ECONOMY_OUTBOX_RELAY_INTERVAL_MS'),
+      this.config.getOrThrow('ECONOMY_OUTBOX_RELAY_INTERVAL_MS', { infer: true }),
     );
     this.scheduler.addInterval(RELAY_JOB, interval);
     this.logger.log('Outbox relay đã bật');

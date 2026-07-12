@@ -1,6 +1,6 @@
-import { Body, Controller, Get, HttpCode, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
+import { Throttle, minutes } from '@nestjs/throttler';
 import { CursorPageQueryDto } from '@litmatch/common-dtos';
 
 import { EconomyService } from './economy.service';
@@ -24,8 +24,8 @@ export class EconomyController {
   }
 
   @Post('iap/verify')
-  @HttpCode(200)
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: minutes(1) } })
   @ApiOperation({
     summary: 'Verify receipt IAP và credit diamond — idempotent theo provider transaction id, gửi lại không credit đôi',
   })
@@ -34,7 +34,7 @@ export class EconomyController {
   }
 
   @Post('vip/purchase')
-  @HttpCode(200)
+  @HttpCode(HttpStatus.OK)
   @ApiIdempotencyKeyHeader()
   @ApiOperation({ summary: 'Mua VIP bằng diamond — gia hạn cộng dồn nếu đang active' })
   purchaseVip(

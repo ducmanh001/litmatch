@@ -9,6 +9,8 @@ import { UserStatus } from '../user';
 import type { ConfigService } from '@nestjs/config';
 import type { DataSource, EntityManager, Repository } from 'typeorm';
 import type Redis from 'ioredis';
+
+import type { CoreApiEnv } from '../../config/env.validation';
 import type { EconomyService } from '../economy';
 import type { User, UserService } from '../user';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
@@ -84,7 +86,7 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
         if (!(key in CONFIG)) throw new Error(`missing config ${key}`);
         return CONFIG[key];
       },
-    } as unknown as ConfigService;
+    } as unknown as ConfigService<CoreApiEnv, true>;
 
     service = new MatchingService(
       dataSource as unknown as DataSource,

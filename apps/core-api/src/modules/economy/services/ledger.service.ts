@@ -1,19 +1,19 @@
 import { createHash } from 'node:crypto';
 
-import { Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DomainException } from '@litmatch/common-exceptions';
 import { DataSource, EntityManager, IsNull } from 'typeorm';
 
-import { EconomyErrors } from './economy.errors';
-import { LedgerAccount, LedgerAccountKind, LedgerCurrency } from './entities/ledger-account.entity';
-import { LedgerDirection, LedgerEntry } from './entities/ledger-entry.entity';
-import { OutboxEvent } from './entities/outbox-event.entity';
-import { LedgerTransaction, TransactionStatus, TransactionType } from './entities/transaction.entity';
-import { Wallet } from './entities/wallet.entity';
+import { isUniqueViolation, violatedConstraint } from '../../../database/postgres-errors';
+import { ECONOMY_EVENTS_TOPIC, UQ_TRANSACTIONS_IDEMPOTENCY_KEY } from '../economy.constants';
+import { EconomyErrors } from '../economy.errors';
+import { LedgerAccount, LedgerAccountKind, LedgerCurrency } from '../entities/ledger-account.entity';
+import { LedgerDirection, LedgerEntry } from '../entities/ledger-entry.entity';
+import { OutboxEvent } from '../entities/outbox-event.entity';
+import { LedgerTransaction, TransactionStatus, TransactionType } from '../entities/transaction.entity';
+import { Wallet } from '../entities/wallet.entity';
 
-const PG_UNIQUE_VIOLATION = '23505';
-const UQ_TRANSACTIONS_IDEMPOTENCY_KEY = 'uq_transactions_idempotency_key';
 const USER_ACCOUNT_KINDS = new Set([LedgerAccountKind.UserWallet, LedgerAccountKind.UserEarnings]);
 
 export interface LedgerEntryInput {
@@ -112,7 +112,7 @@ export class LedgerService {
       });
       return { transaction, replayed: false };
     } catch (err) {
-      if (this.isUniqueViolation(err) && this.violatedConstraint(err, UQ_TRANSACTIONS_IDEMPOTENCY_KEY)) {
+      if (isUniqueViolation(err) && violatedConstraint(err, UQ_TRANSACTIONS_IDEMPOTENCY_KEY)) {
         const winner = await this.dataSource
           .getRepository(LedgerTransaction)
           .findOneByOrFail({ idempotencyKey: input.idempotencyKey });
@@ -144,10 +144,10 @@ export class LedgerService {
       .getRepository(LedgerTransaction)
       .findOneBy({ id: originalTransactionId });
     if (!original) {
-      throw new DomainException(EconomyErrors.TRANSACTION_NOT_FOUND, 'Không tìm thấy giao dịch gốc', 404);
+      throw new DomainException(EconomyErrors.TRANSACTION_NOT_FOUND, 'Không tìm thấy giao dịch gốc', HttpStatus.NOT_FOUND);
     }
     if (original.status === TransactionStatus.Reversed) {
-      throw new DomainException(EconomyErrors.TRANSACTION_ALREADY_REVERSED, 'Giao dịch đã được hoàn trước đó', 409);
+      throw new DomainException(EconomyErrors.TRANSACTION_ALREADY_REVERSED, 'Giao dịch đã được hoàn trước đó', HttpStatus.CONFLICT);
     }
 
     const entries = await this.dataSource.getRepository(LedgerEntry).findBy({ transactionId: original.id });
@@ -182,7 +182,7 @@ export class LedgerService {
         );
         if (!marked.affected) {
           // request khác vừa reverse xong trước — rollback toàn bộ bút toán đảo của mình
-          throw new DomainException(EconomyErrors.TRANSACTION_ALREADY_REVERSED, 'Giao dịch đã được hoàn trước đó', 409);
+          throw new DomainException(EconomyErrors.TRANSACTION_ALREADY_REVERSED, 'Giao dịch đã được hoàn trước đó', HttpStatus.CONFLICT);
         }
         await opts.withinTransaction?.(manager, reversalTxn);
       },
@@ -253,7 +253,7 @@ export class LedgerService {
       throw new DomainException(
         EconomyErrors.IDEMPOTENCY_CONFLICT,
         'Idempotency key đã dùng cho 1 request khác nội dung',
-        409,
+        HttpStatus.CONFLICT,
       );
     }
     return existing;
@@ -281,19 +281,6 @@ export class LedgerService {
       [entry.accountKind, isUserAccount ? (entry.userId as string) : null, entry.currency],
     );
     return manager.getRepository(LedgerAccount).findOneByOrFail(where);
-  }
-
-  /** So driver error code, kèm fallback driverError (pg driver bọc code gốc trong đó). */
-  private isUniqueViolation(err: unknown): boolean {
-    const e = err as { code?: string; driverError?: { code?: string } };
-    return (e.driverError?.code ?? e.code) === PG_UNIQUE_VIOLATION;
-  }
-
-  /** So đúng tên constraint (không suy đoán qua message) — fallback message.includes cho driver cũ không trả constraint. */
-  private violatedConstraint(err: unknown, constraint: string): boolean {
-    const e = err as { driverError?: { constraint?: string }; constraint?: string; message?: string };
-    const name = e.driverError?.constraint ?? e.constraint;
-    return name === constraint || (e.message?.includes(constraint) ?? false);
   }
 
   private async lockWallet(manager: EntityManager, userId: string): Promise<Wallet> {
@@ -337,12 +324,12 @@ export class LedgerService {
         throw new DomainException(
           EconomyErrors.WALLET_INSUFFICIENT_BALANCE,
           'Không đủ diamond',
-          422,
+          HttpStatus.UNPROCESSABLE_ENTITY,
           { required: (-newBalance).toString() },
         );
       }
       if (newEarnings < 0n) {
-        throw new DomainException(EconomyErrors.WALLET_INSUFFICIENT_BALANCE, 'Không đủ điểm quy đổi', 422);
+        throw new DomainException(EconomyErrors.WALLET_INSUFFICIENT_BALANCE, 'Không đủ điểm quy đổi', HttpStatus.UNPROCESSABLE_ENTITY);
       }
 
       wallet.balance = newBalance.toString();
@@ -353,7 +340,7 @@ export class LedgerService {
       if (balanceDelta !== 0n) {
         await manager.save(
           manager.create(OutboxEvent, {
-            topic: 'litmatch.economy.events',
+            topic: ECONOMY_EVENTS_TOPIC,
             eventType: outboxEventTypeOverride ?? (balanceDelta > 0n ? 'economy.diamond.credited' : 'economy.diamond.debited'),
             payload: {
               version: 1,

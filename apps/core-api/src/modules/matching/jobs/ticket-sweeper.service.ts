@@ -4,11 +4,13 @@ import { SchedulerRegistry } from '@nestjs/schedule';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, In } from 'typeorm';
 
-import { MatchTicket, MatchTicketStatus } from './entities/match-ticket.entity';
-import { MatchSession, MatchSessionStatus } from './entities/match-session.entity';
-import { MATCHING_ACTIVE_SHARDS_KEY, MATCHING_REDIS, matchingShardKey, ticketScore } from './redis/matching-redis.provider';
+import { requeueIdempotencyKey } from '../matching.constants';
+import { MatchTicket, MatchTicketStatus } from '../entities/match-ticket.entity';
+import { MatchSession, MatchSessionStatus } from '../entities/match-session.entity';
+import { MATCHING_ACTIVE_SHARDS_KEY, MATCHING_REDIS, matchingShardKey, ticketScore } from '../redis/matching-redis.provider';
 
 import type Redis from 'ioredis';
+import type { CoreApiEnv } from '../../../config/env.validation';
 
 const SWEEPER_JOB = 'matching-ticket-sweeper';
 /** Giới hạn số session xử lý mỗi tick — batch vận hành nội bộ, không phải rule nghiệp vụ. */
@@ -31,7 +33,7 @@ export class TicketSweeperService implements OnApplicationBootstrap, OnApplicati
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
-    private readonly config: ConfigService,
+    private readonly config: ConfigService<CoreApiEnv, true>,
     private readonly scheduler: SchedulerRegistry,
     @Inject(MATCHING_REDIS) private readonly redis: Redis,
   ) {}
@@ -39,7 +41,7 @@ export class TicketSweeperService implements OnApplicationBootstrap, OnApplicati
   onApplicationBootstrap(): void {
     const interval = setInterval(
       () => void this.runOnce().catch((err) => this.logger.error({ err: `${err}` }, 'Sweeper tick lỗi')),
-      this.config.getOrThrow<number>('MATCHING_SWEEPER_INTERVAL_MS'),
+      this.config.getOrThrow('MATCHING_SWEEPER_INTERVAL_MS', { infer: true }),
     );
     this.scheduler.addInterval(SWEEPER_JOB, interval);
   }
@@ -69,7 +71,7 @@ export class TicketSweeperService implements OnApplicationBootstrap, OnApplicati
    * là ticket MỚI nên enqueued_at = created_at; dùng enqueued_at để nhất quán ngữ nghĩa "chờ từ lúc vào queue".
    */
   private async expireStaleQueuedTickets(): Promise<number> {
-    const maxWaitSeconds = this.config.getOrThrow<number>('MATCHING_QUEUE_MAX_WAIT_SECONDS');
+    const maxWaitSeconds = this.config.getOrThrow('MATCHING_QUEUE_MAX_WAIT_SECONDS', { infer: true });
     // TypeORM query() cho UPDATE trả [rows, rowCount] (không phải rows trần như SELECT)
     const [rows] = (await this.dataSource.query(
       `UPDATE match_tickets
@@ -86,7 +88,7 @@ export class TicketSweeperService implements OnApplicationBootstrap, OnApplicati
   }
 
   private async expireStalePendingSessions(): Promise<number> {
-    const timeoutSeconds = this.config.getOrThrow<number>('MATCHING_CONFIRM_TIMEOUT_SECONDS');
+    const timeoutSeconds = this.config.getOrThrow('MATCHING_CONFIRM_TIMEOUT_SECONDS', { infer: true });
     const stale = await this.dataSource
       .getRepository(MatchSession)
       .createQueryBuilder('s')
@@ -144,7 +146,7 @@ export class TicketSweeperService implements OnApplicationBootstrap, OnApplicati
               enqueuedAt: new Date(),
               priorityBoostMs: 0,
               sessionId: null,
-              idempotencyKey: `matching:requeue:${session.id}:${ticket.id}`,
+              idempotencyKey: requeueIdempotencyKey(session.id, ticket.id),
             }),
           );
           toEnqueue.push(requeued);

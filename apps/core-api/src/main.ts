@@ -7,17 +7,19 @@ import { Logger } from 'nestjs-pino';
 
 import { AppModule } from './app/app.module';
 
+import type { CoreApiEnv } from './config/env.validation';
+
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   app.useLogger(app.get(Logger));
 
-  const config = app.get(ConfigService);
+  const config = app.get<ConfigService<CoreApiEnv, true>>(ConfigService);
 
   app.setGlobalPrefix('api/v1', { exclude: ['health'] }); // version trong URI ngay từ đầu (docs/05 § 5.4)
   app.use(helmet());
 
   const corsOrigins = config
-    .getOrThrow<string>('CORS_ORIGINS')
+    .getOrThrow('CORS_ORIGINS', { infer: true })
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
@@ -28,7 +30,7 @@ async function bootstrap(): Promise<void> {
   );
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
-  if (config.getOrThrow<boolean>('SWAGGER_ENABLED') && config.get('NODE_ENV') !== 'production') {
+  if (config.getOrThrow('SWAGGER_ENABLED', { infer: true }) && config.get('NODE_ENV', { infer: true }) !== 'production') {
     const doc = SwaggerModule.createDocument(
       app,
       new DocumentBuilder().setTitle('Litmatch core-api').setVersion('v1').addBearerAuth().build(),
@@ -37,7 +39,7 @@ async function bootstrap(): Promise<void> {
   }
 
   app.enableShutdownHooks();
-  await app.listen(config.getOrThrow<number>('PORT'));
+  await app.listen(config.getOrThrow('PORT', { infer: true }));
 }
 
 void bootstrap();
