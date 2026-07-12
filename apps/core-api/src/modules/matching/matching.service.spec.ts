@@ -3,6 +3,7 @@ import { DomainException } from '@litmatch/common-exceptions';
 import { MatchingService } from './matching.service';
 import { MatchingErrors } from './matching.errors';
 import {
+  GenderPreference,
   MatchTicket,
   MatchTicketStatus,
   MatchType,
@@ -35,6 +36,7 @@ function makeTicket(overrides: Partial<MatchTicket> = {}): MatchTicket {
     matchType: MatchType.Voice,
     region: 'VN',
     ageBand: 5,
+    genderPreference: GenderPreference.Any,
     status: MatchTicketStatus.Queued,
     enqueuedAt: new Date('2026-07-12T00:00:00Z'),
     priorityBoostMs: 0,
@@ -199,6 +201,47 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
         expect.any(String),
         existing.id,
       );
+    });
+
+    it('không gửi genderPreference → default any (client cũ giữ nguyên hành vi, docs/01 #13)', async () => {
+      const ticket = await service.joinQueue(
+        me,
+        { matchType: MatchType.Voice },
+        'k1',
+      );
+      expect(ticket.genderPreference).toBe(GenderPreference.Any);
+    });
+
+    it('gửi genderPreference → snapshot đúng lên ticket', async () => {
+      const ticket = await service.joinQueue(
+        me,
+        {
+          matchType: MatchType.Voice,
+          genderPreference: GenderPreference.Female,
+        },
+        'k1',
+      );
+      expect(ticket.genderPreference).toBe(GenderPreference.Female);
+    });
+
+    it('cùng key nhưng genderPreference đổi → 409 IDEMPOTENCY_CONFLICT (request khác nội dung)', async () => {
+      ticketRepo.save.mockRejectedValueOnce({
+        code: '23505',
+        message: 'uq_match_tickets_idempotency_key',
+      });
+      ticketRepo.findOneBy.mockResolvedValueOnce(makeTicket()); // ticket cũ pref = any
+      await expect(
+        service.joinQueue(
+          me,
+          {
+            matchType: MatchType.Voice,
+            genderPreference: GenderPreference.Male,
+          },
+          'k1',
+        ),
+      ).rejects.toMatchObject({
+        code: MatchingErrors.TICKET_IDEMPOTENCY_CONFLICT,
+      });
     });
 
     it('cùng key nhưng nội dung khác (matchType đổi) → 409 IDEMPOTENCY_CONFLICT (docs/05 § 5.10)', async () => {

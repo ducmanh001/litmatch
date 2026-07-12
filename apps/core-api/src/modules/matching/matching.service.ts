@@ -18,6 +18,7 @@ import {
 } from './matching.constants';
 import { MatchingErrors } from './matching.errors';
 import {
+  GenderPreference,
   MATCH_TICKET_TRANSITIONS,
   MatchTicket,
   MatchTicketStatus,
@@ -95,6 +96,8 @@ export class MatchingService {
     // region/ageBand server tự derive từ profile — không tin client (docs/10 § 10.0.B)
     const region = profile.region ?? DEFAULT_REGION;
     const ageBand = this.ageBandOf(profile.birthDate);
+    // preference là lựa chọn hợp lệ của client (như matchType); không gửi = any (docs/01 #13)
+    const genderPreference = dto.genderPreference ?? GenderPreference.Any;
     const prefixedKey = joinIdempotencyKey(user.userId, idempotencyKey);
 
     let ticket: MatchTicket;
@@ -105,6 +108,7 @@ export class MatchingService {
           matchType: dto.matchType,
           region,
           ageBand,
+          genderPreference,
           status: MatchTicketStatus.Queued,
           enqueuedAt: new Date(),
           priorityBoostMs: 0,
@@ -121,7 +125,8 @@ export class MatchingService {
       if (existing) {
         if (
           existing.userId !== user.userId ||
-          existing.matchType !== dto.matchType
+          existing.matchType !== dto.matchType ||
+          existing.genderPreference !== genderPreference
         ) {
           throw new DomainException(
             MatchingErrors.TICKET_IDEMPOTENCY_CONFLICT,

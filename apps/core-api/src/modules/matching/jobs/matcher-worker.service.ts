@@ -13,6 +13,7 @@ import { DataSource, In } from 'typeorm';
 import {
   MatchTicket,
   MatchTicketStatus,
+  genderPreferenceAllows,
 } from '../entities/match-ticket.entity';
 import {
   MatchSession,
@@ -163,10 +164,26 @@ export class MatcherWorkerService
       const aValid = isValid(ta);
       const bValid = isValid(tb);
 
+      // Gender filter 2 CHIỀU (docs/01 #13) với gender đọc TƯƠI từ users trong chính transaction
+      // này (user đổi profile giữa lúc chờ vẫn đúng — docs/10 § 10.0.C). Không khớp = cặp hợp lệ
+      // nhưng không được ghép → cùng nhánh requeue với block/report, không mất lượt chờ.
+      const genderOk =
+        aValid &&
+        bValid &&
+        genderPreferenceAllows(
+          ta.genderPreference,
+          userById.get(tb.userId)?.gender,
+        ) &&
+        genderPreferenceAllows(
+          tb.genderPreference,
+          userById.get(ta.userId)?.gender,
+        );
+
       if (
         aValid &&
         bValid &&
         ta.userId !== tb.userId &&
+        genderOk &&
         (await this.interactionPolicy.canPair(ta.userId, tb.userId))
       ) {
         const session = await manager.save(

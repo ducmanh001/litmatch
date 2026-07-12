@@ -186,6 +186,7 @@ export class TicketSweeperService
               matchType: ticket.matchType,
               region: ticket.region,
               ageBand: ticket.ageBand,
+              genderPreference: ticket.genderPreference, // requeue giữ nguyên lựa chọn của user
               status: MatchTicketStatus.Queued,
               enqueuedAt: new Date(),
               priorityBoostMs: 0,
