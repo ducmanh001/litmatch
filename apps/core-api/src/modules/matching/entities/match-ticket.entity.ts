@@ -7,6 +7,27 @@ export enum MatchType {
   Voice = 'voice',
 }
 
+/**
+ * Giới tính user muốn ghép (docs/01 #13). KHÔNG tái dùng enum `Gender` của user module:
+ * preference có `any` và không cho chọn `unknown`/`other` — hai tập giá trị khác nhau về nghĩa.
+ */
+export enum GenderPreference {
+  Any = 'any',
+  Male = 'male',
+  Female = 'female',
+}
+
+/**
+ * Preference cụ thể chỉ pass khi gender đối phương bằng ĐÚNG giá trị đó — user gender
+ * `unknown`/`other` chỉ ghép được với preference `any` (filter cơ bản, không đoán hộ).
+ */
+export function genderPreferenceAllows(
+  pref: GenderPreference,
+  partnerGender: string | undefined,
+): boolean {
+  return pref === GenderPreference.Any || (pref as string) === partnerGender;
+}
+
 export enum MatchTicketStatus {
   Queued = 'queued',
   Matched = 'matched',
@@ -67,6 +88,14 @@ export class MatchTicket extends BaseAppEntity {
   /** floor(tuổi / MATCHING_AGE_BAND_SIZE); user chưa khai sinh nhật → -1 (band "chưa rõ tuổi"). */
   @Column({ type: 'int' })
   ageBand!: number;
+
+  /**
+   * Snapshot lựa chọn giới tính cho LẦN vào queue này (đổi ý = cancel + join lại). Check khớp
+   * 2 chiều tại matcher `tryPair` với gender đọc TƯƠI từ users (docs/10 § 10.0.C) — KHÔNG shard
+   * theo gender: preference `any` phải quét được mọi ứng viên trong shard hiện có.
+   */
+  @Column({ type: 'varchar', length: 10, default: GenderPreference.Any })
+  genderPreference!: GenderPreference;
 
   @Column({ type: 'varchar', length: 16, default: MatchTicketStatus.Queued })
   status!: MatchTicketStatus;

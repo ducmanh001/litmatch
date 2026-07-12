@@ -6,10 +6,11 @@ import { InitAuthUser1751900000000 } from '../../database/migrations/17519000000
 import { EconomyLedger1752000000000 } from '../../database/migrations/1752000000000-economy-ledger';
 import { EconomyRefund1752100000000 } from '../../database/migrations/1752100000000-economy-refund';
 import { MatchingCore1752200000000 } from '../../database/migrations/1752200000000-matching-core';
+import { MatchingGenderPreference1752300000000 } from '../../database/migrations/1752300000000-matching-gender-preference';
 import { AuthIdentity } from '../auth/entities/auth-identity.entity';
 import { PhoneOtp } from '../auth/entities/phone-otp.entity';
 import { RefreshToken } from '../auth/entities/refresh-token.entity';
-import { User, UserService, UserStatus } from '../user';
+import { Gender, User, UserService, UserStatus } from '../user';
 import { EconomyService } from '../economy/economy.service';
 import { EconomyErrors } from '../economy/economy.errors';
 import { LedgerService } from '../economy/services/ledger.service';
@@ -30,6 +31,7 @@ import { MatchingErrors } from './matching.errors';
 import { MatcherWorkerService } from './jobs/matcher-worker.service';
 import { TicketSweeperService } from './jobs/ticket-sweeper.service';
 import {
+  GenderPreference,
   MatchTicket,
   MatchTicketStatus,
   MatchType,
@@ -121,7 +123,11 @@ d('Matching integration (Postgres + Redis thật)', () => {
 
   async function createUser(
     nickname: string,
-    opts: { region?: string | null; birthDate?: string | null } = {},
+    opts: {
+      region?: string | null;
+      birthDate?: string | null;
+      gender?: Gender;
+    } = {},
   ): Promise<User> {
     const repo = ds.getRepository(User);
     return repo.save(
@@ -131,6 +137,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
         isGuest: false,
         region: opts.region === undefined ? 'VN' : opts.region,
         birthDate: opts.birthDate === undefined ? '2000-01-01' : opts.birthDate,
+        gender: opts.gender ?? Gender.Unknown,
       }),
     );
   }
@@ -193,6 +200,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
         EconomyLedger1752000000000,
         EconomyRefund1752100000000,
         MatchingCore1752200000000,
+        MatchingGenderPreference1752300000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -360,6 +368,85 @@ d('Matching integration (Postgres + Redis thật)', () => {
 
     // bỏ block → tick sau ghép bình thường (block chỉ chặn đúng thời điểm còn hiệu lực)
     blockedPairs.clear();
+    expect(await worker.runOnce()).toBe(1);
+  });
+
+  it('gender filter 2 chiều khớp (nữ muốn nam + nam muốn nữ) → ghép bình thường (docs/01 #13)', async () => {
+    const f = await createUser('gender-f', { gender: Gender.Female });
+    const m = await createUser('gender-m', { gender: Gender.Male });
+    await matching.joinQueue(
+      auth(f.id),
+      {
+        matchType: MatchType.Voice,
+        genderPreference: GenderPreference.Male,
+      },
+      'k',
+    );
+    await matching.joinQueue(
+      auth(m.id),
+      {
+        matchType: MatchType.Voice,
+        genderPreference: GenderPreference.Female,
+      },
+      'k',
+    );
+    expect(await worker.runOnce()).toBe(1);
+  });
+
+  it('gender filter khớp 1 chiều KHÔNG đủ → không ghép, cả 2 giữ nguyên queue + score gốc (không mất lượt)', async () => {
+    // m2 (pref any) chấp nhận m1, nhưng m1 chỉ muốn female → 1 chiều fail là đủ để không ghép
+    const m1 = await createUser('gender-one-way-1', { gender: Gender.Male });
+    const m2 = await createUser('gender-one-way-2', { gender: Gender.Male });
+    const t1 = await matching.joinQueue(
+      auth(m1.id),
+      {
+        matchType: MatchType.Voice,
+        genderPreference: GenderPreference.Female,
+      },
+      'k',
+    );
+    const t2 = await matching.joinQueue(
+      auth(m2.id),
+      { matchType: MatchType.Voice }, // không gửi → default any
+      'k',
+    );
+
+    expect(await worker.runOnce()).toBe(0);
+
+    const shard = matchingShardKey(MatchType.Voice, 'VN', t1.ageBand);
+    for (const t of [t1, t2]) {
+      const fresh = await ds
+        .getRepository(MatchTicket)
+        .findOneByOrFail({ id: t.id });
+      expect(fresh.status).toBe(MatchTicketStatus.Queued);
+      expect(fresh.sessionId).toBeNull();
+      expect(await redis.zscore(shard, t.id)).toBe(
+        String(t.enqueuedAt.getTime()),
+      );
+    }
+  });
+
+  it('user đổi gender SAU khi enqueue → matcher đọc gender TƯƠI lúc ghép, pref cụ thể không khớp unknown (docs/10 § 10.0.C)', async () => {
+    const a = await createUser('gender-fresh-a', { gender: Gender.Female });
+    const b = await createUser('gender-fresh-b', { gender: Gender.Male });
+    await matching.joinQueue(
+      auth(a.id),
+      {
+        matchType: MatchType.Voice,
+        genderPreference: GenderPreference.Male,
+      },
+      'k',
+    );
+    await matching.joinQueue(auth(b.id), { matchType: MatchType.Voice }, 'k');
+
+    // b xoá khai báo gender (→ unknown) khi cả 2 ĐÃ trong queue → pref 'male' của a hết khớp
+    await ds
+      .getRepository(User)
+      .update({ id: b.id }, { gender: Gender.Unknown });
+    expect(await worker.runOnce()).toBe(0);
+
+    // b khai lại male → tick sau ghép được (không dùng snapshot gender lúc enqueue)
+    await ds.getRepository(User).update({ id: b.id }, { gender: Gender.Male });
     expect(await worker.runOnce()).toBe(1);
   });
 
@@ -602,10 +689,13 @@ d('Matching integration (Postgres + Redis thật)', () => {
 
     // --- matched quá hạn confirm: u2 đã confirm, u3 im lặng ---
     const u2 = await createUser('sweep-2');
-    const u3 = await createUser('sweep-3');
+    const u3 = await createUser('sweep-3', { gender: Gender.Female });
     const t2 = await matching.joinQueue(
       auth(u2.id),
-      { matchType: MatchType.Voice },
+      {
+        matchType: MatchType.Voice,
+        genderPreference: GenderPreference.Female, // requeue phải giữ nguyên lựa chọn này
+      },
       'k',
     );
     const t3 = await matching.joinQueue(
@@ -648,6 +738,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
       .getRepository(MatchTicket)
       .findOneByOrFail({ userId: u2.id, status: MatchTicketStatus.Queued });
     expect(requeued.id).not.toBe(t2.id);
+    expect(requeued.genderPreference).toBe(GenderPreference.Female); // không rơi về default
     expect(await redis.zscore(shard, requeued.id)).toBe(
       String(requeued.enqueuedAt.getTime()),
     );

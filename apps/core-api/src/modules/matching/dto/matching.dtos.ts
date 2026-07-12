@@ -1,22 +1,35 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum } from 'class-validator';
+import { IsEnum, IsOptional } from 'class-validator';
 
 import {
+  GenderPreference,
   MatchTicket,
   MatchTicketStatus,
   MatchType,
 } from '../entities/match-ticket.entity';
 
 /**
- * Client CHỈ được chọn matchType. region + ageBand server tự derive từ profile user
- * (User.region / User.birthDate) — KHÔNG nhận từ body/header: client tự khai region/tuổi
- * là dữ liệu nghiệp vụ quyết định shard ghép cặp, tin client là lỗi docs/10 § 10.0.B
- * (client giả mạo để chọn shard/độ tuổi mình muốn).
+ * Client CHỈ được chọn matchType + genderPreference (2 lựa chọn hợp lệ của user, không phải
+ * dữ liệu derive). region + ageBand server tự derive từ profile user (User.region /
+ * User.birthDate) — KHÔNG nhận từ body/header: client tự khai region/tuổi là dữ liệu nghiệp vụ
+ * quyết định shard ghép cặp, tin client là lỗi docs/10 § 10.0.B (client giả mạo để chọn
+ * shard/độ tuổi mình muốn).
  */
 export class JoinQueueDto {
   @ApiProperty({ enum: MatchType, example: MatchType.Voice })
   @IsEnum(MatchType)
   matchType!: MatchType;
+
+  @ApiProperty({
+    enum: GenderPreference,
+    required: false,
+    default: GenderPreference.Any,
+    description:
+      'Giới tính muốn ghép (docs/01 #13) — bỏ trống = any. Check khớp 2 CHIỀU lúc ghép.',
+  })
+  @IsOptional()
+  @IsEnum(GenderPreference)
+  genderPreference?: GenderPreference;
 }
 
 export class TicketDto {
@@ -30,6 +43,8 @@ export class TicketDto {
       'Dải tuổi server derive từ birthDate; -1 = chưa khai sinh nhật',
   })
   ageBand!: number;
+  @ApiProperty({ enum: GenderPreference })
+  genderPreference!: GenderPreference;
   @ApiProperty({ nullable: true, type: String }) sessionId!: string | null;
   @ApiProperty() enqueuedAt!: Date;
   @ApiProperty() createdAt!: Date;
@@ -41,6 +56,7 @@ export class TicketDto {
     dto.status = ticket.status;
     dto.region = ticket.region;
     dto.ageBand = ticket.ageBand;
+    dto.genderPreference = ticket.genderPreference;
     dto.sessionId = ticket.sessionId;
     dto.enqueuedAt = ticket.enqueuedAt;
     dto.createdAt = ticket.createdAt;

@@ -1,6 +1,6 @@
 # Matching Service (module trong `core-api`) — đặc tả slice M1: Ticket/Queue engine
 
-> Phạm vi file này: CHỈ mục đầu tiên của Giai đoạn 2 (`MatchTicket` + state machine + shard queue + speed-up qua Economy). Soul Match (chat/like), Signaling Gateway thật, tích hợp LiveKit, Calling module là các mục roadmap riêng, KHÔNG thuộc slice này — code sau, khi tới lượt.
+> Phạm vi file này: mục đầu tiên của Giai đoạn 2 (`MatchTicket` + state machine + shard queue + speed-up qua Economy) + follow-up bộ lọc giới tính (docs/01 #13, § 2.1). Soul Match (chat/like), Signaling Gateway thật, tích hợp LiveKit, Calling module là các mục roadmap riêng, KHÔNG thuộc slice này — code sau, khi tới lượt.
 
 ## 1. State machine `MatchTicket`
 
@@ -25,8 +25,16 @@ Mọi transition khác throw `MATCHING_TICKET_INVALID_TRANSITION`.
 - Cấu trúc: **Sorted Set**, member = `ticketId`, score = `enqueuedAtMs - speedupBoostMs` (speed-up trừ `MATCHING_PRIORITY_BOOST_MS` khỏi score → nổi lên đầu hàng đợi, score càng nhỏ càng được ghép trước).
 - Danh sách shard đang hoạt động: Set `matching:shards:active` (thêm khi enqueue, dọn khi shard rỗng) để matcher worker không phải quét toàn bộ keyspace.
 - **Double-lock ghép cặp — atomic bằng `ZPOPMIN key 2`** (Redis native, atomic sẵn không cần Lua vì Redis đơn luồng): lấy 2 ticketId điểm thấp nhất ra khỏi sorted set trong 1 lệnh, đảm bảo 2 matcher instance không bao giờ lấy trùng ticket.
-- Sau khi pop khỏi Redis, **verify lại trong Postgres** (không tin trạng thái Redis là nguồn sự thật): cả 2 ticket còn `queued`, không cùng `userId`, không nằm trong danh sách block/report lẫn nhau (docs/06). Verify + transition `queued→matched` + tạo `MatchSession` phải nằm trong **1 transaction Postgres** với `SELECT ... FOR UPDATE` trên 2 ticket đó.
+- Sau khi pop khỏi Redis, **verify lại trong Postgres** (không tin trạng thái Redis là nguồn sự thật): cả 2 ticket còn `queued`, không cùng `userId`, **preference giới tính khớp 2 chiều (§ 2.1)**, không nằm trong danh sách block/report lẫn nhau (docs/06). Verify + transition `queued→matched` + tạo `MatchSession` phải nằm trong **1 transaction Postgres** với `SELECT ... FOR UPDATE` trên 2 ticket đó.
 - Ticket nào verify fail (đã bị cancel/hết hạn ở giữa chừng, hoặc bị block) → **không** ghép, tự expire ticket đó; ticket còn hợp lệ → đẩy lại vào Redis với **priority gốc, không mất lượt chờ** (dùng lại `enqueuedAtMs` cũ, không tính lại từ đầu).
+
+### 2.1 Bộ lọc giới tính (docs/01 #13)
+
+- Client chọn `genderPreference` ∈ `any|male|female` trong body join (không gửi = `any`); snapshot lên ticket cho **lần vào queue này** — đổi ý = cancel + join lại. Retry cùng Idempotency-Key nhưng đổi preference = request khác nội dung → 409.
+- **KHÔNG shard theo gender**: filter là điều kiện verify tại thời điểm ghép trong `tryPair`, cùng chỗ với block/report (docs/10 § 10.0.C). Lý do: shard theo gender nổ số shard ×3 và preference `any` sẽ phải quét nhiều shard.
+- Check **2 chiều** (`prefA` khớp `genderB` VÀ `prefB` khớp `genderA`); gender đối phương đọc **tươi** từ `users` trong chính transaction verify — user đổi profile giữa lúc chờ vẫn đúng. Preference cụ thể chỉ khớp đúng giá trị đó: user gender `unknown`/`other` chỉ ghép được với preference `any`.
+- Cặp không khớp giới = cặp hợp lệ nhưng không ghép → đi cùng nhánh requeue với block/report (score gốc, không mất lượt). Trade-off đã chấp nhận (giống block): cặp không khớp ở đầu shard chặn shard đó tới khi có ứng viên score thấp hơn chen vào hoặc sweeper expire; nếu thành vấn đề thật → slice sau đổi sang pop-k-candidates.
+- Sweeper requeue bên đã confirm (§ 3) phải **copy `genderPreference`** sang ticket mới, không rơi về default.
 
 ## 3. Matcher worker & sweeper
 
@@ -53,19 +61,19 @@ Mọi transition khác throw `MATCHING_TICKET_INVALID_TRANSITION`.
 
 ## 5. Entity
 
-- `MatchTicket extends BaseAppEntity`: `userId (uuid, index)`, `matchType ('soul'|'voice')`, `region (varchar)`, `ageBand (int)`, `status (enum MatchTicketStatus)`, `enqueuedAt (timestamptz)`, `sessionId (uuid, nullable)`. Index `(status, matchType, region, ageBand)` cho sweeper quét theo shard.
+- `MatchTicket extends BaseAppEntity`: `userId (uuid, index)`, `matchType ('soul'|'voice')`, `region (varchar)`, `ageBand (int)`, `genderPreference ('any'|'male'|'female', default 'any' — § 2.1)`, `status (enum MatchTicketStatus)`, `enqueuedAt (timestamptz)`, `sessionId (uuid, nullable)`. Index `(status, matchType, region, ageBand)` cho sweeper quét theo shard.
 - `MatchSession extends BaseAppEntity`: `matchType`, `userAId`, `userBId`, `ticketAId`, `ticketBId`, `status (enum: pending_confirm|confirmed|expired)`, `confirmedAId (nullable timestamptz-check hoặc 2 cột confirmedAAt/confirmedBAt)`, `endedAt (nullable)`.
 - 1 user chỉ 1 ticket `queued`/`matched` tại 1 thời điểm (docs/06) → **partial unique index** Postgres: `UNIQUE (user_id) WHERE status IN ('queued','matched')` — chặn ở DB, không chỉ ở code.
 
 ## 6. API (`api/v1/matching`)
 
-| Endpoint                             | Idempotency-Key | Mô tả                                                                                                   |
-| ------------------------------------ | --------------- | ------------------------------------------------------------------------------------------------------- |
-| `POST /matching/tickets`             | có              | Vào hàng đợi — 409 `MATCHING_TICKET_ALREADY_QUEUED` nếu đã có ticket active (khớp partial unique index) |
-| `DELETE /matching/tickets/:id`       | không           | Huỷ ticket của chính mình (check ownership — IDOR, docs/10 § 10.1.D)                                    |
-| `GET /matching/tickets/:id`          | không           | Trạng thái ticket (poll)                                                                                |
-| `POST /matching/tickets/:id/confirm` | không           | Xác nhận match — check ownership + đúng session đang `pending_confirm`                                  |
-| `POST /matching/tickets/:id/speedup` | có              | Trừ diamond ưu tiên — xem § 4                                                                           |
+| Endpoint                             | Idempotency-Key | Mô tả                                                                                                                                                    |
+| ------------------------------------ | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /matching/tickets`             | có              | Vào hàng đợi (body: `matchType`, `genderPreference?` — § 2.1) — 409 `MATCHING_TICKET_ALREADY_QUEUED` nếu đã có ticket active (khớp partial unique index) |
+| `DELETE /matching/tickets/:id`       | không           | Huỷ ticket của chính mình (check ownership — IDOR, docs/10 § 10.1.D)                                                                                     |
+| `GET /matching/tickets/:id`          | không           | Trạng thái ticket (poll)                                                                                                                                 |
+| `POST /matching/tickets/:id/confirm` | không           | Xác nhận match — check ownership + đúng session đang `pending_confirm`                                                                                   |
+| `POST /matching/tickets/:id/speedup` | có              | Trừ diamond ưu tiên — xem § 4                                                                                                                            |
 
 ## 7. Domain rule tái xác nhận tại thời điểm ghép (docs/10 § 10.0.C)
 
