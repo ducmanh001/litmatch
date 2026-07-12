@@ -10,6 +10,8 @@ export enum TransactionType {
   IapPurchase = 'iap_purchase',
   VipPurchase = 'vip_purchase',
   MatchingSpeedup = 'matching_speedup',
+  /** Billing voice call theo phút (docs/services/calling-service.md § 4). */
+  CallingPerMinute = 'calling_per_minute',
   Reversal = 'reversal',
   Adjustment = 'adjustment',
 }

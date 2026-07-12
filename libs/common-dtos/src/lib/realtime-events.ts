@@ -35,6 +35,8 @@ export const RealtimeEvents = {
   MatchMatched: 'match.matched',
   /** Cả 2 đã confirm — session bắt đầu. */
   MatchConfirmed: 'match.confirmed',
+  /** Voice call kết thúc (mọi lý do — kể cả server tự end hết free window). */
+  CallEnded: 'call.ended',
 } as const;
 export type RealtimeEventName =
   (typeof RealtimeEvents)[keyof typeof RealtimeEvents];
@@ -66,4 +68,12 @@ export interface MatchMatchedEventData {
 export interface MatchConfirmedEventData {
   ticketId: string;
   sessionId: string;
+}
+
+export interface CallEndedEventData {
+  callId: string;
+  matchSessionId: string;
+  /** completed | free_limit | insufficient_balance | pending_timeout (calling-service.md § 1). */
+  reason: string;
+  durationSeconds: number;
 }

@@ -64,6 +64,14 @@ export interface CoreApiEnv {
   SOUL_CHAT_DURATION_SECONDS: number;
   SOUL_RATING_WINDOW_SECONDS: number;
   SOUL_CHAT_MESSAGE_MAX_LENGTH: number;
+  CALLING_LIVEKIT_URL: string;
+  CALLING_LIVEKIT_API_KEY: string;
+  CALLING_LIVEKIT_API_SECRET: string;
+  CALLING_FREE_CALL_SECONDS: number;
+  CALLING_PRICE_PER_MINUTE_DIAMOND: number;
+  CALLING_PENDING_TIMEOUT_SECONDS: number;
+  CALLING_TICKER_INTERVAL_MS: number;
+  CALLING_TOKEN_TTL_SECONDS: number;
   THROTTLE_TTL_SECONDS: number;
   THROTTLE_LIMIT: number;
 }
@@ -162,6 +170,21 @@ export const coreApiEnvSchema = Joi.object({
     .min(1)
     .max(2000)
     .default(500),
+
+  // Calling — Giai đoạn 2 (docs/services/calling-service.md § 6); key/secret khớp livekit.yaml
+  CALLING_LIVEKIT_URL: Joi.string()
+    .uri({ scheme: ['ws', 'wss'] })
+    .default('ws://localhost:7880'),
+  CALLING_LIVEKIT_API_KEY: Joi.string().default('devkey'),
+  CALLING_LIVEKIT_API_SECRET: Joi.string()
+    .min(16)
+    .default('devsecret_change_me_0123456789abcdef'),
+  CALLING_FREE_CALL_SECONDS: Joi.number().integer().min(10).default(420),
+  // 0 (default) = free-only, hết free window server tự end; >0 = trừ cả 2 bên mỗi phút
+  CALLING_PRICE_PER_MINUTE_DIAMOND: Joi.number().integer().min(0).default(0),
+  CALLING_PENDING_TIMEOUT_SECONDS: Joi.number().integer().min(5).default(60),
+  CALLING_TICKER_INTERVAL_MS: Joi.number().integer().min(200).default(1000),
+  CALLING_TOKEN_TTL_SECONDS: Joi.number().integer().min(30).default(120),
 
   THROTTLE_TTL_SECONDS: Joi.number().integer().min(1).default(60),
   THROTTLE_LIMIT: Joi.number().integer().min(1).default(100),

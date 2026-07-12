@@ -32,8 +32,8 @@
 - [x] Matching: bộ lọc giới tính khi ghép cặp (docs/01 #13) — check 2 chiều tại `tryPair` trong transaction verify (cùng chỗ block/report, `docs/10 § 10.0.C`), snapshot preference lên ticket, KHÔNG shard theo gender — [services/matching-service.md § 2.1](./services/matching-service.md)
 - [x] Soul Match: chat room ẩn danh tạm thời gắn `MatchSession` (phase derive từ giờ server, không cron), rating 2 chiều immutable `rude|boring|like`, cả 2 like → `Friendship` (module `friend` tối thiểu) trong cùng transaction + unlock profile — [services/soul-match-service.md](./services/soul-match-service.md). Realtime push chưa có (polling REST) — gộp vào mục Signaling Gateway ngay dưới, message store thiết kế sẵn để gateway fanout qua Redis pub/sub
 - [x] Signaling Gateway (Socket.IO) — nền realtime fanout: JWT handshake, room theo user, relay Redis pub/sub `realtime:user:{userId}` (match.matched/confirmed cho Voice/Soul Match, soul.message/matched) — [services/realtime-gateway.md](./services/realtime-gateway.md). Điều khiển LiveKit (mint token, join call, ACK media) thuộc 2 mục dưới
-- [ ] Tích hợp SFU (**LiveKit self-host — đã chốt theo § 3.8.A**) cho phòng 2 người
-- [ ] Calling module: tạo/kết thúc call, tính thời lượng, trừ diamond theo phút nếu có
+- [x] Tích hợp SFU (**LiveKit self-host — ADR 0001**) cho phòng 2 người: port `LivekitRoomPort` (mint token server-side, deleteRoom, verify webhook), client nối thẳng LiveKit bằng token TTL ngắn — [services/calling-service.md](./services/calling-service.md)
+- [x] Calling module: `CallSession` (pending→active→ended terminal, webhook idempotent), thời lượng theo giờ server, free-call ~7 phút tự end, billing theo phút (default TẮT — `CALLING_PRICE_PER_MINUTE_DIAMOND=0`) trừ cả 2 bên idempotent theo (call, user, phút), realtime `call.ended` — [services/calling-service.md](./services/calling-service.md)
 - [ ] Friend + Chat 1-1: `Friendship` tạo khi cả 2 "Thích", `Conversation`/`Message` chat lâu dài (dùng lại hạ tầng chat realtime của Soul Match) — đích đến của phễu matching, không để user match xong không có gì làm tiếp
 
 ## Giai đoạn 3 — Party Room + Gift
