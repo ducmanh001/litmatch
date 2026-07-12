@@ -1,0 +1,8 @@
+**
+!dist/
+!dist/apps/
+!dist/apps/core-api/
+!dist/apps/core-api/**
+!dist/apps/signaling-gateway/
+!dist/apps/signaling-gateway/**
+

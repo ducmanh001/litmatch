@@ -10,4 +10,12 @@ describe('GET /health', () => {
       uptimeSeconds: expect.any(Number),
     });
   });
+
+  it('exposes separate liveness and readiness probes', async () => {
+    const live = await axios.get('/health/live');
+    const ready = await axios.get('/health/ready');
+
+    expect(live.status).toBe(200);
+    expect(ready.data).toEqual({ status: 'ok' });
+  });
 });

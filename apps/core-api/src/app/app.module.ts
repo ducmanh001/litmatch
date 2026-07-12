@@ -20,6 +20,7 @@ import { MatchingModule } from '../modules/matching';
 import { UserModule } from '../modules/user';
 
 import { HealthController } from './health.controller';
+import { ReadinessService } from './readiness.service';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { HealthController } from './health.controller';
   ],
   controllers: [HealthController],
   providers: [
+    ReadinessService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_INTERCEPTOR, useClass: ResponseEnvelopeInterceptor },
