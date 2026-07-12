@@ -1,5 +1,12 @@
 /**
  * Public API của Matching module — module khác CHỈ import từ đây (arch test enforce).
- * Hiện chưa module nào cần gọi Matching → export tối thiểu.
+ * Soul Match dùng: đọc session (read-only) + lock row session để serialize rating
+ * (docs/services/soul-match-service.md § 3) — quyền GHI session vẫn thuộc riêng Matching.
  */
 export { MatchingModule } from './matching.module';
+export { MatchingService } from './matching.service';
+export {
+  MatchSession,
+  MatchSessionStatus,
+} from './entities/match-session.entity';
+export { MatchType } from './entities/match-ticket.entity';

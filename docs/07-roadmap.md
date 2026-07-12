@@ -29,8 +29,8 @@
 > Xây Matching module theo đúng hình dạng full-scale ở [03-architecture.md § 3.8.B](./03-architecture.md) ngay từ đầu (ticket state machine + shard theo tiêu chí), thay vì làm 1 queue Redis đơn giản rồi tái cấu trúc sau.
 
 - [x] Matching module (slice M1 — ticket/queue engine): `MatchTicket` với state machine `queued → matched → confirmed → expired/cancelled`, queue **shard theo (loại match × region × dải tuổi)** — [services/matching-service.md](./services/matching-service.md). Giới tính KHÔNG phải tiêu chí shard (nhóm cùng giới lại không đúng kỹ thuật) — chuyển thành **filter lúc ghép cặp**, xem mục ngay dưới. Priority speed-up trừ diamond qua Economy module qua DI (không qua network) — đã có.
-- [ ] Matching: bộ lọc giới tính khi ghép cặp (docs/01 #13) — check ở thời điểm `tryPair` (cùng chỗ verify block/report, `docs/10 § 10.0.C`), theo preference lưu trên `User`/ticket, không phải sharding
-- [ ] Soul Match: chat room ẩn danh tạm thời, cơ chế like/dislike 2 chiều, unlock profile khi match
+- [x] Matching: bộ lọc giới tính khi ghép cặp (docs/01 #13) — check 2 chiều tại `tryPair` trong transaction verify (cùng chỗ block/report, `docs/10 § 10.0.C`), snapshot preference lên ticket, KHÔNG shard theo gender — [services/matching-service.md § 2.1](./services/matching-service.md)
+- [x] Soul Match: chat room ẩn danh tạm thời gắn `MatchSession` (phase derive từ giờ server, không cron), rating 2 chiều immutable `rude|boring|like`, cả 2 like → `Friendship` (module `friend` tối thiểu) trong cùng transaction + unlock profile — [services/soul-match-service.md](./services/soul-match-service.md). Realtime push chưa có (polling REST) — gộp vào mục Signaling Gateway ngay dưới, message store thiết kế sẵn để gateway fanout qua Redis pub/sub
 - [ ] Signaling Gateway (Socket.IO) cho Voice Match
 - [ ] Tích hợp SFU (**LiveKit self-host — đã chốt theo § 3.8.A**) cho phòng 2 người
 - [ ] Calling module: tạo/kết thúc call, tính thời lượng, trừ diamond theo phút nếu có

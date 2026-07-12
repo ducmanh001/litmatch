@@ -1,6 +1,6 @@
 # Matching Service (module trong `core-api`) — đặc tả slice M1: Ticket/Queue engine
 
-> Phạm vi file này: mục đầu tiên của Giai đoạn 2 (`MatchTicket` + state machine + shard queue + speed-up qua Economy) + follow-up bộ lọc giới tính (docs/01 #13, § 2.1). Soul Match (chat/like), Signaling Gateway thật, tích hợp LiveKit, Calling module là các mục roadmap riêng, KHÔNG thuộc slice này — code sau, khi tới lượt.
+> Phạm vi file này: mục đầu tiên của Giai đoạn 2 (`MatchTicket` + state machine + shard queue + speed-up qua Economy) + follow-up bộ lọc giới tính (docs/01 #13, § 2.1). Soul Match (chat/like) đã có spec riêng: [soul-match-service.md](./soul-match-service.md) — đọc `MatchSession` qua `MatchingService.findSessionById` (read-only, quyền ghi vẫn thuộc Matching). Signaling Gateway thật, tích hợp LiveKit, Calling module là các mục roadmap riêng, KHÔNG thuộc slice này.
 
 ## 1. State machine `MatchTicket`
 

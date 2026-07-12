@@ -16,7 +16,9 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { ResponseEnvelopeInterceptor } from '../common/interceptors/response-envelope.interceptor';
 import { AuthModule } from '../modules/auth';
 import { EconomyModule } from '../modules/economy';
+import { FriendModule } from '../modules/friend';
 import { MatchingModule } from '../modules/matching';
+import { SoulMatchModule } from '../modules/soul-match';
 import { UserModule } from '../modules/user';
 
 import { HealthController } from './health.controller';
@@ -61,6 +63,8 @@ import { ReadinessService } from './readiness.service';
     AuthModule,
     EconomyModule,
     MatchingModule,
+    FriendModule,
+    SoulMatchModule,
   ],
   controllers: [HealthController],
   providers: [
