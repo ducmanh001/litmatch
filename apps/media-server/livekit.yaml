@@ -12,5 +12,12 @@ redis:
 keys:
   # DEV ONLY — sinh key thật bằng `livekit-server generate-keys` khi deploy
   devkey: devsecret_change_me_0123456789abcdef
+# Webhook về core-api — mỗi module lọc theo prefix room của mình (call-* / party-*),
+# chữ ký JWT ký bằng api_key được verify ở controller trước khi tin (docs/10 § Calling/Party Room)
+webhook:
+  api_key: devkey
+  urls:
+    - http://host.docker.internal:3000/calling/webhooks/livekit
+    - http://host.docker.internal:3000/party/webhooks/livekit
 logging:
   level: info

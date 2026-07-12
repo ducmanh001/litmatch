@@ -65,14 +65,22 @@ export interface CoreApiEnv {
   SOUL_RATING_WINDOW_SECONDS: number;
   SOUL_CHAT_MESSAGE_MAX_LENGTH: number;
   FRIEND_MESSAGE_MAX_LENGTH: number;
-  CALLING_LIVEKIT_URL: string;
-  CALLING_LIVEKIT_API_KEY: string;
-  CALLING_LIVEKIT_API_SECRET: string;
+  LIVEKIT_URL: string;
+  LIVEKIT_API_KEY: string;
+  LIVEKIT_API_SECRET: string;
   CALLING_FREE_CALL_SECONDS: number;
   CALLING_PRICE_PER_MINUTE_DIAMOND: number;
   CALLING_PENDING_TIMEOUT_SECONDS: number;
   CALLING_TICKER_INTERVAL_MS: number;
   CALLING_TOKEN_TTL_SECONDS: number;
+  PARTY_MAX_SPEAKERS: number;
+  PARTY_MAX_MEMBERS: number;
+  PARTY_TOKEN_TTL_SECONDS: number;
+  PARTY_EMPTY_ROOM_TIMEOUT_SECONDS: number;
+  PARTY_SWEEPER_INTERVAL_MS: number;
+  PARTY_STALE_ROOM_SECONDS: number;
+  PARTY_TITLE_MAX_LENGTH: number;
+  GIFT_POINTS_RATE_PERCENT: number;
   THROTTLE_TTL_SECONDS: number;
   THROTTLE_LIMIT: number;
 }
@@ -181,11 +189,11 @@ export const coreApiEnvSchema = Joi.object({
     .default(2000),
 
   // Calling — Giai đoạn 2 (docs/services/calling-service.md § 6); key/secret khớp livekit.yaml
-  CALLING_LIVEKIT_URL: Joi.string()
+  LIVEKIT_URL: Joi.string()
     .uri({ scheme: ['ws', 'wss'] })
     .default('ws://localhost:7880'),
-  CALLING_LIVEKIT_API_KEY: Joi.string().default('devkey'),
-  CALLING_LIVEKIT_API_SECRET: Joi.string()
+  LIVEKIT_API_KEY: Joi.string().default('devkey'),
+  LIVEKIT_API_SECRET: Joi.string()
     .min(16)
     .default('devsecret_change_me_0123456789abcdef'),
   CALLING_FREE_CALL_SECONDS: Joi.number().integer().min(10).default(420),
@@ -194,6 +202,23 @@ export const coreApiEnvSchema = Joi.object({
   CALLING_PENDING_TIMEOUT_SECONDS: Joi.number().integer().min(5).default(60),
   CALLING_TICKER_INTERVAL_MS: Joi.number().integer().min(200).default(1000),
   CALLING_TOKEN_TTL_SECONDS: Joi.number().integer().min(30).default(120),
+
+  // Party Room — Giai đoạn 3 (docs/services/party-room-service.md § 7)
+  // Cap speaker là giới hạn CỨNG theo docs/03 § 3.8.A (consumer tăng N×(N-1)) — chỉ nới khi có cascade SFU
+  PARTY_MAX_SPEAKERS: Joi.number().integer().min(1).default(8),
+  // Truyền vào LiveKit maxParticipants lúc tạo room — SFU tự chặn join vượt ngưỡng
+  PARTY_MAX_MEMBERS: Joi.number().integer().min(2).default(100),
+  PARTY_TOKEN_TTL_SECONDS: Joi.number().integer().min(30).default(120),
+  // LiveKit tự đóng room trống sau N giây — backstop tầng SFU cho phòng vô chủ
+  PARTY_EMPTY_ROOM_TIMEOUT_SECONDS: Joi.number().integer().min(30).default(300),
+  PARTY_SWEEPER_INTERVAL_MS: Joi.number().integer().min(1000).default(30_000),
+  // Phòng active mà không còn member active quá N giây → sweeper đóng (webhook có thể rớt)
+  PARTY_STALE_ROOM_SECONDS: Joi.number().integer().min(30).default(120),
+  PARTY_TITLE_MAX_LENGTH: Joi.number().integer().min(1).max(500).default(100),
+
+  // Gift — Giai đoạn 3 (docs/services/gift-service.md); tỉ lệ quy đổi DIA→PTS cho người nhận,
+  // PHẢI < 100 (docs/06 § Gift: nhận 1:1 biến gift thành kênh chuyển tiền ngang hàng)
+  GIFT_POINTS_RATE_PERCENT: Joi.number().integer().min(0).max(100).default(40),
 
   THROTTLE_TTL_SECONDS: Joi.number().integer().min(1).default(60),
   THROTTLE_LIMIT: Joi.number().integer().min(1).default(100),
