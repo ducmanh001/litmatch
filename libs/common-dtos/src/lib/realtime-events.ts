@@ -37,6 +37,8 @@ export const RealtimeEvents = {
   MatchConfirmed: 'match.confirmed',
   /** Voice call kết thúc (mọi lý do — kể cả server tự end hết free window). */
   CallEnded: 'call.ended',
+  /** Message mới trong chat 1-1 lâu dài giữa 2 bạn (khác chat ẩn danh Soul Match). */
+  FriendMessage: 'friend.message',
 } as const;
 export type RealtimeEventName =
   (typeof RealtimeEvents)[keyof typeof RealtimeEvents];
@@ -76,4 +78,13 @@ export interface CallEndedEventData {
   /** completed | free_limit | insufficient_balance | pending_timeout (calling-service.md § 1). */
   reason: string;
   durationSeconds: number;
+}
+
+export interface FriendMessageEventData {
+  conversationId: string;
+  messageId: string;
+  /** KHÔNG ẩn danh (2 bên đã unlock profile khi thành bạn) — khác SoulMessageEventData. */
+  senderUserId: string;
+  content: string;
+  sentAt: string;
 }

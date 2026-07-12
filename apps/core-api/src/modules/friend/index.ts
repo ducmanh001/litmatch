@@ -5,5 +5,7 @@
  */
 export { FriendModule } from './friend.module';
 export { FriendService } from './friend.service';
-export type { EnsureFriendshipResult } from './friend.service';
+export type { EnsureFriendshipResult, FriendListEntry } from './friend.service';
 export { Friendship, FriendshipSource } from './entities/friendship.entity';
+export { Conversation } from './entities/conversation.entity';
+export { Message } from './entities/message.entity';
