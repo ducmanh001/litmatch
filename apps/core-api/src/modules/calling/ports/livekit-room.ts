@@ -46,14 +46,14 @@ export class SdkLivekitRoomPort extends LivekitRoomPort {
 
   constructor(config: ConfigService<CoreApiEnv, true>) {
     super();
-    this.apiKey = config.getOrThrow('CALLING_LIVEKIT_API_KEY', {
+    this.apiKey = config.getOrThrow('LIVEKIT_API_KEY', {
       infer: true,
     });
-    this.apiSecret = config.getOrThrow('CALLING_LIVEKIT_API_SECRET', {
+    this.apiSecret = config.getOrThrow('LIVEKIT_API_SECRET', {
       infer: true,
     });
     // RoomServiceClient cần http(s) — derive từ ws URL client dùng
-    const wsUrl = config.getOrThrow('CALLING_LIVEKIT_URL', { infer: true });
+    const wsUrl = config.getOrThrow('LIVEKIT_URL', { infer: true });
     const httpUrl = wsUrl.replace(/^ws/, 'http');
     this.roomService = new RoomServiceClient(
       httpUrl,

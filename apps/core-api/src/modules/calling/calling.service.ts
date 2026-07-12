@@ -128,7 +128,7 @@ export class CallingService {
     return {
       call,
       token,
-      livekitUrl: this.config.getOrThrow('CALLING_LIVEKIT_URL', {
+      livekitUrl: this.config.getOrThrow('LIVEKIT_URL', {
         infer: true,
       }),
     };

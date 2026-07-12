@@ -66,7 +66,7 @@ if (!INTEGRATION_DB_URL) {
 jest.setTimeout(60_000);
 
 const CONFIG: Record<string, unknown> = {
-  CALLING_LIVEKIT_URL: 'ws://localhost:7880',
+  LIVEKIT_URL: 'ws://localhost:7880',
   CALLING_TOKEN_TTL_SECONDS: 120,
   // free window nhỏ + pending timeout lớn: test tự backdate thay vì ngồi chờ
   CALLING_FREE_CALL_SECONDS: 5,
