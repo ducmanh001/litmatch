@@ -29,6 +29,7 @@ Xem trạng thái chi tiết theo giai đoạn ở [`docs/07-roadmap.md`](./docs
 │   ├── 08-working-with-claude-code.md
 │   ├── 09-practical-notes.md
 │   ├── 10-code-review-checklist.md ← quan trọng nhất: tự review trước khi báo "xong"
+│   ├── 11-engineering-principles.md ← la bàn thiết kế cho người đọc
 │   └── sources.md
 ├── apps/
 │   ├── core-api/            ← modular monolith chứa toàn bộ business logic (auth, user, matching, economy, social, content, moderation, notification, gift...)
@@ -48,5 +49,6 @@ Xem trạng thái chi tiết theo giai đoạn ở [`docs/07-roadmap.md`](./docs
 - **Modular monolith trước**: chỉ 3 thành phần deploy riêng (`core-api`, `signaling-gateway`, `media-server`), mọi domain khác là module bên trong `core-api`.
 - **Economy = double-entry ledger**: `LedgerEntry` là nguồn sự thật, `Wallet.balance` chỉ là snapshot dẫn xuất.
 - **Review theo phương pháp luận, không chỉ theo checklist kỹ thuật**: `docs/10-code-review-checklist.md` § 10.0 dạy cách tìm lỗi logic nghiệp vụ (business logic vulnerability) — loại lỗi mà linter/scanner không bắt được.
+- **Thiết kế theo ownership và boundary**: đọc [`docs/11-engineering-principles.md`](./docs/11-engineering-principles.md) trước khi thêm abstraction, module hoặc đề xuất tách service.
 
 # litmatch

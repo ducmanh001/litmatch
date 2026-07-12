@@ -2,6 +2,10 @@
 
 # 5. Coding Standard (NestJS) — tuân theo xuyên suốt, mọi module, mọi giai đoạn
 
+Các nguyên tắc quyết định ownership, boundary, abstraction và comment nằm ở
+[11-engineering-principles.md](./11-engineering-principles.md); file này tập trung
+vào cách triển khai cụ thể trong NestJS.
+
 ## 5.1 Nguyên tắc chung
 
 - **Single source of truth cho MỌI giá trị lặp lại hoặc có thể lệch** (nguyên tắc gốc — các mục dưới đây, § 5.2 `ConfigService`, và `docs/10 § 10.1.G` chỉ là các trường hợp cụ thể của đúng 1 nguyên tắc này, đọc nguyên tắc này trước khi thêm case mới thay vì tự suy luận lại từ đầu). Gặp 1 giá trị (số, chuỗi, URL, tên field/key...) xuất hiện hoặc CÓ THỂ xuất hiện ≥ 2 chỗ, hoặc là hằng số/cấu hình do bên ngoài code quyết định — luôn tự hỏi theo đúng thứ tự:
@@ -29,7 +33,7 @@
 - `Guard` cho auth/permission, `Interceptor` cho logging/transform response, `Pipe` cho validate.
 - Config qua `ConfigService`, không dùng `process.env` trực tiếp trong business logic.
 - **Luôn tiêm `ConfigService<CoreApiEnv, true>`, không phải `ConfigService` trần** (`CoreApiEnv` khai trong `env.validation.ts`, khớp 1-1 với `coreApiEnvSchema`) — gọi `getOrThrow('KEY', { infer: true })`/`get('KEY', { infer: true })` thay vì tự viết `getOrThrow<string>('KEY')`. Thêm key mới vào Joi schema thì thêm luôn field tương ứng vào `CoreApiEnv` cùng lúc — gõ sai tên key hoặc sai kiểu là lỗi compile-time, không đợi tới lúc chạy mới vỡ.
-- **`.env.example` ↔ Joi schema ↔ interface Env khớp 1-1 THEO TỪNG APP, không có key mồ côi**: `.env.example` là file chung cả repo = hợp của schema các app — mỗi key trong đó phải thuộc đúng 1 schema (`coreApiEnvSchema` hoặc `signalingEnvSchema`), và mỗi app khớp 1-1 giữa schema ↔ interface Env của nó (`CoreApiEnv`, `SignalingEnv`). Không thêm key "để sẵn" cho module chưa tồn tại (ai đó `getOrThrow` nó sẽ chết runtime vì schema không biết key này) — env key của 1 module ra đời CÙNG PR với module đó, đủ cả 3 nơi.
+- **`.env.example` ↔ Joi schema ↔ interface Env khớp 1-1 THEO TỪNG APP, không có key mồ côi**: `.env.example` là file chung cả repo = hợp của schema các app — mỗi key trong đó phải thuộc ít nhất 1 schema (`coreApiEnvSchema` hoặc `signalingEnvSchema`); các key nền tảng dùng chung như `NODE_ENV`, `LOG_LEVEL`, `CORS_ORIGINS` có thể xuất hiện trong nhiều schema. Mỗi app vẫn khớp 1-1 giữa schema ↔ interface Env của nó (`CoreApiEnv`, `SignalingEnv`). Không thêm key "để sẵn" cho module chưa tồn tại (ai đó `getOrThrow` nó sẽ chết runtime vì schema không biết key này) — env key của 1 module ra đời CÙNG PR với module đó, đủ cả 3 nơi.
 - **`getOrThrow()` mặc định, không phải `get()` + fallback tay**: mọi giá trị mặc định/optional khai 1 lần trong Joi schema (`env.validation.ts`, `.default(...)`), code luôn đọc bằng `getOrThrow()` — thiếu biến thì chết ngay lúc dùng thay vì âm thầm chạy với giá trị đoán, và không có 2 nơi cùng giữ 1 default (schema + `config.get('X', 100)` lặp lại) dễ lệch nhau khi sửa 1 chỗ quên chỗ kia. Ngoại lệ hợp lệ duy nhất: cờ môi trường có thể thật sự không tồn tại ở 1 số môi trường (vd `NODE_ENV`) thì dùng `get()`.
 - **Job chạy định kỳ cần đọc interval từ config** (`.env`, không hardcode — § 5.1): không dùng decorator tĩnh `@Cron()`/`@Interval()`/`@Timeout()` (nhận giá trị cố định lúc decorate class) — đăng ký qua `SchedulerRegistry` (`@nestjs/schedule`) trong `onApplicationBootstrap`, đọc interval bằng `getOrThrow()` rồi `addInterval()`/`addCronJob()` thủ công (xem `outbox-relay.service.ts`, `ticket-sweeper.service.ts`).
 
