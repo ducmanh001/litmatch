@@ -12,4 +12,18 @@ describe('GET /health', () => {
       },
     });
   });
+
+  it('separates liveness from dependency readiness', async () => {
+    const live = await axios.get('/health/live');
+    const ready = await axios.get('/health/ready');
+
+    expect(live.status).toBe(200);
+    expect(ready.status).toBe(200);
+    expect(ready.data).toEqual({
+      data: {
+        status: 'ok',
+        checks: { postgres: 'up', redis: 'up' },
+      },
+    });
+  });
 });

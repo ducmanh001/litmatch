@@ -15,7 +15,9 @@ async function bootstrap(): Promise<void> {
 
   const config = app.get<ConfigService<CoreApiEnv, true>>(ConfigService);
 
-  app.setGlobalPrefix('api/v1', { exclude: ['health'] }); // version trong URI ngay từ đầu (docs/05 § 5.4)
+  app.setGlobalPrefix('api/v1', {
+    exclude: ['health', 'health/live', 'health/ready'],
+  }); // version trong URI ngay từ đầu (docs/05 § 5.4)
   app.use(helmet());
 
   const corsOrigins = config

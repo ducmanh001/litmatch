@@ -1,0 +1,26 @@
+{
+  "name": "litmatch",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+  },
+  "forwardPorts": [3000, 3001, 5432, 6379, 9092],
+  "portsAttributes": {
+    "3000": { "label": "core-api" },
+    "3001": { "label": "signaling-gateway" },
+    "5432": { "label": "PostgreSQL", "onAutoForward": "silent" },
+    "6379": { "label": "Redis", "onAutoForward": "silent" },
+    "9092": { "label": "Kafka", "onAutoForward": "silent" }
+  },
+  "postCreateCommand": "corepack enable && corepack prepare pnpm@11.9.0 --activate && pnpm install --frozen-lockfile",
+  "remoteUser": "node",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "firsttris.vscode-jest-runner"
+      ]
+    }
+  }
+}

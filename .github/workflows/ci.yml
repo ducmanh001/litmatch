@@ -2,17 +2,51 @@ name: CI
 
 on:
   push:
-    branches: ['master', 'main']
+    branches: [main]
   pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 env:
   JWT_SECRET: ci-only-secret-0123456789abcdef-xyz
   AUTH_OTP_PEPPER: ci-only-pepper-0123456789
   DATABASE_URL: postgresql://litmatch:litmatch_local@localhost:5432/litmatch
+  REDIS_URL: redis://localhost:6379/15
 
 jobs:
-  verify:
+  quality:
+    name: Format and lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 11.9.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Agent contract and guard evals
+        env:
+          AGENT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: pnpm agent:check && pnpm agent:test
+      - run: pnpm format:check
+      - run: pnpm nx run-many -t lint
+
+  test:
+    name: Test, build and e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:16-alpine
@@ -38,63 +72,139 @@ jobs:
           --health-retries 10
     env:
       INTEGRATION_DB_URL: postgresql://litmatch:litmatch_local@localhost:5432/litmatch_test
-      REDIS_URL: redis://localhost:6379/15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           fetch-depth: 0
-
-      - uses: pnpm/action-setup@v4
+          persist-credentials: false
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
-          version: 11
-
-      - uses: actions/setup-node@v4
+          version: 11.9.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
-
       - run: pnpm install --frozen-lockfile
-
-      - name: Format check (Prettier — docs/05 § 5.1; local đã có husky pre-commit, đây là chốt chặn cuối)
-        run: pnpm format:check
-
-      - name: Lint
-        run: pnpm nx run-many -t lint
-
-      - name: Unit + integration test (kèm arch test module boundaries, gate coverage service layer)
-        # --coverage kích hoạt coverageThreshold trong apps/core-api/jest.config.cts (docs/05 § 5.9)
+      - name: Unit and integration tests with coverage gate
         run: pnpm nx run-many -t test --coverage
-
-      - name: Build
-        run: pnpm nx run-many -t build
-
-      - name: End-to-end smoke test
+      - run: pnpm nx run-many -t build
+      - name: End-to-end smoke tests
         run: pnpm nx run-many -t e2e --parallel=2
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage-${{ github.run_id }}
+          path: coverage/
+          if-no-files-found: warn
+          retention-days: 7
 
   docker:
-    # Build image để xác nhận Dockerfile luôn hợp lệ — push registry cấu hình ở Giai đoạn 6 (K8s)
-    needs: verify
+    name: Container build and runtime smoke
+    needs: [quality, test]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: litmatch
+          POSTGRES_PASSWORD: litmatch_local
+          POSTGRES_DB: litmatch
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U litmatch"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
-          fetch-depth: 0
-
-      - uses: pnpm/action-setup@v4
+          persist-credentials: false
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
-          version: 11
-
-      - uses: actions/setup-node@v4
+          version: 11.9.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
-
       - run: pnpm install --frozen-lockfile
+      - run: pnpm nx run-many -t build
+      - run: pnpm db:migrate
 
-      - name: Build deploy artefacts (webpack generatePackageJson tạo sẵn package.json + lockfile pruned trong dist)
-        run: pnpm nx run-many -t build
-
-      - name: Build docker images
+      - name: Build images
         run: |
           docker build -f apps/core-api/Dockerfile -t litmatch/core-api:${{ github.sha }} .
           docker build -f apps/signaling-gateway/Dockerfile -t litmatch/signaling-gateway:${{ github.sha }} .
+
+      - name: Install Trivy (verified checksum)
+        env:
+          TRIVY_VERSION: 0.72.0
+          TRIVY_SHA256: bbb64b9695866ce4a7a8f5c9592002c5961cab378577fa3f8a040df362b9b2ea
+        run: |
+          curl --fail --silent --show-error --location \
+            --output /tmp/trivy.tar.gz \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  /tmp/trivy.tar.gz" | sha256sum --check --strict
+          tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
+          sudo install -m 0755 /tmp/trivy /usr/local/bin/trivy
+
+      - name: Scan runtime images
+        run: |
+          trivy image litmatch/core-api:${{ github.sha }} --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress --skip-version-check
+          trivy image litmatch/signaling-gateway:${{ github.sha }} --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress --skip-version-check
+          trivy image litmatch/core-api:${{ github.sha }} --scanners vuln --format cyclonedx --output core-api.cdx.json --skip-version-check
+          trivy image litmatch/signaling-gateway:${{ github.sha }} --scanners vuln --format cyclonedx --output signaling-gateway.cdx.json --skip-version-check
+
+      - name: Upload image SBOMs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: image-sboms-${{ github.run_id }}
+          path: '*.cdx.json'
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Start images and verify health endpoints
+        env:
+          CORE_IMAGE: litmatch/core-api:${{ github.sha }}
+          SIGNALING_IMAGE: litmatch/signaling-gateway:${{ github.sha }}
+        run: |
+          cleanup() {
+            docker rm --force litmatch-core-smoke litmatch-signaling-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          # The production bundle uses test config until a real SMS provider is available;
+          # core-api intentionally refuses to boot production with DevSmsProvider.
+          docker run --detach --name litmatch-core-smoke --network host \
+            --env NODE_ENV=test \
+            --env DATABASE_URL="${DATABASE_URL}" \
+            --env REDIS_URL="${REDIS_URL}" \
+            --env JWT_SECRET="${JWT_SECRET}" \
+            --env AUTH_OTP_PEPPER="${AUTH_OTP_PEPPER}" \
+            "${CORE_IMAGE}"
+          docker run --detach --name litmatch-signaling-smoke --network host \
+            --env NODE_ENV=production \
+            "${SIGNALING_IMAGE}"
+
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3000/health/ready >/dev/null \
+              && curl --fail --silent http://127.0.0.1:3001/health/ready >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+
+          docker logs litmatch-core-smoke
+          docker logs litmatch-signaling-smoke
+          exit 1

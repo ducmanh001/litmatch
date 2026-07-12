@@ -1,0 +1,9 @@
+# Default owner for repository-level changes.
+* @ducmanh001
+
+# High-risk infrastructure and money paths require explicit ownership.
+/.github/ @ducmanh001
+/apps/core-api/src/database/migrations/ @ducmanh001
+/apps/core-api/src/modules/economy/ @ducmanh001
+/docker-compose.yml @ducmanh001
+
