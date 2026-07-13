@@ -30,13 +30,17 @@ export function AppShell() {
 
   const logout = useMutation({
     mutationFn: async () => {
-      const refreshToken = tokenStore.getRefreshToken();
+      const csrfToken = tokenStore.getCsrfToken();
       tokenStore.setSession(null);
       navigate('/login', { replace: true });
-      if (refreshToken !== null) {
-        // Local logout thắng mọi response refresh cũ; revoke server chạy best-effort sau đó.
+      if (csrfToken !== null) {
+        // Local logout thắng mọi response refresh cũ; revoke server (xoá cookie refresh_token
+        // httpOnly qua CsrfGuard, ADR 0007) chạy best-effort sau đó.
         await apiClient
-          .POST('/api/v1/auth/logout', { body: { refreshToken } })
+          .POST('/api/v1/auth/logout', {
+            credentials: 'include',
+            headers: { 'x-csrf-token': csrfToken },
+          })
           .catch(() => undefined);
       }
     },

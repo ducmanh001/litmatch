@@ -1,7 +1,7 @@
 # 0003. Browser localStorage chỉ là scaffold, production cần cookie hoặc nonce CSP
 
 - **Ngày**: 2026-07-13
-- **Trạng thái**: Accepted
+- **Trạng thái**: Superseded by 0007
 - **Thay thế**: ADR 0002
 - **Liên quan**: docs/12-frontend-architecture.md § 12.6, docs/13 § 13.11
 

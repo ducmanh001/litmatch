@@ -94,7 +94,7 @@ describe('UsersPage', () => {
   it('không cho tự ban chính mình — nút Khoá disabled ở đúng dòng của mình', async () => {
     tokenStore.setSession({
       accessToken: fakeJwt({ sub: 'u1', isGuest: false, role: 'admin' }),
-      refreshToken: 'r',
+      csrfToken: 'r',
     });
     vi.spyOn(apiClient, 'GET').mockResolvedValue({
       data: { data: { items: [user({ id: 'u1' })], total: 1 } },

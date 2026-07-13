@@ -13,12 +13,12 @@ export {
 } from './lib/api-error';
 export {
   createTokenStore,
-  browserRefreshTokenStorage,
-  memoryRefreshTokenStorage,
+  browserCsrfTokenStorage,
+  memoryCsrfTokenStorage,
 } from './lib/token-store';
 export type {
   AuthSession,
-  RefreshTokenStorage,
+  CsrfTokenStorage,
   SessionStatus,
   TokenStore,
 } from './lib/token-store';

@@ -31,14 +31,18 @@ function AppChrome({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = (): void => {
-    const refreshToken = tokenStore.getRefreshToken();
+    const csrfToken = tokenStore.getCsrfToken();
     disconnectRealtime();
     tokenStore.setSession(null);
     router.replace('/login');
-    if (refreshToken !== null) {
-      // Local logout thắng mọi response refresh cũ; revoke server chạy best-effort sau đó.
+    if (csrfToken !== null) {
+      // Local logout thắng mọi response refresh cũ; revoke server (xoá cookie refresh_token
+      // httpOnly qua CsrfGuard, ADR 0007) chạy best-effort sau đó.
       void apiClient
-        .POST('/api/v1/auth/logout', { body: { refreshToken } })
+        .POST('/api/v1/auth/logout', {
+          credentials: 'include',
+          headers: { 'x-csrf-token': csrfToken },
+        })
         .catch(() => undefined);
     }
   };

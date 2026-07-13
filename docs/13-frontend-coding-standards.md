@@ -189,9 +189,10 @@ feature sở hữu nó, mỗi store 1 concern — không store "app state" tổn
 - Cấm `dangerouslySetInnerHTML`; ngoại lệ duy nhất là nội dung đã sanitize và lý do ghi ngay
   tại chỗ dùng.
 - Cấm log token/OTP/PII ra console kể cả khi debug; cấm gửi chúng vào bất kỳ analytics nào.
-- `localStorage` chỉ chứa refresh token theo quyết định 12.6 — không nhét thêm PII/cache
-  dữ liệu người khác vào storage bền. Áp dụng mitigation và production gate trong ADR 0003;
-  session multi-tab phải đồng bộ logout/rotation, không coi mỗi tab là phiên độc lập.
+- `localStorage` chỉ chứa `csrfToken` (12.6, ADR 0007) — refresh token là httpOnly cookie, JS
+  không đọc được và KHÔNG BAO GIỜ được persist ở tầng FE; access token chỉ ở memory. Không nhét
+  thêm PII/token khác/cache dữ liệu người khác vào storage bền. Session multi-tab phải đồng bộ
+  logout/rotation qua `storage` event, không coi mỗi tab là phiên độc lập.
 - Ẩn/hiện theo role là UX; mọi enforcement thật ở backend guard (12.9-9). Không bao giờ coi
   "UI không có nút đó" là chốt chặn.
 
@@ -204,8 +205,15 @@ feature sở hữu nó, mỗi store 1 concern — không store "app state" tổn
   thái § 13.7) → wrapper api-client (refresh 1 lần rồi logout). KHÔNG snapshot test cả trang
   — vỡ theo mọi thay đổi markup, không bắt được bug thật.
 - `*.spec.tsx?` đặt cạnh file nó test, như quy ước backend (§ 5.3).
-- E2E (Playwright) dựng khi có flow login + 1 flow nghiệp vụ thật để test — không scaffold
-  trước (nguyên tắc không để dành).
+- **E2E (Playwright) — dựng ở `apps/web/e2e/`** (trigger: có flow login + 1 flow nghiệp vụ
+  thật — login OTP + vào hàng đợi ghép đôi, ADR 0007). `pnpm nx e2e web` tự chạy core-api +
+  web dev server (webhook `webServer` trong `playwright.config.mts`) rồi lái Chrome cài sẵn
+  trên máy (`channel: 'chrome'` — không tự quản lý Chromium riêng, tránh phải cài thêm OS deps
+  cần sudo). Chỉ có project `chromium`; không set up firefox/webkit (chưa cần, đúng nguyên tắc
+  không để dành). Đọc OTP dev-only qua `apps/web/e2e/support/dev-otp.ts` — parse lại log
+  `DevSmsProvider` (không có backdoor API/DB trả plaintext OTP, xem `otp.service.ts`).
+- Playwright lint rule (`eslint-plugin-playwright`) chỉ scope vào `e2e/**` trong
+  `eslint.config.mjs` của `web` — áp toàn project thì báo sai trên mọi `*.spec.ts(x)` Vitest.
 
 ## 13.13 Performance
 

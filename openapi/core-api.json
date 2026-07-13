@@ -255,14 +255,6 @@
       "post": {
         "operationId": "AuthController_refresh",
         "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/RefreshDto" }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "",
@@ -280,7 +272,7 @@
             }
           }
         },
-        "summary": "Đổi refresh token lấy cặp token mới (rotation, phát hiện reuse)",
+        "summary": "Đổi refresh token (cookie httpOnly) lấy cặp token mới (rotation, phát hiện reuse) — cần header X-CSRF-Token (ADR 0007)",
         "tags": ["auth"]
       }
     },
@@ -288,16 +280,8 @@
       "post": {
         "operationId": "AuthController_logout",
         "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/RefreshDto" }
-            }
-          }
-        },
         "responses": { "204": { "description": "" } },
-        "summary": "Thu hồi refresh token",
+        "summary": "Thu hồi refresh token, xoá cookie — cần header X-CSRF-Token (ADR 0007)",
         "tags": ["auth"]
       }
     },
@@ -2946,7 +2930,7 @@
         "type": "object",
         "properties": {
           "accessToken": { "type": "string" },
-          "refreshToken": { "type": "string" },
+          "csrfToken": { "type": "string" },
           "expiresIn": {
             "type": "number",
             "description": "TTL access token (giây)"
@@ -2956,7 +2940,7 @@
         },
         "required": [
           "accessToken",
-          "refreshToken",
+          "csrfToken",
           "expiresIn",
           "userId",
           "isGuest"
@@ -3001,11 +2985,6 @@
           }
         },
         "required": ["provider", "idToken"]
-      },
-      "RefreshDto": {
-        "type": "object",
-        "properties": { "refreshToken": { "type": "string" } },
-        "required": ["refreshToken"]
       },
       "WalletDto": {
         "type": "object",

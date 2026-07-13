@@ -39,7 +39,7 @@ function renderList() {
 
 describe('MessageList', () => {
   beforeEach(() => {
-    tokenStore.setSession({ accessToken: 'a', refreshToken: 'r' });
+    tokenStore.setSession({ accessToken: 'a', csrfToken: 'r' });
   });
   afterEach(() => {
     tokenStore.setSession(null);

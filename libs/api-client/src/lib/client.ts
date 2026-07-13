@@ -11,9 +11,11 @@ import type { Client, Middleware } from 'openapi-fetch';
  * này được type-check bởi `paths` generated khi gọi POST, lệch spec là lỗi compile.
  */
 const AUTH_REFRESH_PATH = '/api/v1/auth/refresh' satisfies keyof paths;
+/** Header double-submit CSRF (ADR 0007) — cùng tên `x-csrf-token` phía core-api. */
+const CSRF_HEADER_NAME = 'x-csrf-token';
 
 export type CoreApiClient = Client<paths> & {
-  /** Restore access token từ refresh token trước protected UI/realtime. */
+  /** Restore access token qua refresh cookie httpOnly trước protected UI/realtime. */
   restoreSession(): Promise<boolean>;
   /** Force rotation khi transport khác REST báo access token hết hạn. */
   refreshSession(): Promise<boolean>;
@@ -29,12 +31,33 @@ export interface ApiClientOptions {
   fetch?: typeof globalThis.fetch;
 }
 
+function isAuthTokensBody(
+  body: unknown,
+): body is { data: { accessToken: string; csrfToken: string } } {
+  return (
+    typeof body === 'object' &&
+    body !== null &&
+    'data' in body &&
+    typeof body.data === 'object' &&
+    body.data !== null &&
+    'accessToken' in body.data &&
+    typeof body.data.accessToken === 'string' &&
+    body.data.accessToken !== '' &&
+    'csrfToken' in body.data &&
+    typeof body.data.csrfToken === 'string' &&
+    body.data.csrfToken !== ''
+  );
+}
+
 /**
  * Client REST duy nhất cho core-api (docs/12 § 12.3 — mọi call qua đây, không fetch tay):
  * - Gắn `Authorization: Bearer` từ TokenStore cho mọi request.
  * - Non-2xx → ném `ApiError` (envelope `{ error }` — docs/05 § 5.4); mất mạng → `ApiError.network`.
  * - 401 → refresh rotation đúng MỘT lần (single-flight giữa các request song song) rồi retry;
  *   vẫn 401 hoặc refresh fail → xoá session + `onSessionExpired` (docs/13 § 13.7).
+ * - Refresh token là cookie httpOnly (ADR 0007) — call `/auth/refresh` phải `credentials:
+ *   'include'` (browser tự gắn cookie) + header CSRF từ `TokenStore.getCsrfToken()`, không còn
+ *   gửi `refreshToken` trong body.
  */
 export function createApiClient(options: ApiClientOptions): CoreApiClient {
   const { baseUrl, tokenStore, onSessionExpired } = options;
@@ -69,54 +92,33 @@ export function createApiClient(options: ApiClientOptions): CoreApiClient {
     if (typeof window === 'undefined') {
       return work();
     }
-    // Rotation nhiều tab không được race; browser thiếu Web Locks thì fail closed.
+    // Rotation nhiều tab không được race trên CÙNG cookie refresh token (2 request cùng giá trị
+    // cũ → server coi là reuse, revoke cả family) — browser thiếu Web Locks thì fail closed.
     if (navigator.locks === undefined) return false;
     return navigator.locks.request(refreshLockName, work);
   };
 
   /** Single-flight: N request cùng dính 401 chỉ tạo 1 lần rotation (docs/10 § 10.1.E). */
   const rotateSession = (): Promise<boolean> => {
-    const intentRefreshToken = tokenStore.getRefreshToken();
     refreshInFlight ??= withCrossTabRefreshLock(async () => {
-      if (
-        tokenStore.getRefreshToken() !== intentRefreshToken &&
-        tokenStore.getStatus() === 'authenticated'
-      ) {
-        return true;
-      }
-      const refreshToken = tokenStore.getRefreshToken();
-      if (refreshToken === null) return false;
       const expectedGeneration = tokenStore.getGeneration();
+      const csrfToken = tokenStore.getCsrfToken();
       const controller = new AbortController();
       refreshAbortController = controller;
       try {
         const response = await safeFetch(`${baseUrl}${AUTH_REFRESH_PATH}`, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ refreshToken }),
+          credentials: 'include', // gắn kèm cookie refresh_token/csrf_token httpOnly
+          headers: csrfToken !== null ? { [CSRF_HEADER_NAME]: csrfToken } : {},
           signal: controller.signal,
         });
         if (!response.ok) return false;
         const body: unknown = await response.json();
-        if (
-          typeof body !== 'object' ||
-          body === null ||
-          !('data' in body) ||
-          typeof body.data !== 'object' ||
-          body.data === null ||
-          !('accessToken' in body.data) ||
-          typeof body.data.accessToken !== 'string' ||
-          body.data.accessToken === '' ||
-          !('refreshToken' in body.data) ||
-          typeof body.data.refreshToken !== 'string' ||
-          body.data.refreshToken === ''
-        ) {
-          return false;
-        }
+        if (!isAuthTokensBody(body)) return false;
         const committed = tokenStore.setSessionIfCurrent(
           {
             accessToken: body.data.accessToken,
-            refreshToken: body.data.refreshToken,
+            csrfToken: body.data.csrfToken,
           },
           expectedGeneration,
         );
@@ -182,12 +184,15 @@ export function createApiClient(options: ApiClientOptions): CoreApiClient {
   const client = createClient<paths>({
     baseUrl,
     fetch: safeFetch,
+    // Bắt buộc cho MỌI request (không chỉ /auth/refresh) — thiếu cờ này thì browser âm thầm
+    // bỏ Set-Cookie của response cross-origin (login/verify cũng set cookie, ADR 0007).
+    credentials: 'include',
   });
   client.use(authMiddleware);
   return Object.assign(client, {
     async restoreSession(): Promise<boolean> {
       if (tokenStore.getAccessToken() !== null) return true;
-      if (tokenStore.getRefreshToken() === null) return false;
+      if (tokenStore.getStatus() === 'unauthenticated') return false;
       const restored = await rotateSession();
       if (!restored) expireSession();
       return restored;

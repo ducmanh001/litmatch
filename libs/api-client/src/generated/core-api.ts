@@ -167,7 +167,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Đổi refresh token lấy cặp token mới (rotation, phát hiện reuse) */
+    /** Đổi refresh token (cookie httpOnly) lấy cặp token mới (rotation, phát hiện reuse) — cần header X-CSRF-Token (ADR 0007) */
     post: operations['AuthController_refresh'];
     delete?: never;
     options?: never;
@@ -184,7 +184,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Thu hồi refresh token */
+    /** Thu hồi refresh token, xoá cookie — cần header X-CSRF-Token (ADR 0007) */
     post: operations['AuthController_logout'];
     delete?: never;
     options?: never;
@@ -1321,7 +1321,7 @@ export interface components {
     };
     AuthTokensDto: {
       accessToken: string;
-      refreshToken: string;
+      csrfToken: string;
       /** @description TTL access token (giây) */
       expiresIn: number;
       userId: string;
@@ -1349,9 +1349,6 @@ export interface components {
       provider: 'google' | 'apple';
       /** @description ID token từ SDK của provider — server tự verify, không tin client */
       idToken: string;
-    };
-    RefreshDto: {
-      refreshToken: string;
     };
     WalletDto: {
       /**
@@ -2078,11 +2075,7 @@ export interface operations {
       path?: never;
       cookie?: never;
     };
-    requestBody: {
-      content: {
-        'application/json': components['schemas']['RefreshDto'];
-      };
-    };
+    requestBody?: never;
     responses: {
       200: {
         headers: {
@@ -2106,11 +2099,7 @@ export interface operations {
       path?: never;
       cookie?: never;
     };
-    requestBody: {
-      content: {
-        'application/json': components['schemas']['RefreshDto'];
-      };
-    };
+    requestBody?: never;
     responses: {
       204: {
         headers: {

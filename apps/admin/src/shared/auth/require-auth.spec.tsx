@@ -35,7 +35,7 @@ describe('RequireAuth', () => {
   });
 
   it('có session (token không giải mã được — vd token giả trong test) → render trang private (guard này KHÔNG phải chốt bảo mật)', () => {
-    act(() => tokenStore.setSession({ accessToken: 'a', refreshToken: 'r' }));
+    act(() => tokenStore.setSession({ accessToken: 'a', csrfToken: 'r' }));
     renderGuarded();
     expect(screen.getByText('private-page')).toBeDefined();
   });
@@ -44,7 +44,7 @@ describe('RequireAuth', () => {
     act(() =>
       tokenStore.setSession({
         accessToken: fakeJwt({ sub: 'u1', isGuest: false, role: 'admin' }),
-        refreshToken: 'r',
+        csrfToken: 'r',
       }),
     );
     renderGuarded();
@@ -55,7 +55,7 @@ describe('RequireAuth', () => {
     act(() =>
       tokenStore.setSession({
         accessToken: fakeJwt({ sub: 'u1', isGuest: false, role: 'user' }),
-        refreshToken: 'r',
+        csrfToken: 'r',
       }),
     );
     renderGuarded();

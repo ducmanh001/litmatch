@@ -8,13 +8,27 @@ import { DataSource, Repository } from 'typeorm';
 import { isUniqueViolation } from '../../database/postgres-errors';
 import { User, UserService, UserStatus } from '../user';
 
+import { generateCsrfToken } from '../../common/csrf/csrf-token';
+
 import { AuthErrors } from './auth.errors';
 import { AuthIdentity, AuthProvider } from './entities/auth-identity.entity';
 import { OtpService } from './services/otp.service';
 import { SocialVerifierService } from './services/social-verifier';
 import { TokenService } from './services/token.service';
 
-import type { AuthTokensDto } from './dto/auth-tokens.dto';
+/**
+ * Kết quả nội bộ giữa Service ↔ Controller (ADR 0007) — có `refreshToken` plain vì Controller
+ * cần giá trị này để set cookie httpOnly. KHÔNG bao giờ trả nguyên object này ra HTTP response
+ * — Controller phải tự bóc `refreshToken` ra trước khi build `AuthTokensDto` công khai.
+ */
+export interface IssuedSession {
+  accessToken: string;
+  refreshToken: string;
+  csrfToken: string;
+  expiresIn: number;
+  userId: string;
+  isGuest: boolean;
+}
 
 @Injectable()
 export class AuthService {
@@ -28,7 +42,7 @@ export class AuthService {
     private readonly socialVerifier: SocialVerifierService,
   ) {}
 
-  async guestLogin(deviceId: string): Promise<AuthTokensDto> {
+  async guestLogin(deviceId: string): Promise<IssuedSession> {
     const user = await this.findOrCreateUser(AuthProvider.Guest, deviceId, {
       isGuest: true,
       nicknamePrefix: 'Khách',
@@ -40,7 +54,7 @@ export class AuthService {
     return this.otpService.requestOtp(phone);
   }
 
-  async verifyOtpAndLogin(phone: string, code: string): Promise<AuthTokensDto> {
+  async verifyOtpAndLogin(phone: string, code: string): Promise<IssuedSession> {
     await this.otpService.verifyOtp(phone, code);
     const user = await this.findOrCreateUser(AuthProvider.Phone, phone, {
       isGuest: false,
@@ -52,7 +66,7 @@ export class AuthService {
   async socialLogin(
     provider: AuthProvider,
     idToken: string,
-  ): Promise<AuthTokensDto> {
+  ): Promise<IssuedSession> {
     const identity = await this.socialVerifier.verify(provider, idToken);
     const user = await this.findOrCreateUser(provider, identity.uid, {
       isGuest: false,
@@ -61,7 +75,7 @@ export class AuthService {
     return this.issue(user);
   }
 
-  async refresh(refreshToken: string): Promise<AuthTokensDto> {
+  async refresh(refreshToken: string): Promise<IssuedSession> {
     const { userId, tokens } = await this.tokenService.rotate(refreshToken);
     // Xác minh lại trạng thái ĐÚNG THỜI ĐIỂM hành động (docs/10 § 10.0.C):
     // user bị ban giữa 2 lần refresh thì không được cấp phiên mới
@@ -72,7 +86,12 @@ export class AuthService {
       await this.tokenService.revoke(tokens.refreshToken);
       throw err;
     }
-    return { ...tokens, userId: user.id, isGuest: user.isGuest };
+    return {
+      ...tokens,
+      csrfToken: generateCsrfToken(),
+      userId: user.id,
+      isGuest: user.isGuest,
+    };
   }
 
   async logout(refreshToken: string): Promise<void> {
@@ -138,12 +157,17 @@ export class AuthService {
     return user;
   }
 
-  private async issue(user: User): Promise<AuthTokensDto> {
+  private async issue(user: User): Promise<IssuedSession> {
     const tokens = await this.tokenService.issueForUser(
       user.id,
       user.isGuest,
       user.role,
     );
-    return { ...tokens, userId: user.id, isGuest: user.isGuest };
+    return {
+      ...tokens,
+      csrfToken: generateCsrfToken(),
+      userId: user.id,
+      isGuest: user.isGuest,
+    };
   }
 }

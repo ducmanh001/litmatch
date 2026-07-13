@@ -71,6 +71,7 @@ export function LoginForm() {
       phoneForm.formState.errors.phone?.message ?? errorOf(requestOtp.error);
     return (
       <form
+        key="phone"
         className="space-y-4"
         onSubmit={phoneForm.handleSubmit((v) => requestOtp.mutate(v.phone))}
         noValidate
@@ -108,6 +109,7 @@ export function LoginForm() {
     codeForm.formState.errors.code?.message ?? errorOf(verifyOtp.error);
   return (
     <form
+      key="code"
       className="space-y-4"
       onSubmit={codeForm.handleSubmit((v) =>
         verifyOtp.mutate({ phone: phase.phone, code: v.code }),

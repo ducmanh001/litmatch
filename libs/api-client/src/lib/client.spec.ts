@@ -1,6 +1,6 @@
 import { createApiClient } from './client';
 import { ApiError, CLIENT_NETWORK_ERROR, isApiError } from './api-error';
-import { createTokenStore, memoryRefreshTokenStorage } from './token-store';
+import { createTokenStore, memoryCsrfTokenStorage } from './token-store';
 import { vi } from 'vitest';
 
 import type { TokenStore } from './token-store';
@@ -21,7 +21,8 @@ function errorBody(code: string): unknown {
 interface Recorded {
   url: string;
   auth: string | null;
-  body: unknown;
+  csrfHeader: string | null;
+  credentials: RequestCredentials;
 }
 
 /** Fetch stub: trả response theo hàng đợi, ghi lại từng request đã nhận. */
@@ -38,7 +39,8 @@ function fetchStub(queue: Array<Response | Error>): {
     calls.push({
       url: new URL(request.url).pathname,
       auth: request.headers.get('authorization'),
-      body: request.body !== null ? await request.clone().json() : undefined,
+      csrfHeader: request.headers.get('x-csrf-token'),
+      credentials: request.credentials,
     });
     const next = queue.shift();
     if (next === undefined) throw new Error('fetch stub: hết queue');
@@ -49,8 +51,8 @@ function fetchStub(queue: Array<Response | Error>): {
 }
 
 function storeWithSession(): TokenStore {
-  const store = createTokenStore(memoryRefreshTokenStorage());
-  store.setSession({ accessToken: 'access-old', refreshToken: 'refresh-old' });
+  const store = createTokenStore(memoryCsrfTokenStorage());
+  store.setSession({ accessToken: 'access-old', csrfToken: 'csrf-old' });
   return store;
 }
 
@@ -69,6 +71,21 @@ describe('createApiClient', () => {
 
     expect(calls[0].auth).toBe('Bearer access-old');
     expect(res.data).toEqual({ data: { id: 'u1' } });
+  });
+
+  it('MỌI request đều credentials:include — thiếu thì browser bỏ Set-Cookie cross-origin (ADR 0007)', async () => {
+    const { fetch, calls } = fetchStub([
+      jsonResponse(200, { data: { id: 'u1' } }),
+    ]);
+    const client = createApiClient({
+      baseUrl: BASE_URL,
+      tokenStore: storeWithSession(),
+      fetch,
+    });
+
+    await client.GET('/api/v1/users/me');
+
+    expect(calls[0].credentials).toBe('include');
   });
 
   it('non-2xx → ném ApiError đúng code/traceId/status', async () => {
@@ -104,22 +121,16 @@ describe('createApiClient', () => {
     expect((err as ApiError).status).toBe(0);
   });
 
-  it('restoreSession dùng refresh token để khôi phục access token sau reload', async () => {
+  it('restoreSession sau reload: dùng csrfToken persisted + credentials:include để phục hồi', async () => {
     const { fetch, calls } = fetchStub([
       jsonResponse(200, {
-        data: { accessToken: 'access-new', refreshToken: 'refresh-new' },
+        data: { accessToken: 'access-new', csrfToken: 'csrf-new' },
       }),
     ]);
-    const store = createTokenStore(memoryRefreshTokenStorage());
-    store.setSession({
-      accessToken: 'access-old',
-      refreshToken: 'refresh-old',
-    });
-    // Mô phỏng reload: memory access token mất nhưng refresh token bền vẫn còn.
-    const reloadedStore = createTokenStore({
-      get: store.getRefreshToken,
-      set: () => undefined,
-    });
+    // Mô phỏng reload: accessToken mất (memory), csrfToken vẫn còn (persisted — ADR 0007).
+    const storage = memoryCsrfTokenStorage();
+    storage.set('csrf-old');
+    const reloadedStore = createTokenStore(storage);
     const client = createApiClient({
       baseUrl: BASE_URL,
       tokenStore: reloadedStore,
@@ -129,6 +140,21 @@ describe('createApiClient', () => {
     await expect(client.restoreSession()).resolves.toBe(true);
     expect(reloadedStore.getAccessToken()).toBe('access-new');
     expect(calls.map((call) => call.url)).toEqual(['/api/v1/auth/refresh']);
+    expect(calls[0].csrfHeader).toBe('csrf-old');
+    expect(calls[0].credentials).toBe('include');
+  });
+
+  it('chưa từng đăng nhập (không có csrfToken persisted) → restoreSession false, không gọi API', async () => {
+    const { fetch, calls } = fetchStub([]);
+    const store = createTokenStore(memoryCsrfTokenStorage());
+    const client = createApiClient({
+      baseUrl: BASE_URL,
+      tokenStore: store,
+      fetch,
+    });
+
+    await expect(client.restoreSession()).resolves.toBe(false);
+    expect(calls).toHaveLength(0);
   });
 
   it('response refresh đến muộn không được hồi sinh session đã logout', async () => {
@@ -151,7 +177,7 @@ describe('createApiClient', () => {
     store.setSession(null);
     resolveRefresh?.(
       jsonResponse(200, {
-        data: { accessToken: 'late-access', refreshToken: 'late-refresh' },
+        data: { accessToken: 'late-access', csrfToken: 'late-csrf' },
       }),
     );
 
@@ -173,11 +199,11 @@ describe('createApiClient', () => {
     expect(store.getStatus()).toBe('unauthenticated');
   });
 
-  it('401 → refresh rotation 1 lần rồi retry với token mới', async () => {
+  it('401 → refresh rotation 1 lần (kèm CSRF header, credentials:include) rồi retry với token mới', async () => {
     const { fetch, calls } = fetchStub([
       jsonResponse(401, errorBody('AUTH_TOKEN_EXPIRED')),
       jsonResponse(200, {
-        data: { accessToken: 'access-new', refreshToken: 'refresh-new' },
+        data: { accessToken: 'access-new', csrfToken: 'csrf-new' },
       }),
       jsonResponse(200, { data: { id: 'u1' } }),
     ]);
@@ -196,16 +222,17 @@ describe('createApiClient', () => {
       '/api/v1/auth/refresh',
       '/api/v1/users/me',
     ]);
-    expect(calls[1].body).toEqual({ refreshToken: 'refresh-old' });
+    expect(calls[1].csrfHeader).toBe('csrf-old');
+    expect(calls[1].credentials).toBe('include');
     expect(calls[2].auth).toBe('Bearer access-new');
-    expect(store.getRefreshToken()).toBe('refresh-new');
+    expect(store.getCsrfToken()).toBe('csrf-new');
   });
 
   it('retry sau refresh mất mạng vẫn ném ApiError chuẩn hóa', async () => {
     const { fetch } = fetchStub([
       jsonResponse(401, errorBody('AUTH_TOKEN_EXPIRED')),
       jsonResponse(200, {
-        data: { accessToken: 'access-new', refreshToken: 'refresh-new' },
+        data: { accessToken: 'access-new', csrfToken: 'csrf-new' },
       }),
       new TypeError('retry fetch failed'),
     ]);
@@ -248,7 +275,7 @@ describe('createApiClient', () => {
       jsonResponse(401, errorBody('AUTH_TOKEN_EXPIRED')),
       jsonResponse(401, errorBody('AUTH_TOKEN_EXPIRED')),
       jsonResponse(200, {
-        data: { accessToken: 'access-new', refreshToken: 'refresh-new' },
+        data: { accessToken: 'access-new', csrfToken: 'csrf-new' },
       }),
       jsonResponse(200, { data: { id: 'a' } }),
       jsonResponse(200, { data: { id: 'b' } }),
@@ -270,11 +297,11 @@ describe('createApiClient', () => {
     expect(refreshCalls).toHaveLength(1);
   });
 
-  it('chưa từng đăng nhập (không refresh token) → 401 ném thẳng, không gọi refresh', async () => {
+  it('status unauthenticated (chưa đăng nhập) → 401 ném thẳng, không gọi refresh', async () => {
     const { fetch, calls } = fetchStub([
       jsonResponse(401, errorBody('AUTH_TOKEN_MISSING')),
     ]);
-    const store = createTokenStore(memoryRefreshTokenStorage());
+    const store = createTokenStore(memoryCsrfTokenStorage());
     const client = createApiClient({
       baseUrl: BASE_URL,
       tokenStore: store,

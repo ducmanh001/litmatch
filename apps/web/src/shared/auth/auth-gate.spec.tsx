@@ -28,12 +28,12 @@ describe('AuthGate', () => {
   });
 
   it('restore access token trước khi render protected UI', async () => {
-    window.localStorage.setItem('litmatch-web.refresh-token', 'refresh');
+    window.localStorage.setItem('litmatch-web.csrf-token', 'csrf');
     act(() => {
       window.dispatchEvent(
         new StorageEvent('storage', {
-          key: 'litmatch-web.refresh-token',
-          newValue: 'refresh',
+          key: 'litmatch-web.csrf-token',
+          newValue: 'csrf',
           storageArea: window.localStorage,
         }),
       );
