@@ -46,6 +46,14 @@ test('plans the checksum-verified Gitleaks installation', () => {
   assert.match(result.stderr, /Would install gitleaks 8\.30\.1/u);
 });
 
+test('plans the checksum-verified actionlint installation', () => {
+  const result = dryRun('actionlint');
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /actionlint-1\.7\.12\/actionlint\n$/u);
+  assert.match(result.stderr, /Would install actionlint 1\.7\.12/u);
+});
+
 test('plans the checksum-verified Trivy installation', () => {
   const result = dryRun('trivy');
 

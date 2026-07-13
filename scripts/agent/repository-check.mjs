@@ -18,6 +18,7 @@ import {
   SUPPRESS_MARKER,
   findVendorNameViolations,
 } from './vendor-wording.mjs';
+import { workflowPolicyErrors } from '../ci/workflow-policy.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const errors = [];
@@ -87,6 +88,21 @@ function validateEslintToolchainDeps() {
     addError(
       'package.json phải khai báo direct devDependency `@eslint/js` để Nx/ESLint flat config không phụ thuộc transitive và không làm hỏng project graph trên CI.',
     );
+  }
+}
+
+function validateGithubWorkflowPolicy() {
+  const ciWorkflow = readFileSync(
+    join(root, '.github/workflows/ci.yml'),
+    'utf8',
+  );
+  const securityWorkflow = readFileSync(
+    join(root, '.github/workflows/security.yml'),
+    'utf8',
+  );
+
+  for (const error of workflowPolicyErrors({ ciWorkflow, securityWorkflow })) {
+    addError(error);
   }
 }
 
@@ -246,6 +262,7 @@ validateContextMap();
 validateSkill('.agents/skills/new-module/SKILL.md');
 validateSkill('.agents/skills/review-module/SKILL.md');
 validateEslintToolchainDeps();
+validateGithubWorkflowPolicy();
 validateDiff();
 validateNeutralWording();
 validateSymlinks();

@@ -16,6 +16,13 @@ import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 const tools = {
+  actionlint: {
+    version: '1.7.12',
+    sha256: '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8',
+    archive: 'actionlint_1.7.12_linux_amd64.tar.gz',
+    url: 'https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz',
+    binary: 'actionlint',
+  },
   gitleaks: {
     version: '8.30.1',
     sha256: '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb',
