@@ -7,12 +7,24 @@ import { EntityManager, Repository } from 'typeorm';
 import { UserErrors } from './user.errors';
 import { Gender, User, UserStatus } from './entities/user.entity';
 
+import type { Role } from '@litmatch/common-dtos';
 import type { CoreApiEnv } from '../../config/env.validation';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
 
 export interface CreateUserInput {
   nickname: string;
   isGuest: boolean;
+}
+
+export interface UserPageFilter {
+  status?: UserStatus;
+  role?: Role;
+  nickname?: string;
+}
+
+export interface UserPage {
+  items: User[];
+  total: number;
 }
 
 @Injectable()
@@ -52,6 +64,26 @@ export class UserService {
       );
     }
     return user;
+  }
+
+  /** Admin Users List (docs/12 § 12.7) — offset OK vì list nhỏ, không phải lịch sử vô hạn (docs/05 § 5.4). */
+  async findPage(
+    filter: UserPageFilter,
+    limit: number,
+    offset: number,
+  ): Promise<UserPage> {
+    const qb = this.userRepo.createQueryBuilder('u');
+    if (filter.status)
+      qb.andWhere('u.status = :status', { status: filter.status });
+    if (filter.role) qb.andWhere('u.role = :role', { role: filter.role });
+    if (filter.nickname) {
+      qb.andWhere('u.nickname ILIKE :nickname', {
+        nickname: `%${filter.nickname}%`,
+      });
+    }
+    qb.orderBy('u.createdAt', 'DESC').skip(offset).take(limit);
+    const [items, total] = await qb.getManyAndCount();
+    return { items, total };
   }
 
   /**

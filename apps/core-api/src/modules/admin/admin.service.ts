@@ -5,19 +5,32 @@ import { DataSource } from 'typeorm';
 
 import { AuditLogService } from '../../common/audit/audit-log.service';
 import { User, UserService } from '../user';
+import { Report, ReportStatus, SafetyService } from '../safety';
 
 import { AdminErrors } from './admin.errors';
+
+import type { UserPage, UserPageFilter } from '../user';
+import type { ReportPage, ReportPageFilter } from '../safety';
 
 @Injectable()
 export class AdminService {
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly userService: UserService,
+    private readonly safetyService: SafetyService,
     private readonly auditLogService: AuditLogService,
   ) {}
 
   async getUser(userId: string): Promise<User> {
     return this.userService.getByIdOrThrow(userId);
+  }
+
+  async listUsers(
+    filter: UserPageFilter,
+    limit: number,
+    offset: number,
+  ): Promise<UserPage> {
+    return this.userService.findPage(filter, limit, offset);
   }
 
   /**
@@ -60,6 +73,46 @@ export class AdminService {
         manager,
       );
       return user;
+    });
+  }
+
+  async listReports(
+    filter: ReportPageFilter,
+    limit: number,
+    offset: number,
+  ): Promise<ReportPage> {
+    return this.safetyService.findReportsPage(filter, limit, offset);
+  }
+
+  async resolveReport(actorUserId: string, reportId: string): Promise<Report> {
+    return this.setReportStatus(actorUserId, reportId, ReportStatus.Resolved);
+  }
+
+  async dismissReport(actorUserId: string, reportId: string): Promise<Report> {
+    return this.setReportStatus(actorUserId, reportId, ReportStatus.Dismissed);
+  }
+
+  private async setReportStatus(
+    actorUserId: string,
+    reportId: string,
+    status: ReportStatus,
+  ): Promise<Report> {
+    return this.dataSource.transaction(async (manager) => {
+      const report = await this.safetyService.setReportStatus(
+        manager,
+        reportId,
+        status,
+      );
+      await this.auditLogService.record(
+        {
+          actorUserId,
+          action: `report.${status}`,
+          targetType: 'report',
+          targetId: reportId,
+        },
+        manager,
+      );
+      return report;
     });
   }
 }

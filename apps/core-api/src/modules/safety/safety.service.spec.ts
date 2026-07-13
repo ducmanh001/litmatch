@@ -3,7 +3,7 @@ import { DomainException } from '@litmatch/common-exceptions';
 import { SafetyService } from './safety.service';
 import { SafetyErrors } from './safety.errors';
 import { Block, BlockAction } from './entities/block.entity';
-import { Report, ReportReason } from './entities/report.entity';
+import { Report, ReportReason, ReportStatus } from './entities/report.entity';
 
 import type { ConfigService } from '@nestjs/config';
 import type { EntityManager, Repository } from 'typeorm';
@@ -37,8 +37,28 @@ function queryBuilderStub(sum: number) {
   return qb;
 }
 
+function pageQueryBuilderStub(items: Report[], total: number) {
+  const qb = {
+    andWhere: jest.fn(),
+    orderBy: jest.fn(),
+    skip: jest.fn(),
+    take: jest.fn(),
+    getManyAndCount: jest.fn(async () => [items, total]),
+  };
+  qb.andWhere.mockReturnValue(qb);
+  qb.orderBy.mockReturnValue(qb);
+  qb.skip.mockReturnValue(qb);
+  qb.take.mockReturnValue(qb);
+  return qb;
+}
+
+let reportEntityRepo: { findOneBy: jest.Mock; save: jest.Mock };
+
 describe('SafetyService', () => {
-  let reportRepo: { exists: jest.Mock };
+  let reportRepo: {
+    exists: jest.Mock;
+    createQueryBuilder: jest.Mock;
+  };
   let blockRepo: {
     findOne: jest.Mock;
     save: jest.Mock;
@@ -51,12 +71,16 @@ describe('SafetyService', () => {
     createQueryBuilder: jest.Mock;
     create: jest.Mock;
     save: jest.Mock;
+    getRepository: jest.Mock;
   };
   let dataSource: { transaction: jest.Mock };
   let service: SafetyService;
 
   beforeEach(() => {
-    reportRepo = { exists: jest.fn(async () => false) };
+    reportRepo = {
+      exists: jest.fn(async () => false),
+      createQueryBuilder: jest.fn(() => pageQueryBuilderStub([], 0)),
+    };
     blockRepo = {
       findOne: jest.fn(async () => null),
       save: jest.fn(async (b) => b),
@@ -67,11 +91,16 @@ describe('SafetyService', () => {
       getByIdOrThrow: jest.fn(async () => ({ id: 'target' })),
       adjustTrustScore: jest.fn(async () => undefined),
     };
+    reportEntityRepo = {
+      findOneBy: jest.fn(async () => Object.assign(new Report(), { id: 'r1' })),
+      save: jest.fn(async (r) => r),
+    };
     manager = {
       count: jest.fn(async () => 0),
       createQueryBuilder: jest.fn(() => queryBuilderStub(0)),
       create: jest.fn((_entity, input) => Object.assign(new Report(), input)),
       save: jest.fn(async (r) => r),
+      getRepository: jest.fn(() => reportEntityRepo),
     };
     dataSource = {
       transaction: jest.fn(async (cb: (m: EntityManager) => Promise<unknown>) =>
@@ -226,6 +255,58 @@ describe('SafetyService', () => {
       blockRepo.findOne.mockResolvedValue(null); // không active
       blockRepo.exists.mockResolvedValue(true); // nhưng có sự kiện trong window
       expect(await service.canPair('a', 'b')).toBe(false);
+    });
+  });
+
+  describe('setReportStatus — moderation queue (Admin)', () => {
+    it('report không tồn tại → 404 REPORT_NOT_FOUND', async () => {
+      reportEntityRepo.findOneBy.mockResolvedValue(null);
+      expectDomainError(
+        await service
+          .setReportStatus(manager as never, 'missing', ReportStatus.Resolved)
+          .catch((e) => e),
+        SafetyErrors.REPORT_NOT_FOUND,
+      );
+    });
+
+    it('report tồn tại → cập nhật đúng status, chỉ mutate field này', async () => {
+      const updated = await service.setReportStatus(
+        manager as never,
+        'r1',
+        ReportStatus.Dismissed,
+      );
+      expect(updated.status).toBe(ReportStatus.Dismissed);
+      expect(reportEntityRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'r1', status: ReportStatus.Dismissed }),
+      );
+    });
+  });
+
+  describe('findReportsPage — moderation queue (Admin)', () => {
+    it('lọc theo status khi có truyền, trả items + total', async () => {
+      const items = [Object.assign(new Report(), { id: 'r1' })];
+      const qb = pageQueryBuilderStub(items, 1);
+      reportRepo.createQueryBuilder.mockReturnValue(qb);
+
+      const page = await service.findReportsPage(
+        { status: ReportStatus.Pending },
+        20,
+        0,
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith('r.status = :status', {
+        status: ReportStatus.Pending,
+      });
+      expect(page).toEqual({ items, total: 1 });
+    });
+
+    it('không truyền status → không filter thêm', async () => {
+      const qb = pageQueryBuilderStub([], 0);
+      reportRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findReportsPage({}, 20, 0);
+
+      expect(qb.andWhere).not.toHaveBeenCalled();
     });
   });
 });

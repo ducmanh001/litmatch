@@ -6,6 +6,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -20,6 +21,15 @@ import { RequireRoles } from '../../common/decorators/roles.decorator';
 
 import { AdminService } from './admin.service';
 import { AdminUserDto } from './dto/admin-user.dto';
+import {
+  AdminUsersPageDto,
+  ListUsersQueryDto,
+} from './dto/admin-list-users.dto';
+import {
+  AdminReportDto,
+  AdminReportsPageDto,
+  ListReportsQueryDto,
+} from './dto/admin-report.dto';
 
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 
@@ -35,6 +45,22 @@ import type { AuthenticatedUser } from '../../common/decorators/current-user.dec
 @Controller('admin')
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
+
+  @Get('users')
+  @ApiOperation({
+    summary: 'Danh sách user — lọc status/role/nickname, offset pagination',
+  })
+  @ApiOkResponse({ type: AdminUsersPageDto })
+  async listUsers(
+    @Query() query: ListUsersQueryDto,
+  ): Promise<AdminUsersPageDto> {
+    const page = await this.adminService.listUsers(
+      { status: query.status, role: query.role, nickname: query.nickname },
+      query.limit,
+      query.offset,
+    );
+    return AdminUsersPageDto.from(page);
+  }
 
   @Get('users/:id')
   @ApiOperation({
@@ -68,6 +94,46 @@ export class AdminController {
   ): Promise<AdminUserDto> {
     return AdminUserDto.from(
       await this.adminService.unbanUser(actor.userId, id),
+    );
+  }
+
+  @Get('reports')
+  @ApiOperation({ summary: 'Moderation queue — lọc status, offset pagination' })
+  @ApiOkResponse({ type: AdminReportsPageDto })
+  async listReports(
+    @Query() query: ListReportsQueryDto,
+  ): Promise<AdminReportsPageDto> {
+    const page = await this.adminService.listReports(
+      { status: query.status },
+      query.limit,
+      query.offset,
+    );
+    return AdminReportsPageDto.from(page);
+  }
+
+  @Post('reports/:id/resolve')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Đánh dấu report đã xử lý — audit log' })
+  @ApiOkResponse({ type: AdminReportDto })
+  async resolveReport(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<AdminReportDto> {
+    return AdminReportDto.from(
+      await this.adminService.resolveReport(actor.userId, id),
+    );
+  }
+
+  @Post('reports/:id/dismiss')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Bỏ qua report (không vi phạm) — audit log' })
+  @ApiOkResponse({ type: AdminReportDto })
+  async dismissReport(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<AdminReportDto> {
+    return AdminReportDto.from(
+      await this.adminService.dismissReport(actor.userId, id),
     );
   }
 }

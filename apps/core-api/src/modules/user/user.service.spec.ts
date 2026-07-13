@@ -11,6 +11,7 @@ describe('UserService', () => {
   const repo = {
     findOneBy: jest.fn(),
     save: jest.fn((u: User) => Promise.resolve(u)),
+    createQueryBuilder: jest.fn(),
   };
   const config = {
     getOrThrow: jest.fn(
@@ -84,5 +85,55 @@ describe('UserService', () => {
     await expect(service.getByIdOrThrow('nope')).rejects.toBeInstanceOf(
       DomainException,
     );
+  });
+
+  describe('findPage — Admin Users List', () => {
+    function qbStub(items: User[], total: number) {
+      const qb = {
+        andWhere: jest.fn(),
+        orderBy: jest.fn(),
+        skip: jest.fn(),
+        take: jest.fn(),
+        getManyAndCount: jest.fn(async () => [items, total]),
+      };
+      qb.andWhere.mockReturnValue(qb);
+      qb.orderBy.mockReturnValue(qb);
+      qb.skip.mockReturnValue(qb);
+      qb.take.mockReturnValue(qb);
+      return qb;
+    }
+
+    it('không filter → không gọi andWhere, trả nguyên items+total', async () => {
+      const qb = qbStub([activeUser()], 1);
+      repo.createQueryBuilder.mockReturnValue(qb);
+
+      const page = await service.findPage({}, 20, 0);
+
+      expect(qb.andWhere).not.toHaveBeenCalled();
+      expect(qb.skip).toHaveBeenCalledWith(0);
+      expect(qb.take).toHaveBeenCalledWith(20);
+      expect(page.total).toBe(1);
+    });
+
+    it('filter status/role/nickname → mỗi filter thêm đúng 1 andWhere', async () => {
+      const qb = qbStub([], 0);
+      repo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findPage(
+        { status: UserStatus.Banned, role: 'admin', nickname: 'foo' },
+        20,
+        0,
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith('u.status = :status', {
+        status: UserStatus.Banned,
+      });
+      expect(qb.andWhere).toHaveBeenCalledWith('u.role = :role', {
+        role: 'admin',
+      });
+      expect(qb.andWhere).toHaveBeenCalledWith('u.nickname ILIKE :nickname', {
+        nickname: '%foo%',
+      });
+    });
   });
 });

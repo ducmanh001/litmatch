@@ -1070,6 +1070,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/admin/users': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Danh sách user — lọc status/role/nickname, offset pagination */
+    get: operations['AdminController_listUsers'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/admin/users/{id}': {
     parameters: {
       query?: never;
@@ -1115,6 +1132,57 @@ export interface paths {
     put?: never;
     /** Mở khoá tài khoản user — audit log */
     post: operations['AdminController_unbanUser'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/reports': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Moderation queue — lọc status, offset pagination */
+    get: operations['AdminController_listReports'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/reports/{id}/resolve': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Đánh dấu report đã xử lý — audit log */
+    post: operations['AdminController_resolveReport'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/reports/{id}/dismiss': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Bỏ qua report (không vi phạm) — audit log */
+    post: operations['AdminController_dismissReport'];
     delete?: never;
     options?: never;
     head?: never;
@@ -1577,6 +1645,7 @@ export interface components {
       /** @enum {string} */
       move: 'rock' | 'paper' | 'scissors';
     };
+    Object: Record<string, never>;
     AdminUserDto: {
       id: string;
       nickname: string;
@@ -1588,6 +1657,28 @@ export interface components {
       status: 'active' | 'banned';
       /** @enum {string} */
       role: 'user' | 'moderator' | 'admin';
+    };
+    AdminUsersPageDto: {
+      items: components['schemas']['AdminUserDto'][];
+      total: number;
+    };
+    AdminReportDto: {
+      id: string;
+      reporterUserId: string;
+      targetUserId: string;
+      /** @enum {string} */
+      reason:
+        'harassment' | 'spam' | 'underage' | 'inappropriate_content' | 'other';
+      description: Record<string, never> | null;
+      trustPenaltyApplied: number;
+      /** @enum {string} */
+      status: 'pending' | 'resolved' | 'dismissed';
+      /** Format: date-time */
+      createdAt: string;
+    };
+    AdminReportsPageDto: {
+      items: components['schemas']['AdminReportDto'][];
+      total: number;
     };
   };
   responses: never;
@@ -3505,6 +3596,36 @@ export interface operations {
       };
     };
   };
+  AdminController_listUsers: {
+    parameters: {
+      query?: {
+        status?: 'active' | 'banned';
+        role?: 'user' | 'moderator' | 'admin';
+        nickname?: string;
+        limit?: components['schemas']['Object'];
+        offset?: components['schemas']['Object'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminUsersPageDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
   AdminController_getUser: {
     parameters: {
       query?: never;
@@ -3575,6 +3696,86 @@ export interface operations {
         content: {
           'application/json': {
             data: components['schemas']['AdminUserDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_listReports: {
+    parameters: {
+      query?: {
+        status?: 'pending' | 'resolved' | 'dismissed';
+        limit?: components['schemas']['Object'];
+        offset?: components['schemas']['Object'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminReportsPageDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_resolveReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminReportDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_dismissReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminReportDto'];
             meta?: {
               [key: string]: unknown;
             };
