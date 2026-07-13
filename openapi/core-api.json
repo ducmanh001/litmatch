@@ -374,7 +374,22 @@
     "/api/v1/economy/transactions": {
       "get": {
         "operationId": "EconomyController_listTransactions",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
         "responses": { "200": { "description": "" } },
         "security": [{ "bearer": [] }],
         "summary": "Lịch sử giao dịch — cursor pagination",
@@ -660,7 +675,22 @@
     "/api/v1/notifications": {
       "get": {
         "operationId": "NotificationController_list",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -799,6 +829,20 @@
             "required": true,
             "in": "path",
             "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -912,6 +956,20 @@
             "name": "id",
             "required": true,
             "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
             "schema": { "type": "string" }
           }
         ],
@@ -1193,7 +1251,22 @@
       },
       "get": {
         "operationId": "PartyRoomController_list",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -1455,7 +1528,22 @@
       },
       "get": {
         "operationId": "FeedController_listFeed",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -1573,6 +1661,20 @@
             "name": "postId",
             "required": true,
             "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
             "schema": { "type": "string" }
           }
         ],
@@ -2633,7 +2735,12 @@
             "type": "array",
             "items": { "$ref": "#/components/schemas/MessageDto" }
           },
-          "meta": { "type": "object" }
+          "meta": {
+            "type": "object",
+            "properties": {
+              "nextCursor": { "type": "string", "nullable": true }
+            }
+          }
         },
         "required": ["items", "meta"]
       },
@@ -2685,7 +2792,12 @@
             "type": "array",
             "items": { "$ref": "#/components/schemas/SoulMessageDto" }
           },
-          "meta": { "type": "object" }
+          "meta": {
+            "type": "object",
+            "properties": {
+              "nextCursor": { "type": "string", "nullable": true }
+            }
+          }
         },
         "required": ["items", "meta"]
       },
@@ -2817,7 +2929,12 @@
             "type": "array",
             "items": { "$ref": "#/components/schemas/PartyRoomDto" }
           },
-          "meta": { "type": "object" }
+          "meta": {
+            "type": "object",
+            "properties": {
+              "nextCursor": { "type": "string", "nullable": true }
+            }
+          }
         },
         "required": ["data", "meta"]
       },

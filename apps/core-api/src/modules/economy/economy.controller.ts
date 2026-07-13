@@ -18,6 +18,7 @@ import { CursorPageQueryDto } from '@litmatch/common-dtos';
 
 import { EconomyService } from './economy.service';
 import { PurchaseVipDto, VerifyIapDto, WalletDto } from './dto/economy.dtos';
+import { ApiCursorPageQuery } from '../../common/decorators/cursor-page-query.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import {
   ApiIdempotencyKeyHeader,
@@ -75,6 +76,7 @@ export class EconomyController {
 
   @Get('transactions')
   @ApiOperation({ summary: 'Lịch sử giao dịch — cursor pagination' })
+  @ApiCursorPageQuery()
   listTransactions(
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: CursorPageQueryDto,
