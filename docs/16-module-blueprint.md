@@ -90,7 +90,8 @@ Không export `Repository<T>` hoặc writer nội bộ của module.
 
 ## 16.5 Naming và vị trí type
 
-- File và folder dùng kebab-case; class dùng PascalCase; constant dùng UPPER_SNAKE_CASE.
+- Mọi quy ước đặt tên theo [17-naming-conventions.md](./17-naming-conventions.md); mục này chỉ
+  quy định vị trí và grouping type của module.
 - File mới ưu tiên một DTO/entity mỗi file: `profile.dto.ts`, `user.entity.ts`.
 - File nhóm các DTO/entity liên quan chặt chẽ (`profile.dtos.ts`, `iap.entities.ts`) chỉ
   dùng khi grouping giúp đọc code tốt hơn; không trộn hai quy ước tùy tiện trong cùng
@@ -125,3 +126,7 @@ Không export `Repository<T>` hoặc writer nội bộ của module.
 - Test đặt cạnh source; integration test đặt ở root module.
 - Migration là file mới và có index theo query thực tế.
 - `pnpm agent:check`, test áp dụng, lint/build và `review-module verify` đạt yêu cầu.
+
+---
+
+[← 15 · Commit Guidelines](./15-commit-guidelines.md) · [17 · Naming Conventions →](./17-naming-conventions.md)

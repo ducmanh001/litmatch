@@ -4,11 +4,13 @@ on:
   push:
     branches: [main]
   pull_request:
+  merge_group:
+  workflow_dispatch:
   schedule:
     - cron: '17 20 * * 1'
 
 concurrency:
-  group: security-${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -18,6 +20,7 @@ jobs:
   codeql:
     name: CodeQL
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       security-events: write
@@ -33,6 +36,7 @@ jobs:
   repository-scan:
     name: Secrets and dependencies
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
@@ -40,21 +44,12 @@ jobs:
           persist-credentials: false
 
       - name: Install Gitleaks (verified checksum)
-        env:
-          GITLEAKS_VERSION: 8.30.1
-          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
-        run: |
-          curl --fail --silent --show-error --location \
-            --output /tmp/gitleaks.tar.gz \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum --check --strict
-          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
-          sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
+        run: node scripts/ci/security-tools.mjs gitleaks --install-dir /tmp/litmatch-ci-tools --add-to-github-path
 
       - name: Scan Git history for secrets
-        run: gitleaks git --redact --no-banner --verbose .
+        run: gitleaks git --redact --no-banner --verbose --baseline-path .gitleaks-baseline.json .
 
-      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
         with:
           version: 11.9.0
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
@@ -65,19 +60,9 @@ jobs:
       - name: Audit high and critical dependency vulnerabilities
         run: pnpm audit --audit-level high
 
-      # Install the CLI directly and verify it. This deliberately avoids trivy-action because
-      # its tags were affected by the March 2026 supply-chain incident.
+      # Bootstrap CLI trực tiếp có kiểm SHA; cố ý không dùng trivy-action.
       - name: Install Trivy (verified checksum)
-        env:
-          TRIVY_VERSION: 0.72.0
-          TRIVY_SHA256: bbb64b9695866ce4a7a8f5c9592002c5961cab378577fa3f8a040df362b9b2ea
-        run: |
-          curl --fail --silent --show-error --location \
-            --output /tmp/trivy.tar.gz \
-            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
-          echo "${TRIVY_SHA256}  /tmp/trivy.tar.gz" | sha256sum --check --strict
-          tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
-          sudo install -m 0755 /tmp/trivy /usr/local/bin/trivy
+        run: node scripts/ci/security-tools.mjs trivy --install-dir /tmp/litmatch-ci-tools --add-to-github-path
 
       - name: Scan filesystem vulnerabilities and misconfiguration
         run: >-
@@ -88,5 +73,46 @@ jobs:
           --exit-code 1
           --no-progress
           --skip-version-check
+          --ignorefile .trivyignore.yaml
           --skip-dirs .nx
           --skip-dirs dist
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          show-openssf-scorecard: true
+          warn-on-openssf-scorecard-level: 3
+
+  required:
+    name: Security required
+    if: always()
+    needs: [codeql, repository-scan, dependency-review]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every applicable security stage
+        env:
+          CODEQL_RESULT: ${{ needs.codeql.result }}
+          REPOSITORY_SCAN_RESULT: ${{ needs.repository-scan.result }}
+          DEPENDENCY_REVIEW_RESULT: ${{ needs.dependency-review.result }}
+        run: |
+          if [[ "${CODEQL_RESULT}" != success \
+            || "${REPOSITORY_SCAN_RESULT}" != success ]]; then
+            echo "::error::Security incomplete: codeql=${CODEQL_RESULT}, repository-scan=${REPOSITORY_SCAN_RESULT}"
+            exit 1
+          fi
+
+          if [[ "${DEPENDENCY_REVIEW_RESULT}" != success \
+            && "${DEPENDENCY_REVIEW_RESULT}" != skipped ]]; then
+            echo "::error::Dependency review failed: ${DEPENDENCY_REVIEW_RESULT}"
+            exit 1
+          fi

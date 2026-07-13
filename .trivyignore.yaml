@@ -1,0 +1,7 @@
+misconfigurations:
+  - id: KSV-0109
+    paths:
+      - k8s/base/core-api/configmap.yaml
+  - id: KSV-0009
+    paths:
+      - k8s/base/media-server/deployment.yaml

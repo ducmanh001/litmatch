@@ -32,3 +32,5 @@
 ## Bằng chứng test
 
 <!-- Lệnh + kết quả tóm tắt thật (số test pass/fail, coverage nếu có) -->
+
+- [ ] `pnpm ci:preflight` pass trước lần push cuối
