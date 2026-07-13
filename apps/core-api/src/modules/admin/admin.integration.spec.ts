@@ -1,3 +1,4 @@
+import { Registry } from 'prom-client';
 import { DataSource } from 'typeorm';
 
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
@@ -6,6 +7,7 @@ import { UserRole1753600000000 } from '../../database/migrations/1753600000000-u
 import { AdminAuditLog1753700000000 } from '../../database/migrations/1753700000000-admin-audit-log';
 import { MatchingCore1752200000000 } from '../../database/migrations/1752200000000-matching-core';
 import { EconomyLedger1752000000000 } from '../../database/migrations/1752000000000-economy-ledger';
+import { EconomyRefund1752100000000 } from '../../database/migrations/1752100000000-economy-refund';
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
 import { PartyRoomGift1752700000000 } from '../../database/migrations/1752700000000-party-room-gift';
 import { ReportStatus1753800000000 } from '../../database/migrations/1753800000000-report-status';
@@ -20,12 +22,27 @@ import {
   SafetyService,
 } from '../safety';
 import { Gift, GiftErrors, GiftService } from '../gift';
+import { EconomyService } from '../economy/economy.service';
+import { EconomyMetrics } from '../economy/economy.metrics';
+import { LedgerService } from '../economy/services/ledger.service';
+import { LedgerAccount } from '../economy/entities/ledger-account.entity';
+import { LedgerEntry } from '../economy/entities/ledger-entry.entity';
+import { OutboxEvent } from '../economy/entities/outbox-event.entity';
+import { LedgerTransaction } from '../economy/entities/transaction.entity';
+import { Wallet } from '../economy/entities/wallet.entity';
+import {
+  IapProduct,
+  IapProvider,
+  IapReceipt,
+} from '../economy/entities/iap.entities';
+import { VipPlan } from '../economy/entities/vip-plan.entity';
 
 import { AdminService } from './admin.service';
 import { AdminErrors } from './admin.errors';
 
 import type { ConfigService } from '@nestjs/config';
 import type { CoreApiEnv } from '../../config/env.validation';
+import type { IapVerifier } from '../economy/ports/iap-verifier';
 
 /**
  * Integration test Admin (Task 0, docs/12 § 12.7) trên Postgres thật:
@@ -57,6 +74,7 @@ const configStub = {
 d('Admin integration (Postgres thật)', () => {
   let ds: DataSource;
   let admin: AdminService;
+  let economyService: EconomyService;
   let seedCounter = 0;
 
   async function createUser(nickname: string): Promise<User> {
@@ -96,11 +114,26 @@ d('Admin integration (Postgres thật)', () => {
     ds = new DataSource({
       type: 'postgres',
       url: url.toString(),
-      entities: [User, AdminAuditLog, Report, Block, Gift],
+      entities: [
+        User,
+        AdminAuditLog,
+        Report,
+        Block,
+        Gift,
+        LedgerAccount,
+        LedgerTransaction,
+        LedgerEntry,
+        Wallet,
+        IapProduct,
+        IapReceipt,
+        VipPlan,
+        OutboxEvent,
+      ],
       migrations: [
         InitAuthUser1751900000000,
         UserRole1753600000000,
         EconomyLedger1752000000000,
+        EconomyRefund1752100000000,
         MatchingCore1752200000000,
         Safety1752800000000,
         PartyRoomGift1752700000000,
@@ -134,6 +167,20 @@ d('Admin integration (Postgres thật)', () => {
       configStub,
       {} as never,
     );
+    const ledger = new LedgerService(ds, new EconomyMetrics(new Registry()));
+    const stubVerifier = {
+      verify: async (_p: IapProvider, payload: Record<string, unknown>) => ({
+        providerTransactionId: String(payload['devTransactionId']),
+      }),
+    } as IapVerifier;
+    economyService = new EconomyService(
+      ds.getRepository(Wallet),
+      ds.getRepository(IapProduct),
+      ds.getRepository(VipPlan),
+      ds.getRepository(LedgerTransaction),
+      ledger,
+      stubVerifier,
+    );
     const auditLogService = new AuditLogService(
       ds.getRepository(AdminAuditLog),
     );
@@ -142,6 +189,7 @@ d('Admin integration (Postgres thật)', () => {
       userService,
       safetyService,
       giftService,
+      economyService,
       auditLogService,
     );
   });
@@ -433,6 +481,104 @@ d('Admin integration (Postgres thật)', () => {
       const found = gifts.find((g) => g.id === created.id);
       expect(found).toBeDefined();
       expect(found?.active).toBe(false);
+    });
+  });
+
+  describe('Economy ops', () => {
+    async function fund(userId: string): Promise<void> {
+      await economyService.creditFromIap(
+        userId,
+        IapProvider.Google,
+        { devTransactionId: `admin-econ-${userId}-${++seedCounter}` },
+        'com.litmatch.diamond.1200',
+      );
+    }
+
+    async function fundAndGetTransactionId(userId: string): Promise<string> {
+      const result = await economyService.creditFromIap(
+        userId,
+        IapProvider.Google,
+        { devTransactionId: `admin-econ-tx-${userId}-${++seedCounter}` },
+        'com.litmatch.diamond.1200',
+      );
+      return result.transactionId;
+    }
+
+    async function walletBalance(userId: string): Promise<number> {
+      const wallet = await ds.getRepository(Wallet).findOneBy({ userId });
+      return Number(wallet?.balance ?? 0);
+    }
+
+    it('getWallet: trả đúng balance sau khi fund', async () => {
+      const user = await createUser('econ-wallet');
+      await fund(user.id);
+
+      const wallet = await admin.getWallet(user.id);
+      expect(wallet.balance).toBe('1200');
+    });
+
+    it('listTransactions: thấy giao dịch actor tự thực hiện (IAP credit)', async () => {
+      const user = await createUser('econ-list-tx');
+      await fund(user.id);
+
+      const page = await admin.listTransactions(user.id, 20);
+      expect(page.items.length).toBeGreaterThanOrEqual(1);
+      expect(page.items[0].diamondDelta).toBe('1200');
+    });
+
+    it('refundTransaction: hoàn tiền + ghi ĐÚNG 1 dòng audit atomic, balance quay lại', async () => {
+      const actor = await createUser('econ-refund-actor');
+      const user = await createUser('econ-refund-user');
+      const transactionId = await fundAndGetTransactionId(user.id);
+      expect(await walletBalance(user.id)).toBe(1200);
+
+      const result = await admin.refundTransaction(
+        actor.id,
+        transactionId,
+        'admin test refund',
+      );
+      expect(result.transactionId).toBe(transactionId);
+      expect(result.reversalTransactionId).not.toBe(transactionId);
+
+      expect(await walletBalance(user.id)).toBe(0);
+
+      const logs = await ds.getRepository(AdminAuditLog).findBy({
+        targetId: transactionId,
+        action: 'economy.transaction.refunded',
+      });
+      expect(logs).toHaveLength(1);
+      expect(logs[0].actorUserId).toBe(actor.id);
+      expect(logs[0].metadata).toMatchObject({ reason: 'admin test refund' });
+    });
+
+    it('refundTransaction: refund lại CÙNG giao dịch lần 2 → TRANSACTION_ALREADY_REVERSED, không ghi audit thêm', async () => {
+      const actor = await createUser('econ-double-refund-actor');
+      const user = await createUser('econ-double-refund-user');
+      const transactionId = await fundAndGetTransactionId(user.id);
+
+      await admin.refundTransaction(actor.id, transactionId, 'lần 1');
+      await expect(
+        admin.refundTransaction(actor.id, transactionId, 'lần 2'),
+      ).rejects.toMatchObject({ code: 'ECONOMY_TRANSACTION_ALREADY_REVERSED' });
+
+      const logs = await ds.getRepository(AdminAuditLog).findBy({
+        targetId: transactionId,
+        action: 'economy.transaction.refunded',
+      });
+      expect(logs).toHaveLength(1); // chỉ lần 1 thành công
+    });
+
+    it('refundTransaction: giao dịch không tồn tại → 404, không ghi audit', async () => {
+      const actor = await createUser('econ-missing-tx-actor');
+      const fakeId = '00000000-0000-4000-8000-000000000099';
+      await expect(
+        admin.refundTransaction(actor.id, fakeId, 'reason'),
+      ).rejects.toMatchObject({ code: 'ECONOMY_TRANSACTION_NOT_FOUND' });
+
+      const logs = await ds
+        .getRepository(AdminAuditLog)
+        .findBy({ targetId: fakeId });
+      expect(logs).toHaveLength(0);
     });
   });
 });

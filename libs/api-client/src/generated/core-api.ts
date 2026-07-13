@@ -1224,6 +1224,57 @@ export interface paths {
     patch: operations['AdminController_updateGift'];
     trace?: never;
   };
+  '/api/v1/admin/economy/wallet/{userId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Ví của user — balance + VIP */
+    get: operations['AdminController_getWallet'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/economy/users/{userId}/transactions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Lịch sử giao dịch của user — cursor pagination, actor-scoped (chưa thấy giao dịch nhận quà) */
+    get: operations['AdminController_listTransactions'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/economy/transactions/{id}/refund': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Hoàn tiền thủ công 1 giao dịch — bút toán đảo, audit log, không sửa/xoá giao dịch gốc */
+    post: operations['AdminController_refundTransaction'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1739,6 +1790,35 @@ export interface components {
       priceDiamond?: number;
       sortOrder?: number;
       active?: boolean;
+    };
+    AdminWalletDto: {
+      balance: string;
+      earnings: string;
+      /** @enum {string|null} */
+      vipTier: 'vip' | 'svip' | null;
+      /** Format: date-time */
+      vipExpiresAt: string | null;
+    };
+    AdminTransactionDto: {
+      id: string;
+      type: string;
+      status: string;
+      /** @description Diamond delta THEO ví user này — actor-scoped (docs/12 § 12.7: chưa thấy giao dịch nhận quà, chỉ giao dịch user chủ động thực hiện) */
+      diamondDelta: string;
+      /** Format: date-time */
+      createdAt: string;
+    };
+    AdminTransactionsPageDto: {
+      items: components['schemas']['AdminTransactionDto'][];
+      nextCursor: Record<string, never> | null;
+    };
+    RefundTransactionDto: {
+      /** @description Lý do hoàn tiền — bắt buộc để audit lại được */
+      reason: string;
+    };
+    RefundResultDto: {
+      transactionId: string;
+      reversalTransactionId: string;
     };
   };
   responses: never;
@@ -3918,6 +3998,93 @@ export interface operations {
         content: {
           'application/json': {
             data: components['schemas']['AdminGiftDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_getWallet: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        userId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminWalletDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_listTransactions: {
+    parameters: {
+      query?: {
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
+      header?: never;
+      path: {
+        userId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminTransactionsPageDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_refundTransaction: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RefundTransactionDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['RefundResultDto'];
             meta?: {
               [key: string]: unknown;
             };
