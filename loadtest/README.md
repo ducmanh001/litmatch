@@ -1,10 +1,13 @@
-# Litmatch — Load test (Giai đoạn 6 roadmap)
+# Litmatch — Load test (Giai đoạn 6 + Giai đoạn 7 roadmap)
 
 3 script k6 cho luồng: Matching Queue, Signaling WebSocket, và luồng đầu-cuối Matching → Calling.
 Không cài k6 thật ở môi trường viết script này (không có quyền cài binary hệ thống) — script đã
 được đối chiếu cẩn thận với API thật (đọc trực tiếp controller/DTO trong code), nhưng **chưa từng
 chạy thử với server thật**. Chạy thử ở máy có k6 + core-api/signaling-gateway đang sống trước khi
 tin số liệu.
+
+Ngoài ra có `party-room-livekit.sh` (Giai đoạn 7) — khác cơ chế hoàn toàn với 3 script k6 trên, xem
+mục 4 bên dưới — và `party-room-slo.yaml` (mục tiêu SLO đi kèm).
 
 ## Cài k6
 
@@ -90,6 +93,38 @@ trong cửa sổ chờ `MATCH_WAIT_SECONDS`.
 **Cần VUS đủ đông và chẵn** — matching cần ít nhất 2 ticket cùng shard (loại match + region + dải
 tuổi) để matcher-worker (chạy nền, `MATCHING_MATCHER_INTERVAL_MS`) ghép cặp. Script không tự điều
 phối cặp thủ công, dựa hoàn toàn vào matcher-worker thật đang chạy trong core-api.
+
+## 4. `party-room-livekit.sh` — LiveKit media load (khác cơ chế với 3 script k6 trên)
+
+k6 (`k6/ws` lẫn `k6/experimental/websockets`) không có client WebRTC — nó có thể gọi REST mint
+token nhưng **không thể** publish/subscribe audio/video thật, nên không đo được tải media thật
+của SFU (LiveKit). LiveKit tự cung cấp công cụ đúng việc này: `lk load-test` (LiveKit CLI, gói
+`livekit-cli`) — mở kết nối client Go SDK thật, publish/subscribe track thật vào 1 room thật.
+
+`party-room-livekit.sh` wrap `lk load-test` với **profile Party Room production**: số publisher/
+subscriber lấy trực tiếp từ `PARTY_MAX_MEMBERS`/`PARTY_MAX_SPEAKERS` thật (mặc định 100 thành
+viên, tối đa 8 speaker + 1 host = 9 publisher, còn lại 91 subscriber audience), audio-only (Party
+Room hiện chưa có video — đã grep xác nhận). Xem comment đầu file script để biết đầy đủ nguồn số
+liệu (file:line) và lý do chọn ramp-up/duration.
+
+**CHƯA TỪNG CHẠY** — môi trường viết script này không có LiveKit server thật đang sống, và repo
+hiện KHÔNG có môi trường staging LiveKit đã triển khai thật (`k8s/base/media-server/` mới là
+manifest, chưa `kubectl apply` lên cluster thật). Chạy thử với `docker compose -f
+apps/media-server/docker-compose.yml up -d` (dev, chỉ 1 node, không phản ánh capacity production)
+hoặc với staging LiveKit thật (khi có) trước khi tin số liệu:
+
+```bash
+LIVEKIT_URL=ws://localhost:7880 \
+LIVEKIT_API_KEY=devkey \
+LIVEKIT_API_SECRET=devsecret_change_me_0123456789abcdef \
+  ./loadtest/party-room-livekit.sh
+```
+
+Đo được gì: `lk load-test` in bytes/s, packets/s in/out, số track publish/subscribe thành công lúc
+kết thúc. Nếu Prometheus đang scrape `prometheus_port` của LiveKit (xem
+`apps/media-server/livekit.yaml`), đối chiếu thêm CPU/room/participant per-node qua
+`k8s/base/media-server/prometheus-alerts.yaml`. Ngưỡng "đạt/không đạt" tham khảo
+`party-room-slo.yaml` — ngưỡng đó cũng là **mục tiêu khởi điểm**, chưa phải số đo xác nhận.
 
 ## Về threshold (p95, error rate)
 

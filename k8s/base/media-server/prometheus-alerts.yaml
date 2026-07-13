@@ -1,0 +1,158 @@
+# Litmatch — Prometheus alerting rules cho media-server (LiveKit self-host), Giai đoạn 7 roadmap:
+# "Benchmark LiveKit bằng profile Party Room production, đặt SLO/headroom và cảnh báo theo node".
+#
+# KHÔNG PHẢI resource Kubernetes — đây là file rule chuẩn Prometheus (`groups: - name: ... rules:
+# ...`), nạp bằng `rule_files:` trong prometheus.yml của bất kỳ Prometheus instance nào đang scrape
+# `prometheus_port: 6789` của LiveKit (xem apps/media-server/livekit.yaml,
+# k8s/base/media-server/deployment.yaml annotation `prometheus.io/port: '6789'`). KHÔNG add vào
+# `kustomization.yaml` cùng thư mục — file đó chỉ liệt kê Kind hợp lệ (Deployment/Service/
+# ConfigMap) cho `kubectl apply`, còn file rule Prometheus không phải Kind Kubernetes và repo này
+# CHƯA triển khai Prometheus Operator (không có CRD `PrometheusRule` nào khác trong repo, chỉ có
+# annotation-based scrape `prometheus.io/scrape` kiểu cổ điển) — nếu sau này team chọn Prometheus
+# Operator, chuyển nội dung `rules:` dưới đây vào 1 CRD `PrometheusRule` thay vì đổi format tại đây.
+#
+# CHƯA TỪNG CHẠY / CHƯA WIRE VÀO ALERTMANAGER THẬT — repo này hiện không có Prometheus,
+# Alertmanager hay Grafana nào được deploy (xác nhận trước khi viết file này: không tìm thấy
+# manifest/config nào cho 3 thứ đó). File này là SCAFFOLDING sẵn sàng dùng khi có Prometheus thật
+# trỏ vào cluster LiveKit thật — không phải bằng chứng đã cảnh báo hoạt động.
+#
+# ## Tên metric — mức độ tin cậy khác nhau theo từng nhóm rule, đọc trước khi bật paging thật
+#
+# LiveKit self-host pin ở `livekit/livekit-server:v1.13.1` (apps/media-server/docker-compose.yml,
+# k8s/base/media-server/deployment.yaml — cùng digest). Tên metric bên dưới lấy từ tài liệu công
+# khai của LiveKit (docs.livekit.io/transport/self-hosting/benchmark, DeepWiki tổng hợp từ source
+# livekit/livekit § Prometheus Metrics — đọc lúc viết file này), NHƯNG môi trường viết file này
+# không có instance LiveKit thật để tự `curl :6789/metrics` xác nhận tên/label THẬT trên đúng
+# v1.13.1. Trước khi tin bất kỳ rule nào dưới đây cho on-call thật:
+#
+#   curl -s http://<pod-hoặc-node>:6789/metrics | grep -E '^livekit_|^process_'
+#
+# và đối chiếu từng rule. Rule nào dùng metric CHƯA xác nhận được label value (không chỉ tên
+# metric) đã ghi rõ trong comment riêng của rule đó.
+#
+# Ngưỡng số cụ thể lấy từ loadtest/party-room-slo.yaml — 2 file đổi cùng nhau khi chỉnh SLO.
+
+groups:
+  - name: litmatch-media-server-node-headroom
+    rules:
+      # --- CPU headroom — dùng process_cpu_seconds_total, metric CHUẨN của thư viện Prometheus Go
+      # client (prometheus/client_golang) mà livekit-server (viết bằng Go) dùng nội bộ — độ tin cậy
+      # CAO, không phụ thuộc việc LiveKit có tự định nghĩa metric CPU riêng hay không (đây là metric
+      # tự động của mọi process Go dùng client_golang, kể cả bản LiveKit không tài liệu hoá riêng).
+      - alert: LiveKitNodeCpuHighWarn
+        expr: rate(process_cpu_seconds_total{job="livekit"}[5m]) * 100 > 70
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'LiveKit node {{ $labels.instance }} CPU > 70% (party-room-slo.yaml: node_headroom.cpu_percent.warn)'
+          description: >-
+            CPU node LiveKit vượt ngưỡng warn 70% liên tục 5 phút. Một room không tự chia sang
+            node khác (docs/03 § 3.5) — cân nhắc chặn tạo room mới trên node này hoặc thêm node
+            trước khi chạm ngưỡng critical.
+
+      - alert: LiveKitNodeCpuHighCritical
+        expr: rate(process_cpu_seconds_total{job="livekit"}[5m]) * 100 > 85
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'LiveKit node {{ $labels.instance }} CPU > 85% (party-room-slo.yaml: node_headroom.cpu_percent.critical)'
+          description: >-
+            CPU node LiveKit chạm ngưỡng critical — rủi ro rớt frame/tăng packet loss cho mọi room
+            đang host trên node này. Hành động ngay: chặn room mới trên node, xem xét vertical
+            scale/thêm node theo docs/03 § 3.8.A (KHÔNG tự động thêm node chia lại room đang chạy).
+
+      # --- Số room đang host trên 1 node so với trần capacity CHƯA ĐO THẬT (xem
+      # loadtest/party-room-slo.yaml: capacity_ceiling_placeholder_rooms_per_node = 5, placeholder
+      # bảo thủ). livekit_room_total là gauge tài liệu hoá công khai (độ tin cậy cao về TÊN, nhưng
+      # ngưỡng so sánh dưới đây là placeholder — SỬA "5" thành số đo thật sau khi chạy
+      # loadtest/party-room-livekit.sh nhiều room đồng thời trên 1 node thật).
+      - alert: LiveKitNodeRoomCountApproachingCeilingWarn
+        expr: livekit_room_total{job="livekit"} > 5 * 0.6
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'LiveKit node {{ $labels.instance }} room_total > 60% trần capacity ước tính (CHƯA ĐO THẬT)'
+          description: >-
+            Ngưỡng "5 room/node" là placeholder bảo thủ (party-room-slo.yaml), CHƯA phải số đo
+            thật — xác nhận bằng benchmark thật trước khi coi rule này đáng tin cho paging.
+
+      - alert: LiveKitNodeRoomCountApproachingCeilingCritical
+        expr: livekit_room_total{job="livekit"} > 5 * 0.8
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'LiveKit node {{ $labels.instance }} room_total > 80% trần capacity ước tính (CHƯA ĐO THẬT)'
+          description: >-
+            Node gần trần capacity ước tính — room mới có nguy cơ bị đẩy sang node khác đã đông
+            hoặc node mới thiếu warm-up. Cùng lưu ý placeholder ở rule Warn phía trên.
+
+  - name: litmatch-media-server-media-quality
+    rules:
+      # --- Packet loss/retransmission audio — livekit_packet_total{direction,transmission} có TÊN
+      # metric + tên 2 label (`direction`, `transmission`) tài liệu hoá công khai, nhưng GIÁ TRỊ cụ
+      # thể của label `transmission` (vd "lost" hay tên khác) CHƯA xác nhận trên v1.13.1 — bắt buộc
+      # `curl :6789/metrics | grep livekit_packet_total` để lấy đúng giá trị label trước khi dùng
+      # rule này paging thật. Biểu thức dưới đây viết theo giả định phổ biến nhất
+      # (transmission="lost" là counter tăng khi packet bị mất) — SỬA lại label nếu sai.
+      - alert: LiveKitAudioPacketLossHighWarn
+        expr: >-
+          (
+            sum by (instance) (rate(livekit_packet_total{job="livekit", transmission="lost"}[5m]))
+            /
+            sum by (instance) (rate(livekit_packet_total{job="livekit"}[5m]))
+          ) * 100 > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'LiveKit node {{ $labels.instance }} packet loss > 1% (party-room-slo.yaml: audio_packet_loss_percent.warn)'
+          description: >-
+            XÁC NHẬN label transmission="lost" đúng trên bản LiveKit đang chạy trước khi tin rule
+            này — xem comment nhóm rule ở trên.
+
+      - alert: LiveKitAudioPacketLossHighCritical
+        expr: >-
+          (
+            sum by (instance) (rate(livekit_packet_total{job="livekit", transmission="lost"}[5m]))
+            /
+            sum by (instance) (rate(livekit_packet_total{job="livekit"}[5m]))
+          ) * 100 > 3
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'LiveKit node {{ $labels.instance }} packet loss > 3% (party-room-slo.yaml: audio_packet_loss_percent.critical)'
+          description: >-
+            Người nghe bắt đầu nghe rè/giật rõ ràng theo ngưỡng QoE WebRTC phổ biến — xem
+            loadtest/party-room-slo.yaml để biết lý do chọn số.
+
+      # --- Track publish failure: KHÔNG tìm thấy tên metric "publish failure" tường minh trong tài
+      # liệu công khai đã đọc (docs.livekit.io/transport/self-hosting/benchmark, DeepWiki Prometheus
+      # Metrics § livekit/livekit) lúc viết file này — đây là ĐIỂM MỞ, không phải rule đã kiểm
+      # chứng. `livekit_session_start_time_ms` (histogram) đo thời gian thiết lập session, gần nhất
+      # với "publish thành công hay không" qua việc quan sát count không tăng tương ứng số
+      # participant join, nhưng đây là suy luận gián tiếp, KHÔNG phải phép đo trực tiếp tỉ lệ thất
+      # bại publish. Rule dưới đây COMMENT-OUT có chủ đích — bật lại sau khi xác nhận tên metric
+      # thật (`curl :6789/metrics | grep -i -E 'publish|track'` trên instance thật) và sửa expr.
+      #
+      # - alert: LiveKitTrackPublishFailureRateHigh
+      #   expr: >-
+      #     TODO: xác nhận tên metric track publish failure thật trên v1.13.1 trước khi viết expr.
+      #   for: 5m
+      #   labels:
+      #     severity: warning
+      #   annotations:
+      #     summary: 'Tỉ lệ track publish failure vượt ngưỡng (party-room-slo.yaml: track_publish_failure_rate_percent)'
+      #     description: 'Rule đang tắt — chưa xác nhận tên metric thật, xem comment phía trên.'
+
+  - name: litmatch-media-server-participant-scale
+    rules:
+      # --- Participant total trên node — tín hiệu tham khảo kèm room_total, không có ngưỡng SLO
+      # riêng trong party-room-slo.yaml (số participant hợp lệ phụ thuộc số room × kích thước từng
+      # room, không phải hằng số) — dùng để debug khi 2 rule room_count ở trên bắn cảnh báo.
+      - record: litmatch:livekit_participant_total_per_node
+        expr: livekit_participant_total{job="livekit"}

@@ -118,6 +118,11 @@ Luồng `Matching → Calling → Economy` chạm vào nhiều module, không th
   cứng cho tới khi có bằng chứng tải; nhu cầu room lớn hơn một node là một quyết định kiến trúc mới.
 - Đổi provider hoặc topology phải tạo ADR mới và sửa file này + [04-tech-stack.md](./04-tech-stack.md)
   trước khi code.
+- Scaffolding cho việc benchmark/SLO/cảnh báo (Giai đoạn 7): profile load test Party Room
+  (`loadtest/party-room-livekit.sh`, dùng `lk load-test` — k6 không mở được kết nối WebRTC thật),
+  mục tiêu SLO/headroom (`loadtest/party-room-slo.yaml`) và rule cảnh báo Prometheus theo node
+  (`k8s/base/media-server/prometheus-alerts.yaml`) đã có sẵn nhưng **chưa từng chạy với LiveKit
+  cluster production thật** — xem `loadtest/README.md` mục 4 trước khi tin số liệu.
 
 ### B. Matching Queue phải shard theo tiêu chí + region ngay từ đầu, không chỉ 1 queue Redis duy nhất
 
@@ -133,6 +138,7 @@ Luồng `Matching → Calling → Economy` chạm vào nhiều module, không th
 - Idempotency key bắt buộc là **unique constraint ở tầng DB**, đặt trên bảng `Transaction` (1 key cho cả giao dịch nghiệp vụ) — **KHÔNG đặt unique trên bảng `LedgerEntry`**: mỗi giao dịch tạo ≥2 bút toán cùng thuộc 1 key, unique ở tầng ledger sẽ chặn chính bút toán thứ 2 của giao dịch hợp lệ. Các `LedgerEntry` trỏ về `transaction_id`. Không chỉ check-rồi-insert ở tầng code (vẫn có race condition) — request trùng idempotency key thì trả lại chính kết quả giao dịch cũ, không tạo bút toán mới.
 - Snapshot `Wallet.balance` được cập nhật trong **cùng transaction DB** với thao tác append bút toán ledger (không async qua event) — nhờ đó bước "check đủ diamond trước khi trừ" dựa trên snapshot + `SELECT ... FOR UPDATE` là an toàn. Chỉ chuyển sang cập nhật async khi số liệu thật cho thấy contention thực sự — và khi đó phải thiết kế lại luôn cả bước check số dư đi kèm, không đổi lẻ 1 nửa.
 - Ở giai đoạn scale thật, cân nhắc PostgreSQL với constraint chặt + partition theo thời gian là đủ cho phần lớn trường hợp; chỉ cân nhắc engine ledger chuyên dụng (vd TigerBeetle) nếu throughput giao dịch tiền vượt quá khả năng Postgres đã tối ưu (đây là quyết định đo bằng số liệu thật, không phải mặc định).
+- Job đối soát (Giai đoạn 7) chạy **2 tier theo chi phí**: tier fast (bất biến Nợ=Có theo currency + orphan receipt — 1 câu aggregate) chạy dày (`ECONOMY_RECONCILIATION_FAST_INTERVAL_MS`, mặc định 60s), tier deep (sample ví so snapshot↔derived) giữ cadence thưa (`ECONOMY_RECONCILIATION_INTERVAL_MS`, mặc định 300s). Lệch/run lỗi được export qua Prometheus (`economy_reconciliation_mismatch_total` theo check+currency, `economy_reconciliation_last_run_status` theo tier, `economy_reconciliation_run_duration_seconds`) để alert rule fire tự động — job **read-only tuyệt đối**, sửa lệch thật luôn đi qua reversal entry ở write path chuẩn.
 
 ---
 

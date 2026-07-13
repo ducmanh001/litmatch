@@ -62,7 +62,7 @@
 
 ### Đối soát (reconciliation) — chạy định kỳ từ Giai đoạn 1
 
-1. Toàn cục: tổng Nợ = tổng Có theo currency; 2. mọi `iap_receipts` đã credit có đúng 1 transaction completed khớp số diamond; 3. sample wallet vs derive từ ledger. Lệch → log error + metric `economy_reconciliation_mismatch_total` (cảnh báo tự động ở Giai đoạn 7).
+1. Toàn cục: tổng Nợ = tổng Có theo currency; 2. mọi `iap_receipts` đã credit có đúng 1 transaction completed khớp số diamond; 3. sample wallet vs derive từ ledger. Từ Giai đoạn 7 tách 2 tier: check 1+2 là tier fast (`ECONOMY_RECONCILIATION_FAST_INTERVAL_MS`, mặc định 60s), check 3 là tier deep (`ECONOMY_RECONCILIATION_INTERVAL_MS`, mặc định 300s); `ECONOMY_RECONCILIATION_ENABLED=false` tắt cả hai. Lệch → log error + metric `economy_reconciliation_mismatch_total{check,currency}`; mỗi run set `economy_reconciliation_last_run_status{tier}` (0 = lệch hoặc run lỗi — alert rule fire trên metric này) + histogram `economy_reconciliation_run_duration_seconds{tier}`. Job read-only tuyệt đối — không auto-correct, sửa lệch bằng reversal entry qua write path chuẩn.
 
 ## 3. Quy tắc concurrency (docs/10 § Economy)
 
