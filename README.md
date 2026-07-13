@@ -78,7 +78,7 @@ nhật PR. Hook `pre-push` tự chạy quality gate trong Node 22 Linux với `n
 dependency ẩn bởi máy local bị chặn trước khi code lên GitHub. Lệnh Docker dùng database cô lập
 `litmatch_ci` thay vì database dev; xem trước toàn bộ kế hoạch bằng `pnpm ci:local:plan`.
 
-Các profile CI tắt Nx daemon/Husky và chạy actionlint đã pin checksum, nên hành vi gần runner
+Các profile CI tắt Nx daemon/Husky và chạy actionlint + ShellCheck đã pin checksum, nên hành vi gần runner
 GitHub và lỗi workflow YAML/expression được phát hiện ngay local.
 
 Gitleaks quét cả lịch sử Git và dùng [baseline](./.gitleaks-baseline.json) gồm đúng ba finding
