@@ -29,6 +29,7 @@ import {
 } from '../economy/entities/iap.entities';
 import { VipPlan } from '../economy/entities/vip-plan.entity';
 
+import { requeueIdempotencyKey } from './matching.constants';
 import { MatchingMetrics } from './matching.metrics';
 import { MatchingService } from './matching.service';
 import { MatchingErrors } from './matching.errors';
@@ -775,5 +776,214 @@ d('Matching integration (Postgres + Redis thật)', () => {
     ).rejects.toMatchObject({
       code: MatchingErrors.TICKET_INVALID_TRANSITION,
     });
+  });
+
+  // ============ Chaos tests (docs/07 GĐ7) — kill matcher/sweeper giữa chừng, xác nhận ============
+  // ============ idempotency + recovery đúng dưới lỗi THẬT, không chỉ đúng trên giấy   ============
+
+  it('chaos: matcher chết SAU ZPOPMIN, TRƯỚC tryPair → 2 zombie (queued DB, mất khỏi Redis) không tạo session, sweeper expire được, sweep 2 lần idempotent', async () => {
+    const u1 = await createUser('chaos-pop-1');
+    const u2 = await createUser('chaos-pop-2');
+    const t1 = await matching.joinQueue(
+      auth(u1.id),
+      { matchType: MatchType.Voice },
+      'k',
+    );
+    const t2 = await matching.joinQueue(
+      auth(u2.id),
+      { matchType: MatchType.Voice },
+      'k',
+    );
+    const shard = matchingShardKey(MatchType.Voice, 'VN', t1.ageBand);
+
+    // Giả lập đúng crash window của drainShard (matcher-worker.service.ts): ZPOPMIN atomic
+    // lấy 2 ticket khỏi Redis rồi process CHẾT — tryPair (transaction Postgres) không bao giờ chạy.
+    const popped = await redis.zpopmin(shard, 2);
+    expect(popped.length).toBe(4); // đúng 2 ticket (id, score) đã bị pop khỏi queue
+
+    // Không có session nào được tạo — không double-pair, không session dở dang
+    const sessions = await ds.getRepository(MatchSession).find({
+      where: [
+        { ticketAId: In([t1.id, t2.id]) },
+        { ticketBId: In([t1.id, t2.id]) },
+      ],
+    });
+    expect(sessions).toHaveLength(0);
+
+    // Trạng thái zombie: DB vẫn 'queued' nhưng đã biến mất khỏi Redis → matcher tick sau
+    // không thấy gì để ghép (không double-pop, không lỗi)
+    for (const t of [t1, t2]) {
+      expect(
+        (await ds.getRepository(MatchTicket).findOneByOrFail({ id: t.id }))
+          .status,
+      ).toBe(MatchTicketStatus.Queued);
+      expect(await redis.zscore(shard, t.id)).toBeNull();
+    }
+    expect(await worker.runOnce()).toBe(0);
+
+    // Recovery: quá MATCHING_QUEUE_MAX_WAIT_SECONDS (backdate thay vì ngồi chờ — cùng pattern
+    // test sweeper phía trên) → sweeper expire cả 2 zombie, không kẹt vĩnh viễn
+    await ds.query(
+      `UPDATE match_tickets SET enqueued_at = now() - interval '2 hours' WHERE id = ANY($1)`,
+      [[t1.id, t2.id]],
+    );
+    const swept = await sweeper.runOnce();
+    expect(swept.expiredQueued).toBe(2);
+    for (const t of [t1, t2]) {
+      expect(
+        (await ds.getRepository(MatchTicket).findOneByOrFail({ id: t.id }))
+          .status,
+      ).toBe(MatchTicketStatus.Expired);
+    }
+
+    // Sweeper chạy lần 2 (giả lập chính sweeper crash/retry) → idempotent: không lỗi,
+    // không side effect đôi, mỗi user vẫn đúng 1 ticket
+    const sweptAgain = await sweeper.runOnce();
+    expect(sweptAgain.expiredQueued).toBe(0);
+    for (const u of [u1, u2]) {
+      expect(
+        await ds.getRepository(MatchTicket).countBy({ userId: u.id }),
+      ).toBe(1);
+    }
+  });
+
+  it('chaos: matcher chết SAU commit tryPair, realtime publish không bao giờ tới → match đã bền trong DB, client vẫn thấy qua GET /matching/tickets/:id (poll fallback)', async () => {
+    const u1 = await createUser('chaos-publish-1');
+    const u2 = await createUser('chaos-publish-2');
+    const t1 = await matching.joinQueue(
+      auth(u1.id),
+      { matchType: MatchType.Voice },
+      'k',
+    );
+    const t2 = await matching.joinQueue(
+      auth(u2.id),
+      { matchType: MatchType.Voice },
+      'k',
+    );
+
+    // Giả lập crash window thứ 2 của tryPair: DB transaction ĐÃ commit, bước publish realtime
+    // (chạy SAU commit, best-effort) chết — mọi redis.publish đều fail
+    const publishSpy = jest
+      .spyOn(redis, 'publish')
+      .mockRejectedValue(new Error('simulated crash: realtime publish chết'));
+    try {
+      // publish fail KHÔNG được phá nghiệp vụ đã commit (hợp đồng publishRealtimeEvent best-effort)
+      expect(await worker.runOnce()).toBe(1);
+      expect(publishSpy).toHaveBeenCalledTimes(2); // đã THỬ publish cho cả 2 user và fail thật
+    } finally {
+      publishSpy.mockRestore();
+    }
+
+    // Match bền trong DB dù không ai nhận được push
+    const session = await ds.getRepository(MatchSession).findOneByOrFail({
+      ticketAId: In([t1.id, t2.id]),
+    });
+    expect(session.status).toBe(MatchSessionStatus.PendingConfirm);
+
+    // Poll fallback THẬT (GET /matching/tickets/:id → MatchingService.getTicket): cả 2 user
+    // tự khám phá được match + sessionId mà không cần realtime push
+    for (const [u, t] of [
+      [u1, t1],
+      [u2, t2],
+    ] as const) {
+      const polled = await matching.getTicket(auth(u.id), t.id);
+      expect(polled.status).toBe(MatchTicketStatus.Matched);
+      expect(polled.sessionId).toBe(session.id);
+    }
+
+    // Luồng tiếp theo không kẹt: cả 2 confirm bình thường từ thông tin poll được
+    await matching.confirmTicket(auth(u1.id), t1.id);
+    const afterSecond = await matching.confirmTicket(auth(u2.id), t2.id);
+    expect(afterSecond.status).toBe(MatchTicketStatus.Confirmed);
+    expect(
+      (await ds.getRepository(MatchSession).findOneByOrFail({ id: session.id }))
+        .status,
+    ).toBe(MatchSessionStatus.Confirmed);
+  });
+
+  it('chaos: sweeper chết SAU commit requeue, TRƯỚC/GIỮA Redis zadd → chạy lại không tạo ticket đôi; key requeue được unique constraint DB chặn thật; zombie DB-only được chính sweeper dọn', async () => {
+    const u1 = await createUser('chaos-requeue-1'); // bên ĐÃ confirm — được requeue
+    const u2 = await createUser('chaos-requeue-2'); // bên im lặng
+    const t1 = await matching.joinQueue(
+      auth(u1.id),
+      { matchType: MatchType.Voice },
+      'k',
+    );
+    await matching.joinQueue(auth(u2.id), { matchType: MatchType.Voice }, 'k');
+    expect(await worker.runOnce()).toBe(1);
+    await matching.confirmTicket(auth(u1.id), t1.id);
+    const sessionId = (
+      await ds.getRepository(MatchTicket).findOneByOrFail({ id: t1.id })
+    ).sessionId as string;
+    await ds.query(
+      `UPDATE match_sessions SET created_at = now() - interval '2 hours' WHERE id = $1`,
+      [sessionId],
+    );
+
+    // Giả lập crash window của expireSession (ticket-sweeper.service.ts): transaction Postgres
+    // ĐÃ commit (session expired + ticket requeue mới), Redis zadd NGAY SAU đó chết →
+    // sweeper tick này nổ giữa chừng (lỗi thật, không nuốt)
+    const zaddSpy = jest
+      .spyOn(redis, 'zadd')
+      .mockRejectedValue(new Error('simulated crash: Redis zadd chết'));
+    try {
+      await expect(sweeper.runOnce()).rejects.toThrow(
+        'simulated crash: Redis zadd chết',
+      );
+    } finally {
+      zaddSpy.mockRestore();
+    }
+
+    // Trạng thái sau crash: DB đã commit đủ (session expired, t1/t2 expired, ticket requeue MỚI
+    // với idempotency key tất định), nhưng ticket mới KHÔNG có trong Redis (zadd chết)
+    expect(
+      (await ds.getRepository(MatchSession).findOneByOrFail({ id: sessionId }))
+        .status,
+    ).toBe(MatchSessionStatus.Expired);
+    const requeued = await ds
+      .getRepository(MatchTicket)
+      .findOneByOrFail({ userId: u1.id, status: MatchTicketStatus.Queued });
+    expect(requeued.id).not.toBe(t1.id);
+    expect(requeued.idempotencyKey).toBe(
+      requeueIdempotencyKey(sessionId, t1.id),
+    );
+    const shard = matchingShardKey(MatchType.Voice, 'VN', requeued.ageBand);
+    expect(await redis.zscore(shard, requeued.id)).toBeNull();
+
+    // Sweeper chạy lại sau crash → session đã expired nên không xử lý lại, KHÔNG tạo ticket đôi
+    const sweptAgain = await sweeper.runOnce();
+    expect(sweptAgain.expiredSessions).toBe(0);
+    expect(
+      await ds
+        .getRepository(MatchTicket)
+        .countBy({ userId: u1.id, status: MatchTicketStatus.Queued }),
+    ).toBe(1);
+
+    // Key requeue KHÔNG phải naming convention suông: chốt chặn DB thật là unique constraint
+    // uq_match_tickets_idempotency_key (migration 1752200000000) — INSERT thẳng (bypass mọi
+    // code path) ticket thứ 2 cùng key → 23505
+    const u3 = await createUser('chaos-requeue-3');
+    await expect(
+      ds.query(
+        `INSERT INTO match_tickets (user_id, match_type, region, age_band, status, enqueued_at, idempotency_key)
+         VALUES ($1, 'voice', 'VN', 5, 'expired', now(), $2)`,
+        [u3.id, requeueIdempotencyKey(sessionId, t1.id)],
+      ),
+    ).rejects.toMatchObject({
+      driverError: expect.objectContaining({ code: '23505' }),
+    });
+
+    // Zombie DB-only (queued trong DB, vắng mặt Redis) được CHÍNH sweeper dọn ở chu kỳ sau
+    // khi quá hạn chờ — đúng hợp đồng ghi ở comment expireSession
+    await ds.query(
+      `UPDATE match_tickets SET enqueued_at = now() - interval '2 hours' WHERE id = $1`,
+      [requeued.id],
+    );
+    const sweptZombie = await sweeper.runOnce();
+    expect(sweptZombie.expiredQueued).toBe(1);
+    expect(
+      (await ds.getRepository(MatchTicket).findOneByOrFail({ id: requeued.id }))
+        .status,
+    ).toBe(MatchTicketStatus.Expired);
   });
 });
