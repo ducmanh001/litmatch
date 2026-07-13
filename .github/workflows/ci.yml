@@ -90,7 +90,7 @@ jobs:
       - name: Frontend contract, tests, builds and bundle audit
         run: pnpm agent:verify frontend
       - name: Unit and integration tests with coverage gate
-        run: pnpm nx run-many -t test --coverage --exclude=admin,web,api-client
+        run: pnpm nx run-many -t test --coverage
       - run: pnpm nx run-many -t build --exclude=admin,web,api-client
       - name: End-to-end smoke tests
         run: pnpm nx run-many -t e2e --parallel=2
