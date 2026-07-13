@@ -54,9 +54,9 @@
 
 ## Giai đoạn 5 — Content phụ trợ
 
-- [ ] Movie Match: đồng bộ playback qua WebSocket
-- [ ] Palm Match: template content, random theo input
-- [ ] Mini game (ưu tiên thấp nhất toàn dự án — chỉ bắt đầu khi mọi mục trước của giai đoạn này đã xong)
+- [x] Movie Match: đồng bộ playback qua WebSocket — [services/movie-match-service.md](./services/movie-match-service.md); chỉ giữa 2 bạn (tái dùng `Friendship`/`Conversation`, không chat riêng), playback state last-write-wins (UX ephemeral, không lock kiểu ledger), 1 session active/user qua bảng phụ trợ `movie_session_active_participants`
+- [x] Palm Match: template content, random theo input — [services/palm-match-service.md](./services/palm-match-service.md); random deterministic theo `(userId, category, ngày server UTC)` qua FNV-1a hash, seed tính hoàn toàn ở server
+- [x] Mini game: oẳn tù tì 2 người — [services/mini-game-service.md](./services/mini-game-service.md); 1 game đại diện (rock-paper-scissors) theo đúng tinh thần ưu tiên thấp nhất, nộp move qua UPDATE có điều kiện chống lộ/double-submit, mở rộng thêm game khác dùng lại khung `MiniGameSession`. **Giai đoạn 5 hoàn tất.**
 
 ## Giai đoạn 6 — Scale & Observability
 

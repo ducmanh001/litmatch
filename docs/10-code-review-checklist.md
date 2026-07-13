@@ -214,7 +214,58 @@
 - Report bị lạm dụng để "vote kick" người khác (report giả hàng loạt) nhưng hệ thống không rate-limit hay phát hiện pattern bất thường
 - Unmatch/block chỉ ẩn ở UI nhưng vẫn cho phép bên kia tìm lại qua tính năng khác (feed, party room công khai) → "block" không thực sự cắt hết điểm chạm giữa 2 user
 
-> Danh sách trên không đầy đủ — khi bắt đầu 1 domain mới chưa có ở đây (vd Movie Match, Palm Match), viết thêm 1 mục con mới theo đúng cấu trúc và tư duy của § 10.0, thay vì chỉ áp checklist cũ.
+**Movie Match — phòng xem chung, dễ nhầm với Party Room/Calling nhưng KHÔNG có tiền/SFU**
+
+- **Tự chế lại quan hệ "được xem chung với ai"** thay vì tái dùng `Friendship` đã có — tạo bảng
+  invite/relationship riêng cho Movie Match là trùng lặp không cần thiết (docs/11 § chống
+  over-engineering); chỉ 2 user đã là bạn mới tạo được `MovieSession`.
+- **Tự chế lại chat riêng cho Movie Match** thay vì tái dùng `Conversation` của Friend Chat —
+  2 người xem chung đã là bạn nên đã có `Conversation`; thêm bảng message thứ 2 cho cùng 1 cặp
+  user là 2 nguồn sự thật cho cùng 1 khái niệm "tin nhắn giữa 2 người bạn".
+- **Coi playback state (`positionSeconds`, `isPlaying`) như dữ liệu tài chính rồi áp
+  `SELECT ... FOR UPDATE`/idempotency key kiểu Economy** — đây là state UX thuần tuý, sai lệch vài
+  giây không gây hại; over-engineering lock cho use-case này là đặt sai loại correctness (khác hẳn
+  ledger, xem [11-engineering-principles.md](./11-engineering-principles.md)). Ngược lại vẫn cần
+  1 nguồn sự thật server-side (không tin timestamp tự tính của client) để user thứ 3 join lại
+  giữa chừng thấy đúng vị trí gần nhất.
+- **Không giới hạn 1 session active/user**: thiếu ràng buộc khiến 1 user mở nhiều `MovieSession`
+  cùng lúc với nhiều bạn khác nhau, gây rối trạng thái phòng nào đang "xem cùng ai" (cùng tinh
+  thần 1-user-1-queue của Matching/Party Room).
+- **IDOR theo `movieSessionId`**: thiếu guard caller phải là 1 trong 2 participant — trả cùng 404
+  cho "không tồn tại" và "không phải thành viên" (cùng pattern Friend Chat/Soul Match).
+- **Video URL không validate nguồn** (chỉ chấp nhận domain cho phép, vd YouTube) — mở URL bất kỳ
+  biến tính năng thành proxy/link phishing.
+
+**Palm Match — nội dung giải trí, dễ chủ quan bỏ qua vì "chỉ là random"**
+
+- **Random thật (không seed) mỗi lần gọi cùng input** khiến cùng 1 user hỏi lại trong cùng ngày ra
+  2 kết quả khác nhau — cảm giác giả tạo/không đáng tin của tính năng horoscope; phải seed
+  deterministic theo `(userId, category, ngày server)` để cùng ngày ra cùng 1 kết quả, đổi ngày mới
+  đổi kết quả.
+- **Seed lộ ra client** (client tự tính/gửi seed) thay vì server tự tính từ `userId` + giờ server —
+  cho phép client "quay số" tới khi ra kết quả đẹp bằng cách tự chọn seed.
+- **Không có fallback khi catalog rỗng theo category** → 500 thay vì lỗi domain rõ ràng.
+- **Coi đây là AI thật** (gọi LLM sinh nội dung tự do) — sai với chính đặc tả tính năng (template +
+  random, không cần AI thật, xem docs/01 #5); giữ nội dung trong catalog `PalmReadingTemplate` để
+  kiểm soát được tông giọng/không sinh nội dung nhạy cảm ngoài ý muốn.
+
+**Mini Game — giao điểm 2 người chơi realtime, dễ lộ nước đi hoặc double-move**
+
+- **Trả nước đi của đối phương trước khi cả 2 đã nộp** (API/realtime payload chứa move của bên
+  kia ngay khi họ vừa nộp) — phá tính "đồng thời" của trò chơi, bên nộp sau luôn thắng vì đã biết
+  trước; chỉ resolve (tính thắng/thua + trả cả 2 nước đi) khi ĐỦ CẢ HAI đã nộp.
+- **Cho nộp lại nước đi sau khi đã nộp** (update thay vì chặn) — 1 bên thấy ván chưa resolve rồi
+  đổi ý sau khi ngầm đoán được đối phương đã chọn gì qua kênh khác (chat).
+- **Race 2 request nộp move cùng lúc** ghi đè lẫn nhau hoặc resolve 2 lần — nộp move phải là
+  update có điều kiện (chỉ set khi cột move đang null) làm chốt chặn DB, không phải check-rồi-ghi.
+- **Không giới hạn 1 session active/cặp** — vd cho phép tạo vô số ván mới trong lúc ván cũ chưa kết
+  thúc, gây nhầm lẫn ván nào đang chờ move.
+- **Mở rộng thêm game type mà không tách rule engine** — nhét if/else theo `gameType` thẳng vào
+  service chung làm phình God Service; nếu thêm game thứ 2 (đua xe/giải đố ở docs/01 #11), tách
+  logic resolve theo từng game vào 1 chỗ riêng thay vì rẽ nhánh chồng chất.
+
+> Danh sách trên không đầy đủ — khi bắt đầu 1 domain mới chưa có ở đây, viết thêm 1 mục con mới
+> theo đúng cấu trúc và tư duy của § 10.0, thay vì chỉ áp checklist cũ.
 
 ## 10.3 Cách áp dụng checklist này
 

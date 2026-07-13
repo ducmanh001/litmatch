@@ -90,6 +90,9 @@ export interface CoreApiEnv {
   SAFETY_TRUST_PENALTY_DAILY_CAP: number;
   SAFETY_TRUST_SCORE_FLOOR: number;
   NOTIFICATION_PUSH_PROVIDER: 'dev' | 'fcm';
+  MOVIE_MATCH_URL_MAX_LENGTH: number;
+  MOVIE_MATCH_ALLOWED_VIDEO_HOSTS: string;
+  PALM_MATCH_TARGET_NAME_MAX_LENGTH: number;
   THROTTLE_TTL_SECONDS: number;
   THROTTLE_LIMIT: number;
 }
@@ -253,6 +256,14 @@ export const coreApiEnvSchema = Joi.object({
   // Notification — Giai đoạn 4 (docs/services/notification-service.md § 4)
   // 'dev' (no-op, chặn cứng ở production) — chưa có FCM/APNs thật, giống ECONOMY_IAP_VERIFIER
   NOTIFICATION_PUSH_PROVIDER: Joi.string().valid('dev', 'fcm').default('dev'),
+
+  // Movie Match — Giai đoạn 5 (docs/services/movie-match-service.md § 8)
+  MOVIE_MATCH_URL_MAX_LENGTH: Joi.number().integer().min(1).default(2048),
+  // Danh sách phân tách dấu phẩy — parse mảng ở service (không parse ở Joi cho đơn giản)
+  MOVIE_MATCH_ALLOWED_VIDEO_HOSTS: Joi.string().default('youtube.com,youtu.be'),
+
+  // Palm Match — Giai đoạn 5 (docs/services/palm-match-service.md § 5)
+  PALM_MATCH_TARGET_NAME_MAX_LENGTH: Joi.number().integer().min(1).default(50),
 
   THROTTLE_TTL_SECONDS: Joi.number().integer().min(1).default(60),
   THROTTLE_LIMIT: Joi.number().integer().min(1).default(100),

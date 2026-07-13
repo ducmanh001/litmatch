@@ -1907,6 +1907,342 @@
         "summary": "Xem avatar người khác — public, không cần bạn bè",
         "tags": ["avatar"]
       }
+    },
+    "/api/v1/movie-match/sessions": {
+      "post": {
+        "operationId": "MovieMatchController_createSession",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateMovieSessionDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/MovieSessionDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Tạo phiên xem chung với 1 bạn — idempotent (trả lại session cũ nếu đã active đúng cặp)",
+        "tags": ["movie-match"]
+      }
+    },
+    "/api/v1/movie-match/sessions/{id}/state": {
+      "patch": {
+        "operationId": "MovieMatchController_updateState",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateMovieStateDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/MovieSessionDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Cập nhật playback state (last-write-wins, không lock) — publish cho bên còn lại",
+        "tags": ["movie-match"]
+      }
+    },
+    "/api/v1/movie-match/sessions/{id}/end": {
+      "post": {
+        "operationId": "MovieMatchController_endSession",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/MovieSessionDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Kết thúc phiên xem chung — chỉ 1 trong 2 participant",
+        "tags": ["movie-match"]
+      }
+    },
+    "/api/v1/movie-match/sessions/{id}": {
+      "get": {
+        "operationId": "MovieMatchController_getSession",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/MovieSessionDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "State hiện tại — poll fallback cho realtime",
+        "tags": ["movie-match"]
+      }
+    },
+    "/api/v1/palm-match/reading": {
+      "get": {
+        "operationId": "PalmMatchController_getReading",
+        "parameters": [
+          {
+            "name": "category",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["love", "career", "health", "general"]
+            }
+          },
+          {
+            "name": "targetName",
+            "required": false,
+            "in": "query",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PalmMatchReadingDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Nội dung bói toán giải trí — deterministic theo user + category + ngày server (guest dùng được)",
+        "tags": ["palm-match"]
+      }
+    },
+    "/api/v1/mini-game/sessions": {
+      "post": {
+        "operationId": "MiniGameController_createSession",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMiniGameSessionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MiniGameSessionDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Tạo ván oẳn tù tì với 1 bạn — idempotent (trả lại ván cũ nếu đang chờ move đúng cặp)",
+        "tags": ["mini-game"]
+      }
+    },
+    "/api/v1/mini-game/sessions/{id}/moves": {
+      "post": {
+        "operationId": "MiniGameController_submitMove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SubmitMiniGameMoveDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MiniGameSessionDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Nộp move — chỉ nộp được 1 lần, không đổi lại được; resolve khi cả 2 đã nộp",
+        "tags": ["mini-game"]
+      }
+    },
+    "/api/v1/mini-game/sessions/{id}/cancel": {
+      "post": {
+        "operationId": "MiniGameController_cancelSession",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MiniGameSessionDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Huỷ ván đang chờ move — chỉ 1 trong 2 participant",
+        "tags": ["mini-game"]
+      }
+    },
+    "/api/v1/mini-game/sessions/{id}": {
+      "get": {
+        "operationId": "MiniGameController_getSession",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MiniGameSessionDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "State hiện tại — poll fallback cho realtime; không lộ move đối phương trước khi resolved",
+        "tags": ["mini-game"]
+      }
     }
   },
   "info": {
@@ -2670,6 +3006,128 @@
           }
         },
         "required": ["userId", "layers"]
+      },
+      "CreateMovieSessionDto": {
+        "type": "object",
+        "properties": {
+          "friendUserId": {
+            "type": "string",
+            "description": "userId của bạn muốn xem chung — phải đã là bạn"
+          },
+          "videoUrl": { "type": "string", "maxLength": 4096 }
+        },
+        "required": ["friendUserId", "videoUrl"]
+      },
+      "MovieSessionDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "partnerUserId": {
+            "type": "string",
+            "description": "userId của người bạn còn lại trong phiên (không phải caller)"
+          },
+          "videoUrl": { "type": "string" },
+          "positionSeconds": { "type": "number" },
+          "isPlaying": { "type": "boolean" },
+          "positionUpdatedAt": { "format": "date-time", "type": "string" },
+          "status": { "type": "string" },
+          "endedAt": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true
+          },
+          "endReason": { "type": "string", "nullable": true }
+        },
+        "required": [
+          "id",
+          "partnerUserId",
+          "videoUrl",
+          "positionSeconds",
+          "isPlaying",
+          "positionUpdatedAt",
+          "status",
+          "endedAt",
+          "endReason"
+        ]
+      },
+      "UpdateMovieStateDto": {
+        "type": "object",
+        "properties": {
+          "positionSeconds": {
+            "type": "number",
+            "description": "Vị trí phát hiện tại (giây)"
+          },
+          "isPlaying": { "type": "boolean" }
+        },
+        "required": ["positionSeconds", "isPlaying"]
+      },
+      "PalmMatchReadingDto": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": ["love", "career", "health", "general"]
+          },
+          "content": { "type": "string" },
+          "forDate": {
+            "type": "string",
+            "description": "Ngày server (UTC, YYYY-MM-DD) dùng làm seed"
+          }
+        },
+        "required": ["category", "content", "forDate"]
+      },
+      "CreateMiniGameSessionDto": {
+        "type": "object",
+        "properties": {
+          "friendUserId": {
+            "type": "string",
+            "description": "userId của bạn muốn chơi cùng — phải đã là bạn"
+          },
+          "gameType": {
+            "type": "string",
+            "enum": ["rock_paper_scissors"],
+            "default": "rock_paper_scissors"
+          }
+        },
+        "required": ["friendUserId", "gameType"]
+      },
+      "MiniGameSessionDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "partnerUserId": {
+            "type": "string",
+            "description": "userId của người bạn còn lại trong ván (không phải caller)"
+          },
+          "gameType": { "type": "string" },
+          "status": { "type": "string" },
+          "myMove": { "type": "string", "nullable": true },
+          "opponentHasMoved": { "type": "boolean" },
+          "opponentMove": { "type": "string", "nullable": true },
+          "winnerUserId": { "type": "string", "nullable": true },
+          "resolvedAt": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "partnerUserId",
+          "gameType",
+          "status",
+          "myMove",
+          "opponentHasMoved",
+          "winnerUserId",
+          "resolvedAt"
+        ]
+      },
+      "SubmitMiniGameMoveDto": {
+        "type": "object",
+        "properties": {
+          "move": { "type": "string", "enum": ["rock", "paper", "scissors"] }
+        },
+        "required": ["move"]
       }
     }
   }
