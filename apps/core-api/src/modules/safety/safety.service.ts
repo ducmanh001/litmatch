@@ -6,12 +6,22 @@ import { DataSource, MoreThan, MoreThanOrEqual, Repository } from 'typeorm';
 
 import { SafetyErrors } from './safety.errors';
 import { Block, BlockAction } from './entities/block.entity';
-import { Report, ReportReason } from './entities/report.entity';
+import { Report, ReportReason, ReportStatus } from './entities/report.entity';
 import { UserService } from '../user';
 
+import type { EntityManager } from 'typeorm';
 import type { CoreApiEnv } from '../../config/env.validation';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+export interface ReportPageFilter {
+  status?: ReportStatus;
+}
+
+export interface ReportPage {
+  items: Report[];
+  total: number;
+}
 
 /**
  * Facade Safety (docs/services/safety-service.md): Report/Block append-only + trust score
@@ -229,6 +239,42 @@ export class SafetyService {
       ],
     });
     return !recentBlock;
+  }
+
+  /** Moderation queue cho Admin (docs/12 § 12.7) — offset OK vì list nhỏ (docs/05 § 5.4). */
+  async findReportsPage(
+    filter: ReportPageFilter,
+    limit: number,
+    offset: number,
+  ): Promise<ReportPage> {
+    const qb = this.reportRepo.createQueryBuilder('r');
+    if (filter.status)
+      qb.andWhere('r.status = :status', { status: filter.status });
+    qb.orderBy('r.createdAt', 'DESC').skip(offset).take(limit);
+    const [items, total] = await qb.getManyAndCount();
+    return { items, total };
+  }
+
+  /**
+   * Nhận `manager` để AdminModule ghi CÙNG transaction với audit log (atomic — cùng pattern
+   * `UserService.banUser`). Chỉ `status` được mutate — mọi field khác của report bất biến.
+   */
+  async setReportStatus(
+    manager: EntityManager,
+    reportId: string,
+    status: ReportStatus,
+  ): Promise<Report> {
+    const repo = manager.getRepository(Report);
+    const report = await repo.findOneBy({ id: reportId });
+    if (!report) {
+      throw new DomainException(
+        SafetyErrors.REPORT_NOT_FOUND,
+        'Không tìm thấy report',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    report.status = status;
+    return repo.save(report);
   }
 
   private async latestAction(

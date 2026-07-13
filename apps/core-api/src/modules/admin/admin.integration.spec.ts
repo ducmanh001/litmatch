@@ -4,9 +4,19 @@ import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
 import { InitAuthUser1751900000000 } from '../../database/migrations/1751900000000-init-auth-user';
 import { UserRole1753600000000 } from '../../database/migrations/1753600000000-user-role';
 import { AdminAuditLog1753700000000 } from '../../database/migrations/1753700000000-admin-audit-log';
+import { MatchingCore1752200000000 } from '../../database/migrations/1752200000000-matching-core';
+import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
+import { ReportStatus1753800000000 } from '../../database/migrations/1753800000000-report-status';
 import { AuditLogService } from '../../common/audit/audit-log.service';
 import { AdminAuditLog } from '../../common/audit/audit-log.entity';
 import { Gender, User, UserService, UserStatus } from '../user';
+import {
+  Block,
+  Report,
+  ReportReason,
+  ReportStatus,
+  SafetyService,
+} from '../safety';
 
 import { AdminService } from './admin.service';
 import { AdminErrors } from './admin.errors';
@@ -83,11 +93,14 @@ d('Admin integration (Postgres thật)', () => {
     ds = new DataSource({
       type: 'postgres',
       url: url.toString(),
-      entities: [User, AdminAuditLog],
+      entities: [User, AdminAuditLog, Report, Block],
       migrations: [
         InitAuthUser1751900000000,
         UserRole1753600000000,
+        MatchingCore1752200000000,
+        Safety1752800000000,
         AdminAuditLog1753700000000,
+        ReportStatus1753800000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -97,10 +110,17 @@ d('Admin integration (Postgres thật)', () => {
     await ds.runMigrations();
 
     const userService = new UserService(ds.getRepository(User), configStub);
+    const safetyService = new SafetyService(
+      ds,
+      ds.getRepository(Report),
+      ds.getRepository(Block),
+      userService,
+      configStub,
+    );
     const auditLogService = new AuditLogService(
       ds.getRepository(AdminAuditLog),
     );
-    admin = new AdminService(ds, userService, auditLogService);
+    admin = new AdminService(ds, userService, safetyService, auditLogService);
   });
 
   afterAll(async () => {
@@ -175,5 +195,127 @@ d('Admin integration (Postgres thật)', () => {
     await expect(
       ds.query(`DELETE FROM admin_audit_logs WHERE id = $1`, [row.id]),
     ).rejects.toThrow(/append-only/);
+  });
+
+  describe('listUsers — Admin Users List', () => {
+    it('filter theo status + nickname, total phản ánh đúng số khớp filter', async () => {
+      const a = await createUser('list-match-alpha');
+      await admin.banUser((await createUser('list-actor')).id, a.id);
+      await createUser('list-other');
+
+      const page = await admin.listUsers(
+        { status: UserStatus.Banned, nickname: 'list-match' },
+        20,
+        0,
+      );
+
+      expect(page.total).toBe(1);
+      expect(page.items.map((u) => u.id)).toEqual([a.id]);
+    });
+
+    it('offset/limit cắt đúng trang', async () => {
+      const nickname = `page-${++seedCounter}`;
+      await Promise.all([
+        createUser(nickname),
+        createUser(nickname),
+        createUser(nickname),
+      ]);
+
+      const page = await admin.listUsers({ nickname }, 2, 0);
+      expect(page.items).toHaveLength(2);
+      expect(page.total).toBe(3);
+
+      const page2 = await admin.listUsers({ nickname }, 2, 2);
+      expect(page2.items).toHaveLength(1);
+    });
+  });
+
+  describe('Moderation queue — reports', () => {
+    async function createReport(
+      reporterId: string,
+      targetId: string,
+    ): Promise<Report> {
+      const repo = ds.getRepository(Report);
+      return repo.save(
+        repo.create({
+          reporterUserId: reporterId,
+          targetUserId: targetId,
+          reason: ReportReason.Spam,
+          description: null,
+          trustPenaltyApplied: 0,
+        }),
+      );
+    }
+
+    it('report mới luôn ở status pending', async () => {
+      const [reporter, target] = await Promise.all([
+        createUser('rep-reporter'),
+        createUser('rep-target'),
+      ]);
+      const report = await createReport(reporter.id, target.id);
+      expect(report.status).toBe(ReportStatus.Pending);
+    });
+
+    it('listReports lọc theo status pending mặc định thấy report mới', async () => {
+      const [reporter, target] = await Promise.all([
+        createUser('list-rep-reporter'),
+        createUser('list-rep-target'),
+      ]);
+      const report = await createReport(reporter.id, target.id);
+
+      const page = await admin.listReports(
+        { status: ReportStatus.Pending },
+        20,
+        0,
+      );
+      expect(page.items.some((r) => r.id === report.id)).toBe(true);
+    });
+
+    it('resolveReport: đổi status + ghi đúng 1 dòng audit, không đụng report khác', async () => {
+      const [actor, reporter, target] = await Promise.all([
+        createUser('resolve-actor'),
+        createUser('resolve-reporter'),
+        createUser('resolve-target'),
+      ]);
+      const report = await createReport(reporter.id, target.id);
+
+      const resolved = await admin.resolveReport(actor.id, report.id);
+      expect(resolved.status).toBe(ReportStatus.Resolved);
+
+      const logs = await ds
+        .getRepository(AdminAuditLog)
+        .findBy({ targetId: report.id, action: 'report.resolved' });
+      expect(logs).toHaveLength(1);
+      expect(logs[0].actorUserId).toBe(actor.id);
+    });
+
+    it('dismissReport: đổi status dismissed + audit riêng biệt với resolve', async () => {
+      const [actor, reporter, target] = await Promise.all([
+        createUser('dismiss-actor'),
+        createUser('dismiss-reporter'),
+        createUser('dismiss-target'),
+      ]);
+      const report = await createReport(reporter.id, target.id);
+
+      const dismissed = await admin.dismissReport(actor.id, report.id);
+      expect(dismissed.status).toBe(ReportStatus.Dismissed);
+
+      const logs = await ds
+        .getRepository(AdminAuditLog)
+        .findBy({ targetId: report.id, action: 'report.dismissed' });
+      expect(logs).toHaveLength(1);
+    });
+
+    it('resolve report không tồn tại → 404, không ghi audit', async () => {
+      const actor = await createUser('missing-report-actor');
+      await expect(
+        admin.resolveReport(actor.id, '00000000-0000-4000-8000-000000000000'),
+      ).rejects.toMatchObject({ code: 'SAFETY_REPORT_NOT_FOUND' });
+
+      const logs = await ds
+        .getRepository(AdminAuditLog)
+        .findBy({ targetId: '00000000-0000-4000-8000-000000000000' });
+      expect(logs).toHaveLength(0);
+    });
   });
 });

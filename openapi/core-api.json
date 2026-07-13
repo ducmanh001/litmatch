@@ -2346,6 +2346,74 @@
         "tags": ["mini-game"]
       }
     },
+    "/api/v1/admin/users": {
+      "get": {
+        "operationId": "AdminController_listUsers",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": { "type": "string", "enum": ["active", "banned"] }
+          },
+          {
+            "name": "role",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["user", "moderator", "admin"]
+            }
+          },
+          {
+            "name": "nickname",
+            "required": false,
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 20,
+              "allOf": [{ "$ref": "#/components/schemas/Object" }]
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 0,
+              "allOf": [{ "$ref": "#/components/schemas/Object" }]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminUsersPageDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Danh sách user — lọc status/role/nickname, offset pagination",
+        "tags": ["admin"]
+      }
+    },
     "/api/v1/admin/users/{id}": {
       "get": {
         "operationId": "AdminController_getUser",
@@ -2442,6 +2510,128 @@
         },
         "security": [{ "bearer": [] }],
         "summary": "Mở khoá tài khoản user — audit log",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/reports": {
+      "get": {
+        "operationId": "AdminController_listReports",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["pending", "resolved", "dismissed"]
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 20,
+              "allOf": [{ "$ref": "#/components/schemas/Object" }]
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 0,
+              "allOf": [{ "$ref": "#/components/schemas/Object" }]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminReportsPageDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Moderation queue — lọc status, offset pagination",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/reports/{id}/resolve": {
+      "post": {
+        "operationId": "AdminController_resolveReport",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AdminReportDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Đánh dấu report đã xử lý — audit log",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/reports/{id}/dismiss": {
+      "post": {
+        "operationId": "AdminController_dismissReport",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AdminReportDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Bỏ qua report (không vi phạm) — audit log",
         "tags": ["admin"]
       }
     }
@@ -3345,6 +3535,7 @@
         },
         "required": ["move"]
       },
+      "Object": { "type": "object", "properties": {} },
       "AdminUserDto": {
         "type": "object",
         "properties": {
@@ -3368,6 +3559,63 @@
           "status",
           "role"
         ]
+      },
+      "AdminUsersPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AdminUserDto" }
+          },
+          "total": { "type": "number" }
+        },
+        "required": ["items", "total"]
+      },
+      "AdminReportDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "reporterUserId": { "type": "string" },
+          "targetUserId": { "type": "string" },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "harassment",
+              "spam",
+              "underage",
+              "inappropriate_content",
+              "other"
+            ]
+          },
+          "description": { "type": "object", "nullable": true },
+          "trustPenaltyApplied": { "type": "number" },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "resolved", "dismissed"]
+          },
+          "createdAt": { "format": "date-time", "type": "string" }
+        },
+        "required": [
+          "id",
+          "reporterUserId",
+          "targetUserId",
+          "reason",
+          "description",
+          "trustPenaltyApplied",
+          "status",
+          "createdAt"
+        ]
+      },
+      "AdminReportsPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AdminReportDto" }
+          },
+          "total": { "type": "number" }
+        },
+        "required": ["items", "total"]
       }
     }
   }
