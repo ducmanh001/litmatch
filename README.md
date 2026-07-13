@@ -65,6 +65,24 @@ Các lệnh hạ tầng thường dùng:
 | `pnpm infra:logs`                    | Theo dõi log Postgres/Redis/Kafka                                                      |
 | `pnpm infra:reset`                   | **Xoá toàn bộ volume local** và tạo lại từ đầu                                         |
 | `pnpm db:migrate` / `pnpm db:status` | Chạy hoặc xem trạng thái migration                                                     |
+| `pnpm ci:local:quick`                | Mô phỏng job Format and lint của GitHub Actions, reset Nx cache để không tin cache cũ  |
+| `pnpm ci:local:clean`                | Chạy quality gate trong Node 22 Linux container + `node_modules` rỗng, gần CI nhất     |
+| `pnpm ci:local`                      | Chạy quick + Postgres/Redis + frontend/core test, build và E2E như CI                  |
+| `pnpm ci:local:docker`               | Build, quét Trivy image Core API/Signaling và smoke health-check local; không deploy   |
+| `pnpm ci:local:security`             | Chạy Gitleaks, `pnpm audit` và Trivy local; hai CLI tự tải theo version/SHA đã pin     |
+| `pnpm ci:local:all`                  | Chạy toàn bộ local preflight ở trên; CodeQL vẫn chỉ có trên GitHub                     |
+
+Nên chạy `pnpm ci:local:quick` trong vòng lặp hằng ngày, `pnpm ci:local:clean` trước PR (để
+bắt dependency thiếu chỉ lộ trên runner sạch), rồi `pnpm ci:local` khi chạm code/test. Lệnh
+Docker dùng database cô lập `litmatch_ci` thay vì database dev; có thể xem trước các bước mà
+không chạy gì bằng `pnpm ci:local:plan`.
+
+Các profile CI tắt Nx daemon và Husky để hành vi gần runner GitHub, tránh watcher/hook local làm
+lệch kết quả kiểm tra.
+
+Gitleaks quét cả lịch sử Git và dùng [baseline](./.gitleaks-baseline.json) gồm đúng ba finding
+test giả lập đã xác minh. Baseline không phải allowlist chung: finding mới vẫn fail; chỉ cập nhật
+khi đã review từng fingerprint.
 
 ## Nguyên tắc cốt lõi (chi tiết đầy đủ trong `docs/`, xem `AGENTS.md` cho bản tóm tắt agent dùng)
 

@@ -36,6 +36,13 @@ spec:
         prometheus.io/port: '3001'
         prometheus.io/path: /metrics
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: signaling-gateway
           image: ghcr.io/litmatch/signaling-gateway:latest
@@ -48,6 +55,9 @@ spec:
                 name: signaling-gateway-config
             - secretRef:
                 name: signaling-gateway-secrets
+          volumeMounts:
+            - name: temporary-files
+              mountPath: /tmp
           # Connection-bound: CPU thấp, memory cao hơn tỉ lệ so với core-api (giữ state nhiều
           # socket). Số liệu khởi điểm — cần benchmark connection/pod thật (loadtest/signaling-ws.js
           # hoặc Artillery, xem loadtest/README.md) trước khi tin số liệu này ở production.
@@ -76,8 +86,17 @@ spec:
             failureThreshold: 3
           securityContext:
             runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: false
+            privileged: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ['ALL']
       # Socket.IO client cần thời gian reconnect vào pod khác khi pod bị drain — grace period dài
       # hơn core-api để giảm đột ngột drop hàng loạt connection lúc rolling update.
       terminationGracePeriodSeconds: 60
+      volumes:
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: 64Mi

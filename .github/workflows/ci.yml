@@ -150,16 +150,7 @@ jobs:
           docker build -f apps/signaling-gateway/Dockerfile -t litmatch/signaling-gateway:${{ github.sha }} .
 
       - name: Install Trivy (verified checksum)
-        env:
-          TRIVY_VERSION: 0.72.0
-          TRIVY_SHA256: bbb64b9695866ce4a7a8f5c9592002c5961cab378577fa3f8a040df362b9b2ea
-        run: |
-          curl --fail --silent --show-error --location \
-            --output /tmp/trivy.tar.gz \
-            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
-          echo "${TRIVY_SHA256}  /tmp/trivy.tar.gz" | sha256sum --check --strict
-          tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
-          sudo install -m 0755 /tmp/trivy /usr/local/bin/trivy
+        run: node scripts/ci/security-tools.mjs trivy --install-dir /tmp/litmatch-ci-tools --add-to-github-path
 
       - name: Scan runtime images
         run: |
@@ -197,6 +188,8 @@ jobs:
             "${CORE_IMAGE}"
           docker run --detach --name litmatch-signaling-smoke --network host \
             --env NODE_ENV=production \
+            --env JWT_SECRET="${JWT_SECRET}" \
+            --env REDIS_URL="${REDIS_URL}" \
             "${SIGNALING_IMAGE}"
 
           for attempt in {1..30}; do

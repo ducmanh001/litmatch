@@ -150,6 +150,9 @@ const ignoredDirectories = new Set([
 ]);
 const ignoredFiles = new Set([
   'pnpm-lock.yaml',
+  // Gitleaks baseline là report do scanner sinh ra; Message giữ nguyên commit metadata để
+  // baseline match chính xác, nên không phải bề mặt hướng dẫn/code cần wording trung lập.
+  '.gitleaks-baseline.json',
   'apps/core-api/src/database/migrations/1752000000000-economy-ledger.ts',
 ]);
 const textFile = /(?:\.(md|mjs|cjs|js|ts|cts|json|ya?ml|toml)|Dockerfile)$/u;
