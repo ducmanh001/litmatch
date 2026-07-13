@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -46,6 +48,12 @@ const environment = {
   INTEGRATION_DB_URL:
     process.env['LOCAL_CI_INTEGRATION_DB_URL'] ??
     'postgresql://litmatch:litmatch_local@localhost:5432/litmatch_test',
+  NEXT_PUBLIC_API_URL:
+    process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3000',
+  NEXT_PUBLIC_SOCKET_URL:
+    process.env['NEXT_PUBLIC_SOCKET_URL'] ?? 'http://localhost:3001',
+  NEXT_PUBLIC_LIVEKIT_URL:
+    process.env['NEXT_PUBLIC_LIVEKIT_URL'] ?? 'ws://localhost:7880',
 };
 
 let dependenciesPrepared = false;
@@ -104,6 +112,24 @@ function prepareNx() {
 }
 
 function startTestServices() {
+  const postgresReady =
+    !dryRun &&
+    commandSucceeds('docker', [
+      'exec',
+      'litmatch-postgres',
+      'pg_isready',
+      '--username',
+      'litmatch',
+    ]);
+  const redisReady =
+    !dryRun &&
+    commandSucceeds('docker', ['exec', 'litmatch-redis', 'redis-cli', 'ping']);
+
+  if (postgresReady && redisReady) {
+    console.log('\n[ci-local] Reuse healthy local PostgreSQL and Redis');
+    return;
+  }
+
   run('Start local PostgreSQL and Redis', 'docker', [
     'compose',
     'up',
@@ -119,11 +145,14 @@ function runQuality() {
   prepareNx();
   run('Agent contract and guard checks', pnpm, ['agent:check']);
   run('Agent guard tests', pnpm, ['agent:test']);
+  runWorkflowLint();
   run('Format check', pnpm, ['format:check']);
   run('Lint every Nx project', pnpm, ['nx', 'run-many', '-t', 'lint']);
 }
 
 function runCleanQuality() {
+  if (!dryRun) mkdirSync(join(root, '.nx'), { recursive: true });
+
   const command = [
     'git config --global --add safe.directory /workspace',
     'corepack enable',
@@ -131,6 +160,8 @@ function runCleanQuality() {
     'pnpm nx reset',
     'pnpm agent:check',
     'pnpm agent:test',
+    'ACTIONLINT="$(node scripts/ci/security-tools.mjs actionlint --print-path)"',
+    '"$ACTIONLINT" .github/workflows/*.yml',
     'pnpm format:check',
     'pnpm nx run-many -t lint',
   ].join(' && ');
@@ -215,10 +246,8 @@ function ensureLocalCiDatabase() {
   const check = spawnSync(
     'docker',
     [
-      'compose',
       'exec',
-      '--no-TTY',
-      'postgres',
+      'litmatch-postgres',
       'psql',
       '--username',
       'litmatch',
@@ -243,10 +272,8 @@ function ensureLocalCiDatabase() {
   if (check.stdout.trim() === '1') return;
 
   run('Create isolated local CI database', 'docker', [
-    'compose',
     'exec',
-    '--no-TTY',
-    'postgres',
+    'litmatch-postgres',
     'psql',
     '--username',
     'litmatch',
@@ -442,6 +469,14 @@ function provisionSecurityTool(toolName) {
   return result.stdout.trim();
 }
 
+function runWorkflowLint() {
+  const actionlint = provisionSecurityTool('actionlint');
+  run('Validate GitHub Actions workflows', actionlint, [
+    '.github/workflows/ci.yml',
+    '.github/workflows/security.yml',
+  ]);
+}
+
 function runSecurityChecks() {
   const gitleaks = provisionSecurityTool('gitleaks');
   const trivy = provisionSecurityTool('trivy');
@@ -509,7 +544,7 @@ function runProfile() {
     return;
   }
 
-  runQuality();
+  runCleanQuality();
   runSecurityChecks();
   runTestAndBuild();
   runContainerSmoke();

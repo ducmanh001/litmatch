@@ -18,6 +18,7 @@ test('quick local CI profile resets Nx and runs the quality gate', () => {
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Reset Nx daemon and project-graph cache/u);
+  assert.match(result.stdout, /Validate GitHub Actions workflows/u);
   assert.match(result.stdout, /Lint every Nx project/u);
 });
 
@@ -33,8 +34,13 @@ test('all local CI profile plans quality, security, test, and Docker smoke stage
   const result = dryRun('all');
 
   assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /Run quality gate in a clean Node 22 Linux container/u,
+  );
   assert.match(result.stdout, /Scan Git history for secrets/u);
   assert.match(result.stdout, /Ensure isolated database litmatch_ci/u);
+  assert.match(result.stdout, /Start local PostgreSQL and Redis/u);
   assert.match(result.stdout, /End-to-end smoke tests/u);
   assert.match(result.stdout, /Build Core API image/u);
   assert.match(result.stdout, /Scan Core API runtime image/u);

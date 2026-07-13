@@ -27,6 +27,7 @@
     "ci:local:all": "node scripts/ci/local.mjs all",
     "ci:local:plan": "node scripts/ci/local.mjs all --dry-run",
     "ci:local:test": "node --test scripts/ci/*.test.mjs",
+    "ci:preflight": "node scripts/ci/local.mjs all",
     "openapi:emit": "nx run core-api:openapi-emit",
     "openapi:gen": "openapi-typescript openapi/core-api.json -o libs/api-client/src/generated/core-api.ts && prettier --write libs/api-client/src/generated/core-api.ts",
     "openapi:sync": "pnpm openapi:emit && pnpm openapi:gen",

@@ -56,8 +56,10 @@ liệt kê trong [14-rule-enforcement-matrix.md](./14-rule-enforcement-matrix.md
 3. Với luồng nghiệp vụ mới, chạy `review-module plan`.
 4. Viết test song song, thay đổi từng lát nhỏ.
 5. Chạy `pnpm agent:check`, test áp dụng, lint, build.
-6. Chạy `review-module verify`; FAIL thì sửa và verify lại.
-7. Bàn giao bằng chứng, không chỉ nói “đã xong”.
+6. Trước khi push/cập nhật PR, chạy một local gate bằng `pnpm ci:preflight`; hook `pre-push`
+   luôn chạy thêm clean quality gate trong Node 22 Linux với dependency cài từ lockfile mới.
+7. Chạy `review-module verify`; FAIL thì sửa và verify lại.
+8. Bàn giao bằng chứng, không chỉ nói “đã xong”.
 
 ## 8.6 Handoff contract
 

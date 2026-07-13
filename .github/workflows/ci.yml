@@ -4,9 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
+  merge_group:
+  workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -17,6 +19,9 @@ env:
   AUTH_OTP_PEPPER: ci-only-pepper-0123456789
   DATABASE_URL: postgresql://litmatch:litmatch_local@localhost:5432/litmatch
   REDIS_URL: redis://localhost:6379/15
+  NEXT_PUBLIC_API_URL: http://localhost:3000
+  NEXT_PUBLIC_SOCKET_URL: http://localhost:3001
+  NEXT_PUBLIC_LIVEKIT_URL: ws://localhost:7880
 
 jobs:
   quality:
@@ -35,13 +40,10 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: Agent contract and guard evals
+      - name: Local-equivalent quality preflight
         env:
           AGENT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: pnpm agent:check && pnpm agent:test
-      - run: pnpm format:check
-      - run: pnpm nx run-many -t lint
+        run: pnpm ci:local:quick
 
   test:
     name: Test, build and e2e
@@ -203,3 +205,23 @@ jobs:
           docker logs litmatch-core-smoke
           docker logs litmatch-signaling-smoke
           exit 1
+
+  required:
+    name: CI required
+    if: always()
+    needs: [quality, test, docker]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every CI stage
+        env:
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          DOCKER_RESULT: ${{ needs.docker.result }}
+        run: |
+          if [[ "${QUALITY_RESULT}" != success \
+            || "${TEST_RESULT}" != success \
+            || "${DOCKER_RESULT}" != success ]]; then
+            echo "::error::CI incomplete: quality=${QUALITY_RESULT}, test=${TEST_RESULT}, docker=${DOCKER_RESULT}"
+            exit 1
+          fi
