@@ -1189,6 +1189,41 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/admin/gifts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Toàn bộ catalog quà kể cả đã tắt (khác /gifts công khai chỉ active) */
+    get: operations['AdminController_listGifts'];
+    put?: never;
+    /** Tạo quà mới trong catalog — audit log */
+    post: operations['AdminController_createGift'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/gifts/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Sửa giá/tên/thứ tự/bật-tắt quà — audit log, không hard-delete (gift_events tham chiếu FK) */
+    patch: operations['AdminController_updateGift'];
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1679,6 +1714,31 @@ export interface components {
     AdminReportsPageDto: {
       items: components['schemas']['AdminReportDto'][];
       total: number;
+    };
+    AdminGiftDto: {
+      id: string;
+      code: string;
+      name: string;
+      priceDiamond: number;
+      active: boolean;
+      sortOrder: number;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    CreateGiftDto: {
+      code: string;
+      name: string;
+      priceDiamond: number;
+      /** @default 0 */
+      sortOrder: number;
+    };
+    UpdateGiftDto: {
+      name?: string;
+      priceDiamond?: number;
+      sortOrder?: number;
+      active?: boolean;
     };
   };
   responses: never;
@@ -3776,6 +3836,88 @@ export interface operations {
         content: {
           'application/json': {
             data: components['schemas']['AdminReportDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_listGifts: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminGiftDto'][];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_createGift: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateGiftDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminGiftDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_updateGift: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateGiftDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminGiftDto'];
             meta?: {
               [key: string]: unknown;
             };

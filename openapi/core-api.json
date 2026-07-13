@@ -2634,6 +2634,108 @@
         "summary": "Bỏ qua report (không vi phạm) — audit log",
         "tags": ["admin"]
       }
+    },
+    "/api/v1/admin/gifts": {
+      "get": {
+        "operationId": "AdminController_listGifts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/AdminGiftDto" }
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Toàn bộ catalog quà kể cả đã tắt (khác /gifts công khai chỉ active)",
+        "tags": ["admin"]
+      },
+      "post": {
+        "operationId": "AdminController_createGift",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateGiftDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AdminGiftDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Tạo quà mới trong catalog — audit log",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/gifts/{id}": {
+      "patch": {
+        "operationId": "AdminController_updateGift",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateGiftDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AdminGiftDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Sửa giá/tên/thứ tự/bật-tắt quà — audit log, không hard-delete (gift_events tham chiếu FK)",
+        "tags": ["admin"]
+      }
     }
   },
   "info": {
@@ -3616,6 +3718,48 @@
           "total": { "type": "number" }
         },
         "required": ["items", "total"]
+      },
+      "AdminGiftDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "code": { "type": "string" },
+          "name": { "type": "string" },
+          "priceDiamond": { "type": "number" },
+          "active": { "type": "boolean" },
+          "sortOrder": { "type": "number" },
+          "createdAt": { "format": "date-time", "type": "string" },
+          "updatedAt": { "format": "date-time", "type": "string" }
+        },
+        "required": [
+          "id",
+          "code",
+          "name",
+          "priceDiamond",
+          "active",
+          "sortOrder",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreateGiftDto": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "string" },
+          "name": { "type": "string" },
+          "priceDiamond": { "type": "number" },
+          "sortOrder": { "type": "number", "default": 0 }
+        },
+        "required": ["code", "name", "priceDiamond"]
+      },
+      "UpdateGiftDto": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "priceDiamond": { "type": "number" },
+          "sortOrder": { "type": "number" },
+          "active": { "type": "boolean" }
+        }
       }
     }
   }

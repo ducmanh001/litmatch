@@ -1,10 +1,12 @@
 import {
+  Body,
   Controller,
   Get,
   HttpCode,
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
@@ -30,6 +32,11 @@ import {
   AdminReportsPageDto,
   ListReportsQueryDto,
 } from './dto/admin-report.dto';
+import {
+  AdminGiftDto,
+  CreateGiftDto,
+  UpdateGiftDto,
+} from './dto/admin-gift.dto';
 
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 
@@ -134,6 +141,44 @@ export class AdminController {
   ): Promise<AdminReportDto> {
     return AdminReportDto.from(
       await this.adminService.dismissReport(actor.userId, id),
+    );
+  }
+
+  @Get('gifts')
+  @ApiOperation({
+    summary:
+      'Toàn bộ catalog quà kể cả đã tắt (khác /gifts công khai chỉ active)',
+  })
+  @ApiOkResponse({ type: [AdminGiftDto] })
+  async listGifts(): Promise<AdminGiftDto[]> {
+    return (await this.adminService.listGifts()).map(AdminGiftDto.from);
+  }
+
+  @Post('gifts')
+  @ApiOperation({ summary: 'Tạo quà mới trong catalog — audit log' })
+  @ApiOkResponse({ type: AdminGiftDto })
+  async createGift(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Body() body: CreateGiftDto,
+  ): Promise<AdminGiftDto> {
+    return AdminGiftDto.from(
+      await this.adminService.createGift(actor.userId, body),
+    );
+  }
+
+  @Patch('gifts/:id')
+  @ApiOperation({
+    summary:
+      'Sửa giá/tên/thứ tự/bật-tắt quà — audit log, không hard-delete (gift_events tham chiếu FK)',
+  })
+  @ApiOkResponse({ type: AdminGiftDto })
+  async updateGift(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: UpdateGiftDto,
+  ): Promise<AdminGiftDto> {
+    return AdminGiftDto.from(
+      await this.adminService.updateGift(actor.userId, id, body),
     );
   }
 }

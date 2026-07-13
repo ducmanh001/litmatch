@@ -8,4 +8,6 @@ export const GiftErrors = {
   SENDER_NOT_IN_ROOM: 'GIFT_SENDER_NOT_IN_ROOM',
   /** Người nhận không phải member active của phòng. */
   RECEIVER_NOT_IN_ROOM: 'GIFT_RECEIVER_NOT_IN_ROOM',
+  /** Admin tạo quà với `code` đã tồn tại (unique constraint `uq_gifts_code`). */
+  CODE_ALREADY_EXISTS: 'GIFT_CODE_ALREADY_EXISTS',
 } as const;

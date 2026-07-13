@@ -51,6 +51,14 @@ export const router = createBrowserRouter([
                   ).ModerationPage,
                 }),
               },
+              {
+                path: 'gifts',
+                lazy: async () => ({
+                  Component: (
+                    await import('../features/gifts/pages/gifts-page')
+                  ).GiftsPage,
+                }),
+              },
             ],
           },
         ],
