@@ -35,6 +35,22 @@ export const router = createBrowserRouter([
                   ).DashboardPage,
                 }),
               },
+              {
+                path: 'users',
+                lazy: async () => ({
+                  Component: (
+                    await import('../features/users/pages/users-page')
+                  ).UsersPage,
+                }),
+              },
+              {
+                path: 'moderation',
+                lazy: async () => ({
+                  Component: (
+                    await import('../features/moderation/pages/moderation-page')
+                  ).ModerationPage,
+                }),
+              },
             ],
           },
         ],
