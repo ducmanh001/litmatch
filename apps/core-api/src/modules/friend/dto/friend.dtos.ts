@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString, Length } from 'class-validator';
 
+import { ApiCursorPageMeta } from '../../../common/decorators/cursor-page-query.decorator';
 import { MESSAGE_CONTENT_HARD_CAP } from '../friend.constants';
 import { PublicProfileDto } from '../../user';
 
@@ -36,7 +37,7 @@ export class MessageDto {
 
 export class MessagesPageDto {
   @ApiProperty({ type: [MessageDto] }) items!: MessageDto[];
-  @ApiProperty() meta!: CursorPageMeta;
+  @ApiCursorPageMeta() meta!: CursorPageMeta;
 }
 
 export class ConversationDto {

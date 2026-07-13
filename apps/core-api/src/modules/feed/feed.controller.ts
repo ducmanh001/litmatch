@@ -29,6 +29,7 @@ import {
   PostsPageDto,
   ReactionStatusDto,
 } from './dto/feed.dtos';
+import { ApiCursorPageQuery } from '../../common/decorators/cursor-page-query.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
@@ -54,6 +55,7 @@ export class FeedController {
     summary:
       'Feed công khai toàn cục, mới nhất trước — loại tác giả đang block/bị block',
   })
+  @ApiCursorPageQuery()
   @ApiOkResponse({ type: PostsPageDto })
   async listFeed(
     @CurrentUser() user: AuthenticatedUser,
@@ -101,6 +103,7 @@ export class FeedController {
 
   @Get('posts/:postId/comments')
   @ApiOperation({ summary: 'Danh sách bình luận, cũ → mới' })
+  @ApiCursorPageQuery()
   @ApiOkResponse({ type: CommentsPageDto })
   async listComments(
     @CurrentUser() user: AuthenticatedUser,

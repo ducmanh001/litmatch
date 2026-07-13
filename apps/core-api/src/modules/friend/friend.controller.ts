@@ -26,6 +26,7 @@ import {
   MessagesPageDto,
   SendFriendMessageDto,
 } from './dto/friend.dtos';
+import { ApiCursorPageQuery } from '../../common/decorators/cursor-page-query.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import {
   ApiIdempotencyKeyHeader,
@@ -85,6 +86,7 @@ export class FriendController {
 
   @Get('conversations/:id/messages')
   @ApiOperation({ summary: 'List message (cursor) — chỉ 2 thành viên' })
+  @ApiCursorPageQuery()
   @ApiOkResponse({ type: MessagesPageDto })
   async listMessages(
     @CurrentUser() user: AuthenticatedUser,

@@ -28,6 +28,7 @@ import {
   SoulMessagesPageDto,
   SoulSessionViewDto,
 } from './dto/soul-match.dtos';
+import { ApiCursorPageQuery } from '../../common/decorators/cursor-page-query.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import {
   ApiIdempotencyKeyHeader,
@@ -62,6 +63,7 @@ export class SoulMatchController {
   @ApiOperation({
     summary: 'List message ẩn danh (cursor) — khoá khi phòng đã đóng',
   })
+  @ApiCursorPageQuery()
   @ApiOkResponse({ type: SoulMessagesPageDto })
   async listMessages(
     @CurrentUser() user: AuthenticatedUser,
