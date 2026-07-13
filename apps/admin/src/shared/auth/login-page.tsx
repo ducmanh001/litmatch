@@ -83,6 +83,7 @@ export function LoginPage() {
 
         {phase.step === 'phone' ? (
           <form
+            key="phone"
             className="space-y-4"
             onSubmit={phoneForm.handleSubmit((v) => requestOtp.mutate(v.phone))}
             noValidate
@@ -113,6 +114,7 @@ export function LoginPage() {
           </form>
         ) : (
           <form
+            key="code"
             className="space-y-4"
             onSubmit={codeForm.handleSubmit((v) =>
               verifyOtp.mutate({ phone: phase.phone, code: v.code }),

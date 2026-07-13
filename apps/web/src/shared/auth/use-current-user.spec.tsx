@@ -29,7 +29,7 @@ describe('useCurrentUser', () => {
   });
 
   it('gọi GET /users/me khi đã đăng nhập', async () => {
-    tokenStore.setSession({ accessToken: 'a', refreshToken: 'r' });
+    tokenStore.setSession({ accessToken: 'a', csrfToken: 'r' });
     const getSpy = vi.spyOn(apiClient, 'GET').mockResolvedValue({
       data: { data: { id: 'u1', nickname: 'A', gender: 'unknown' } },
     } as never);

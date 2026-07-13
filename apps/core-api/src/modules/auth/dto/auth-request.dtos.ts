@@ -44,10 +44,3 @@ export class SocialLoginDto {
   @IsNotEmpty()
   idToken!: string;
 }
-
-export class RefreshDto {
-  @ApiProperty()
-  @IsString()
-  @IsNotEmpty()
-  refreshToken!: string;
-}

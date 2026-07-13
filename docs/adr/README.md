@@ -36,7 +36,8 @@ Quan hệ với `docs/03-architecture.md`: file 03 mô tả kiến trúc **hiệ
 | ----------------------------------------------------- | -------------------------------------------------------- | ---------- | ---------- |
 | [0001](./0001-livekit-self-host-lam-media-server.md)  | LiveKit self-host làm Media Server chính từ Giai đoạn 2  | 2026-07-10 | Accepted   |
 | [0002](./0002-browser-refresh-token-local-storage.md) | Browser V1 giữ refresh token trong localStorage          | 2026-07-13 | Superseded |
-| [0003](./0003-browser-auth-production-gate.md)        | Browser localStorage chỉ là scaffold, production có gate | 2026-07-13 | Accepted   |
+| [0003](./0003-browser-auth-production-gate.md)        | Browser localStorage chỉ là scaffold, production có gate | 2026-07-13 | Superseded |
 | [0004](./0004-api-gateway-nginx-ingress.md)           | API Gateway = nginx-ingress controller                   | 2026-07-13 | Accepted   |
 | [0005](./0005-livekit-hostnetwork-rtc.md)             | Networking RTC multi-node LiveKit = hostNetwork          | 2026-07-13 | Accepted   |
 | [0006](./0006-cloudflare-global-routing.md)           | Global routing đa region = Cloudflare Load Balancing     | 2026-07-13 | Accepted   |
+| [0007](./0007-httponly-cookie-refresh-token.md)       | Refresh token = httpOnly cookie + CSRF double-submit     | 2026-07-14 | Accepted   |

@@ -1,16 +1,16 @@
 import {
-  browserRefreshTokenStorage,
+  browserCsrfTokenStorage,
   createApiClient,
   createTokenStore,
 } from '@litmatch/api-client';
 
 import { env } from '../env';
 
-/** Key localStorage cho refresh token (docs/12 § 12.6) — đổi key là logout toàn bộ user. */
-const REFRESH_TOKEN_STORAGE_KEY = 'litmatch-web.refresh-token';
+/** Key localStorage cho csrfToken (docs/12 § 12.6, ADR 0007) — refresh token là cookie httpOnly, không ở đây. */
+const CSRF_TOKEN_STORAGE_KEY = 'litmatch-web.csrf-token';
 
 export const tokenStore = createTokenStore(
-  browserRefreshTokenStorage(REFRESH_TOKEN_STORAGE_KEY),
+  browserCsrfTokenStorage(CSRF_TOKEN_STORAGE_KEY),
 );
 
 /**
