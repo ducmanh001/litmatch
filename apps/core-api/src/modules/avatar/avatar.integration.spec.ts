@@ -1,3 +1,4 @@
+import { Registry } from 'prom-client';
 import { DataSource } from 'typeorm';
 
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
@@ -11,6 +12,7 @@ import { AvatarErrors } from './avatar.errors';
 import { AvatarAsset, AvatarSlot } from './entities/avatar-asset.entity';
 import { UserAvatarConfig } from './entities/user-avatar-config.entity';
 import { UserAvatarItem } from './entities/user-avatar-item.entity';
+import { EconomyMetrics } from '../economy/economy.metrics';
 import { EconomyService } from '../economy/economy.service';
 import { LedgerService } from '../economy/services/ledger.service';
 import { LedgerAccount } from '../economy/entities/ledger-account.entity';
@@ -130,7 +132,7 @@ d('Avatar integration (Postgres thật)', () => {
     await ds.initialize();
     await ds.runMigrations();
 
-    const ledger = new LedgerService(ds);
+    const ledger = new LedgerService(ds, new EconomyMetrics(new Registry()));
     const stubVerifier = {
       verify: async (_p: IapProvider, payload: Record<string, unknown>) => ({
         providerTransactionId: String(payload['devTransactionId']),

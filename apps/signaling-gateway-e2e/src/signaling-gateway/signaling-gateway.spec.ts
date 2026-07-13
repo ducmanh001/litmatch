@@ -18,7 +18,7 @@ describe('GET /health', () => {
     expect(live.status).toBe(200);
     expect(ready.data).toEqual({
       status: 'ok',
-      checks: { redisSubscription: 'up' },
+      checks: { redisSubscription: 'up', redisClusterAdapter: 'up' },
     });
   });
 });

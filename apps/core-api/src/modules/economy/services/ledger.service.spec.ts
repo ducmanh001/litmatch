@@ -19,7 +19,8 @@ describe('LedgerService (validation thuần)', () => {
     getRepository: () => ({ findOneBy }),
     transaction: jest.fn(),
   } as unknown as DataSource;
-  const service = new LedgerService(dataSource);
+  const metrics = { record: jest.fn() };
+  const service = new LedgerService(dataSource, metrics as never);
 
   const entry = (
     over: Partial<Parameters<LedgerService['record']>[0]['entries'][0]> = {},
@@ -131,9 +132,13 @@ describe('LedgerService (validation thuần)', () => {
     });
     expect(result.replayed).toBe(true);
     expect(dataSource.transaction).not.toHaveBeenCalled();
+    expect(metrics.record).toHaveBeenCalledWith(
+      TransactionType.Adjustment,
+      'replayed',
+    );
   });
 
-  it('cùng key nhưng nội dung KHÁC → 409 ECONOMY_TRANSACTION_IDEMPOTENCY_CONFLICT', async () => {
+  it('cùng key nhưng nội dung KHÁC → 409 ECONOMY_TRANSACTION_IDEMPOTENCY_CONFLICT + tính vào failure rate', async () => {
     findOneBy.mockResolvedValue({ id: 't1', requestHash: 'x'.repeat(64) });
     await expect(
       service.record({
@@ -152,6 +157,10 @@ describe('LedgerService (validation thuần)', () => {
       code: EconomyErrors.IDEMPOTENCY_CONFLICT,
       httpStatus: 409,
     });
+    expect(metrics.record).toHaveBeenCalledWith(
+      TransactionType.Adjustment,
+      'failed',
+    );
   });
 
   it('type=adjustment bắt buộc actorUserId để audit (docs/10 § Economy) — thiếu actor phải bị chặn', async () => {

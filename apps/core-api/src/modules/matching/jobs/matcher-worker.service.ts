@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { RealtimeEvents } from '@litmatch/common-dtos';
+import { withSpan } from '@litmatch/observability';
 import { DataSource, In } from 'typeorm';
 
 import { publishRealtimeEvent } from '../../../common/realtime/publish-realtime';
@@ -21,6 +22,7 @@ import {
   MatchSession,
   MatchSessionStatus,
 } from '../entities/match-session.entity';
+import { MatchingMetrics } from '../matching.metrics';
 import { MATCH_INTERACTION_POLICY } from '../ports/interaction-policy';
 import {
   MATCHING_ACTIVE_SHARDS_KEY,
@@ -71,6 +73,7 @@ export class MatcherWorkerService
     @Inject(MATCHING_REDIS) private readonly redis: Redis,
     @Inject(MATCH_INTERACTION_POLICY)
     private readonly interactionPolicy: MatchInteractionPolicy,
+    private readonly metrics: MatchingMetrics,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -94,13 +97,24 @@ export class MatcherWorkerService
     if (this.running) return 0; // tick trước chưa xong thì bỏ qua, không chồng
     this.running = true;
     try {
-      let matched = 0;
-      for (const shard of await this.redis.smembers(
-        MATCHING_ACTIVE_SHARDS_KEY,
-      )) {
-        matched += await this.drainShard(shard);
-      }
-      return matched;
+      // Tick chạy ngoài context 1 HTTP request nên không có parent span tự nhiên — bọc thủ công
+      // để DB/Redis bên trong (drainShard/tryPair) trở thành child span trong CÙNG 1 trace
+      // (docs/07 GĐ6 — distributed tracing Matching → Calling → Economy, xem
+      // libs/observability/src/lib/traced.ts).
+      return await withSpan(
+        'litmatch.matching',
+        'matching.matcher.tick',
+        async (span) => {
+          let matched = 0;
+          for (const shard of await this.redis.smembers(
+            MATCHING_ACTIVE_SHARDS_KEY,
+          )) {
+            matched += await this.drainShard(shard);
+          }
+          span.setAttribute('matching.matched_pairs', matched);
+          return matched;
+        },
+      );
     } finally {
       this.running = false;
     }
@@ -207,12 +221,25 @@ export class MatcherWorkerService
         ta.sessionId = session.id;
         tb.sessionId = session.id;
         await manager.save([ta, tb]);
+        const matchedAt = Date.now();
         return {
           kind: 'matched' as const,
           requeue: [] as PoppedTicket[],
           matchedPair: [
-            { userId: ta.userId, ticketId: ta.id, sessionId: session.id },
-            { userId: tb.userId, ticketId: tb.id, sessionId: session.id },
+            {
+              userId: ta.userId,
+              ticketId: ta.id,
+              sessionId: session.id,
+              matchType: ta.matchType,
+              waitSeconds: (matchedAt - ta.enqueuedAt.getTime()) / 1000,
+            },
+            {
+              userId: tb.userId,
+              ticketId: tb.id,
+              sessionId: session.id,
+              matchType: tb.matchType,
+              waitSeconds: (matchedAt - tb.enqueuedAt.getTime()) / 1000,
+            },
           ],
         };
       }
@@ -252,6 +279,10 @@ export class MatcherWorkerService
       await this.redis.sadd(MATCHING_ACTIVE_SHARDS_KEY, shard);
     }
     if (result.matchedPair) {
+      // Matching latency (docs/07 GĐ6) — ghi cho CẢ 2 vé, mỗi bên có wait time riêng
+      for (const { matchType, waitSeconds } of result.matchedPair) {
+        this.metrics.observeMatched(matchType, waitSeconds);
+      }
       // Realtime SAU commit — best-effort, client vẫn còn GET /matching/tickets/:id poll fallback
       await Promise.all(
         result.matchedPair.map(({ userId, ticketId, sessionId }) => {

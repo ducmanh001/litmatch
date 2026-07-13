@@ -1,0 +1,19 @@
+# media-server vẫn replicas: 1 ở production cho tới khi có ADR networking RTC multi-node (xem
+# k8s/base/media-server/deployment.yaml + k8s/README.md) — chỉ nới resource cho node lớn hơn.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: media-server
+  namespace: litmatch
+spec:
+  template:
+    spec:
+      containers:
+        - name: media-server
+          resources:
+            requests:
+              cpu: '2'
+              memory: '2Gi'
+            limits:
+              cpu: '4'
+              memory: '4Gi'

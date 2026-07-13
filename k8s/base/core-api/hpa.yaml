@@ -1,0 +1,39 @@
+# HPA dựa trên CPU + memory (resource metrics chuẩn, có sẵn qua metrics-server, không cần
+# thêm adapter). Ngưỡng dưới đây là gợi ý khởi điểm, CHƯA có số liệu production — điều chỉnh khi
+# có traffic thật. Follow-up CHƯA làm ở PR này: scale theo custom metric (vd matching queue depth
+# đọc từ Prometheus — Giai đoạn 6 metrics) cần cài thêm `prometheus-adapter` để expose metric đó
+# qua Custom/External Metrics API cho HPA autoscaling/v2 `type: Pods|External` — không tự bịa
+# cấu hình prometheus-adapter ở đây vì chưa kiểm chứng được với metric thật.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: core-api
+  namespace: litmatch
+  labels:
+    app.kubernetes.io/name: core-api
+    app.kubernetes.io/part-of: litmatch
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: core-api
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+    scaleUp:
+      stabilizationWindowSeconds: 60

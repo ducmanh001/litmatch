@@ -2,6 +2,7 @@ import { Inject, Module, OnApplicationShutdown } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { CallingController } from './calling.controller';
+import { CallingMetrics } from './calling.metrics';
 import { CallingService } from './calling.service';
 import { CallSession } from './entities/call-session.entity';
 import { CallTickerService } from './jobs/call-ticker.service';
@@ -25,6 +26,7 @@ import type Redis from 'ioredis';
   controllers: [CallingController, LivekitWebhookController],
   providers: [
     CallingService,
+    CallingMetrics,
     CallTickerService,
     callingRedisProvider,
     { provide: LivekitRoomPort, useClass: SdkLivekitRoomPort },

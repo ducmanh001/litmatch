@@ -1,0 +1,27 @@
+# ClusterIP — chủ yếu phục vụ core-api gọi control API/webhook nội bộ (LIVEKIT_URL trong
+# k8s/base/core-api/configmap.yaml trỏ Service này). Đây KHÔNG PHẢI cách client (app di động/web)
+# kết nối RTC thật — client cần nối trực tiếp LiveKit qua token TTL ngắn (docs/03 § 3.7), và
+# đường đó cần expose ra ngoài cluster cho cổng 7880/7881 + dải UDP 50000-50200, chưa có trong
+# Service này (xem giới hạn networking RTC ở deployment.yaml + k8s/README.md — cần ADR riêng).
+apiVersion: v1
+kind: Service
+metadata:
+  name: media-server
+  namespace: litmatch
+  labels:
+    app.kubernetes.io/name: media-server
+    app.kubernetes.io/part-of: litmatch
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: media-server
+  ports:
+    - name: http
+      port: 7880
+      targetPort: http
+    - name: rtc-tcp
+      port: 7881
+      targetPort: rtc-tcp
+    - name: metrics
+      port: 6789
+      targetPort: metrics

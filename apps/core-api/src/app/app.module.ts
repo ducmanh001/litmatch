@@ -14,6 +14,7 @@ import { SnakeNamingStrategy } from '../database/snake-naming.strategy';
 import { GlobalExceptionFilter } from '../common/filters/global-exception.filter';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { ResponseEnvelopeInterceptor } from '../common/interceptors/response-envelope.interceptor';
+import { MetricsModule } from '../common/metrics/metrics.module';
 import { AuthModule } from '../modules/auth';
 import { AvatarModule } from '../modules/avatar';
 import { CallingModule } from '../modules/calling';
@@ -71,6 +72,7 @@ import { ReadinessService } from './readiness.service';
       }),
     }),
     ScheduleModule.forRoot(),
+    MetricsModule,
     UserModule,
     AuthModule,
     EconomyModule,

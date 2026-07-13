@@ -1,4 +1,5 @@
 import Redis from 'ioredis';
+import { Registry } from 'prom-client';
 import { DataSource, In } from 'typeorm';
 
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
@@ -14,6 +15,7 @@ import { RefreshToken } from '../auth/entities/refresh-token.entity';
 import { Gender, User, UserService, UserStatus } from '../user';
 import { EconomyService } from '../economy/economy.service';
 import { EconomyErrors } from '../economy/economy.errors';
+import { EconomyMetrics } from '../economy/economy.metrics';
 import { LedgerService } from '../economy/services/ledger.service';
 import { LedgerAccount } from '../economy/entities/ledger-account.entity';
 import { LedgerEntry } from '../economy/entities/ledger-entry.entity';
@@ -27,6 +29,7 @@ import {
 } from '../economy/entities/iap.entities';
 import { VipPlan } from '../economy/entities/vip-plan.entity';
 
+import { MatchingMetrics } from './matching.metrics';
 import { MatchingService } from './matching.service';
 import { MatchingErrors } from './matching.errors';
 import { MatcherWorkerService } from './jobs/matcher-worker.service';
@@ -218,7 +221,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
       db: 15,
     });
 
-    const ledger = new LedgerService(ds);
+    const ledger = new LedgerService(ds, new EconomyMetrics(new Registry()));
     const stubVerifier = {
       verify: async (_p: IapProvider, payload: Record<string, unknown>) => ({
         providerTransactionId: String(payload['devTransactionId']),
@@ -247,12 +250,14 @@ d('Matching integration (Postgres + Redis thật)', () => {
       configStub,
       redis,
     );
+    const metrics = new MatchingMetrics(new Registry());
     worker = new MatcherWorkerService(
       ds,
       configStub,
       schedulerStub,
       redis,
       policyStub,
+      metrics,
     );
     workerB = new MatcherWorkerService(
       ds,
@@ -260,6 +265,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
       schedulerStub,
       redis,
       policyStub,
+      metrics,
     );
     sweeper = new TicketSweeperService(ds, configStub, schedulerStub, redis);
   });

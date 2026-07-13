@@ -1,8 +1,9 @@
-# Realtime qua Signaling Gateway — slice nền fanout (Giai đoạn 2)
+# Realtime qua Signaling Gateway — slice nền fanout (Giai đoạn 2) + cluster adapter (Giai đoạn 6)
 
-> Phạm vi: nền realtime của `apps/signaling-gateway` (Socket.IO) + cách core-api publish.
+> Phạm vi: nền realtime của `apps/signaling-gateway` (Socket.IO) + cách core-api publish +
+> Redis cluster adapter cho horizontal scale (§ 6).
 > **Ngoài phạm vi**: điều khiển LiveKit (mint token phòng, join/leave call, ACK media —
-> thuộc mục SFU/Calling của roadmap), Redis adapter multi-instance (Giai đoạn 6).
+> thuộc mục SFU/Calling của roadmap).
 
 ## 1. Nguyên tắc phân vai (docs/03 § 3.3)
 
@@ -57,5 +58,28 @@ Mỗi module publish bằng Redis client riêng của mình (docs/05 § 5.3) qua
   dùng chung với lệnh khác); channel lạ/payload rác → bỏ qua + log, không chết.
 - Socket chết được dọn bởi ping/pong mặc định của Socket.IO (`pingTimeout`) — chưa cần timer
   riêng vì gateway không giữ room state nghiệp vụ (docs/10 § Calling/Signaling).
-- Config Joi: `JWT_SECRET` (bắt buộc, cùng core-api), `REDIS_URL`. Scale ngang gateway cần
-  Redis adapter cho Socket.IO — mục Giai đoạn 6, chưa làm.
+- Config Joi: `JWT_SECRET` (bắt buộc, cùng core-api), `REDIS_URL`.
+
+## 6. Cluster adapter cho Socket.IO (Giai đoạn 6 — horizontal scale)
+
+`SignalingRedisAdapterService` (`apps/signaling-gateway/src/app/redis-adapter.service.ts`) mở
+**2 kết nối Redis riêng** cho `@socket.io/redis-adapter` — KHÔNG dùng chung với connection
+PSUBSCRIBE `realtime:user:*` của `SignalingGateway` (giữ đúng nguyên tắc "1 connection riêng cho
+subscribe" ở § 5). Adapter được `connect()` xong TRƯỚC `app.listen()` và gắn vào `CorsIoAdapter`
+(nay nhận thêm tham số `clusterAdapter`) — bắt buộc thứ tự này vì `afterInit()` của gateway (chạy
+lúc `listen()`) cần Server đã có adapter.
+
+Giá trị mang lại: gọi `server.to(room).emit()` ở 1 instance giờ tới được socket đang giữ ở
+**instance khác** trong cụm — điều relay PSUBSCRIBE ở § 3-4 (mỗi instance tự nhận toàn bộ event
+qua Redis pub/sub rồi chỉ emit cho room cục bộ của mình) vốn KHÔNG cần tới cluster adapter để hoạt
+động đúng, nhưng cluster adapter mở đường cho các tính năng Socket.IO xuyên instance sau này
+(broadcast toàn cụm, `fetchSockets()`...) mà không phải thiết kế lại tầng transport.
+
+Verify: `signaling.horizontal-scale.integration.spec.ts` boot 2 Nest app instance thật (2 port
+khác nhau, cùng Redis thật), 1 client chỉ connect vào instance A, gọi thẳng `server.to(room).emit()`
+ở instance B — client vẫn nhận được event. Readiness `/health/ready` cộng thêm check
+`redisClusterAdapter` (song song `redisSubscription` sẵn có).
+
+Lưu ý transport: cluster adapter không tự giải quyết sticky-session cho Socket.IO long-polling
+qua nhiều instance — client hiện đã cố định `transports: ['websocket']` (xem test), nên không cần
+sticky session ở tầng LB miễn còn giữ đúng cấu hình này.

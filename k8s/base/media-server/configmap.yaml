@@ -1,0 +1,49 @@
+# Nội dung tương đương apps/media-server/livekit.yaml (dev) nhưng KHÔNG mang key/secret thật —
+# block `keys:` dưới đây là placeholder, PHẢI được override bằng giá trị thật lúc deploy (xem
+# k8s/README.md mục "LiveKit keys"). redis.address trỏ Redis managed ngoài cluster (giả định theo
+# yêu cầu task — không deploy Redis trong k8s manifest này); webhook urls trỏ Service core-api
+# trong cùng namespace (DNS nội bộ K8s), KHÔNG dùng host.docker.internal (chỉ đúng cho docker-compose
+# dev, không tồn tại trong cluster K8s).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: media-server-config
+  namespace: litmatch
+  labels:
+    app.kubernetes.io/name: media-server
+    app.kubernetes.io/part-of: litmatch
+data:
+  livekit.yaml: |
+    port: 7880
+    # Prometheus metrics nội bộ của LiveKit (docs/07 GĐ6) — cổng riêng, KHÔNG qua control port 7880
+    prometheus_port: 6789
+    rtc:
+      tcp_port: 7881
+      port_range_start: 50000
+      port_range_end: 50200
+      # Cần địa chỉ IP ngoài mà client thật sự kết nối tới cho ICE candidate — với hostNetwork
+      # (xem deployment.yaml) đây thường là IP node; nếu không dùng hostNetwork, networking RTC
+      # UDP thật cho multi-node LiveKit CHƯA có giải pháp kiểm chứng ở đây (xem README, cần ADR).
+      use_external_ip: true
+    redis:
+      # Managed Redis ngoài cluster, giống DATABASE_URL/REDIS_URL của core-api — điền qua Secret
+      # nếu cần auth (REDIS_URL của core-api hiện đã là Secret riêng; nếu Redis cùng instance,
+      # cân nhắc đưa address+password vào Secret thay vì ConfigMap khi có password thật).
+      address: 'REPLACE_ME:6379'
+    keys:
+      # PLACEHOLDER — KHÔNG dùng giá trị dev này ở production. LiveKit hiện đọc key/secret từ
+      # chính file config này (không có cơ chế "keys_file" tách riêng đã được xác nhận trong
+      # version đang dùng ở docs/03 § 3.8.A, v1.13.1) — nghĩa là secret buộc phải nằm trong nội
+      # dung ConfigMap/file mount này, một hạn chế đã biết. Cách xử lý đúng: sinh ConfigMap này
+      # từ template + giá trị thật ở bước deploy (vd `kustomize edit` hoặc envsubst chạy trong CI
+      # với secret lấy từ Vault/sealed-secrets), KHÔNG commit YAML đã điền giá trị thật vào git.
+      # Giá trị KEY/SECRET này PHẢI khớp LIVEKIT_API_KEY/LIVEKIT_API_SECRET trong
+      # k8s/base/core-api/secret.yaml (cùng cặp credential core-api dùng để mint token).
+      REPLACE_ME_KEY: REPLACE_ME_SECRET
+    webhook:
+      api_key: REPLACE_ME_KEY
+      urls:
+        - http://core-api.litmatch.svc.cluster.local:3000/calling/webhooks/livekit
+        - http://core-api.litmatch.svc.cluster.local:3000/party/webhooks/livekit
+    logging:
+      level: info

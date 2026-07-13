@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import type { CoreApiEnv } from '../../config/env.validation';
 import { EconomyController } from './economy.controller';
+import { EconomyMetrics } from './economy.metrics';
 import { EconomyService } from './economy.service';
 import { LedgerService } from './services/ledger.service';
 import { LedgerAccount } from './entities/ledger-account.entity';
@@ -48,6 +49,7 @@ import { EconomyWebhooksController } from './webhooks/economy-webhooks.controlle
   controllers: [EconomyController, EconomyWebhooksController],
   providers: [
     EconomyService,
+    EconomyMetrics,
     LedgerService, // writer duy nhất của ledger — KHÔNG export ra ngoài module
     RefundService,
     OutboxRelayService,

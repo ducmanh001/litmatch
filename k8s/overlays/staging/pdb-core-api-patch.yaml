@@ -1,0 +1,10 @@
+# Staging chạy 1 replica (xem core-api-patch.yaml) — PDB minAvailable=1 kế thừa từ base sẽ chặn
+# MỌI voluntary eviction (node drain, rolling upgrade) vì không còn pod dự phòng. Staging chấp
+# nhận downtime ngắn, hạ minAvailable về 0 để không chặn thao tác vận hành cluster.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: core-api
+  namespace: litmatch
+spec:
+  minAvailable: 0

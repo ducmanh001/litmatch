@@ -10,6 +10,7 @@ import { DataSource, Repository } from 'typeorm';
 import { isUniqueViolation } from '../../database/postgres-errors';
 import { publishRealtimeEvent } from '../../common/realtime/publish-realtime';
 import { CallingErrors } from './calling.errors';
+import { CallingMetrics } from './calling.metrics';
 import {
   CallEndReason,
   CallSession,
@@ -58,6 +59,7 @@ export class CallingService {
     private readonly livekit: LivekitRoomPort,
     private readonly config: ConfigService<CoreApiEnv, true>,
     @Inject(CALLING_REDIS) private readonly redis: Redis,
+    private readonly metrics: CallingMetrics,
   ) {}
 
   /**
@@ -195,6 +197,8 @@ export class CallingService {
     });
 
     if (result.justEnded && result.call) {
+      // Call drop rate (docs/07 GĐ6) — đúng 1 lần/call vì chỉ nhánh justEnded mới chạy tới đây
+      this.metrics.recordEnded(result.call.endReason ?? reason);
       await this.cleanupEndedCall(result.call);
     }
     return result;

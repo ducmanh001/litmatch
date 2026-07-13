@@ -1,0 +1,116 @@
+# Media Server = LiveKit self-host (ADR 0001), KHÔNG chứa business logic (docs/03 § 3.3) — chỉ
+# chạy image chính thức `livekit/livekit-server`, không có code Node của riêng Litmatch.
+#
+# QUAN TRỌNG — giới hạn đã biết, đọc trước khi đổi replicas:
+# docs/03-architecture.md § 3.5: multi-node LiveKit dùng Redis chia sẻ room state để CHỌN NODE
+# host room mới, nhưng "một room phải nằm vừa trên một node" — thêm node KHÔNG tự chia nhỏ một
+# room. Ở tầng networking, RTC dùng UDP port range 50000-50200 cho MỖI pod; một Service
+# ClusterIP/LoadBalancer chuẩn không share port range đó dễ dàng cho nhiều pod cùng lúc (mỗi pod
+# cần định danh network riêng cho dải UDP này) — cách phổ biến là `hostNetwork: true` (đánh đổi:
+# mất network namespace isolation, port RTC trùng giữa các pod trên cùng node) hoặc NodePort
+# riêng từng pod (phức tạp, cần tự động hoá gán port). CHƯA chọn phương án nào ở đây vì cần ADR
+# riêng quyết định topology/provider cho networking RTC production (docs/03 § 3.8.A: "capacity
+# phải được chứng minh bằng benchmark... nhu cầu room lớn hơn một node là một quyết định kiến
+# trúc mới"). Vì vậy: replicas mặc định = 1, KHÔNG có HorizontalPodAutoscaler cho app này (xem
+# k8s/README.md để biết lý do đầy đủ) — scale thật cần quyết định networking trước, không phải
+# thiếu sót ngẫu nhiên.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: media-server
+  namespace: litmatch
+  labels:
+    app.kubernetes.io/name: media-server
+    app.kubernetes.io/part-of: litmatch
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    # Recreate thay vì RollingUpdate: 1 room ràng buộc vào 1 pod (§ 3.5) — rolling update sẽ làm
+    # rớt toàn bộ call/room đang host trên pod bị thay dù chỉ 1 replica, không có pod thứ 2 để
+    # chuyển tải êm; chấp nhận downtime ngắn lúc deploy thay vì chạy 2 phiên bản LiveKit trỏ cùng
+    # Redis room state đồng thời (rủi ro chưa kiểm chứng).
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: media-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: media-server
+        app.kubernetes.io/part-of: litmatch
+      annotations:
+        # LiveKit prometheus_port riêng (media-server-config) — docs/07 GĐ6, khác /metrics của
+        # core-api/signaling-gateway (2 app NestJS tự phơi qua prom-client)
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '6789'
+        prometheus.io/path: /metrics
+    spec:
+      # OPTION (chưa bật mặc định) — bỏ comment nếu cluster thật cần client kết nối trực tiếp
+      # UDP RTC port range mà không qua NAT/LoadBalancer phức tạp:
+      #   hostNetwork: true
+      #   dnsPolicy: ClusterFirstWithHostNet
+      # Đánh đổi: pod dùng network namespace của Node (mất cô lập network), port 7880/7881/50000-
+      # 50200 phải trống trên Node đó, không thể chạy 2 pod media-server trên cùng 1 Node. Đây là
+      # 1 lựa chọn có đánh đổi, không phải khuyến nghị mặc định — quyết định cuối cần ADR riêng.
+      containers:
+        - name: media-server
+          # Cùng digest pin với apps/media-server/docker-compose.yml — nâng version qua PR có
+          # benchmark/compatibility evidence riêng, không đổi ngầm ở đây.
+          image: livekit/livekit-server:v1.13.1@sha256:2c6869d2d5ff6c9c0166f47be1c92dad6928bfecfa5e4060a6ece48db8accfa3
+          imagePullPolicy: IfNotPresent
+          args: ['--config', '/etc/livekit.yaml']
+          ports:
+            - name: http
+              containerPort: 7880
+            - name: rtc-tcp
+              containerPort: 7881
+            - name: rtc-udp
+              containerPort: 50000
+              protocol: UDP
+            # K8s containerPort không hỗ trợ khai cả dải 50000-50200 bằng 1 entry — đây chỉ khai
+            # port đầu dải cho mục đích tài liệu/probe; toàn dải cần hostNetwork hoặc NodePort per-
+            # pod ở trên mới thật sự mở hết (giới hạn đã ghi rõ trong README).
+            - name: metrics
+              containerPort: 6789
+          volumeMounts:
+            - name: config
+              mountPath: /etc/livekit.yaml
+              subPath: livekit.yaml
+              readOnly: true
+          # LiveKit chưa có custom health controller theo hợp đồng /health/live của Litmatch (đó
+          # là hợp đồng riêng của NestJS apps) — dùng HTTP GET path gốc trên cổng control (7880)
+          # làm proxy cho "process còn sống và đang lắng nghe". CHƯA kiểm chứng chi tiết response
+          # body/status code chính xác của LiveKit ở version này trong môi trường thật — coi đây
+          # là giả định cần xác nhận khi triển khai thật (ghi ở README).
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # Số liệu khởi điểm, CHƯA có benchmark Party Room production thật (docs/03 § 3.8.A yêu
+          # cầu benchmark theo đúng workload trước khi tin số liệu này) — media/SFU có thể CPU-bound
+          # nặng hơn nhiều tuỳ số publisher/subscriber/track/codec/bitrate, không dùng 1 con số
+          # chung cho mọi cấu hình phòng.
+          resources:
+            requests:
+              cpu: '1'
+              memory: '1Gi'
+            limits:
+              cpu: '2'
+              memory: '2Gi'
+      volumes:
+        - name: config
+          configMap:
+            name: media-server-config

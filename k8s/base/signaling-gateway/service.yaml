@@ -1,0 +1,23 @@
+# ClusterIP nội bộ. Ingress/LoadBalancer thật cho traffic browser/app từ ngoài cluster là điểm mở
+# (API Gateway chưa chốt — docs/04-tech-stack.md) — Service này chỉ expose trong cluster, chưa
+# kèm Ingress resource ở thay đổi này (ngoài phạm vi 2 hạng mục được giao).
+apiVersion: v1
+kind: Service
+metadata:
+  name: signaling-gateway
+  namespace: litmatch
+  labels:
+    app.kubernetes.io/name: signaling-gateway
+    app.kubernetes.io/part-of: litmatch
+spec:
+  type: ClusterIP
+  # Socket.IO transport polling cần sticky session theo IP nếu Ingress không hỗ trợ cookie affinity
+  # và Redis adapter (Giai đoạn 6, đang song song) chưa xong — ghi rõ ở k8s/README.md, không tự
+  # quyết ingress annotation cụ thể ở đây vì phụ thuộc ingress controller thật của cluster.
+  sessionAffinity: None
+  selector:
+    app.kubernetes.io/name: signaling-gateway
+  ports:
+    - name: http
+      port: 3001
+      targetPort: http

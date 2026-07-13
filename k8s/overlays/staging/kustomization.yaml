@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+patches:
+  - path: core-api-patch.yaml
+  - path: core-api-hpa-patch.yaml
+  - path: signaling-gateway-patch.yaml
+  - path: signaling-gateway-hpa-patch.yaml
+  - path: media-server-patch.yaml
+  - path: pdb-core-api-patch.yaml
+  - path: pdb-signaling-gateway-patch.yaml
+images:
+  - name: ghcr.io/litmatch/core-api
+    newTag: staging
+  - name: ghcr.io/litmatch/signaling-gateway
+    newTag: staging

@@ -1,0 +1,8 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: core-api
+  namespace: litmatch
+spec:
+  minReplicas: 1
+  maxReplicas: 3

@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+patches:
+  - path: core-api-patch.yaml
+  - path: core-api-hpa-patch.yaml
+  - path: signaling-gateway-patch.yaml
+  - path: signaling-gateway-hpa-patch.yaml
+  - path: media-server-patch.yaml
+images:
+  - name: ghcr.io/litmatch/core-api
+    newTag: latest # CI ghi đè bằng git SHA lúc deploy thật, xem k8s/README.md
+  - name: ghcr.io/litmatch/signaling-gateway
+    newTag: latest

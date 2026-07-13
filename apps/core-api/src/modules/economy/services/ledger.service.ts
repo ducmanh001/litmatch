@@ -14,6 +14,7 @@ import {
   UQ_TRANSACTIONS_IDEMPOTENCY_KEY,
 } from '../economy.constants';
 import { EconomyErrors } from '../economy.errors';
+import { EconomyMetrics } from '../economy.metrics';
 import {
   LedgerAccount,
   LedgerAccountKind,
@@ -70,7 +71,10 @@ export interface RecordResult {
  */
 @Injectable()
 export class LedgerService {
-  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
+  constructor(
+    @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly metrics: EconomyMetrics,
+  ) {}
 
   async record(input: RecordTransactionInput): Promise<RecordResult> {
     this.validateEntries(input.entries);
@@ -91,11 +95,18 @@ export class LedgerService {
       .findOneBy({
         idempotencyKey: input.idempotencyKey,
       });
-    if (existing)
-      return {
-        transaction: this.assertSameRequest(existing, requestHash),
-        replayed: true,
-      };
+    if (existing) {
+      // assertSameRequest có thể throw IDEMPOTENCY_CONFLICT — record ĐÚNG kết quả, không đoán trước
+      let transaction: LedgerTransaction;
+      try {
+        transaction = this.assertSameRequest(existing, requestHash);
+      } catch (err) {
+        this.metrics.record(input.type, 'failed');
+        throw err;
+      }
+      this.metrics.record(input.type, 'replayed');
+      return { transaction, replayed: true };
+    }
 
     try {
       const transaction = await this.dataSource.transaction(async (manager) => {
@@ -156,6 +167,7 @@ export class LedgerService {
         await input.withinTransaction?.(manager, txn);
         return txn;
       });
+      this.metrics.record(input.type, 'success');
       return { transaction, replayed: false };
     } catch (err) {
       if (
@@ -165,11 +177,19 @@ export class LedgerService {
         const winner = await this.dataSource
           .getRepository(LedgerTransaction)
           .findOneByOrFail({ idempotencyKey: input.idempotencyKey });
-        return {
-          transaction: this.assertSameRequest(winner, requestHash),
-          replayed: true,
-        };
+        let transaction: LedgerTransaction;
+        try {
+          transaction = this.assertSameRequest(winner, requestHash);
+        } catch (assertErr) {
+          this.metrics.record(input.type, 'failed');
+          throw assertErr;
+        }
+        this.metrics.record(input.type, 'replayed');
+        return { transaction, replayed: true };
       }
+      // Transaction failure rate (docs/07 GĐ6) — bao gồm cả lỗi nghiệp vụ (WALLET_INSUFFICIENT_BALANCE
+      // ném từ applyWalletDeltas trong transaction) lẫn lỗi hạ tầng, đều là "giao dịch không ghi sổ được"
+      this.metrics.record(input.type, 'failed');
       throw err;
     }
   }

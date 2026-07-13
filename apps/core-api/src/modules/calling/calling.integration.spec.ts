@@ -1,3 +1,4 @@
+import { Registry } from 'prom-client';
 import { DataSource } from 'typeorm';
 
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
@@ -28,6 +29,8 @@ import {
   MatchSessionStatus,
 } from '../matching/entities/match-session.entity';
 import { EconomyService } from '../economy/economy.service';
+
+import { EconomyMetrics } from '../economy/economy.metrics';
 import { LedgerService } from '../economy/services/ledger.service';
 import { LedgerAccount } from '../economy/entities/ledger-account.entity';
 import { LedgerEntry } from '../economy/entities/ledger-entry.entity';
@@ -257,7 +260,7 @@ d('Calling integration (Postgres thật)', () => {
     await ds.runMigrations();
 
     const userService = new UserService(ds.getRepository(User), configStub);
-    const ledger = new LedgerService(ds);
+    const ledger = new LedgerService(ds, new EconomyMetrics(new Registry()));
     const stubVerifier = {
       verify: async (_p: IapProvider, payload: Record<string, unknown>) => ({
         providerTransactionId: String(payload['devTransactionId']),
@@ -292,6 +295,8 @@ d('Calling integration (Postgres thật)', () => {
       configStub,
       // stub publish — realtime end-to-end đã test ở suite signaling-gateway
       { publish: async () => 1 } as never,
+      // metrics call drop rate không phải trọng tâm suite này — test riêng ở calling.metrics.spec.ts
+      { recordEnded: () => undefined } as never,
     );
     ticker = new CallTickerService(
       ds,

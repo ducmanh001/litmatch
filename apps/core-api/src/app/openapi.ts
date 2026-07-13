@@ -11,7 +11,12 @@ import type {
 } from '@nestjs/swagger/dist/interfaces/open-api-spec.interface';
 
 export const API_GLOBAL_PREFIX = 'api/v1';
-export const API_PREFIX_EXCLUDES = ['health', 'health/live', 'health/ready'];
+export const API_PREFIX_EXCLUDES = [
+  'health',
+  'health/live',
+  'health/ready',
+  'metrics', // docs/07 Giai đoạn 6 — scrape Prometheus theo convention chuẩn /metrics
+];
 
 const HTTP_METHODS = [
   'get',

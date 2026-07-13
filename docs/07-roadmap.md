@@ -60,11 +60,53 @@
 
 ## Giai đoạn 6 — Scale & Observability
 
-- [ ] Horizontal scale Signaling Gateway (Redis adapter cho Socket.IO)
-- [ ] Kubernetes deployment + autoscale
-- [ ] Monitoring: Prometheus metrics (matching latency, call drop rate, transaction failure rate)
-- [ ] Distributed tracing xuyên suốt Matching → Calling → Economy
-- [ ] Load test (k6/Artillery)
+- [x] Horizontal scale Signaling Gateway (Redis adapter cho Socket.IO): `@socket.io/redis-adapter`
+      qua `SignalingRedisAdapterService` (2 kết nối Redis riêng — KHÔNG dùng chung với connection
+      PSUBSCRIBE `realtime:user:*` sẵn có), gắn vào `CorsIoAdapter` trước `app.listen()` —
+      [services/realtime-gateway.md § 6](./services/realtime-gateway.md). Verify bằng integration
+      test 2 instance gateway độc lập thật (`signaling.horizontal-scale.integration.spec.ts`):
+      `server.to(room).emit()` gọi ở instance B tới được socket chỉ connect ở instance A. Readiness
+      `/health/ready` cộng thêm check `redisClusterAdapter`.
+- [x] Kubernetes deployment + autoscale: `k8s/` (kustomize base + overlay `staging`/`production`)
+      cho đúng 3 backend deployable — Deployment/Service/ConfigMap/Secret-placeholder/HPA/PDB cho
+      `core-api` + `signaling-gateway`, Deployment/Service/ConfigMap riêng cho `media-server`
+      (KHÔNG HPA — một room vẫn phải vừa một node theo docs/03 § 3.5, networking RTC multi-node
+      thật cần ADR riêng, chưa quyết ở đây). Xem giả định/điểm mở trong `k8s/README.md`.
+- [x] Monitoring: Prometheus metrics (matching latency, call drop rate, transaction failure rate):
+      `libs/observability` (`prom-client`, registry riêng mỗi process + `http_request_duration_seconds`
+      dùng chung) + `/metrics` (không JWT, không throttle) trên `core-api`/`signaling-gateway`;
+      LiveKit tự phơi `prometheus_port` riêng (`media-server-config`). 3 metric domain theo đúng
+      yêu cầu: `matching_ticket_wait_seconds` (`MatchingMetrics`, ghi trong `MatcherWorkerService.tryPair`
+      lúc match), `call_ended_total{reason}` (`CallingMetrics`, ghi trong `CallingService.endById`
+      — drop rate = tỉ lệ `reason!="completed"` tính ở PromQL), `economy_transaction_total{type,result}`
+      (`EconomyMetrics`, ghi tại ĐIỂM DUY NHẤT `LedgerService.record()` — bao trùm mọi giao dịch
+      Economy vì đây là writer duy nhất của ledger). Verify bằng unit test cho từng metric + 5 suite
+      integration Economy/Matching/Calling/Gift/Avatar chạy thật trên Postgres+Redis.
+- [x] Distributed tracing xuyên suốt Matching → Calling → Economy: `@opentelemetry/sdk-node` +
+      `auto-instrumentations-node` (http/express/pg/ioredis/pino...) bootstrap ở `apps/*/src/tracing.ts`
+      (import ĐẦU TIÊN trong `main.ts` — ràng buộc kỹ thuật thật của OTel JS, đã verify bằng script
+      tay + app build thật). Opt-in qua env chuẩn OTel `OTEL_EXPORTER_OTLP_ENDPOINT` — KHÔNG khởi
+      động SDK nếu thiếu (tránh export lỗi âm thầm ở dev/test/CI chưa có collector); metrics/logs
+      của chính OTel SDK bị tắt hẳn để không chồng lấn Prometheus/pino đã chọn. HTTP request tự
+      thành root span (nối Matching/Calling/Economy khi cùng 1 request chạm cả 3, vd `CallingService.joinCall`
+      đọc `MatchingService`); 2 background job không có parent span tự nhiên (`MatcherWorkerService`,
+      `CallTickerService` — nơi Calling thật sự chạm Economy qua `spendDiamond` mỗi phút billing)
+      được bọc thủ công bằng `withSpan()` (`libs/observability/src/lib/traced.ts`). Bonus phát hiện
+      khi verify: `@opentelemetry/instrumentation-pino` tự gắn `trace_id`/`span_id` vào mọi log —
+      nối log ↔ trace không cần thêm code (docs/05 § 5.5).
+- [x] Load test (k6/Artillery): `loadtest/` — `matching-queue.js`, `calling-flow.js` (k6, join
+      queue → matched → confirm → join call), `signaling-ws.js` (k6, framing Socket.IO tự viết tay
+      vì k6 không có client Socket.IO gốc — CHƯA verify được trên server thật, có
+      `signaling-ws.artillery.yml` dùng `artillery-engine-socketio-v3` làm phương án thay thế đã
+      kiểm chứng tốt hơn). Threshold trong script là điểm khởi đầu, cần chỉnh theo SLO thật khi có
+      traffic production — xem `loadtest/README.md`.
+
+**Giai đoạn 6 hoàn tất** — điểm mở cần quyết định trước khi vận hành thật ở quy mô lớn (không
+chặn merge, ghi nhận để làm tiếp ở Giai đoạn 7 hoặc khi có nhu cầu): networking RTC multi-node cho
+LiveKit trong K8s (hostNetwork vs NodePort per-pod — cần ADR riêng), chọn công cụ quản lý Secret
+(sealed-secrets/Vault — hiện chỉ khai tên key, không tạo giá trị thật trong git), xác nhận framing
+Socket.IO tay trong `signaling-ws.js` trên server thật trước khi tin số liệu của nó, và scale HPA
+theo custom metric Prometheus (vd độ sâu matching queue) cần thêm `prometheus-adapter` — chưa làm.
 
 ## Giai đoạn 7 — Vận hành ở quy mô thật (Litmatch-scale, không còn là MVP)
 

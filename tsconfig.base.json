@@ -20,7 +20,8 @@
       "@litmatch/common-dtos/pure": ["./libs/common-dtos/src/pure.ts"],
       "@litmatch/api-client": ["./libs/api-client/src/index.ts"],
       "@litmatch/logger": ["./libs/logger/src/index.ts"],
-      "@litmatch/config-validator": ["./libs/config-validator/src/index.ts"]
+      "@litmatch/config-validator": ["./libs/config-validator/src/index.ts"],
+      "@litmatch/observability": ["./libs/observability/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]

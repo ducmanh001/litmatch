@@ -1,3 +1,4 @@
+import { Registry } from 'prom-client';
 import { DataSource } from 'typeorm';
 
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
@@ -9,6 +10,7 @@ import { PhoneOtp } from '../auth/entities/phone-otp.entity';
 import { RefreshToken } from '../auth/entities/refresh-token.entity';
 import { User } from '../user/entities/user.entity';
 
+import { EconomyMetrics } from './economy.metrics';
 import { EconomyService } from './economy.service';
 import { EconomyErrors } from './economy.errors';
 import { LedgerService } from './services/ledger.service';
@@ -106,7 +108,7 @@ d('Economy integration (Postgres thật)', () => {
     await ds.initialize();
     await ds.runMigrations();
 
-    ledger = new LedgerService(ds);
+    ledger = new LedgerService(ds, new EconomyMetrics(new Registry()));
     economy = new EconomyService(
       ds.getRepository(Wallet),
       ds.getRepository(IapProduct),

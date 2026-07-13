@@ -1,0 +1,8 @@
+# Cùng lý do như pdb-core-api-patch.yaml — staging chạy 1 replica signaling-gateway.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: signaling-gateway
+  namespace: litmatch
+spec:
+  minAvailable: 0
