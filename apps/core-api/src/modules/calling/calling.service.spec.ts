@@ -30,7 +30,11 @@ const configStub = {
   },
 } as unknown as ConfigService<CoreApiEnv, true>;
 
-const me: AuthenticatedUser = { userId: 'user-a', isGuest: false };
+const me: AuthenticatedUser = {
+  userId: 'user-a',
+  isGuest: false,
+  role: 'user',
+};
 const PARTNER_ID = 'user-b';
 
 function makeVoiceSession(overrides: Partial<MatchSession> = {}): MatchSession {

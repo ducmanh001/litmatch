@@ -31,7 +31,11 @@ const configStub = {
   },
 } as unknown as ConfigService<CoreApiEnv, true>;
 
-const me: AuthenticatedUser = { userId: 'user-me', isGuest: false };
+const me: AuthenticatedUser = {
+  userId: 'user-me',
+  isGuest: false,
+  role: 'user',
+};
 const PARTNER_ID = 'user-partner';
 
 /** Session soul đã confirmed cách đây `secondsAgo` giây (phase derive theo Date.now thật). */

@@ -14,6 +14,7 @@ import {
   API_PREFIX_EXCLUDES,
   buildOpenApiDocument,
 } from './app/openapi';
+import { parseCorsOrigins } from './common/cors/cors-origins';
 import { METRICS_REGISTRY } from './common/metrics/metrics.constants';
 
 import type { CoreApiEnv } from './config/env.validation';
@@ -35,11 +36,11 @@ async function bootstrap(): Promise<void> {
   app.use(helmet());
   app.use(createHttpMetricsMiddleware(app.get<Registry>(METRICS_REGISTRY))); // docs/07 Giai đoạn 6 — http_request_duration_seconds
 
-  const corsOrigins = config
-    .getOrThrow('CORS_ORIGINS', { infer: true })
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
+  // Đã validate format lúc boot ở env.validation.ts (Joi custom) — parse lại đây chỉ để lấy
+  // mảng, không throw lần 2 trong điều kiện bình thường.
+  const corsOrigins = parseCorsOrigins(
+    config.getOrThrow('CORS_ORIGINS', { infer: true }),
+  );
   app.enableCors({ origin: corsOrigins.length > 0 ? corsOrigins : false }); // cấm '*' (docs/05 § 5.8)
 
   app.useGlobalPipes(

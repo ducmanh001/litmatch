@@ -13,8 +13,10 @@ import type { CoreApiEnv } from '../config/env.validation';
 import { SnakeNamingStrategy } from '../database/snake-naming.strategy';
 import { GlobalExceptionFilter } from '../common/filters/global-exception.filter';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
 import { ResponseEnvelopeInterceptor } from '../common/interceptors/response-envelope.interceptor';
 import { MetricsModule } from '../common/metrics/metrics.module';
+import { AdminModule } from '../modules/admin';
 import { AuthModule } from '../modules/auth';
 import { AvatarModule } from '../modules/avatar';
 import { CallingModule } from '../modules/calling';
@@ -89,12 +91,14 @@ import { ReadinessService } from './readiness.service';
     MovieMatchModule,
     PalmMatchModule,
     MiniGameModule,
+    AdminModule,
   ],
   controllers: [HealthController],
   providers: [
     ReadinessService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_INTERCEPTOR, useClass: ResponseEnvelopeInterceptor },
     { provide: APP_FILTER, useClass: GlobalExceptionFilter },
   ],

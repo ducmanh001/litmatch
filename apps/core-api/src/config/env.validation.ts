@@ -4,6 +4,7 @@ import {
 } from '@litmatch/config-validator';
 import * as Joi from 'joi';
 
+import { parseCorsOrigins } from '../common/cors/cors-origins';
 import { parseLivekitRegionUrls } from '../common/livekit/livekit-url';
 
 /**
@@ -108,7 +109,14 @@ export interface CoreApiEnv {
 export const coreApiEnvSchema = Joi.object({
   ...baseEnvSchema,
   PORT: Joi.number().port().default(3000),
-  CORS_ORIGINS: Joi.string().allow('').default(''),
+  // Task 0 (docs/12 § 12.7 point 3) — validate format lúc boot, không đợi tới enableCors runtime
+  CORS_ORIGINS: Joi.string()
+    .allow('')
+    .default('')
+    .custom((value: string) => {
+      parseCorsOrigins(value); // sai format → throw, Joi báo lỗi với message của Error
+      return value;
+    }, 'danh sách origin http(s) hợp lệ, phân cách bằng dấu phẩy'),
   SWAGGER_ENABLED: Joi.boolean().default(true),
 
   DATABASE_URL: Joi.string()
