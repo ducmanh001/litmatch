@@ -174,10 +174,7 @@ jobs:
           CORE_IMAGE: litmatch/core-api:${{ github.sha }}
           SIGNALING_IMAGE: litmatch/signaling-gateway:${{ github.sha }}
         run: |
-          cleanup() {
-            docker rm --force litmatch-core-smoke litmatch-signaling-smoke >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
+          trap 'docker rm --force litmatch-core-smoke litmatch-signaling-smoke >/dev/null 2>&1 || true' EXIT
 
           # The production bundle uses test config until a real SMS provider is available;
           # core-api intentionally refuses to boot production with DevSmsProvider.
@@ -194,7 +191,7 @@ jobs:
             --env REDIS_URL="${REDIS_URL}" \
             "${SIGNALING_IMAGE}"
 
-          for attempt in {1..30}; do
+          for _ in {1..30}; do
             if curl --fail --silent http://127.0.0.1:3000/health/ready >/dev/null \
               && curl --fail --silent http://127.0.0.1:3001/health/ready >/dev/null; then
               exit 0

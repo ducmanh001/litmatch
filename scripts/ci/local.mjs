@@ -160,8 +160,9 @@ function runCleanQuality() {
     'pnpm nx reset',
     'pnpm agent:check',
     'pnpm agent:test',
+    'SHELLCHECK="$(node scripts/ci/security-tools.mjs shellcheck --print-path)"',
     'ACTIONLINT="$(node scripts/ci/security-tools.mjs actionlint --print-path)"',
-    '"$ACTIONLINT" .github/workflows/*.yml',
+    '"$ACTIONLINT" -shellcheck="$SHELLCHECK" .github/workflows/*.yml',
     'pnpm format:check',
     'pnpm nx run-many -t lint',
   ].join(' && ');
@@ -470,8 +471,10 @@ function provisionSecurityTool(toolName) {
 }
 
 function runWorkflowLint() {
+  const shellcheck = provisionSecurityTool('shellcheck');
   const actionlint = provisionSecurityTool('actionlint');
   run('Validate GitHub Actions workflows', actionlint, [
+    `-shellcheck=${shellcheck}`,
     '.github/workflows/ci.yml',
     '.github/workflows/security.yml',
   ]);
