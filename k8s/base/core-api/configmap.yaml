@@ -11,6 +11,8 @@ kind: ConfigMap
 metadata:
   name: core-api-config
   namespace: litmatch
+  # KSV-0109 false-positive: hai key có chữ TOKEN chỉ là TTL (số giây), không phải credential.
+  # Exception scoped theo đúng file trong .trivyignore.yaml; credential vẫn phải nằm trong Secret.
   labels:
     app.kubernetes.io/name: core-api
     app.kubernetes.io/part-of: litmatch

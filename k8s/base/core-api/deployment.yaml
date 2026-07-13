@@ -33,6 +33,13 @@ spec:
         prometheus.io/port: '3000'
         prometheus.io/path: /metrics
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       # Placeholder registry — CI đổi tag theo SHA qua kustomize image transformer (xem
       # kustomization.yaml overlay), không build/push image ở thay đổi này.
       containers:
@@ -47,6 +54,9 @@ spec:
                 name: core-api-config
             - secretRef:
                 name: core-api-secrets
+          volumeMounts:
+            - name: temporary-files
+              mountPath: /tmp
           # CPU-bound business logic: request cao hơn signaling-gateway, memory vừa phải cho
           # Node + connection pool DB/Redis/Kafka. Số liệu khởi điểm — CHƯA có benchmark production
           # thật, điều chỉnh theo Giai đoạn 7 khi có traffic thật (docs/03 § 3.8 phân biệt thiết kế
@@ -76,6 +86,15 @@ spec:
             failureThreshold: 3
           securityContext:
             runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: false
+            privileged: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ['ALL']
       terminationGracePeriodSeconds: 30
+      volumes:
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: 64Mi
