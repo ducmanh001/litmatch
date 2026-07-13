@@ -37,83 +37,26 @@ vào cách triển khai cụ thể trong NestJS.
 - **`getOrThrow()` mặc định, không phải `get()` + fallback tay**: mọi giá trị mặc định/optional khai 1 lần trong Joi schema (`env.validation.ts`, `.default(...)`), code luôn đọc bằng `getOrThrow()` — thiếu biến thì chết ngay lúc dùng thay vì âm thầm chạy với giá trị đoán, và không có 2 nơi cùng giữ 1 default (schema + `config.get('X', 100)` lặp lại) dễ lệch nhau khi sửa 1 chỗ quên chỗ kia. Ngoại lệ hợp lệ duy nhất: cờ môi trường có thể thật sự không tồn tại ở 1 số môi trường (vd `NODE_ENV`) thì dùng `get()`.
 - **Job chạy định kỳ cần đọc interval từ config** (`.env`, không hardcode — § 5.1): không dùng decorator tĩnh `@Cron()`/`@Interval()`/`@Timeout()` (nhận giá trị cố định lúc decorate class) — đăng ký qua `SchedulerRegistry` (`@nestjs/schedule`) trong `onApplicationBootstrap`, đọc interval bằng `getOrThrow()` rồi `addInterval()`/`addCronJob()` thủ công (xem `outbox-relay.service.ts`, `ticket-sweeper.service.ts`).
 
-## 5.3 Cấu trúc thư mục (ví dụ trong `apps/core-api`)
+## 5.3 Cấu trúc module
 
-```
-src/
- |-- modules/
- |    |-- matching/
- |    |    |-- matching.controller.ts
- |    |    |-- matching.service.ts       (facade — service TRÙNG TÊN module, public API qua DI)
- |    |    |-- matching.module.ts
- |    |    |-- matching.constants.ts     (hằng số/key builder dùng bởi ≥2 file trong module — § 5.1)
- |    |    |-- matching.errors.ts
- |    |    |-- index.ts                  (public API — module khác CHỈ import từ đây)
- |    |    |-- jobs/                     (matcher-worker, ticket-sweeper)
- |    |    |-- ports/                    (interaction-policy)
- |    |    |-- redis/                    (provider + key builder Redis riêng của module, nếu có)
- |    |    |-- dto/
- |    |    |-- entities/       (MatchTicket, MatchQueue, MatchSession)
- |    |    `-- events/
- |    `-- economy/
- |         |-- economy.controller.ts
- |         |-- economy.service.ts       (facade; tính toán/derive Wallet snapshot)
- |         |-- economy.module.ts
- |         |-- economy.constants.ts
- |         |-- economy.errors.ts
- |         |-- index.ts
- |         |-- services/       (ledger.service.ts — writer duy nhất; refund.service.ts)
- |         |-- jobs/           (iap-refund-poll, outbox-relay, reconciliation)
- |         |-- ports/          (iap-verifier, notification-verifier)
- |         |-- clients/        (apple-server-api, google-service-account)
- |         |-- webhooks/
- |         |-- dto/
- |         `-- entities/       (LedgerEntry, Wallet, Transaction)
- |-- common/                   (hạ tầng dùng chung TRONG core-api — cái gì app khác cũng cần thì lên libs/)
- |    |-- filters/
- |    |-- interceptors/
- |    |-- guards/
- |    |-- decorators/
- |    |-- constants/           (hằng số bên thứ 3 dùng ≥2 module — § 5.1)
- |    `-- types/               (hợp đồng type giữa modules và common, vd AccessTokenPayload — xem dưới)
- |-- database/                 (hạ tầng DB: naming strategy, datasource CLI, postgres-errors helper)
- |-- config/
- `-- main.ts
-```
+Chi tiết canonical nằm trong [16-module-blueprint.md](./16-module-blueprint.md).
+Mọi module trong `apps/core-api/src/modules` phải theo blueprint đó; skill
+`.agents/skills/new-module/SKILL.md` chỉ là quy trình thực thi, không được tạo
+quy tắc folder/file riêng.
 
-**Gốc module chỉ chứa đúng bộ**: `<module>.controller.ts / <module>.service.ts / <module>.module.ts / <module>.errors.ts / index.ts` (+ `<module>.constants.ts` khi module có hằng cấp module — optional, vd `user/` không có và không cần; + `<module>.integration.spec.ts` nếu có). Mọi thành phần khác xếp vào folder theo **vai trò** — bảng quyết định (chọn dòng ĐẦU TIÊN khớp):
+Tóm tắt bắt buộc:
 
-| Thành phần là gì?                                                                                                                                                                                                                                                            | Folder                    | Ví dụ hiện có                                                                           |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | --------------------------------------------------------------------------------------- |
-| Xử lý HTTP webhook từ bên thứ 3 (controller `@Public` + verify chữ ký)                                                                                                                                                                                                       | `webhooks/`               | `economy/webhooks/`                                                                     |
-| **Port/Strategy**: abstract class (hoặc interface + Symbol) là boundary ổn định để cắm/đổi implementation qua env hoặc DI override — kể cả khi hiện mới có 1 impl dev, miễn là impl thật chắc chắn cắm vào đây sau (Twilio cho SMS, Safety module cho interaction-policy...) | `ports/`                  | `iap-verifier`, `notification-verifier`, `sms-provider`, `interaction-policy`           |
-| **Job nền chạy định kỳ** (đăng ký `SchedulerRegistry` trong `onApplicationBootstrap`)                                                                                                                                                                                        | `jobs/`                   | `outbox-relay`, `reconciliation`, `iap-refund-poll`, `matcher-worker`, `ticket-sweeper` |
-| **Client bên thứ 3**: hàm/lớp thuần gọi API ngoài (không chứa rule nghiệp vụ, không phải port vì chỉ 1 impl)                                                                                                                                                                 | `clients/`                | `apple-server-api`, `google-service-account`                                            |
-| Provider hạ tầng store riêng của module (Redis/queue) + key builder của nó                                                                                                                                                                                                   | `redis/` (hoặc tên store) | `matching/redis/`                                                                       |
-| **Sub-service nghiệp vụ** còn lại, gọi qua DI trong process                                                                                                                                                                                                                  | `services/`               | `ledger.service`, `refund.service`, `otp.service`, `token.service`                      |
-
-- Folder nào chưa có thành phần thì KHÔNG tạo sẵn (matching không có `services/` vì ngoài facade chưa có sub-service nào).
-- **Unit test `*.spec.ts` đặt CẠNH file nó test** (chuẩn NestJS/Jest/Nx — test sống-chết-di-chuyển cùng file nguồn, không gom `tests/` riêng); test integration cả module (`*.integration.spec.ts`, cần DB thật) đặt ở gốc module.
-- Lý do có bảng này: 1 repo mà 2 kiểu cấu trúc thì module thứ N không biết theo kiểu nào; folder trộn nhiều vai trò (service + job + port + client chung 1 chỗ) thì nhìn cây thư mục không còn đọc ra được kiến trúc module.
-
-Mỗi module nghiệp vụ khác (auth, user, social, content, moderation, notification, gift) đi theo đúng bộ khung `*.controller.ts / *.service.ts / *.module.ts / dto/ / entities/ / events/` như ví dụ `matching/` ở trên. **Sinh module mới bằng skill `/new-module`** — thứ tự sinh file cố định + tự nối vào các mảnh khung dùng chung:
-
-- `BaseAppEntity` (`src/common/entities/base.entity.ts`): uuid PK + createdAt/updatedAt — opt-in, entity có PK nghiệp vụ riêng hoặc bảng append-only thì tự khai cột.
-- `@IdempotencyKey()` + `@ApiIdempotencyKeyHeader()` (`src/common/decorators/idempotency-key.decorator.ts`): chuẩn duy nhất để nhận idempotency key ở controller — validate bắt buộc + độ dài, service chỉ còn lo prefix theo domain + unique constraint DB.
-- `CursorPageQueryDto` / `encodeCursor` / `decodeCursor` / `buildCursorPage` (`@litmatch/common-dtos`): chuẩn duy nhất cho list cursor-based — query `limit + 1` rồi đưa qua `buildCursorPage`.
-- `DomainException` + `<Module>Errors` trong `*.errors.ts` (`@litmatch/common-exceptions`).
-
-Khung chỉ cứng ở tầng hình thái này — business logic trong service tự do, không abstract hoá nghiệp vụ.
-
-**Enum và interface nội bộ — định nghĩa cùng file dùng nó, không tách file riêng mặc định:**
-
-- Enum chỉ gắn với 1 cột của đúng 1 entity (vd `IapProvider` trên cột `IapReceipt.provider`) → khai ngay trong file entity đó (`*.entity.ts`/`*.entities.ts`), `export` để nơi khác import khi cần. Không tạo `*.enums.ts` riêng cho 1 enum nhỏ dùng 1 chỗ.
-- Interface là input/output cho lời gọi **nội bộ giữa module qua DI** (không phải DTO nhận từ HTTP — HTTP DTO vẫn bắt buộc class + class-validator theo § 5.1) → khai ngay trong `*.service.ts` là nơi định nghĩa/dùng nó, `export` thẳng để module khác import qua đúng public API (`index.ts`). Không cần class-validator vì đây không phải system boundary.
-- Chỉ tách ra file riêng (`*.enums.ts`, `*.interfaces.ts`) khi 1 enum/interface thực sự dùng chung bởi ≥2 entity/service không liên quan trực tiếp, để tránh import vòng hoặc kéo cả file service chỉ để lấy 1 type.
-- **Port/Strategy cần cắm/đổi implementation qua config** (vd verify receipt IAP, gửi SMS, verify webhook — nơi cần đổi Dev ↔ Store/thật qua env mà không sửa code gọi; không bắt buộc phải đã có ≥2 impl, chỉ cần boundary là thật): khai `abstract class` + toàn bộ implementation cụ thể (`Dev...`, `Store...`) chung 1 file đặt tên theo khái niệm (`iap-verifier.ts`, `sms-provider.ts`) trong folder `ports/` của module, không tách mỗi implementation 1 file. Bind qua module bằng `provide: <AbstractClass>` (dùng thẳng class làm token, không cần `Symbol`) + `useClass`/`useFactory` chọn theo config.
-- **DI token qua `Symbol()`**: chỉ dùng khi KHÔNG có class để làm token — type của thư viện ngoài (vd client Redis) hoặc 1 `interface` thuần không tồn tại lúc runtime (vd 1 policy có thể bị override bởi module khác chưa tồn tại). Có abstract class rồi thì bind thẳng bằng class đó, không tạo thêm `Symbol`. Mỗi `Symbol` phải có comment lý do tồn tại ngay tại khai báo (§ 5.1 mục 4).
-- **Type là HỢP ĐỒNG giữa 2 nơi (producer/consumer khác file) thì chỉ có 1 định nghĩa, đặt ở phía không được phép import phía kia**: vd `AccessTokenPayload` — auth ký, guard ở `common/` verify; `common/` không được import từ `modules/` nên type đặt ở `common/types/` và cả 2 đầu cùng import. Producer dùng đúng type đó khi tạo giá trị (`const payload: AccessTokenPayload = {...}`), KHÔNG truyền object literal trần — lệch hợp đồng phải là lỗi compile, không phải bug runtime. Khi app thứ 2 (signaling-gateway) cần cùng hợp đồng → chuyển lên `libs/`.
-- **Trước khi tự viết helper cho việc "ai cũng gặp" (pagination, idempotency, bắt lỗi DB, hash...): kiểm tra khung dùng chung bên dưới + `common/` + `libs/` đã có chưa** — tự chế bản riêng (vd tự encode cursor bằng `Buffer` thay vì `encodeCursor`/`buildCursorPage` của `@litmatch/common-dtos`) tạo 2 chuẩn song song, client/reviewer không biết tin bản nào, và bản tự chế thường thiếu case (cursor hỏng, race...) mà bản chung đã xử.
+- Module theo domain, có `index.ts` làm public API duy nhất và module khác không import
+  file nội bộ.
+- Root module chỉ chứa facade/module/controller/errors/constants và test colocated;
+  `dto/`, `entities/`, `services/`, `repositories/`, `ports/`, `clients/`, `jobs/`,
+  `webhooks/`, `redis/`, `events/` đều optional theo nhu cầu thực tế.
+- Không tạo folder trống hoặc abstraction để dành. Entity, repository, job và client
+  không được dùng lẫn vai trò.
+- `index.ts` export contract public tối thiểu; không export TypeORM entity/repository
+  cho module mới.
+- DTO, entity, event và migration tuân theo rule chi tiết trong blueprint; test đặt cạnh
+  source, integration test đặt ở root module.
 
 ## 5.4 API contract
 

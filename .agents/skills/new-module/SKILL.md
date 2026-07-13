@@ -7,7 +7,9 @@ description: Scaffold một module NestJS mới trong apps/core-api theo coding 
 
 ## 1. Nạp context
 
-1. Đọc `AGENTS.md`, `apps/core-api/AGENTS.md` và `docs/05-coding-standards.md § 5.3–5.6`.
+1. Đọc `AGENTS.md`, `apps/core-api/AGENTS.md`, `docs/05-coding-standards.md § 5.1–5.6`
+   và [Module Blueprint](../../../docs/16-module-blueprint.md). Blueprint là nguồn chuẩn
+   cho cây file/folder; skill này chỉ mô tả thứ tự thao tác.
 2. Chạy `pnpm agent:context core` và scope domain nếu có.
 3. Đọc domain rules/spec liên quan. Domain phức tạp chưa có spec thì tạo skeleton spec và xin
    quyết định trước khi code sâu.
@@ -20,23 +22,23 @@ Nếu module có tiền, realtime, state machine hoặc tài nguyên tranh chấ
 
 ## 3. Tạo theo thứ tự
 
-| #   | Thành phần                 | Quy tắc                                                                      |
-| --- | -------------------------- | ---------------------------------------------------------------------------- |
-| 1   | `entities/*.entity.ts`     | Dùng `BaseAppEntity` trừ PK nghiệp vụ/append-only; table snake_case số nhiều |
-| 2   | `<module>.errors.ts`       | Một error taxonomy duy nhất, `as const`                                      |
-| 3   | `dto/*.dto.ts`             | Validation + OpenAPI; output có `from`; list dùng cursor helper chung        |
-| 4   | `<module>.constants.ts`    | Config key, constraint, topic, third-party constant, idempotency prefix      |
-| 5   | `<module>.service.ts`      | Facade public; config typed; transaction/idempotency cho side effect         |
-| 6   | Thành phần con             | Chỉ tạo folder thực sự cần: `services/jobs/ports/clients/webhooks/redis`     |
-| 7   | `<module>.service.spec.ts` | Viết ngay; cover happy/error/edge/race nếu có contention                     |
-| 8   | `<module>.controller.ts`   | Chỉ điều phối; DTO, OpenAPI, idempotency header đầy đủ                       |
-| 9   | `events/`                  | Event versioned; DB write + publish dùng outbox                              |
-| 10  | `<module>.module.ts`       | `forFeature`; export public API tối thiểu                                    |
-| 11  | `index.ts`                 | Public API duy nhất của module                                               |
-| 12  | Migration mới              | Không sửa migration đã commit; thêm index theo query thật                    |
-| 13  | Đăng ký                    | Import module vào `app.module.ts`                                            |
+1. Xác định ownership, boundary, flow và acceptance criteria. Nếu module có tiền,
+   realtime, state machine hoặc contention, chạy `review-module plan`.
+2. Tạo root skeleton theo blueprint: `<module>.module.ts`, facade service nếu có
+   behavior, controller nếu có HTTP, `<module>.errors.ts` và `index.ts`.
+3. Thêm `constants.ts` và các folder optional (`dto`, `entities`, `services`,
+   `repositories`, `ports`, `clients`, `jobs`, `webhooks`, `redis`, `events`) chỉ khi
+   thực sự có thành phần tương ứng.
+4. Thêm entity/DTO/port/service/job/client/event theo nhu cầu; dùng `BaseAppEntity`,
+   shared decorators, cursor helper và `DomainException` của repo khi áp dụng.
+5. Viết unit test cạnh file nguồn. Thêm integration test DB thật cho flow cần kiểm tra
+   transaction/concurrency. Schema chỉ đổi bằng migration mới.
+6. Wiring `forFeature`, provider và public exports tối thiểu trong `<module>.module.ts`;
+   đăng ký module trong `app.module.ts`.
+7. Kiểm tra `index.ts` không làm lộ entity/repository/job/client nội bộ và module khác
+   không import file nội bộ.
 
-Không tạo abstraction/folder để dành. Module khác không import file nội bộ.
+Không tạo abstraction hoặc folder để dành. Module khác không import file nội bộ.
 
 ## 4. Validate và bàn giao
 
