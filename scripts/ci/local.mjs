@@ -68,11 +68,11 @@ const sensitiveEnvKeys = new Set([
   'LOCAL_CI_INTEGRATION_DB_URL',
 ]);
 
-function redactEnvAssignment(arg) {
+function redactEnvAssignment(arg, { force = false } = {}) {
   const separatorIndex = arg.indexOf('=');
   if (separatorIndex <= 0) return arg;
   const key = arg.slice(0, separatorIndex);
-  if (!sensitiveEnvKeys.has(key)) return arg;
+  if (!force && !sensitiveEnvKeys.has(key)) return arg;
   return `${key}=***REDACTED***`;
 }
 
@@ -84,17 +84,23 @@ function commandTextForLog(command, args) {
       (current === '--env' || current === '-e') &&
       typeof args[index + 1] === 'string'
     ) {
-      sanitizedArgs.push(current, redactEnvAssignment(args[index + 1]));
+      sanitizedArgs.push(
+        current,
+        redactEnvAssignment(args[index + 1], { force: true }),
+      );
       index += 1;
       continue;
     }
 
     if (typeof current === 'string') {
-      sanitizedArgs.push(redactEnvAssignment(current));
+      const looksLikeEnvAssignment = current.includes('=');
+      sanitizedArgs.push(
+        redactEnvAssignment(current, { force: looksLikeEnvAssignment }),
+      );
       continue;
     }
 
-    sanitizedArgs.push(current);
+    sanitizedArgs.push(String(current));
   }
 
   return commandText(command, sanitizedArgs);
