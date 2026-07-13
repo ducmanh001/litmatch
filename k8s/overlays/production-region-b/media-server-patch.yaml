@@ -1,0 +1,23 @@
+# Region B — SCAFFOLD chưa provision. media-server giữ replicas: 1 và KHÔNG có HPA giống mọi
+# môi trường khác (ADR 0005: hostNetwork gỡ blocker networking, nhưng tăng replica vẫn chờ
+# benchmark thật — k8s/README.md mục media-server). Node LiveKit của region này join CÙNG cụm
+# LiveKit (chung Redis) với region A — bất biến ADR 0005, cấu hình redis trong livekit.yaml
+# của base phải trỏ Redis chung đó lúc deploy thật. Resource copy từ production; tune theo
+# node thật của region.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: media-server
+  namespace: litmatch
+spec:
+  template:
+    spec:
+      containers:
+        - name: media-server
+          resources:
+            requests:
+              cpu: '2'
+              memory: '2Gi'
+            limits:
+              cpu: '4'
+              memory: '4Gi'

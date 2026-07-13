@@ -1,0 +1,34 @@
+# ConfigMap của ingress-nginx CONTROLLER (không phải app litmatch) — trust proxy Cloudflare để
+# lấy real client IP. SCAFFOLD CHƯA PROVISION: chỉ apply khi (a) đã cài ingress-nginx controller
+# vào cluster (k8s/README.md — controller không nằm trong repo này) và (b) traffic đã thật sự đi
+# qua proxy Cloudflare (ADR 0006). KHÔNG nằm trong kustomization nào — apply thủ công/CI riêng
+# per-cluster, vì namespace/tên ConfigMap phụ thuộc cách cài controller.
+#
+# Tên + namespace dưới đây theo install chuẩn của ingress-nginx (helm chart / static manifest
+# mặc định đều tạo ConfigMap `ingress-nginx-controller` trong namespace `ingress-nginx`) — nếu
+# cluster cài khác (vd helm release tên khác), đổi metadata cho khớp rồi merge phần `data:` vào
+# ConfigMap hiện có của controller (apply đè sẽ THAY THẾ toàn bộ data — nếu controller đang có
+# option khác trong ConfigMap, phải giữ lại chúng).
+#
+# Vì sao cần: qua proxy Cloudflare, nginx thấy source IP là IP Cloudflare — rate-limit/audit/log
+# theo IP client sẽ sai nếu không cấu hình. 3 option dưới đây theo đúng tài liệu ingress-nginx
+# (user-guide/nginx-configuration/configmap, đối chiếu 2026-07-13).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingress-nginx-controller
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: litmatch # đánh dấu file này do repo litmatch quản lý
+data:
+  # Tin các header X-Forwarded-* / forwarded-for-header từ proxy phía trước (Cloudflare).
+  use-forwarded-headers: 'true'
+  # Cloudflare gửi IP client thật trong CF-Connecting-IP (ổn định hơn X-Forwarded-For vì không
+  # bị append qua nhiều hop).
+  forwarded-for-header: 'CF-Connecting-IP'
+  # CHỈ tin forwarded headers từ dải IP Cloudflare — mặc định của ingress-nginx là 0.0.0.0/0
+  # (tin tất cả), giữ mặc định khi bật use-forwarded-headers là lỗ spoof IP.
+  # Dải IP public của Cloudflare, nguồn: https://www.cloudflare.com/ips/ — PHẢI sync lại từ
+  # nguồn đó lúc deploy thật và mỗi khi Cloudflare cập nhật (ít thay đổi nhưng không bất biến).
+  proxy-real-ip-cidr: '173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22,2400:cb00::/32,2606:4700::/32,2803:f800::/32,2405:b500::/32,2405:8100::/32,2a06:98c0::/29,2c0f:f248::/32'

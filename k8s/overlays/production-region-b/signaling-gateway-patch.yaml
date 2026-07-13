@@ -1,0 +1,21 @@
+# Region B — SCAFFOLD chưa provision. Copy từ production (region A) làm điểm xuất phát; tune
+# theo số connection Socket.IO thật của region này (signaling-gateway là connection-bound,
+# k8s/README.md mục Resource sizing).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: signaling-gateway
+  namespace: litmatch
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+        - name: signaling-gateway
+          resources:
+            requests:
+              cpu: '150m'
+              memory: '1Gi'
+            limits:
+              cpu: '400m'
+              memory: '2Gi'

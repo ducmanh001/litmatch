@@ -26,7 +26,10 @@ k8s/
     media-server/             # Deployment (replicas:1), Service, ConfigMap (livekit.yaml) — KHÔNG có HPA
   overlays/
     staging/                  # patch replica/resource nhỏ hơn, image tag "staging"
-    production/                # patch replica/resource lớn hơn, image tag do CI ghi đè bằng git SHA
+    production/               # patch replica/resource lớn hơn, image tag do CI ghi đè bằng git SHA
+    production-region-b/      # SCAFFOLD region thứ hai (chưa provision) — region code placeholder, xem mục Multi-region
+  ingress-nginx/
+    cloudflare-real-ip-configmap.yaml  # ConfigMap controller trust proxy Cloudflare (ADR 0006) — apply riêng per-cluster, chưa provision
 ```
 
 ## Cách apply
@@ -40,9 +43,9 @@ kubectl apply -k k8s/overlays/staging
 kubectl apply -k k8s/overlays/production
 ```
 
-Đã build-test cả `k8s/base`, `k8s/overlays/staging`, `k8s/overlays/production` bằng
-`kustomize build` (kustomize v4.5.4 qua `npx kustomize`) — không lỗi cú pháp, patch match đúng
-target. **Lưu ý đã phát hiện lúc test**: với kustomize (ít nhất v4.5.4), một strategic-merge patch
+Đã build-test cả `k8s/base`, `k8s/overlays/staging`, `k8s/overlays/production` và
+`k8s/overlays/production-region-b` (scaffold, xem mục Multi-region) bằng `kustomize build`
+(kustomize v4.5.4 qua `npx kustomize`) — không lỗi cú pháp, patch match đúng target. **Lưu ý đã phát hiện lúc test**: với kustomize (ít nhất v4.5.4), một strategic-merge patch
 target resource có `metadata.namespace` tường minh trong file gốc (không qua kustomize
 `namespace:` transformer) thì **patch cũng phải khai `namespace: litmatch`** ở `metadata`, nếu
 không kustomize báo `no matches for Id ... [noNs]` dù tên/kind đúng — tất cả patch trong
@@ -175,26 +178,46 @@ chưa có metric thật để kiểm chứng tên/label/ngưỡng.
   CHƯA kiểm chứng chi tiết (response code/body thật của LiveKit `v1.13.1` khi healthy) trong môi
   trường k8s thật, cần xác nhận khi triển khai thật.
 
-## Multi-region (Giai đoạn 7) — pattern overlay theo region
+## Multi-region — vận hành khi có ngân sách
 
-Hiện tại repo chỉ có 2 overlay (`staging`, `production`) cho **một** cluster/region — CHƯA tồn tại
-cluster/region thứ hai, và manifest này **không bịa** một region cụ thể nào. Khi region thứ hai
-thật sự được dựng, cách thêm là:
+**Trạng thái thật (2026-07-13): TOÀN BỘ mục này là scaffolding CHƯA PROVISION.** Chỉ có MỘT
+cluster/region thật; chưa có cluster thứ hai, chưa có domain nào delegate về Cloudflare, chưa có
+Load Balancer nào được tạo. Mọi thứ dưới đây tồn tại để đi live NHANH khi có ngân sách cho region
+thứ hai — không phải mô tả một hệ đang chạy.
 
-1. Tạo `k8s/overlays/production-<region>/` bằng cách copy đúng **shape** của
-   `k8s/overlays/production/kustomization.yaml` (resources trỏ `../../base` + danh sách patch +
-   `images:` transformer).
-2. Override giá trị ConfigMap đặc thù region qua patch (vd `LIVEKIT_URL` trỏ media-server của
-   region đó, `LIVEKIT_REGION_URLS` — map đầy đủ region → URL edge, `KAFKA_BROKERS`/`REDIS_URL`
-   nếu hạ tầng managed tách theo region) và image tag do CI ghi đè như production hiện tại.
-3. Mỗi region là một cluster riêng với namespace `litmatch` riêng (cùng nguyên tắc
-   staging/production ở trên) — không nhét nhiều region vào 1 cluster bằng namespace.
+Routing traffic tới region gần nhất **ĐÃ CHỐT: Cloudflare Load Balancing (geo-steering)** —
+[ADR 0006](../docs/adr/0006-cloudflare-global-routing.md). Lý do tóm tắt: cloud-agnostic (không
+trói compute-hosting của từng region vào AWS/GCP/Azure như global LB cloud-native), add-on giá
+mềm trên nền DNS/proxy Cloudflare, không phải tự vận hành GeoDNS. ADR 0006 **không** chọn
+compute provider cho cluster của bất kỳ region nào — việc đó vẫn mở per-region.
 
-**Routing traffic tới region gần nhất (GeoDNS / anycast / global load balancer của một cloud
-provider) là một quyết định RIÊNG, đang mở** — nó bị block bởi việc chọn nhà cung cấp cloud/DNS,
-và repo này hiện **không commit vào AWS/GCP/Azure/bare-metal nào** (đã kiểm tra: manifest không
-chứa annotation/resource đặc thù provider). Không tự mặc định một provider ở đây — xem "Điểm mở"
-bên dưới.
+### Runbook kích hoạt (khi có ngân sách region thứ hai)
+
+1. **Cloudflare**: add domain production vào Cloudflare (delegate nameserver), bật Load
+   Balancing add-on. Tạo 1 LB per hostname public (core-api, signaling-gateway) với policy
+   **geo-steering**; mỗi region là một **pool**, origin = IP public của nginx-ingress region đó.
+   Health check của pool: HTTP tới `/health/ready` (đã có sẵn ở cả core-api lẫn
+   signaling-gateway, `@Public()` + `@SkipThrottle()`, trả 503 khi Postgres/Redis chưa sẵn
+   sàng), **kèm `Host` header đúng hostname app** — origin chỉ là IP Ingress, thiếu Host thì
+   nginx không route tới đúng Service.
+2. **Real client IP**: apply `k8s/ingress-nginx/cloudflare-real-ip-configmap.yaml` vào MỖI
+   cluster (đổi tên/namespace nếu controller cài khác chuẩn; sync dải IP từ
+   <https://www.cloudflare.com/ips/> lúc apply). Không làm bước này thì rate-limit/audit/log
+   theo IP client sai (thấy toàn IP Cloudflare).
+3. **Dựng region mới**: copy pattern `k8s/overlays/production-region-b/` — đổi tên thư mục +
+   region code + LiveKit URL theo market thật (xem chú thích trong
+   `production-region-b/core-api-configmap-patch.yaml`; `REGION_B` là **placeholder có chủ
+   đích**, chưa có market thứ hai nào được chốt về business). Tune replica/resource theo node
+   thật của region. Mỗi region là một cluster riêng với namespace `litmatch` riêng (cùng nguyên
+   tắc staging/production ở trên) — không nhét nhiều region vào 1 cluster bằng namespace.
+4. **Đồng bộ map region**: khi bật multi-region, `LIVEKIT_REGION_URLS` (map ĐẦY ĐỦ region → URL
+   edge) phải giống nhau ở MỌI region — overlay `production` (region A) cũng cần patch ConfigMap
+   tương tự lúc đó (base giữ `''` = single-region, hành vi hôm nay không đổi). Bất biến ADR
+   0005: mọi URL trong map cùng MỘT cụm LiveKit (chung Redis); media-server region mới join cụm
+   hiện hữu, không dựng cụm riêng. Override thêm `KAFKA_BROKERS`/`DATABASE_URL`/`REDIS_URL`
+   (Secret) nếu hạ tầng managed tách theo region.
+5. **TLS**: vẫn là follow-on của ADR 0004 (chưa khai `tls:` trong Ingress) — phải chốt trước khi
+   mở traffic công khai, độc lập với việc thêm region.
 
 ## Điểm mở cần chủ thread xác nhận lại
 
@@ -216,6 +239,8 @@ bên dưới.
    (nếu cluster dùng Prometheus Operator) vào `k8s/base/core-api` và
    `k8s/base/signaling-gateway`. Chưa làm ở PR này vì port/path metrics chưa xác định lúc viết
    manifest này — tránh bịa annotation trỏ endpoint chưa tồn tại.
-7. **Global routing đa region** (GeoDNS vs anycast vs global LB) + TLS/cert-manager + DNS — block
-   bởi việc chọn nhà cung cấp cloud/DNS, chưa chốt (xem mục Multi-region ở trên và ADR 0004 § Hệ
-   quả). Đây là quyết định con người phải chốt tiếp theo cho Giai đoạn 7, không tự mặc định.
+7. ~~Global routing đa region~~ — **ĐÃ CHỐT: Cloudflare Load Balancing geo-steering**
+   ([ADR 0006](../docs/adr/0006-cloudflare-global-routing.md)); scaffold overlay
+   `production-region-b` + ConfigMap real-IP đã có, nhưng **chưa provision gì thật** (chưa có
+   cluster thứ hai, chưa có domain trên Cloudflare) — xem mục Multi-region ở trên. Còn follow-on
+   TLS/cert-manager (ADR 0004 § Hệ quả) trước khi mở traffic công khai.

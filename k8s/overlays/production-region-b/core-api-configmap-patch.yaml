@@ -1,0 +1,30 @@
+# Override config đặc thù region cho core-api của region B — SCAFFOLD, chưa provision.
+#
+# LIVEKIT_REGION_URLS: base để '' (single-region, KHÔNG đổi — deploy production hôm nay giữ
+# nguyên hành vi). Chỉ overlay region bật map này. Khi multi-region thật sự đi live, overlay
+# production (region A) cũng phải nhận CÙNG map đầy đủ này qua patch tương tự — mọi core-api
+# ở mọi region trả lời như nhau, URL chọn theo User.region chứ không theo region của cluster.
+#
+# PLACEHOLDER — đổi khi team chốt market thật (đây là ví dụ cấu trúc, không phải quyết định
+# business):
+#   - "GLOBAL": region hiện hành duy nhất (DEFAULT_REGION trong
+#     apps/core-api/src/modules/matching/matching.constants.ts — precedent duy nhất của
+#     User.region hôm nay) → URL edge LiveKit của region A.
+#   - "REGION_B": region code placeholder → URL edge LiveKit của region B. Hostname theo
+#     convention REPLACE_ME + TLD .invalid của repo (DNS-hợp-lệ để qua validation, PHẢI thay
+#     bằng host thật lúc deploy).
+#
+# BẤT BIẾN (ADR 0005): mọi URL trong map phải trỏ về CÙNG MỘT cụm LiveKit (chung Redis room
+# state) — media-server của region B join cụm LiveKit hiện hữu qua Redis chung, không dựng cụm
+# riêng. Vì vậy LIVEKIT_URL (control API) vẫn trỏ Service ClusterIP local của cluster này —
+# không cần override, DNS nội bộ media-server.litmatch.svc.cluster.local giống nhau ở mọi cluster.
+#
+# Nếu hạ tầng managed tách theo region thì override thêm KAFKA_BROKERS ở đây và
+# DATABASE_URL/REDIS_URL qua Secret của cluster này (xem k8s/README.md mục Giả định vận hành).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: core-api-config
+  namespace: litmatch
+data:
+  LIVEKIT_REGION_URLS: '{"GLOBAL": "wss://replace-me-region-a-livekit.litmatch.invalid", "REGION_B": "wss://replace-me-region-b-livekit.litmatch.invalid"}'

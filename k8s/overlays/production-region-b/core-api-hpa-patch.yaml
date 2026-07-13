@@ -1,0 +1,10 @@
+# Region B — SCAFFOLD chưa provision. Min/max copy từ production (region A); tune theo capacity
+# thật của cluster region này khi có hardware.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: core-api
+  namespace: litmatch
+spec:
+  minReplicas: 3
+  maxReplicas: 15
