@@ -6,11 +6,13 @@ import { DataSource } from 'typeorm';
 import { AuditLogService } from '../../common/audit/audit-log.service';
 import { User, UserService } from '../user';
 import { Report, ReportStatus, SafetyService } from '../safety';
+import { Gift, GiftService } from '../gift';
 
 import { AdminErrors } from './admin.errors';
 
 import type { UserPage, UserPageFilter } from '../user';
 import type { ReportPage, ReportPageFilter } from '../safety';
+import type { CreateGiftInput, UpdateGiftInput } from '../gift';
 
 @Injectable()
 export class AdminService {
@@ -18,6 +20,7 @@ export class AdminService {
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly userService: UserService,
     private readonly safetyService: SafetyService,
+    private readonly giftService: GiftService,
     private readonly auditLogService: AuditLogService,
   ) {}
 
@@ -113,6 +116,48 @@ export class AdminService {
         manager,
       );
       return report;
+    });
+  }
+
+  async listGifts(): Promise<Gift[]> {
+    return this.giftService.listAllForAdmin();
+  }
+
+  async createGift(actorUserId: string, input: CreateGiftInput): Promise<Gift> {
+    return this.dataSource.transaction(async (manager) => {
+      const gift = await this.giftService.createGift(manager, input);
+      await this.auditLogService.record(
+        {
+          actorUserId,
+          action: 'gift.created',
+          targetType: 'gift',
+          targetId: gift.id,
+          metadata: { code: gift.code },
+        },
+        manager,
+      );
+      return gift;
+    });
+  }
+
+  async updateGift(
+    actorUserId: string,
+    giftId: string,
+    input: UpdateGiftInput,
+  ): Promise<Gift> {
+    return this.dataSource.transaction(async (manager) => {
+      const gift = await this.giftService.updateGift(manager, giftId, input);
+      await this.auditLogService.record(
+        {
+          actorUserId,
+          action: 'gift.updated',
+          targetType: 'gift',
+          targetId: giftId,
+          metadata: { ...input },
+        },
+        manager,
+      );
+      return gift;
     });
   }
 }

@@ -6,6 +6,10 @@ import { DomainException } from '@litmatch/common-exceptions';
 import { Repository } from 'typeorm';
 
 import { publishRealtimeEvent } from '../../common/realtime/publish-realtime';
+import {
+  isUniqueViolation,
+  violatedConstraint,
+} from '../../database/postgres-errors';
 import { giftSendIdempotencyKey } from './gift.constants';
 import { GiftErrors } from './gift.errors';
 import { Gift } from './entities/gift.entity';
@@ -16,6 +20,7 @@ import { NotificationService, NotificationType } from '../notification';
 import { PartyRoomService } from '../party-room';
 import { UserService } from '../user';
 
+import type { EntityManager } from 'typeorm';
 import type {
   GiftSentEventData,
   RealtimeEnvelope,
@@ -29,6 +34,20 @@ export interface SendGiftResult {
   giftEvent: GiftEvent;
   gift: Gift;
   replayed: boolean;
+}
+
+export interface CreateGiftInput {
+  code: string;
+  name: string;
+  priceDiamond: number;
+  sortOrder?: number;
+}
+
+export interface UpdateGiftInput {
+  name?: string;
+  priceDiamond?: number;
+  sortOrder?: number;
+  active?: boolean;
 }
 
 /**
@@ -60,6 +79,68 @@ export class GiftService {
       where: { active: true },
       order: { sortOrder: 'ASC', code: 'ASC' },
     });
+  }
+
+  /** Admin xem TOÀN BỘ catalog kể cả quà đã tắt (docs/12 § 12.7) — khác `listCatalog` (chỉ active). */
+  async listAllForAdmin(): Promise<Gift[]> {
+    return this.giftRepo.find({ order: { sortOrder: 'ASC', code: 'ASC' } });
+  }
+
+  /**
+   * Nhận `manager` để AdminModule ghi CÙNG transaction với audit log. `code` unique ở DB
+   * (`uq_gifts_code`) — bắt lỗi race 2 admin cùng tạo trùng code gần như đồng thời.
+   */
+  async createGift(
+    manager: EntityManager,
+    input: CreateGiftInput,
+  ): Promise<Gift> {
+    const repo = manager.getRepository(Gift);
+    try {
+      return await repo.save(
+        repo.create({
+          code: input.code,
+          name: input.name,
+          priceDiamond: input.priceDiamond,
+          sortOrder: input.sortOrder ?? 0,
+          active: true,
+        }),
+      );
+    } catch (err) {
+      if (isUniqueViolation(err) && violatedConstraint(err, 'uq_gifts_code')) {
+        throw new DomainException(
+          GiftErrors.CODE_ALREADY_EXISTS,
+          'Mã quà đã tồn tại',
+          HttpStatus.CONFLICT,
+        );
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Sửa giá/tên/thứ tự/bật-tắt — KHÔNG hard-delete (docs/06: `gift_events` tham chiếu FK tới
+   * `gifts.id`, xoá cứng sẽ làm mất lịch sử giao dịch cũ). Tắt bằng `active: false`.
+   */
+  async updateGift(
+    manager: EntityManager,
+    giftId: string,
+    input: UpdateGiftInput,
+  ): Promise<Gift> {
+    const repo = manager.getRepository(Gift);
+    const gift = await repo.findOneBy({ id: giftId });
+    if (!gift) {
+      throw new DomainException(
+        GiftErrors.GIFT_NOT_FOUND,
+        'Không tìm thấy quà',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    if (input.name !== undefined) gift.name = input.name;
+    if (input.priceDiamond !== undefined)
+      gift.priceDiamond = input.priceDiamond;
+    if (input.sortOrder !== undefined) gift.sortOrder = input.sortOrder;
+    if (input.active !== undefined) gift.active = input.active;
+    return repo.save(gift);
   }
 
   async sendGift(

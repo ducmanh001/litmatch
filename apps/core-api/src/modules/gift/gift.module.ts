@@ -23,7 +23,7 @@ import type Redis from 'ioredis';
   ],
   controllers: [GiftController],
   providers: [GiftService, giftRedisProvider],
-  exports: [], // chưa module nào cần gọi Gift — export tối thiểu (docs/05 § 5.3)
+  exports: [GiftService], // AdminModule quản lý catalog (docs/12 § 12.7)
 })
 export class GiftModule implements OnApplicationShutdown {
   constructor(@Inject(GIFT_REDIS) private readonly redis: Redis) {}
