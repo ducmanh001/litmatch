@@ -7,7 +7,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@litmatch/common-exceptions';
 import { IsNull, Repository } from 'typeorm';
 
-import type { AccessTokenPayload } from '@litmatch/common-dtos';
+import { UserService } from '../../user';
+
+import type { AccessTokenPayload, Role } from '@litmatch/common-dtos';
 import type { CoreApiEnv } from '../../../config/env.validation';
 import { REFRESH_TOKEN_BYTES } from '../auth.constants';
 import { AuthErrors } from '../auth.errors';
@@ -26,17 +28,19 @@ export class TokenService {
     private readonly refreshRepo: Repository<RefreshToken>,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService<CoreApiEnv, true>,
+    private readonly userService: UserService,
   ) {}
 
   async issueForUser(
     userId: string,
     isGuest: boolean,
+    role: Role,
     familyId?: string,
   ): Promise<IssuedTokens> {
     const expiresIn = this.config.getOrThrow('JWT_ACCESS_TTL_SECONDS', {
       infer: true,
     });
-    const payload: AccessTokenPayload = { sub: userId, isGuest };
+    const payload: AccessTokenPayload = { sub: userId, isGuest, role };
     const accessToken = await this.jwtService.signAsync(payload, { expiresIn });
 
     const refreshPlain = randomBytes(REFRESH_TOKEN_BYTES).toString('base64url');
@@ -88,7 +92,15 @@ export class TokenService {
       );
     }
 
-    const tokens = await this.issueForUser(token.userId, false, token.familyId);
+    // Đọc role HIỆN TẠI (không phải role lúc login trước đó) — nếu bị hạ/nâng quyền giữa
+    // chừng, access token mới phải phản ánh đúng, không giữ role cũ trong refresh token record.
+    const user = await this.userService.getByIdOrThrow(token.userId);
+    const tokens = await this.issueForUser(
+      token.userId,
+      false,
+      user.role,
+      token.familyId,
+    );
     return { userId: token.userId, tokens };
   }
 
