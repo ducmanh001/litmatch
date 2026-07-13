@@ -55,9 +55,54 @@ function commandText(command, args) {
   return [command, ...args].join(' ');
 }
 
+const sensitiveEnvKeys = new Set([
+  'JWT_SECRET',
+  'AUTH_OTP_PEPPER',
+  'DATABASE_URL',
+  'REDIS_URL',
+  'INTEGRATION_DB_URL',
+  'LOCAL_CI_JWT_SECRET',
+  'LOCAL_CI_AUTH_OTP_PEPPER',
+  'LOCAL_CI_DATABASE_URL',
+  'LOCAL_CI_REDIS_URL',
+  'LOCAL_CI_INTEGRATION_DB_URL',
+]);
+
+function redactEnvAssignment(arg) {
+  const separatorIndex = arg.indexOf('=');
+  if (separatorIndex <= 0) return arg;
+  const key = arg.slice(0, separatorIndex);
+  if (!sensitiveEnvKeys.has(key)) return arg;
+  return `${key}=***REDACTED***`;
+}
+
+function commandTextForLog(command, args) {
+  const sanitizedArgs = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const current = args[index];
+    if (
+      (current === '--env' || current === '-e') &&
+      typeof args[index + 1] === 'string'
+    ) {
+      sanitizedArgs.push(current, redactEnvAssignment(args[index + 1]));
+      index += 1;
+      continue;
+    }
+
+    if (typeof current === 'string') {
+      sanitizedArgs.push(redactEnvAssignment(current));
+      continue;
+    }
+
+    sanitizedArgs.push(current);
+  }
+
+  return commandText(command, sanitizedArgs);
+}
+
 function run(label, command, args, options = {}) {
   console.log(`\n[ci-local] ${label}`);
-  console.log(`[ci-local] $ ${commandText(command, args)}`);
+  console.log(`[ci-local] $ ${commandTextForLog(command, args)}`);
 
   if (dryRun) return 0;
 
