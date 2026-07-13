@@ -7,6 +7,7 @@ import { EconomyLedger1752000000000 } from '../../database/migrations/1752000000
 import { EconomyRefund1752100000000 } from '../../database/migrations/1752100000000-economy-refund';
 import { MatchingCore1752200000000 } from '../../database/migrations/1752200000000-matching-core';
 import { MatchingGenderPreference1752300000000 } from '../../database/migrations/1752300000000-matching-gender-preference';
+import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
 import { AuthIdentity } from '../auth/entities/auth-identity.entity';
 import { PhoneOtp } from '../auth/entities/phone-otp.entity';
 import { RefreshToken } from '../auth/entities/refresh-token.entity';
@@ -84,6 +85,10 @@ const CONFIG: Record<string, unknown> = {
   MATCHING_SPEEDUP_PRICE_DIAMOND: 50,
   MATCHING_SPEEDUP_MAX_PER_HOUR: 3,
   MATCHING_PRIORITY_BOOST_MS: 300_000,
+  // Mọi user tạo qua createUser() dùng trustScore mặc định 100 (DB default) → penalty luôn 0,
+  // không ảnh hưởng các assertion score đã có (docs/services/safety-service.md § 3.2)
+  MATCHING_TRUST_PENALTY_MS_PER_POINT: 2000,
+  MATCHING_TRUST_PENALTY_MAX_MS: 120_000,
   USER_DEFAULT_AVATAR_ID: 'default-01',
   AUTH_MIN_AGE: 18,
 };
@@ -200,6 +205,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
         EconomyRefund1752100000000,
         MatchingCore1752200000000,
         MatchingGenderPreference1752300000000,
+        Safety1752800000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -227,11 +233,17 @@ d('Matching integration (Postgres + Redis thật)', () => {
       stubVerifier,
     );
     const userService = new UserService(ds.getRepository(User), configStub);
+    // Notification không phải trọng tâm suite này (test riêng ở notification.service.spec.ts) — stub no-op
+    const notificationStub = {
+      createWithManager: async () => ({ id: 'notif-stub' }),
+      sendPush: async () => undefined,
+    };
     matching = new MatchingService(
       ds,
       ds.getRepository(MatchTicket),
       userService,
       economy,
+      notificationStub as never,
       configStub,
       redis,
     );

@@ -10,6 +10,8 @@ import { SoulMatch1752400000000 } from '../../database/migrations/1752400000000-
 import { Calling1752500000000 } from '../../database/migrations/1752500000000-calling';
 import { FriendChat1752600000000 } from '../../database/migrations/1752600000000-friend-chat';
 import { PartyRoomGift1752700000000 } from '../../database/migrations/1752700000000-party-room-gift';
+import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
+import { Notification1753000000000 } from '../../database/migrations/1753000000000-notification';
 
 import { GiftService } from './gift.service';
 import { Gift } from './entities/gift.entity';
@@ -30,6 +32,11 @@ import {
   IapReceipt,
 } from '../economy/entities/iap.entities';
 import { VipPlan } from '../economy/entities/vip-plan.entity';
+import { NotificationService } from '../notification';
+import {
+  Notification,
+  NotificationType,
+} from '../notification/entities/notification.entity';
 import { Gender, User, UserService } from '../user';
 
 import type { ConfigService } from '@nestjs/config';
@@ -78,6 +85,7 @@ d('Gift integration (Postgres thật)', () => {
   let economy: EconomyService;
   let party: PartyRoomService;
   let gift: GiftService;
+  let notification: NotificationService;
   /** Mọi publish realtime (cả party.* lẫn gift.sent) — filter theo event khi assert. */
   const published: Array<{ channel: string; event: string }> = [];
   const giftSentCount = (): number =>
@@ -187,6 +195,7 @@ d('Gift integration (Postgres thật)', () => {
         IapReceipt,
         VipPlan,
         OutboxEvent,
+        Notification,
       ],
       migrations: [
         InitAuthUser1751900000000,
@@ -198,6 +207,8 @@ d('Gift integration (Postgres thật)', () => {
         Calling1752500000000,
         FriendChat1752600000000,
         PartyRoomGift1752700000000,
+        Safety1752800000000,
+        Notification1753000000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -238,12 +249,17 @@ d('Gift integration (Postgres thật)', () => {
       configStub,
       redisStub,
     );
+    // Push chỉ là stub no-op ở suite này — in-app Notification (nguồn sự thật) test thật bên dưới
+    notification = new NotificationService(ds.getRepository(Notification), {
+      send: async () => undefined,
+    } as never);
     gift = new GiftService(
       ds.getRepository(Gift),
       ds.getRepository(GiftEvent),
       economy,
       party,
       userService,
+      notification,
       configStub,
       redisStub,
     );
@@ -320,6 +336,19 @@ d('Gift integration (Postgres thật)', () => {
 
     // realtime fanout cho 3 member (host + sender + receiver)
     expect(giftSentCount()).toBe(3);
+
+    // in-app notification gift_received cho người nhận — ghi ATOMIC cùng transaction tiền
+    // (docs/services/notification-service.md § 3), sender lộ danh tính là ĐÚNG (Party Room không ẩn danh)
+    const notifications = await ds
+      .getRepository(Notification)
+      .findBy({ userId: receiver.id, type: NotificationType.GiftReceived });
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0].payload).toMatchObject({
+      roomId,
+      senderUserId: sender.id,
+      giftCode: 'teddy',
+      priceDiamond: 99,
+    });
   });
 
   it('idempotency: retry tuần tự + 2 request SONG SONG cùng key → trừ tiền đúng 1 lần, 1 GiftEvent', async () => {

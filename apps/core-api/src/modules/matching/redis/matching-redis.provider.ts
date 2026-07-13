@@ -31,11 +31,20 @@ export function speedupCountKey(userId: string): string {
   return `matching:speedup:count:${userId}`;
 }
 
-/** Score sorted set: nhỏ hơn = được ghép trước; speed-up trừ boost khỏi score (spec § 2). */
+/**
+ * Score sorted set: nhỏ hơn = được ghép trước; speed-up trừ boost khỏi score (spec § 2).
+ * `trustPenaltyMs` cộng thêm (docs/services/safety-service.md § 3.2) — snapshot 1 lần lúc
+ * enqueue, không đổi cách boost/lock hoạt động.
+ */
 export function ticketScore(
-  ticket: Pick<MatchTicket, 'enqueuedAt' | 'priorityBoostMs'>,
+  ticket: Pick<
+    MatchTicket,
+    'enqueuedAt' | 'priorityBoostMs' | 'trustPenaltyMs'
+  >,
 ): number {
-  return ticket.enqueuedAt.getTime() - ticket.priorityBoostMs;
+  return (
+    ticket.enqueuedAt.getTime() + ticket.trustPenaltyMs - ticket.priorityBoostMs
+  );
 }
 
 export const matchingRedisProvider: Provider = {

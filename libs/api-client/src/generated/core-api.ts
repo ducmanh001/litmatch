@@ -329,6 +329,93 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/safety/reports': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Report 1 user — trust score penalty chống spam (docs/06) */
+    post: operations['SafetyController_createReport'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/safety/blocks/{targetUserId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Đang có block chính mình → target hay không */
+    get: operations['SafetyController_blockStatus'];
+    put?: never;
+    /** Block 1 user — idempotent */
+    post: operations['SafetyController_block'];
+    /** Unblock 1 user — idempotent */
+    delete: operations['SafetyController_unblock'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/notifications': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Danh sách notification, mới nhất trước */
+    get: operations['NotificationController_list'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/notifications/unread-count': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Số notification chưa đọc — dùng cho badge */
+    get: operations['NotificationController_unreadCount'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/notifications/{notificationId}/read': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Đánh dấu đã đọc — idempotent, chỉ chủ sở hữu */
+    post: operations['NotificationController_markRead'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/friends': {
     parameters: {
       query?: never;
@@ -621,6 +708,215 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/feed/posts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Feed công khai toàn cục, mới nhất trước — loại tác giả đang block/bị block */
+    get: operations['FeedController_listFeed'];
+    put?: never;
+    /** Đăng bài — guest bị chặn (docs/06) */
+    post: operations['FeedController_createPost'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/feed/posts/{postId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Chi tiết 1 bài — 404 nếu đã xoá/bị block (chống oracle) */
+    get: operations['FeedController_getPost'];
+    put?: never;
+    post?: never;
+    /** Xoá mềm bài viết — chỉ tác giả */
+    delete: operations['FeedController_deletePost'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/feed/posts/{postId}/comments': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Danh sách bình luận, cũ → mới */
+    get: operations['FeedController_listComments'];
+    put?: never;
+    /** Bình luận — guest bị chặn, chặn nếu block với tác giả */
+    post: operations['FeedController_createComment'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/feed/comments/{commentId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Xoá mềm comment — chỉ tác giả */
+    delete: operations['FeedController_deleteComment'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/feed/posts/{postId}/reactions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Trạng thái thả tim của chính mình + tổng đếm */
+    get: operations['FeedController_reactionStatus'];
+    put?: never;
+    /** Thả tim — idempotent, guest bị chặn */
+    post: operations['FeedController_like'];
+    /** Bỏ thả tim — idempotent */
+    delete: operations['FeedController_unlike'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/avatar/catalog': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Catalog item đang bật — giá server là nguồn sự thật */
+    get: operations['AvatarController_listCatalog'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/avatar/me/items': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Item avatar mình đang sở hữu */
+    get: operations['AvatarController_listMyItems'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/avatar/items/{assetId}/claim': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Nhận item free — idempotent */
+    post: operations['AvatarController_claim'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/avatar/items/{assetId}/buy': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Mua item trả phí — trừ diamond qua Economy */
+    post: operations['AvatarController_buy'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/avatar/me/equip': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Trang bị item — chỉ item đã sở hữu (docs/10 § Avatar) */
+    put: operations['AvatarController_equip'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/avatar/me': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Avatar của chính mình — lazy-init default nếu chưa có */
+    get: operations['AvatarController_getMyAvatar'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/avatar/users/{userId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Xem avatar người khác — public, không cần bạn bè */
+    get: operations['AvatarController_getAvatarOf'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -767,6 +1063,46 @@ export interface components {
       /** @description true = retry cùng Idempotency-Key, không trừ tiền/boost thêm */
       replayed: boolean;
       ticket: components['schemas']['TicketDto'];
+    };
+    CreateReportDto: {
+      targetUserId: string;
+      /** @enum {string} */
+      reason:
+        'harassment' | 'spam' | 'underage' | 'inappropriate_content' | 'other';
+      description?: string;
+    };
+    ReportDto: {
+      id: string;
+      targetUserId: string;
+      /** @enum {string} */
+      reason:
+        'harassment' | 'spam' | 'underage' | 'inappropriate_content' | 'other';
+      /** Format: date-time */
+      createdAt: string;
+    };
+    BlockStatusDto: {
+      blocked: boolean;
+    };
+    NotificationDto: {
+      id: string;
+      /** @enum {string} */
+      type:
+        | 'match_confirmed'
+        | 'friend_message'
+        | 'gift_received'
+        | 'post_liked'
+        | 'post_commented';
+      payload: Record<string, never>;
+      readAt: Record<string, never> | null;
+      /** Format: date-time */
+      createdAt: string;
+    };
+    NotificationsPageDto: {
+      items: components['schemas']['NotificationDto'][];
+      nextCursor: Record<string, never> | null;
+    };
+    UnreadCountDto: {
+      count: number;
     };
     FriendDto: {
       profile: components['schemas']['PublicProfileDto'];
@@ -917,6 +1253,62 @@ export interface components {
       /** Format: date-time */
       createdAt: string;
       replayed: boolean;
+    };
+    CreatePostDto: {
+      content?: string;
+      imageUrl?: string;
+    };
+    PostDto: {
+      id: string;
+      authorUserId: string;
+      content: Record<string, never> | null;
+      imageUrl: Record<string, never> | null;
+      likeCount: number;
+      commentCount: number;
+      /** Format: date-time */
+      createdAt: string;
+    };
+    PostsPageDto: {
+      items: components['schemas']['PostDto'][];
+      nextCursor: Record<string, never> | null;
+    };
+    CreateCommentDto: {
+      content: string;
+    };
+    CommentDto: {
+      id: string;
+      postId: string;
+      authorUserId: string;
+      content: string;
+      /** Format: date-time */
+      createdAt: string;
+    };
+    CommentsPageDto: {
+      items: components['schemas']['CommentDto'][];
+      nextCursor: Record<string, never> | null;
+    };
+    ReactionStatusDto: {
+      liked: boolean;
+      likeCount: number;
+    };
+    AvatarAssetDto: {
+      id: string;
+      /** @enum {string} */
+      slot: 'base' | 'hair' | 'face' | 'outfit' | 'accessory';
+      code: string;
+      name: string;
+      imageUrl: string;
+      zIndex: number;
+      priceDiamond: number;
+    };
+    EquipAvatarItemDto: {
+      /** @enum {string} */
+      slot: 'base' | 'hair' | 'face' | 'outfit' | 'accessory';
+      avatarAssetId: string;
+    };
+    AvatarConfigDto: {
+      userId: string;
+      layers: components['schemas']['AvatarAssetDto'][];
     };
   };
   responses: never;
@@ -1439,6 +1831,165 @@ export interface operations {
             };
           };
         };
+      };
+    };
+  };
+  SafetyController_createReport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateReportDto'];
+      };
+    };
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['ReportDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  SafetyController_blockStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        targetUserId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['BlockStatusDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  SafetyController_block: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        targetUserId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  SafetyController_unblock: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        targetUserId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  NotificationController_list: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['NotificationsPageDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  NotificationController_unreadCount: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['UnreadCountDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  NotificationController_markRead: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        notificationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
     };
   };
@@ -1968,6 +2519,423 @@ export interface operations {
         content: {
           'application/json': {
             data: components['schemas']['GiftEventDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  FeedController_listFeed: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['PostsPageDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  FeedController_createPost: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreatePostDto'];
+      };
+    };
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['PostDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  FeedController_getPost: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        postId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['PostDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  FeedController_deletePost: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        postId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  FeedController_listComments: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        postId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['CommentsPageDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  FeedController_createComment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        postId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateCommentDto'];
+      };
+    };
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['CommentDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  FeedController_deleteComment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        commentId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  FeedController_reactionStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        postId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['ReactionStatusDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  FeedController_like: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        postId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['ReactionStatusDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  FeedController_unlike: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        postId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['ReactionStatusDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AvatarController_listCatalog: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AvatarAssetDto'][];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AvatarController_listMyItems: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AvatarAssetDto'][];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AvatarController_claim: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        assetId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  AvatarController_buy: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10) */
+        'Idempotency-Key': string;
+      };
+      path: {
+        assetId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  AvatarController_equip: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['EquipAvatarItemDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AvatarConfigDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AvatarController_getMyAvatar: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AvatarConfigDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AvatarController_getAvatarOf: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        userId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AvatarConfigDto'];
             meta?: {
               [key: string]: unknown;
             };

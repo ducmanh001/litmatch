@@ -100,7 +100,7 @@ export class MatchTicket extends BaseAppEntity {
   @Column({ type: 'varchar', length: 16, default: MatchTicketStatus.Queued })
   status!: MatchTicketStatus;
 
-  /** Mốc vào hàng đợi — score Redis = enqueuedAtMs - priorityBoostMs. Requeue sau confirm-timeout tạo ticket MỚI với enqueuedAt mới. */
+  /** Mốc vào hàng đợi — score Redis = enqueuedAtMs + trustPenaltyMs - priorityBoostMs. Requeue sau confirm-timeout tạo ticket MỚI với enqueuedAt mới. */
   @Column({ type: 'timestamptz' })
   enqueuedAt!: Date;
 
@@ -111,6 +111,14 @@ export class MatchTicket extends BaseAppEntity {
    */
   @Column({ type: 'int', default: 0 })
   priorityBoostMs!: number;
+
+  /**
+   * Snapshot 1 LẦN lúc enqueue từ trust score user (docs/services/safety-service.md § 3.2) —
+   * KHÔNG cộng dồn/re-tính lại giữa lúc ticket chờ (khác priorityBoostMs — chỉ đổi qua API
+   * speed-up tường minh). Chỉ làm chậm priority, không chặn hẳn matching.
+   */
+  @Column({ type: 'int', default: 0 })
+  trustPenaltyMs!: number;
 
   @Column({ type: 'uuid', nullable: true })
   sessionId!: string | null;

@@ -1,0 +1,5 @@
+/** Mã lỗi của Safety module (docs/05 § 5.5). */
+export const SafetyErrors = {
+  SELF_REPORT_FORBIDDEN: 'SAFETY_SELF_REPORT_FORBIDDEN',
+  SELF_BLOCK_FORBIDDEN: 'SAFETY_SELF_BLOCK_FORBIDDEN',
+} as const;

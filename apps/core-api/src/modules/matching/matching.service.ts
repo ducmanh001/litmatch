@@ -37,6 +37,7 @@ import {
   ticketScore,
 } from './redis/matching-redis.provider';
 import { EconomyService, TransactionType } from '../economy';
+import { NotificationService, NotificationType } from '../notification';
 import { UserService, UserStatus } from '../user';
 
 import type {
@@ -44,6 +45,7 @@ import type {
   RealtimeEnvelope,
 } from '@litmatch/common-dtos';
 import type { EntityManager } from 'typeorm';
+import type { Notification } from '../notification';
 import type Redis from 'ioredis';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import type { CoreApiEnv } from '../../config/env.validation';
@@ -79,6 +81,7 @@ export class MatchingService {
     private readonly ticketRepo: Repository<MatchTicket>,
     private readonly userService: UserService,
     private readonly economy: EconomyService,
+    private readonly notificationService: NotificationService,
     private readonly config: ConfigService<CoreApiEnv, true>,
     @Inject(MATCHING_REDIS) private readonly redis: Redis,
   ) {}
@@ -120,6 +123,7 @@ export class MatchingService {
           status: MatchTicketStatus.Queued,
           enqueuedAt: new Date(),
           priorityBoostMs: 0,
+          trustPenaltyMs: this.trustPenaltyMsOf(profile.trustScore),
           sessionId: null,
           idempotencyKey: prefixedKey,
         }),
@@ -218,6 +222,7 @@ export class MatchingService {
     // Set khi CHÍNH lời gọi này chốt đủ 2 confirm — publish realtime sau commit, replay không bắn lại
     let completedPair: Array<{ userId: string; ticketId: string }> | null =
       null;
+    let matchNotifications: Notification[] = [];
     const confirmed = await this.dataSource.transaction(async (manager) => {
       const session = await manager.findOne(MatchSession, {
         where: { id: sessionId },
@@ -269,6 +274,17 @@ export class MatchingService {
           { userId: ticket.userId, ticketId: ticket.id },
           { userId: other.userId, ticketId: other.id },
         ];
+        // KHÔNG bao giờ đưa partnerId vào payload — Soul Match ẩn danh tới khi unlock (docs/06,
+        // docs/services/notification-service.md § 3)
+        matchNotifications = await Promise.all(
+          completedPair.map(({ userId: recipientId }) =>
+            this.notificationService.createWithManager(manager, {
+              userId: recipientId,
+              type: NotificationType.MatchConfirmed,
+              payload: { sessionId, matchType: ticket.matchType },
+            }),
+          ),
+        );
       }
       await manager.save(session);
       return manager.save(ticket);
@@ -291,6 +307,10 @@ export class MatchingService {
             );
           },
         ),
+      );
+      // Push SAU commit, best-effort — không throw ra caller (docs/services/notification-service.md § 1)
+      await Promise.all(
+        matchNotifications.map((n) => this.notificationService.sendPush(n)),
       );
     }
     return confirmed;
@@ -476,5 +496,20 @@ export class MatchingService {
     if (beforeBirthday) age -= 1;
     if (age < 0) return UNKNOWN_AGE_BAND;
     return Math.floor(age / bandSize);
+  }
+
+  /**
+   * Snapshot 1 lần lúc enqueue (docs/services/safety-service.md § 3.2) — trust score < 100 cộng
+   * thêm ms vào score, làm chậm priority chứ không chặn hẳn matching (đó là UserStatus.Banned).
+   */
+  private trustPenaltyMsOf(trustScore: number): number {
+    const perPoint = this.config.getOrThrow(
+      'MATCHING_TRUST_PENALTY_MS_PER_POINT',
+      { infer: true },
+    );
+    const maxMs = this.config.getOrThrow('MATCHING_TRUST_PENALTY_MAX_MS', {
+      infer: true,
+    });
+    return Math.min(maxMs, Math.max(0, 100 - trustScore) * perPoint);
   }
 }

@@ -8,6 +8,7 @@ import { MatchingCore1752200000000 } from '../../database/migrations/17522000000
 import { MatchingGenderPreference1752300000000 } from '../../database/migrations/1752300000000-matching-gender-preference';
 import { SoulMatch1752400000000 } from '../../database/migrations/1752400000000-soul-match';
 import { Calling1752500000000 } from '../../database/migrations/1752500000000-calling';
+import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
 
 import { CallingService } from './calling.service';
 import { CallTickerService } from './jobs/call-ticker.service';
@@ -246,6 +247,7 @@ d('Calling integration (Postgres thật)', () => {
         MatchingGenderPreference1752300000000,
         SoulMatch1752400000000,
         Calling1752500000000,
+        Safety1752800000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -274,6 +276,11 @@ d('Calling integration (Postgres thật)', () => {
       ds.getRepository(MatchTicket),
       userService,
       {} as never,
+      // Notification không phải trọng tâm suite này — stub no-op
+      {
+        createWithManager: async () => ({}),
+        sendPush: async () => undefined,
+      } as never,
       configStub,
       {} as never,
     );

@@ -12,6 +12,8 @@ import { Friendship, FriendshipSource } from './entities/friendship.entity';
 import { Message } from './entities/message.entity';
 import { FRIEND_REDIS } from './redis/friend-redis.provider';
 import { ConversationService } from './services/conversation.service';
+import { NotificationService, NotificationType } from '../notification';
+import { SafetyService } from '../safety';
 
 import type {
   CursorPage,
@@ -46,6 +48,8 @@ export class FriendService {
     @InjectRepository(Friendship)
     private readonly friendshipRepo: Repository<Friendship>,
     private readonly conversationService: ConversationService,
+    private readonly safetyService: SafetyService,
+    private readonly notificationService: NotificationService,
     private readonly config: ConfigService<CoreApiEnv, true>,
     @Inject(FRIEND_REDIS) private readonly redis: Redis,
   ) {}
@@ -170,7 +174,11 @@ export class FriendService {
     return this.conversationService.listMessages(conversationId, limit, cursor);
   }
 
-  /** Gửi message — guard membership + validate độ dài + publish realtime sau persist. */
+  /**
+   * Gửi message — guard membership + block (2 chiều) + validate độ dài + publish realtime sau
+   * persist. Block trả CÙNG mã lỗi/status với "không phải thành viên" (docs/services/
+   * safety-service.md § 6) — không tiết lộ ai block ai qua mã lỗi khác nhau, tránh oracle.
+   */
   async sendMessage(
     userId: string,
     conversationId: string,
@@ -181,6 +189,20 @@ export class FriendService {
       userId,
       conversationId,
     );
+    const partnerId =
+      conversation.userLowId === userId
+        ? conversation.userHighId
+        : conversation.userLowId;
+    if (
+      (await this.safetyService.isBlocked(userId, partnerId)) ||
+      (await this.safetyService.isBlocked(partnerId, userId))
+    ) {
+      throw new DomainException(
+        FriendErrors.CONVERSATION_NOT_FOUND,
+        'Không tìm thấy conversation',
+        HttpStatus.NOT_FOUND,
+      );
+    }
     const maxLength = this.config.getOrThrow('FRIEND_MESSAGE_MAX_LENGTH', {
       infer: true,
     });
@@ -200,10 +222,6 @@ export class FriendService {
       idempotencyKey,
     );
 
-    const partnerId =
-      conversation.userLowId === userId
-        ? conversation.userHighId
-        : conversation.userLowId;
     const envelope: RealtimeEnvelope<FriendMessageEventData> = {
       event: RealtimeEvents.FriendMessage,
       data: {
@@ -219,6 +237,30 @@ export class FriendService {
         publishRealtimeEvent(this.redis, this.logger, uid, envelope),
       ),
     );
+
+    // In-app notification cho người nhận — Friend Chat KHÔNG ẩn danh nên lộ senderUserId là
+    // ĐÚNG (khác Soul Match, docs/services/notification-service.md § 3). Tự transaction riêng
+    // vì message đã persist xong (không dùng chung transaction — friend-service.md), best-effort:
+    // lỗi ở đây KHÔNG được làm fail luồng gửi tin nhắn đã thành công.
+    try {
+      const notification = await this.notificationService.create({
+        userId: partnerId,
+        type: NotificationType.FriendMessage,
+        payload: {
+          conversationId,
+          senderUserId: userId,
+          preview: message.content,
+        },
+      });
+      await this.notificationService.sendPush(notification);
+    } catch (err) {
+      this.logger.warn(
+        `Tạo notification friend_message lỗi (bỏ qua, message vẫn gửi thành công): ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+
     return message;
   }
 

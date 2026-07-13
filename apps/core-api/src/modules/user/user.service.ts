@@ -54,6 +54,26 @@ export class UserService {
     return user;
   }
 
+  /**
+   * Sửa trust score atomic, clamp ở sàn `floor` (không CHECK ở DB — cùng tinh thần Wallet:
+   * guard tầng ứng dụng, docs/services/safety-service.md § 4). Nhận `manager` để Safety module
+   * gọi trong CÙNG transaction với `Report`/`Block` (tránh lệch khi 1 bước fail giữa chừng).
+   */
+  async adjustTrustScore(
+    manager: EntityManager,
+    userId: string,
+    delta: number,
+    floor: number,
+  ): Promise<void> {
+    await manager
+      .createQueryBuilder()
+      .update(User)
+      .set({ trustScore: () => 'GREATEST(:floor, trust_score + :delta)' })
+      .where('id = :id')
+      .setParameters({ id: userId, floor, delta })
+      .execute();
+  }
+
   async updateProfile(userId: string, dto: UpdateProfileDto): Promise<User> {
     const user = await this.getByIdOrThrow(userId);
 

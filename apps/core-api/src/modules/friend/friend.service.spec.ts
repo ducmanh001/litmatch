@@ -42,6 +42,8 @@ describe('FriendService (unit — mock repo/conversationService/redis)', () => {
     sendMessage: jest.Mock;
     listMessages: jest.Mock;
   };
+  let safetyService: { isBlocked: jest.Mock };
+  let notificationService: { create: jest.Mock; sendPush: jest.Mock };
   let redis: { publish: jest.Mock };
   let service: FriendService;
 
@@ -49,6 +51,11 @@ describe('FriendService (unit — mock repo/conversationService/redis)', () => {
     friendshipRepo = {
       exists: jest.fn(async () => true),
       createQueryBuilder: jest.fn(),
+    };
+    safetyService = { isBlocked: jest.fn(async () => false) };
+    notificationService = {
+      create: jest.fn(async (input) => ({ id: 'notif-1', ...input })),
+      sendPush: jest.fn(async () => undefined),
     };
     conversationService = {
       findByPair: jest.fn(async () => makeConversation()),
@@ -71,6 +78,8 @@ describe('FriendService (unit — mock repo/conversationService/redis)', () => {
     service = new FriendService(
       friendshipRepo as unknown as Repository<Friendship>,
       conversationService as unknown as ConversationService,
+      safetyService as never,
+      notificationService as never,
       configStub,
       redis as never,
     );
@@ -214,6 +223,17 @@ describe('FriendService (unit — mock repo/conversationService/redis)', () => {
     it('không phải thành viên → 404 CONVERSATION_NOT_FOUND, không gửi', async () => {
       conversationService.findById.mockResolvedValue(
         makeConversation({ userLowId: 'x', userHighId: 'y' }),
+      );
+      const err = await service
+        .sendMessage(USER_A, 'conv-1', 'hi', 'k1')
+        .catch((e) => e);
+      expectDomainError(err, FriendErrors.CONVERSATION_NOT_FOUND);
+      expect(conversationService.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('1 trong 2 đang block nhau → CÙNG 404 CONVERSATION_NOT_FOUND (không lộ ai block ai)', async () => {
+      safetyService.isBlocked.mockImplementation(
+        async (blocker: string) => blocker === USER_B,
       );
       const err = await service
         .sendMessage(USER_A, 'conv-1', 'hi', 'k1')

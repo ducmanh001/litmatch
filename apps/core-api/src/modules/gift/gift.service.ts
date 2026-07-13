@@ -12,6 +12,7 @@ import { Gift } from './entities/gift.entity';
 import { GiftEvent } from './entities/gift-event.entity';
 import { GIFT_REDIS } from './redis/gift-redis.provider';
 import { EconomyService } from '../economy';
+import { NotificationService, NotificationType } from '../notification';
 import { PartyRoomService } from '../party-room';
 import { UserService } from '../user';
 
@@ -22,6 +23,7 @@ import type {
 import type Redis from 'ioredis';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import type { CoreApiEnv } from '../../config/env.validation';
+import type { Notification } from '../notification';
 
 export interface SendGiftResult {
   giftEvent: GiftEvent;
@@ -47,6 +49,7 @@ export class GiftService {
     private readonly economy: EconomyService,
     private readonly partyRoomService: PartyRoomService,
     private readonly userService: UserService,
+    private readonly notificationService: NotificationService,
     private readonly config: ConfigService<CoreApiEnv, true>,
     @Inject(GIFT_REDIS) private readonly redis: Redis,
   ) {}
@@ -112,6 +115,7 @@ export class GiftService {
       ? 0
       : Math.floor((gift.priceDiamond * ratePercent) / 100);
 
+    let notification: Notification | undefined;
     const result = await this.economy.sendGift({
       senderUserId: user.userId,
       receiverUserId,
@@ -139,6 +143,20 @@ export class GiftService {
             transactionId,
           }),
         );
+        // Party Room không ẩn danh nên lộ senderUserId là đúng (docs/services/notification-service.md § 3)
+        notification = await this.notificationService.createWithManager(
+          manager,
+          {
+            userId: receiverUserId,
+            type: NotificationType.GiftReceived,
+            payload: {
+              roomId,
+              senderUserId: user.userId,
+              giftCode: gift.code,
+              priceDiamond: gift.priceDiamond,
+            },
+          },
+        );
       },
     });
 
@@ -149,6 +167,7 @@ export class GiftService {
 
     if (!result.replayed) {
       await this.publishGiftSent(roomId, gift, giftEvent);
+      if (notification) await this.notificationService.sendPush(notification);
     }
     return { giftEvent, gift, replayed: result.replayed };
   }
