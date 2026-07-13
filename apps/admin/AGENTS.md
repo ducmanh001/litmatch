@@ -24,9 +24,10 @@ Env: copy `.env.example` → `.env.local` (đã có sẵn cho local). Đọc env
 | `/`           | Dashboard placeholder trong `AppShell` (sidebar) — sau `RequireAuth`           |
 | `/users`      | Danh sách user — lọc status/nickname, ban/unban (`features/users/`)            |
 | `/moderation` | Moderation queue — lọc status report, resolve/dismiss (`features/moderation/`) |
+| `/gifts`      | Gift catalog — tạo quà mới, sửa giá, bật/tắt (`features/gifts/`)               |
 
-Nav sidebar khai tại `src/app/app-shell.tsx` (`NAV_ITEMS`); economy/gifts vẫn là placeholder —
-thêm route thật vào `src/app/router.tsx` khi làm feature.
+Nav sidebar khai tại `src/app/app-shell.tsx` (`NAV_ITEMS`); economy vẫn là placeholder — thêm
+route thật vào `src/app/router.tsx` khi làm feature.
 
 ## Delta riêng admin
 

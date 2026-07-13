@@ -5,7 +5,9 @@ import { InitAuthUser1751900000000 } from '../../database/migrations/17519000000
 import { UserRole1753600000000 } from '../../database/migrations/1753600000000-user-role';
 import { AdminAuditLog1753700000000 } from '../../database/migrations/1753700000000-admin-audit-log';
 import { MatchingCore1752200000000 } from '../../database/migrations/1752200000000-matching-core';
+import { EconomyLedger1752000000000 } from '../../database/migrations/1752000000000-economy-ledger';
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
+import { PartyRoomGift1752700000000 } from '../../database/migrations/1752700000000-party-room-gift';
 import { ReportStatus1753800000000 } from '../../database/migrations/1753800000000-report-status';
 import { AuditLogService } from '../../common/audit/audit-log.service';
 import { AdminAuditLog } from '../../common/audit/audit-log.entity';
@@ -17,6 +19,7 @@ import {
   ReportStatus,
   SafetyService,
 } from '../safety';
+import { Gift, GiftErrors, GiftService } from '../gift';
 
 import { AdminService } from './admin.service';
 import { AdminErrors } from './admin.errors';
@@ -93,12 +96,14 @@ d('Admin integration (Postgres thật)', () => {
     ds = new DataSource({
       type: 'postgres',
       url: url.toString(),
-      entities: [User, AdminAuditLog, Report, Block],
+      entities: [User, AdminAuditLog, Report, Block, Gift],
       migrations: [
         InitAuthUser1751900000000,
         UserRole1753600000000,
+        EconomyLedger1752000000000,
         MatchingCore1752200000000,
         Safety1752800000000,
+        PartyRoomGift1752700000000,
         AdminAuditLog1753700000000,
         ReportStatus1753800000000,
       ],
@@ -117,10 +122,28 @@ d('Admin integration (Postgres thật)', () => {
       userService,
       configStub,
     );
+    // GiftService phụ thuộc Economy/PartyRoom/Notification chỉ để sendGift() — không dùng ở
+    // đây (chỉ test createGift/updateGift/listAllForAdmin), nên stub các phần đó.
+    const giftService = new GiftService(
+      ds.getRepository(Gift),
+      {} as never,
+      {} as never,
+      {} as never,
+      userService,
+      {} as never,
+      configStub,
+      {} as never,
+    );
     const auditLogService = new AuditLogService(
       ds.getRepository(AdminAuditLog),
     );
-    admin = new AdminService(ds, userService, safetyService, auditLogService);
+    admin = new AdminService(
+      ds,
+      userService,
+      safetyService,
+      giftService,
+      auditLogService,
+    );
   });
 
   afterAll(async () => {
@@ -316,6 +339,100 @@ d('Admin integration (Postgres thật)', () => {
         .getRepository(AdminAuditLog)
         .findBy({ targetId: '00000000-0000-4000-8000-000000000000' });
       expect(logs).toHaveLength(0);
+    });
+  });
+
+  describe('Gift catalog CRUD', () => {
+    it('createGift: tạo mới + ghi ĐÚNG 1 dòng audit', async () => {
+      const actor = await createUser('gift-create-actor');
+      const code = `test-gift-${++seedCounter}`;
+
+      const gift = await admin.createGift(actor.id, {
+        code,
+        name: 'Quà test',
+        priceDiamond: 10,
+      });
+
+      expect(gift.active).toBe(true);
+      expect(gift.sortOrder).toBe(0);
+      const logs = await ds
+        .getRepository(AdminAuditLog)
+        .findBy({ targetId: gift.id, action: 'gift.created' });
+      expect(logs).toHaveLength(1);
+      expect(logs[0].actorUserId).toBe(actor.id);
+    });
+
+    it('createGift: trùng code → GIFT_CODE_ALREADY_EXISTS, không ghi audit', async () => {
+      const actor = await createUser('gift-dup-actor');
+      const code = `dup-gift-${++seedCounter}`;
+      await admin.createGift(actor.id, {
+        code,
+        name: 'Quà gốc',
+        priceDiamond: 5,
+      });
+
+      await expect(
+        admin.createGift(actor.id, {
+          code,
+          name: 'Quà trùng',
+          priceDiamond: 5,
+        }),
+      ).rejects.toMatchObject({ code: GiftErrors.CODE_ALREADY_EXISTS });
+    });
+
+    it('updateGift: sửa giá + tắt active, không hard-delete', async () => {
+      const actor = await createUser('gift-update-actor');
+      const created = await admin.createGift(actor.id, {
+        code: `upd-gift-${++seedCounter}`,
+        name: 'Quà sửa',
+        priceDiamond: 20,
+      });
+
+      const updated = await admin.updateGift(actor.id, created.id, {
+        priceDiamond: 30,
+        active: false,
+      });
+
+      expect(updated.priceDiamond).toBe(30);
+      expect(updated.active).toBe(false);
+      const stillExists = await ds
+        .getRepository(Gift)
+        .findOneBy({ id: created.id });
+      expect(stillExists).not.toBeNull();
+
+      const logs = await ds
+        .getRepository(AdminAuditLog)
+        .findBy({ targetId: created.id, action: 'gift.updated' });
+      expect(logs).toHaveLength(1);
+    });
+
+    it('updateGift: quà không tồn tại → 404, không ghi audit', async () => {
+      const actor = await createUser('gift-missing-actor');
+      await expect(
+        admin.updateGift(actor.id, '00000000-0000-4000-8000-000000000001', {
+          active: false,
+        }),
+      ).rejects.toMatchObject({ code: GiftErrors.GIFT_NOT_FOUND });
+
+      const logs = await ds
+        .getRepository(AdminAuditLog)
+        .findBy({ targetId: '00000000-0000-4000-8000-000000000001' });
+      expect(logs).toHaveLength(0);
+    });
+
+    it('listGifts: thấy CẢ quà đã tắt (khác listCatalog công khai)', async () => {
+      const actor = await createUser('gift-list-actor');
+      const created = await admin.createGift(actor.id, {
+        code: `list-gift-${++seedCounter}`,
+        name: 'Quà list',
+        priceDiamond: 15,
+      });
+      await admin.updateGift(actor.id, created.id, { active: false });
+
+      const gifts = await admin.listGifts();
+      const found = gifts.find((g) => g.id === created.id);
+      expect(found).toBeDefined();
+      expect(found?.active).toBe(false);
     });
   });
 });
