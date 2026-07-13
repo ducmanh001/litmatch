@@ -475,4 +475,37 @@ export class EconomyService {
       meta: page.meta,
     };
   }
+
+  /**
+   * Admin hoàn tiền thủ công một giao dịch (docs/12 § 12.7) — tái dùng nguyên `ledger.reverse`,
+   * KHÔNG thêm cơ chế reversal mới. `actorUserId` luôn là admin thật (không phải `null` = hệ
+   * thống tự động như refund IAP webhook), `reason` bắt buộc để audit lại được (docs/10 § 10.2
+   * "reversal thủ công không ghi actor + lý do → không audit được"). Idempotency key tất định
+   * theo `transactionId` — admin bấm refund lại cùng giao dịch không tạo 2 bút toán đảo khác
+   * nhau; `ledger.reverse` tự chặn double-reverse qua `TRANSACTION_ALREADY_REVERSED`.
+   */
+  async adminRefundTransaction(
+    transactionId: string,
+    reason: string,
+    actorUserId: string,
+    /** Side effect chạy CÙNG DB transaction với bút toán đảo (vd AdminModule ghi audit log). */
+    withinTransaction?: (manager: EntityManager) => Promise<void>,
+  ): Promise<{ transactionId: string; reversalTransactionId: string }> {
+    const result = await this.ledger.reverse(
+      transactionId,
+      `admin-refund:${transactionId}`,
+      reason,
+      {
+        actorUserId,
+        outboxEventTypeOverride: 'economy.diamond.refunded',
+        withinTransaction: withinTransaction
+          ? (manager) => withinTransaction(manager)
+          : undefined,
+      },
+    );
+    return {
+      transactionId,
+      reversalTransactionId: result.transaction.id,
+    };
+  }
 }

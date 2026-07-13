@@ -7,12 +7,15 @@ import { AuditLogService } from '../../common/audit/audit-log.service';
 import { User, UserService } from '../user';
 import { Report, ReportStatus, SafetyService } from '../safety';
 import { Gift, GiftService } from '../gift';
+import { EconomyService } from '../economy';
 
 import { AdminErrors } from './admin.errors';
 
 import type { UserPage, UserPageFilter } from '../user';
 import type { ReportPage, ReportPageFilter } from '../safety';
 import type { CreateGiftInput, UpdateGiftInput } from '../gift';
+import type { CursorPageMeta } from '@litmatch/common-dtos';
+import type { TransactionView, WalletView } from '../economy';
 
 @Injectable()
 export class AdminService {
@@ -21,6 +24,7 @@ export class AdminService {
     private readonly userService: UserService,
     private readonly safetyService: SafetyService,
     private readonly giftService: GiftService,
+    private readonly economyService: EconomyService,
     private readonly auditLogService: AuditLogService,
   ) {}
 
@@ -159,5 +163,56 @@ export class AdminService {
       );
       return gift;
     });
+  }
+
+  async getWallet(userId: string): Promise<WalletView> {
+    return this.economyService.getWallet(userId);
+  }
+
+  /**
+   * Lịch sử giao dịch của user (docs/12 § 12.7) — tái dùng nguyên `listTransactions` hiện có,
+   * actor-scoped: CHƯA thấy giao dịch user chỉ là người NHẬN (vd nhận quà) — giới hạn biết
+   * trước cho v1, không viết query ledger mới ở đây.
+   */
+  async listTransactions(
+    userId: string,
+    limit: number,
+    cursor?: string,
+  ): Promise<{ items: TransactionView[]; meta: CursorPageMeta }> {
+    const page = await this.economyService.listTransactions(
+      userId,
+      limit,
+      cursor,
+    );
+    return { items: page.data, meta: page.meta };
+  }
+
+  /**
+   * Hoàn tiền thủ công 1 giao dịch — audit log ghi CÙNG DB transaction với bút toán đảo
+   * (qua `withinTransaction` của `ledger.reverse`, không phải transaction riêng của
+   * AdminService — economy giữ vai trò writer/facade duy nhất, docs/06).
+   */
+  async refundTransaction(
+    actorUserId: string,
+    transactionId: string,
+    reason: string,
+  ): Promise<{ transactionId: string; reversalTransactionId: string }> {
+    return this.economyService.adminRefundTransaction(
+      transactionId,
+      reason,
+      actorUserId,
+      async (manager) => {
+        await this.auditLogService.record(
+          {
+            actorUserId,
+            action: 'economy.transaction.refunded',
+            targetType: 'transaction',
+            targetId: transactionId,
+            metadata: { reason },
+          },
+          manager,
+        );
+      },
+    );
   }
 }

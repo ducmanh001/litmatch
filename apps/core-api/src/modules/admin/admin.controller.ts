@@ -16,10 +16,11 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
-import { Roles } from '@litmatch/common-dtos';
+import { CursorPageQueryDto, Roles } from '@litmatch/common-dtos';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequireRoles } from '../../common/decorators/roles.decorator';
+import { ApiCursorPageQuery } from '../../common/decorators/cursor-page-query.decorator';
 
 import { AdminService } from './admin.service';
 import { AdminUserDto } from './dto/admin-user.dto';
@@ -37,6 +38,12 @@ import {
   CreateGiftDto,
   UpdateGiftDto,
 } from './dto/admin-gift.dto';
+import {
+  AdminTransactionsPageDto,
+  AdminWalletDto,
+  RefundResultDto,
+  RefundTransactionDto,
+} from './dto/admin-economy.dto';
 
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 
@@ -180,5 +187,48 @@ export class AdminController {
     return AdminGiftDto.from(
       await this.adminService.updateGift(actor.userId, id, body),
     );
+  }
+
+  @Get('economy/wallet/:userId')
+  @ApiOperation({ summary: 'Ví của user — balance + VIP' })
+  @ApiOkResponse({ type: AdminWalletDto })
+  async getWallet(
+    @Param('userId', ParseUUIDPipe) userId: string,
+  ): Promise<AdminWalletDto> {
+    return AdminWalletDto.from(await this.adminService.getWallet(userId));
+  }
+
+  @Get('economy/users/:userId/transactions')
+  @ApiOperation({
+    summary:
+      'Lịch sử giao dịch của user — cursor pagination, actor-scoped (chưa thấy giao dịch nhận quà)',
+  })
+  @ApiCursorPageQuery()
+  @ApiOkResponse({ type: AdminTransactionsPageDto })
+  async listTransactions(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Query() query: CursorPageQueryDto,
+  ): Promise<AdminTransactionsPageDto> {
+    const page = await this.adminService.listTransactions(
+      userId,
+      query.limit,
+      query.cursor,
+    );
+    return { items: page.items, nextCursor: page.meta.nextCursor };
+  }
+
+  @Post('economy/transactions/:id/refund')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Hoàn tiền thủ công 1 giao dịch — bút toán đảo, audit log, không sửa/xoá giao dịch gốc',
+  })
+  @ApiOkResponse({ type: RefundResultDto })
+  async refundTransaction(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: RefundTransactionDto,
+  ): Promise<RefundResultDto> {
+    return this.adminService.refundTransaction(actor.userId, id, body.reason);
   }
 }

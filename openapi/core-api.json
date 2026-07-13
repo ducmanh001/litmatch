@@ -2736,6 +2736,129 @@
         "summary": "Sửa giá/tên/thứ tự/bật-tắt quà — audit log, không hard-delete (gift_events tham chiếu FK)",
         "tags": ["admin"]
       }
+    },
+    "/api/v1/admin/economy/wallet/{userId}": {
+      "get": {
+        "operationId": "AdminController_getWallet",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AdminWalletDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Ví của user — balance + VIP",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/economy/users/{userId}/transactions": {
+      "get": {
+        "operationId": "AdminController_listTransactions",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminTransactionsPageDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Lịch sử giao dịch của user — cursor pagination, actor-scoped (chưa thấy giao dịch nhận quà)",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/economy/transactions/{id}/refund": {
+      "post": {
+        "operationId": "AdminController_refundTransaction",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RefundTransactionDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/RefundResultDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Hoàn tiền thủ công 1 giao dịch — bút toán đảo, audit log, không sửa/xoá giao dịch gốc",
+        "tags": ["admin"]
+      }
     }
   },
   "info": {
@@ -3760,6 +3883,67 @@
           "sortOrder": { "type": "number" },
           "active": { "type": "boolean" }
         }
+      },
+      "AdminWalletDto": {
+        "type": "object",
+        "properties": {
+          "balance": { "type": "string" },
+          "earnings": { "type": "string" },
+          "vipTier": {
+            "type": "string",
+            "enum": ["vip", "svip"],
+            "nullable": true
+          },
+          "vipExpiresAt": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": ["balance", "earnings", "vipTier", "vipExpiresAt"]
+      },
+      "AdminTransactionDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string" },
+          "status": { "type": "string" },
+          "diamondDelta": {
+            "type": "string",
+            "description": "Diamond delta THEO ví user này — actor-scoped (docs/12 § 12.7: chưa thấy giao dịch nhận quà, chỉ giao dịch user chủ động thực hiện)"
+          },
+          "createdAt": { "format": "date-time", "type": "string" }
+        },
+        "required": ["id", "type", "status", "diamondDelta", "createdAt"]
+      },
+      "AdminTransactionsPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AdminTransactionDto" }
+          },
+          "nextCursor": { "type": "object", "nullable": true }
+        },
+        "required": ["items", "nextCursor"]
+      },
+      "RefundTransactionDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Lý do hoàn tiền — bắt buộc để audit lại được"
+          }
+        },
+        "required": ["reason"]
+      },
+      "RefundResultDto": {
+        "type": "object",
+        "properties": {
+          "transactionId": { "type": "string" },
+          "reversalTransactionId": { "type": "string" }
+        },
+        "required": ["transactionId", "reversalTransactionId"]
       }
     }
   }
