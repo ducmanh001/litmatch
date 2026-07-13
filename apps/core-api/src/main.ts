@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory, Reflector } from '@nestjs/core';
 import { SwaggerModule } from '@nestjs/swagger';
 import { createHttpMetricsMiddleware } from '@litmatch/observability';
+import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 
@@ -34,6 +35,7 @@ async function bootstrap(): Promise<void> {
     exclude: API_PREFIX_EXCLUDES,
   }); // version trong URI ngay từ đầu (docs/05 § 5.4)
   app.use(helmet());
+  app.use(cookieParser()); // đọc refresh_token/csrf_token httpOnly (ADR 0007) — trước mọi guard
   app.use(createHttpMetricsMiddleware(app.get<Registry>(METRICS_REGISTRY))); // docs/07 Giai đoạn 6 — http_request_duration_seconds
 
   // Đã validate format lúc boot ở env.validation.ts (Joi custom) — parse lại đây chỉ để lấy
@@ -41,7 +43,10 @@ async function bootstrap(): Promise<void> {
   const corsOrigins = parseCorsOrigins(
     config.getOrThrow('CORS_ORIGINS', { infer: true }),
   );
-  app.enableCors({ origin: corsOrigins.length > 0 ? corsOrigins : false }); // cấm '*' (docs/05 § 5.8)
+  app.enableCors({
+    origin: corsOrigins.length > 0 ? corsOrigins : false, // cấm '*' (docs/05 § 5.8)
+    credentials: true, // browser gửi kèm cookie httpOnly cross-origin (web/admin khác port với core-api — ADR 0007)
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({

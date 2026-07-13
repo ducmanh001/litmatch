@@ -13,3 +13,7 @@ export const OTP_RATE_WINDOW_MS = 3600 * 1000;
 
 /** Entropy refresh token (bytes) — security param cố định; SHA-256 đủ để hash token entropy cỡ này, không cần bcrypt. */
 export const REFRESH_TOKEN_BYTES = 48;
+
+/** Tên cookie httpOnly + path hẹp (ADR 0007) — chỉ gửi kèm request tới đúng nhóm route auth. */
+export const REFRESH_TOKEN_COOKIE_NAME = 'refresh_token';
+export const REFRESH_TOKEN_COOKIE_PATH = '/api/v1/auth';

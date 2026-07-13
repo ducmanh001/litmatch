@@ -1,29 +1,27 @@
 /**
- * Session token store dùng chung cho mọi frontend (docs/12 § 12.6): access token CHỈ ở
- * memory; refresh token qua storage cắm được (browser → localStorage, test → memory).
- * Đây là tầng hợp đồng auth, không phải UI — vì vậy sống ở api-client, không phải app.
+ * Session token store dùng chung cho mọi frontend (docs/12 § 12.6, ADR 0007): refresh token là
+ * cookie httpOnly do core-api set — JS không bao giờ giữ/đọc/persist giá trị đó. Store này chỉ
+ * giữ access token (memory-only, mất khi reload) + csrf token (persist ở storage cắm được —
+ * browser → localStorage, test → memory) để lần refresh đầu tiên sau reload còn CSRF header
+ * hợp lệ gửi kèm trong khi cookie httpOnly vẫn còn sống sót qua reload. Đây là tầng hợp đồng
+ * auth, không phải UI — vì vậy sống ở api-client, không phải app.
  */
 
 export interface AuthSession {
   accessToken: string;
-  refreshToken: string;
+  csrfToken: string;
 }
 
-export interface RefreshTokenStorage {
+export interface CsrfTokenStorage {
   get(): string | null;
   set(value: string | null): void;
   /** Browser adapter báo thay đổi từ tab khác; memory/test adapter không cần implement. */
   subscribe?(listener: (value: string | null) => void): () => void;
-  /** Đồng bộ cả cặp token mà không ghi access token xuống persistent storage. */
-  publishSession?(session: AuthSession | null): void;
-  subscribeSession?(
-    listener: (session: AuthSession | null) => void,
-  ): () => void;
 }
 
 export type SessionStatus = 'authenticated' | 'restorable' | 'unauthenticated';
 
-export function memoryRefreshTokenStorage(): RefreshTokenStorage {
+export function memoryCsrfTokenStorage(): CsrfTokenStorage {
   let value: string | null = null;
   return {
     get: () => value,
@@ -37,16 +35,8 @@ export function memoryRefreshTokenStorage(): RefreshTokenStorage {
  * localStorage adapter — SSR-safe: trước khi có `window` (Next server render) mọi thao tác
  * là no-op trả null, vì session chỉ tồn tại phía browser (docs/12 § 12.6).
  */
-export function browserRefreshTokenStorage(
-  storageKey: string,
-): RefreshTokenStorage {
+export function browserCsrfTokenStorage(storageKey: string): CsrfTokenStorage {
   const available = (): boolean => typeof window !== 'undefined';
-  let broadcastChannel: BroadcastChannel | null = null;
-  const channel = (): BroadcastChannel | null => {
-    if (!available() || typeof BroadcastChannel === 'undefined') return null;
-    broadcastChannel ??= new BroadcastChannel(`${storageKey}.session`);
-    return broadcastChannel;
-  };
   return {
     get: () => (available() ? window.localStorage.getItem(storageKey) : null),
     set: (next) => {
@@ -67,81 +57,50 @@ export function browserRefreshTokenStorage(
       window.addEventListener('storage', onStorage);
       return () => window.removeEventListener('storage', onStorage);
     },
-    publishSession: (session) => channel()?.postMessage(session),
-    subscribeSession: (listener) => {
-      const target = channel();
-      if (target === null) return () => undefined;
-      const onMessage = (event: MessageEvent<unknown>): void => {
-        const value = event.data;
-        if (value === null) {
-          listener(null);
-          return;
-        }
-        if (
-          typeof value === 'object' &&
-          value !== null &&
-          'accessToken' in value &&
-          typeof value.accessToken === 'string' &&
-          'refreshToken' in value &&
-          typeof value.refreshToken === 'string'
-        ) {
-          listener({
-            accessToken: value.accessToken,
-            refreshToken: value.refreshToken,
-          });
-        }
-      };
-      target.addEventListener('message', onMessage);
-      return () => target.removeEventListener('message', onMessage);
-    },
   };
 }
 
 export interface TokenStore {
   getAccessToken(): string | null;
-  getRefreshToken(): string | null;
+  getCsrfToken(): string | null;
   getStatus(): SessionStatus;
   getGeneration(): number;
-  /** Ghi cả cặp token sau login/refresh; `null` = logout (xoá sạch). */
+  /** Ghi session sau login/refresh thành công; `null` = logout/hết hạn (xoá sạch). */
   setSession(session: AuthSession | null): void;
   /** Commit response async chỉ khi chưa có logout/rotation khác chen vào. */
   setSessionIfCurrent(
     session: AuthSession,
     expectedGeneration: number,
   ): boolean;
-  /** Còn refresh token = còn khả năng khôi phục phiên (access hết hạn thì rotation lo). */
+  /** `restorable` hoặc `authenticated` — còn khả năng có phiên hợp lệ. */
   isAuthenticated(): boolean;
-  /** Cho UI (useSyncExternalStore/Zustand) phản ứng login/logout — trả hàm unsubscribe. */
+  /** Cho UI (useSyncExternalStore) phản ứng login/logout — trả hàm unsubscribe. */
   subscribe(listener: () => void): () => void;
 }
 
-export function createTokenStore(
-  refreshStorage: RefreshTokenStorage,
-): TokenStore {
+export function createTokenStore(csrfStorage: CsrfTokenStorage): TokenStore {
   let accessToken: string | null = null;
-  let accessRefreshToken: string | null = null;
+  let csrfToken: string | null = csrfStorage.get();
+  // Có csrfToken persisted từ trước → có thể vẫn còn cookie httpOnly hợp lệ, đáng thử refresh.
+  // Không có → chưa từng đăng nhập trên browser này, khỏi tốn round-trip gọi thẳng unauthenticated.
+  let status: SessionStatus =
+    csrfToken !== null ? 'restorable' : 'unauthenticated';
   let generation = 0;
   const listeners = new Set<() => void>();
   const notify = (): void => listeners.forEach((fn) => fn());
-  const status = (): SessionStatus => {
-    if (accessToken !== null) return 'authenticated';
-    return refreshStorage.get() !== null ? 'restorable' : 'unauthenticated';
-  };
 
-  refreshStorage.subscribe?.((storedRefreshToken) => {
-    // Broadcast có thể tới trước storage event; đừng xóa access token vừa nhận cùng generation.
-    if (storedRefreshToken === accessRefreshToken) return;
+  csrfStorage.subscribe?.((newValue) => {
     generation += 1;
-    accessToken = null;
-    accessRefreshToken = null;
-    notify();
-  });
-  refreshStorage.subscribeSession?.((session) => {
-    generation += 1;
-    accessToken = session?.accessToken ?? null;
-    accessRefreshToken = session?.refreshToken ?? null;
-    if (refreshStorage.get() !== accessRefreshToken) {
-      refreshStorage.set(accessRefreshToken);
+    if (newValue === null) {
+      // Tab khác logout — theo ngay, không đợi tự 401.
+      accessToken = null;
+      csrfToken = null;
+      status = 'unauthenticated';
+    } else {
+      // Tab khác rotate — cập nhật csrfToken, KHÔNG đổi accessToken/status của tab này.
+      csrfToken = newValue;
+      // Trừ khi tab này đang unauthenticated: tab khác vừa login → đáng thử restore ở đây.
+      if (status === 'unauthenticated') status = 'restorable';
     }
     notify();
   });
@@ -149,16 +108,16 @@ export function createTokenStore(
   const setSession = (session: AuthSession | null): void => {
     generation += 1;
     accessToken = session?.accessToken ?? null;
-    accessRefreshToken = session?.refreshToken ?? null;
-    refreshStorage.set(accessRefreshToken);
-    refreshStorage.publishSession?.(session);
+    csrfToken = session?.csrfToken ?? null;
+    status = session === null ? 'unauthenticated' : 'authenticated';
+    csrfStorage.set(csrfToken);
     notify();
   };
 
   return {
     getAccessToken: () => accessToken,
-    getRefreshToken: () => refreshStorage.get(),
-    getStatus: status,
+    getCsrfToken: () => csrfToken,
+    getStatus: () => status,
     getGeneration: () => generation,
     setSession,
     setSessionIfCurrent(session, expectedGeneration) {
@@ -166,7 +125,7 @@ export function createTokenStore(
       setSession(session);
       return true;
     },
-    isAuthenticated: () => status() !== 'unauthenticated',
+    isAuthenticated: () => status !== 'unauthenticated',
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

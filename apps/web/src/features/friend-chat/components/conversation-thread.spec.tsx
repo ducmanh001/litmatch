@@ -18,9 +18,7 @@ function renderThread() {
 }
 
 describe('ConversationThread', () => {
-  beforeEach(() =>
-    tokenStore.setSession({ accessToken: 'a', refreshToken: 'r' }),
-  );
+  beforeEach(() => tokenStore.setSession({ accessToken: 'a', csrfToken: 'r' }));
   afterEach(() => {
     tokenStore.setSession(null);
     vi.restoreAllMocks();

@@ -8,6 +8,7 @@ export const CommonErrors = {
   INTERNAL_ERROR: 'COMMON_INTERNAL_ERROR',
   IDEMPOTENCY_KEY_MISSING: 'COMMON_IDEMPOTENCY_KEY_MISSING',
   IDEMPOTENCY_KEY_INVALID: 'COMMON_IDEMPOTENCY_KEY_INVALID',
+  CSRF_TOKEN_INVALID: 'COMMON_CSRF_TOKEN_INVALID',
 } as const;
 
 export type CommonErrorCode = (typeof CommonErrors)[keyof typeof CommonErrors];

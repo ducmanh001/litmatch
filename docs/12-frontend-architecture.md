@@ -108,30 +108,45 @@ cookie mode.
 
 ## 12.6 Auth — lifecycle và quyết định lưu token
 
-Cả hai app dùng đúng JWT flow của core-api, không dựng hệ auth riêng. V1 giữ access token trong
-memory và refresh token trong `localStorage` theo ADR lịch sử
-[0002](./adr/0002-browser-refresh-token-local-storage.md) và production gate hiện hành
-[0003](./adr/0003-browser-auth-production-gate.md). Cách này chỉ hợp lệ cho scaffold/dev, chưa
-được phép public production trước khi đóng security gate trong ADR 0003.
+Cả hai app dùng đúng JWT flow của core-api, không dựng hệ auth riêng. Refresh token là
+**httpOnly cookie** do core-api set (`Secure` ở production, `SameSite=Strict`) theo
+[ADR 0007](./adr/0007-httponly-cookie-refresh-token.md) — thay thế hoàn toàn
+[ADR 0002](./adr/0002-browser-refresh-token-local-storage.md)/
+[0003](./adr/0003-browser-auth-production-gate.md) (`Superseded`). JS không bao giờ đọc được
+giá trị refresh token. Access token vẫn giữ trong memory, không đổi (mất khi reload, phải phục
+hồi qua refresh). CSRF double-submit áp cho đúng 2 route đọc cookie để đổi trạng thái
+(`/auth/refresh`, `/auth/logout`): FE nhận `csrfToken` qua JSON body lúc login/refresh (**không**
+đọc qua `document.cookie` — `web`/`admin` khác origin với `core-api` nên không đọc được cookie
+của origin khác dù cookie đó không `httpOnly`), rồi echo lại qua header `X-CSRF-Token`.
+`csrfToken` (chỉ riêng giá trị này, KHÔNG bao giờ là access/refresh token) persist ở
+`localStorage` — cần thứ này sống sót qua reload để lần refresh đầu tiên sau reload còn CSRF
+header hợp lệ gửi kèm (cookie httpOnly vẫn còn sau reload, nhưng state JS thì mất hết); an toàn
+vì vô dụng với kẻ tấn công nếu thiếu cookie httpOnly đi kèm (§ ADR 0007 điểm 3).
 
 Session lifecycle bắt buộc:
 
 ```text
 bootstrapping
-  → không có refresh token → unauthenticated
-  → có refresh token → restoring (single-flight refresh)
-      → thành công → authenticated
-      → thất bại/reuse/ban → clear local session → unauthenticated
+  → có csrfToken persisted → restorable → thử refresh 1 lần
+      → 200 → authenticated
+      → 401/network fail → unauthenticated
+  → không có csrfToken persisted (chưa từng đăng nhập) → unauthenticated ngay, khỏi gọi API
 authenticated
-  → API 401 → refreshing một lần → retry request một lần
-  → logout/session-expired/storage event → clear token + query cache + realtime → unauthenticated
+  → API 401 → refreshing một lần (single-flight, gửi kèm credentials + CSRF header) → retry
+    request một lần
+  → logout/session-expired/storage event từ tab khác → clear access token + query cache +
+    realtime → unauthenticated
 ```
 
-- Protected UI và realtime **không** khởi động trước khi `restoring` kết thúc.
-- Refresh rotation phải single-flight trong một tab và phối hợp giữa tab để không dùng lại cùng
-  refresh token; logout/rotation ở tab khác phải làm snapshot UI hiện tại cập nhật.
-- Nâng cấp sang httpOnly cookie là quyết định kiến trúc mới: thêm ADR, backend cookie mode và
-  migration/rollback plan; không tiện tay đổi trong feature PR.
+- Protected UI và realtime **không** khởi động trước khi lần thử refresh đầu tiên (bootstrap)
+  kết thúc.
+- Refresh rotation phải single-flight trong một tab (Web Locks, fail closed nếu thiếu
+  capability — không đổi từ trước). Cross-tab sync giữ nguyên cơ chế `storage` event (đổi đối
+  tượng theo dõi từ `refreshToken` sang `csrfToken`): tab khác rotate → tab này cập nhật
+  `csrfToken`, không đổi trạng thái đăng nhập; tab khác logout (giá trị bị xoá) → tab này chuyển
+  `unauthenticated` ngay, không cần đợi tự 401.
+- Thêm route mới đọc cookie để đổi trạng thái phải tự áp lại CSRF double-submit — không giả
+  định an toàn theo mặc định chỉ vì đứng sau `RolesGuard`/`JwtAuthGuard`.
 
 ## 12.7 Backend capabilities frontend được phép phụ thuộc
 
