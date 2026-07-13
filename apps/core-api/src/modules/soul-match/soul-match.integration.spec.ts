@@ -8,6 +8,7 @@ import { MatchingCore1752200000000 } from '../../database/migrations/17522000000
 import { MatchingGenderPreference1752300000000 } from '../../database/migrations/1752300000000-matching-gender-preference';
 import { SoulMatch1752400000000 } from '../../database/migrations/1752400000000-soul-match';
 import { FriendChat1752600000000 } from '../../database/migrations/1752600000000-friend-chat';
+import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
 
 import { SoulMatchService } from './soul-match.service';
 import { SoulMatchErrors } from './soul-match.errors';
@@ -188,6 +189,7 @@ d('Soul Match integration (Postgres thật)', () => {
         MatchingGenderPreference1752300000000,
         SoulMatch1752400000000,
         FriendChat1752600000000,
+        Safety1752800000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -201,9 +203,17 @@ d('Soul Match integration (Postgres thật)', () => {
       ds.getRepository(Conversation),
       ds.getRepository(Message),
     );
+    // Notification không phải trọng tâm suite này (test riêng ở notification.service.spec.ts) — stub no-op
+    const notificationStub = {
+      createWithManager: async () => ({ id: 'notif-stub' }),
+      sendPush: async () => undefined,
+    };
     friendService = new FriendService(
       ds.getRepository(Friendship),
       conversationService,
+      // stub — guard block test riêng ở suite friend.integration, suite này không chạm block
+      { isBlocked: async () => false } as never,
+      notificationStub as never,
       configStub,
       // stub publish — luồng realtime friend.message test riêng ở suite friend.integration
       { publish: async () => 1 } as never,
@@ -214,6 +224,7 @@ d('Soul Match integration (Postgres thật)', () => {
       ds.getRepository(MatchTicket),
       userService,
       {} as never,
+      notificationStub as never,
       configStub,
       {} as never,
     );

@@ -6,6 +6,7 @@ import { MatchingCore1752200000000 } from '../../database/migrations/17522000000
 import { MatchingGenderPreference1752300000000 } from '../../database/migrations/1752300000000-matching-gender-preference';
 import { SoulMatch1752400000000 } from '../../database/migrations/1752400000000-soul-match';
 import { FriendChat1752600000000 } from '../../database/migrations/1752600000000-friend-chat';
+import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
 
 import { FriendService } from './friend.service';
 import { FriendErrors } from './friend.errors';
@@ -15,9 +16,14 @@ import { Message } from './entities/message.entity';
 import { ConversationService } from './services/conversation.service';
 import { MatchSession } from '../matching/entities/match-session.entity';
 import { MatchTicket } from '../matching/entities/match-ticket.entity';
+import { SafetyService } from '../safety';
+import { Block } from '../safety/entities/block.entity';
+import { Report } from '../safety/entities/report.entity';
 import { SoulChatMessage } from '../soul-match/entities/soul-chat-message.entity';
 import { SoulMatchRating } from '../soul-match/entities/soul-match-rating.entity';
 import { Gender, User } from '../user';
+
+import type { UserService } from '../user';
 
 import type { ConfigService } from '@nestjs/config';
 
@@ -40,6 +46,11 @@ jest.setTimeout(60_000);
 
 const CONFIG: Record<string, unknown> = {
   FRIEND_MESSAGE_MAX_LENGTH: 20,
+  SAFETY_REMATCH_COOLDOWN_DAYS: 30,
+  SAFETY_REPORT_COOLDOWN_DAYS: 7,
+  SAFETY_TRUST_PENALTY_PER_REPORT: 5,
+  SAFETY_TRUST_PENALTY_DAILY_CAP: 20,
+  SAFETY_TRUST_SCORE_FLOOR: 0,
 };
 const configStub = {
   getOrThrow: (key: string) => {
@@ -51,6 +62,7 @@ const configStub = {
 d('Friend integration (Postgres thật)', () => {
   let ds: DataSource;
   let friend: FriendService;
+  let safety: SafetyService;
 
   async function createUser(nickname: string): Promise<User> {
     const repo = ds.getRepository(User);
@@ -103,6 +115,8 @@ d('Friend integration (Postgres thật)', () => {
         Friendship,
         Conversation,
         Message,
+        Report,
+        Block,
       ],
       migrations: [
         InitAuthUser1751900000000,
@@ -110,6 +124,7 @@ d('Friend integration (Postgres thật)', () => {
         MatchingGenderPreference1752300000000,
         SoulMatch1752400000000,
         FriendChat1752600000000,
+        Safety1752800000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -122,9 +137,27 @@ d('Friend integration (Postgres thật)', () => {
       ds.getRepository(Conversation),
       ds.getRepository(Message),
     );
+    // Stub tối thiểu — chỉ cần không throw để SafetyService.block() validate target tồn tại;
+    // các method khác của UserService không liên quan tới guard block ở suite này.
+    const userServiceStub = {
+      getByIdOrThrow: async (id: string) => ({ id }),
+    } as unknown as UserService;
+    safety = new SafetyService(
+      ds,
+      ds.getRepository(Report),
+      ds.getRepository(Block),
+      userServiceStub,
+      configStub,
+    );
     friend = new FriendService(
       ds.getRepository(Friendship),
       conversationService,
+      safety,
+      // Notification không phải trọng tâm suite này (test riêng ở notification.service.spec.ts) — stub no-op
+      {
+        create: async () => ({ id: 'notif-stub' }),
+        sendPush: async () => undefined,
+      } as never,
       configStub,
       // stub publish — realtime end-to-end đã test ở suite signaling-gateway
       { publish: async () => 1 } as never,
@@ -276,6 +309,28 @@ d('Friend integration (Postgres thật)', () => {
     await expect(
       friend.listMessages(a.id, '00000000-0000-4000-8000-000000000000', 20),
     ).rejects.toMatchObject({ code: FriendErrors.CONVERSATION_NOT_FOUND });
+  });
+
+  it('block 2 chiều chặn gửi message — CÙNG mã lỗi với "không phải thành viên" (docs/services/safety-service.md § 6)', async () => {
+    const [a, b] = await Promise.all([
+      createUser('blk-a'),
+      createUser('blk-b'),
+    ]);
+    await ensureFriendship(a, b);
+    const conv = await friend.getConversationWithFriend(a.id, b.id);
+
+    await safety.block(b.id, a.id); // b chặn a
+    await expect(
+      friend.sendMessage(a.id, conv.id, 'hi', 'k1'),
+    ).rejects.toMatchObject({ code: FriendErrors.CONVERSATION_NOT_FOUND });
+    // Chiều còn lại (a gửi cho b khi CHÍNH a là người bị block) cũng chặn — check 2 chiều
+    await expect(
+      friend.sendMessage(b.id, conv.id, 'hi', 'k1'),
+    ).rejects.toMatchObject({ code: FriendErrors.CONVERSATION_NOT_FOUND });
+
+    await safety.unblock(b.id, a.id);
+    const msg = await friend.sendMessage(a.id, conv.id, 'hi lại', 'k2');
+    expect(msg.content).toBe('hi lại');
   });
 
   it('listFriends: sort theo lastMessageAt gần nhất, bạn chưa chat lần nào sort theo friendSince', async () => {

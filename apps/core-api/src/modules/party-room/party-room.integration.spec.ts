@@ -10,6 +10,7 @@ import { SoulMatch1752400000000 } from '../../database/migrations/1752400000000-
 import { Calling1752500000000 } from '../../database/migrations/1752500000000-calling';
 import { FriendChat1752600000000 } from '../../database/migrations/1752600000000-friend-chat';
 import { PartyRoomGift1752700000000 } from '../../database/migrations/1752700000000-party-room-gift';
+import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
 
 import { PartyRoomService } from './party-room.service';
 import { PartyRoomSweeperService } from './jobs/party-room-sweeper.service';
@@ -186,6 +187,7 @@ d('Party Room integration (Postgres thật)', () => {
         Calling1752500000000,
         FriendChat1752600000000,
         PartyRoomGift1752700000000,
+        Safety1752800000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,

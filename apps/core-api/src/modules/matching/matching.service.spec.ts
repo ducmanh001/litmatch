@@ -25,6 +25,8 @@ const CONFIG: Record<string, unknown> = {
   MATCHING_SPEEDUP_PRICE_DIAMOND: 50,
   MATCHING_SPEEDUP_MAX_PER_HOUR: 3,
   MATCHING_PRIORITY_BOOST_MS: 300_000,
+  MATCHING_TRUST_PENALTY_MS_PER_POINT: 2000,
+  MATCHING_TRUST_PENALTY_MAX_MS: 120_000,
 };
 
 const me: AuthenticatedUser = { userId: 'user-me', isGuest: false };
@@ -40,6 +42,7 @@ function makeTicket(overrides: Partial<MatchTicket> = {}): MatchTicket {
     status: MatchTicketStatus.Queued,
     enqueuedAt: new Date('2026-07-12T00:00:00Z'),
     priorityBoostMs: 0,
+    trustPenaltyMs: 0,
     sessionId: null,
     idempotencyKey: 'matching:join:user-me:k1',
     createdAt: new Date('2026-07-12T00:00:00Z'),
@@ -64,6 +67,10 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
     publish: jest.Mock;
   };
   let economy: { spendDiamond: jest.Mock; hasTransaction: jest.Mock };
+  let notificationService: {
+    createWithManager: jest.Mock;
+    sendPush: jest.Mock;
+  };
   let userService: { getByIdOrThrow: jest.Mock };
   let manager: jest.Mocked<Pick<EntityManager, 'findOne' | 'save'>>;
   let dataSource: { transaction: jest.Mock };
@@ -96,6 +103,13 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
       })),
       hasTransaction: jest.fn(async () => false),
     };
+    notificationService = {
+      createWithManager: jest.fn(async (_manager, input) => ({
+        id: 'notif-1',
+        ...input,
+      })),
+      sendPush: jest.fn(async () => undefined),
+    };
     userService = {
       getByIdOrThrow: jest.fn(
         async () =>
@@ -104,6 +118,7 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
             status: UserStatus.Active,
             region: 'VN',
             birthDate: '2000-01-01',
+            trustScore: 100,
           }) as User,
       ),
     };
@@ -126,6 +141,7 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
       ticketRepo as unknown as Repository<MatchTicket>,
       userService as unknown as UserService,
       economy as unknown as EconomyService,
+      notificationService as never,
       config,
       redis as unknown as Redis,
     );
@@ -158,6 +174,7 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
         status: UserStatus.Active,
         region: null,
         birthDate: null,
+        trustScore: 100,
       } as never);
       const ticket = await service.joinQueue(
         me,

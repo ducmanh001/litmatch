@@ -10,3 +10,8 @@ export {
   MatchSessionStatus,
 } from './entities/match-session.entity';
 export { MatchType } from './entities/match-ticket.entity';
+// Safety module bind implementation thật vào token này (docs/services/safety-service.md § 6)
+export {
+  MATCH_INTERACTION_POLICY,
+  MatchInteractionPolicy,
+} from './ports/interaction-policy';

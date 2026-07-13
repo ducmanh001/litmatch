@@ -15,12 +15,16 @@ import { GlobalExceptionFilter } from '../common/filters/global-exception.filter
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { ResponseEnvelopeInterceptor } from '../common/interceptors/response-envelope.interceptor';
 import { AuthModule } from '../modules/auth';
+import { AvatarModule } from '../modules/avatar';
 import { CallingModule } from '../modules/calling';
 import { EconomyModule } from '../modules/economy';
+import { FeedModule } from '../modules/feed';
 import { FriendModule } from '../modules/friend';
 import { GiftModule } from '../modules/gift';
 import { MatchingModule } from '../modules/matching';
+import { NotificationModule } from '../modules/notification';
 import { PartyRoomModule } from '../modules/party-room';
+import { SafetyModule } from '../modules/safety';
 import { SoulMatchModule } from '../modules/soul-match';
 import { UserModule } from '../modules/user';
 
@@ -73,6 +77,10 @@ import { ReadinessService } from './readiness.service';
     CallingModule,
     PartyRoomModule,
     GiftModule,
+    SafetyModule,
+    FeedModule,
+    NotificationModule,
+    AvatarModule,
   ],
   controllers: [HealthController],
   providers: [

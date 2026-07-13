@@ -560,6 +560,174 @@
         "tags": ["matching"]
       }
     },
+    "/api/v1/safety/reports": {
+      "post": {
+        "operationId": "SafetyController_createReport",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateReportDto" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/ReportDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Report 1 user — trust score penalty chống spam (docs/06)",
+        "tags": ["safety"]
+      }
+    },
+    "/api/v1/safety/blocks/{targetUserId}": {
+      "post": {
+        "operationId": "SafetyController_block",
+        "parameters": [
+          {
+            "name": "targetUserId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Block 1 user — idempotent",
+        "tags": ["safety"]
+      },
+      "delete": {
+        "operationId": "SafetyController_unblock",
+        "parameters": [
+          {
+            "name": "targetUserId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Unblock 1 user — idempotent",
+        "tags": ["safety"]
+      },
+      "get": {
+        "operationId": "SafetyController_blockStatus",
+        "parameters": [
+          {
+            "name": "targetUserId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/BlockStatusDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Đang có block chính mình → target hay không",
+        "tags": ["safety"]
+      }
+    },
+    "/api/v1/notifications": {
+      "get": {
+        "operationId": "NotificationController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/NotificationsPageDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Danh sách notification, mới nhất trước",
+        "tags": ["notifications"]
+      }
+    },
+    "/api/v1/notifications/unread-count": {
+      "get": {
+        "operationId": "NotificationController_unreadCount",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/UnreadCountDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Số notification chưa đọc — dùng cho badge",
+        "tags": ["notifications"]
+      }
+    },
+    "/api/v1/notifications/{notificationId}/read": {
+      "post": {
+        "operationId": "NotificationController_markRead",
+        "parameters": [
+          {
+            "name": "notificationId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Đánh dấu đã đọc — idempotent, chỉ chủ sở hữu",
+        "tags": ["notifications"]
+      }
+    },
     "/api/v1/friends": {
       "get": {
         "operationId": "FriendController_listFriends",
@@ -1251,6 +1419,494 @@
         "summary": "Tặng quà trong phòng — trừ DIA người tặng + cộng PTS người nhận atomic; client chỉ bắn hiệu ứng sau khi nhận 200",
         "tags": ["gift"]
       }
+    },
+    "/api/v1/feed/posts": {
+      "post": {
+        "operationId": "FeedController_createPost",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreatePostDto" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/PostDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Đăng bài — guest bị chặn (docs/06)",
+        "tags": ["feed"]
+      },
+      "get": {
+        "operationId": "FeedController_listFeed",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/PostsPageDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Feed công khai toàn cục, mới nhất trước — loại tác giả đang block/bị block",
+        "tags": ["feed"]
+      }
+    },
+    "/api/v1/feed/posts/{postId}": {
+      "get": {
+        "operationId": "FeedController_getPost",
+        "parameters": [
+          {
+            "name": "postId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/PostDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Chi tiết 1 bài — 404 nếu đã xoá/bị block (chống oracle)",
+        "tags": ["feed"]
+      },
+      "delete": {
+        "operationId": "FeedController_deletePost",
+        "parameters": [
+          {
+            "name": "postId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Xoá mềm bài viết — chỉ tác giả",
+        "tags": ["feed"]
+      }
+    },
+    "/api/v1/feed/posts/{postId}/comments": {
+      "post": {
+        "operationId": "FeedController_createComment",
+        "parameters": [
+          {
+            "name": "postId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateCommentDto" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/CommentDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Bình luận — guest bị chặn, chặn nếu block với tác giả",
+        "tags": ["feed"]
+      },
+      "get": {
+        "operationId": "FeedController_listComments",
+        "parameters": [
+          {
+            "name": "postId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/CommentsPageDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Danh sách bình luận, cũ → mới",
+        "tags": ["feed"]
+      }
+    },
+    "/api/v1/feed/comments/{commentId}": {
+      "delete": {
+        "operationId": "FeedController_deleteComment",
+        "parameters": [
+          {
+            "name": "commentId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Xoá mềm comment — chỉ tác giả",
+        "tags": ["feed"]
+      }
+    },
+    "/api/v1/feed/posts/{postId}/reactions": {
+      "post": {
+        "operationId": "FeedController_like",
+        "parameters": [
+          {
+            "name": "postId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReactionStatusDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Thả tim — idempotent, guest bị chặn",
+        "tags": ["feed"]
+      },
+      "delete": {
+        "operationId": "FeedController_unlike",
+        "parameters": [
+          {
+            "name": "postId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReactionStatusDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Bỏ thả tim — idempotent",
+        "tags": ["feed"]
+      },
+      "get": {
+        "operationId": "FeedController_reactionStatus",
+        "parameters": [
+          {
+            "name": "postId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReactionStatusDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Trạng thái thả tim của chính mình + tổng đếm",
+        "tags": ["feed"]
+      }
+    },
+    "/api/v1/avatar/catalog": {
+      "get": {
+        "operationId": "AvatarController_listCatalog",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/AvatarAssetDto" }
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Catalog item đang bật — giá server là nguồn sự thật",
+        "tags": ["avatar"]
+      }
+    },
+    "/api/v1/avatar/me/items": {
+      "get": {
+        "operationId": "AvatarController_listMyItems",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/AvatarAssetDto" }
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Item avatar mình đang sở hữu",
+        "tags": ["avatar"]
+      }
+    },
+    "/api/v1/avatar/items/{assetId}/claim": {
+      "post": {
+        "operationId": "AvatarController_claim",
+        "parameters": [
+          {
+            "name": "assetId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Nhận item free — idempotent",
+        "tags": ["avatar"]
+      }
+    },
+    "/api/v1/avatar/items/{assetId}/buy": {
+      "post": {
+        "operationId": "AvatarController_buy",
+        "parameters": [
+          {
+            "name": "assetId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "200": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Mua item trả phí — trừ diamond qua Economy",
+        "tags": ["avatar"]
+      }
+    },
+    "/api/v1/avatar/me/equip": {
+      "put": {
+        "operationId": "AvatarController_equip",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/EquipAvatarItemDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AvatarConfigDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Trang bị item — chỉ item đã sở hữu (docs/10 § Avatar)",
+        "tags": ["avatar"]
+      }
+    },
+    "/api/v1/avatar/me": {
+      "get": {
+        "operationId": "AvatarController_getMyAvatar",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AvatarConfigDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Avatar của chính mình — lazy-init default nếu chưa có",
+        "tags": ["avatar"]
+      }
+    },
+    "/api/v1/avatar/users/{userId}": {
+      "get": {
+        "operationId": "AvatarController_getAvatarOf",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AvatarConfigDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Xem avatar người khác — public, không cần bạn bè",
+        "tags": ["avatar"]
+      }
     }
   },
   "info": {
@@ -1514,6 +2170,84 @@
           "ticket": { "$ref": "#/components/schemas/TicketDto" }
         },
         "required": ["transactionId", "replayed", "ticket"]
+      },
+      "CreateReportDto": {
+        "type": "object",
+        "properties": {
+          "targetUserId": { "type": "string" },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "harassment",
+              "spam",
+              "underage",
+              "inappropriate_content",
+              "other"
+            ]
+          },
+          "description": { "type": "string" }
+        },
+        "required": ["targetUserId", "reason"]
+      },
+      "ReportDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "targetUserId": { "type": "string" },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "harassment",
+              "spam",
+              "underage",
+              "inappropriate_content",
+              "other"
+            ]
+          },
+          "createdAt": { "format": "date-time", "type": "string" }
+        },
+        "required": ["id", "targetUserId", "reason", "createdAt"]
+      },
+      "BlockStatusDto": {
+        "type": "object",
+        "properties": { "blocked": { "type": "boolean" } },
+        "required": ["blocked"]
+      },
+      "NotificationDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": [
+              "match_confirmed",
+              "friend_message",
+              "gift_received",
+              "post_liked",
+              "post_commented"
+            ]
+          },
+          "payload": { "type": "object" },
+          "readAt": { "type": "object", "nullable": true },
+          "createdAt": { "format": "date-time", "type": "string" }
+        },
+        "required": ["id", "type", "payload", "readAt", "createdAt"]
+      },
+      "NotificationsPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/NotificationDto" }
+          },
+          "nextCursor": { "type": "object", "nullable": true }
+        },
+        "required": ["items", "nextCursor"]
+      },
+      "UnreadCountDto": {
+        "type": "object",
+        "properties": { "count": { "type": "number" } },
+        "required": ["count"]
       },
       "FriendDto": {
         "type": "object",
@@ -1816,6 +2550,126 @@
           "createdAt",
           "replayed"
         ]
+      },
+      "CreatePostDto": {
+        "type": "object",
+        "properties": {
+          "content": { "type": "string" },
+          "imageUrl": { "type": "string" }
+        }
+      },
+      "PostDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "authorUserId": { "type": "string" },
+          "content": { "type": "object", "nullable": true },
+          "imageUrl": { "type": "object", "nullable": true },
+          "likeCount": { "type": "number" },
+          "commentCount": { "type": "number" },
+          "createdAt": { "format": "date-time", "type": "string" }
+        },
+        "required": [
+          "id",
+          "authorUserId",
+          "content",
+          "imageUrl",
+          "likeCount",
+          "commentCount",
+          "createdAt"
+        ]
+      },
+      "PostsPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/PostDto" }
+          },
+          "nextCursor": { "type": "object", "nullable": true }
+        },
+        "required": ["items", "nextCursor"]
+      },
+      "CreateCommentDto": {
+        "type": "object",
+        "properties": { "content": { "type": "string" } },
+        "required": ["content"]
+      },
+      "CommentDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "postId": { "type": "string" },
+          "authorUserId": { "type": "string" },
+          "content": { "type": "string" },
+          "createdAt": { "format": "date-time", "type": "string" }
+        },
+        "required": ["id", "postId", "authorUserId", "content", "createdAt"]
+      },
+      "CommentsPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/CommentDto" }
+          },
+          "nextCursor": { "type": "object", "nullable": true }
+        },
+        "required": ["items", "nextCursor"]
+      },
+      "ReactionStatusDto": {
+        "type": "object",
+        "properties": {
+          "liked": { "type": "boolean" },
+          "likeCount": { "type": "number" }
+        },
+        "required": ["liked", "likeCount"]
+      },
+      "AvatarAssetDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "slot": {
+            "type": "string",
+            "enum": ["base", "hair", "face", "outfit", "accessory"]
+          },
+          "code": { "type": "string" },
+          "name": { "type": "string" },
+          "imageUrl": { "type": "string" },
+          "zIndex": { "type": "number" },
+          "priceDiamond": { "type": "number" }
+        },
+        "required": [
+          "id",
+          "slot",
+          "code",
+          "name",
+          "imageUrl",
+          "zIndex",
+          "priceDiamond"
+        ]
+      },
+      "EquipAvatarItemDto": {
+        "type": "object",
+        "properties": {
+          "slot": {
+            "type": "string",
+            "enum": ["base", "hair", "face", "outfit", "accessory"]
+          },
+          "avatarAssetId": { "type": "string" }
+        },
+        "required": ["slot", "avatarAssetId"]
+      },
+      "AvatarConfigDto": {
+        "type": "object",
+        "properties": {
+          "userId": { "type": "string" },
+          "layers": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AvatarAssetDto" }
+          }
+        },
+        "required": ["userId", "layers"]
       }
     }
   }

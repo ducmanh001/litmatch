@@ -14,6 +14,8 @@ export enum TransactionType {
   CallingPerMinute = 'calling_per_minute',
   /** Tặng quà: 2 chân độc lập DIA + PTS trong 1 transaction (docs/services/economy-service.md § 6). */
   GiftSend = 'gift_send',
+  /** Mua item avatar catalog qua spendDiamond generic (docs/services/avatar-service.md § 2). */
+  AvatarPurchase = 'avatar_purchase',
   Reversal = 'reversal',
   Adjustment = 'adjustment',
 }

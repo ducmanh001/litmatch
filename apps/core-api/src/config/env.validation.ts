@@ -62,6 +62,8 @@ export interface CoreApiEnv {
   MATCHING_SPEEDUP_PRICE_DIAMOND: number;
   MATCHING_SPEEDUP_MAX_PER_HOUR: number;
   MATCHING_PRIORITY_BOOST_MS: number;
+  MATCHING_TRUST_PENALTY_MS_PER_POINT: number;
+  MATCHING_TRUST_PENALTY_MAX_MS: number;
   SOUL_CHAT_DURATION_SECONDS: number;
   SOUL_RATING_WINDOW_SECONDS: number;
   SOUL_CHAT_MESSAGE_MAX_LENGTH: number;
@@ -82,6 +84,12 @@ export interface CoreApiEnv {
   PARTY_STALE_ROOM_SECONDS: number;
   PARTY_TITLE_MAX_LENGTH: number;
   GIFT_POINTS_RATE_PERCENT: number;
+  SAFETY_REMATCH_COOLDOWN_DAYS: number;
+  SAFETY_REPORT_COOLDOWN_DAYS: number;
+  SAFETY_TRUST_PENALTY_PER_REPORT: number;
+  SAFETY_TRUST_PENALTY_DAILY_CAP: number;
+  SAFETY_TRUST_SCORE_FLOOR: number;
+  NOTIFICATION_PUSH_PROVIDER: 'dev' | 'fcm';
   THROTTLE_TTL_SECONDS: number;
   THROTTLE_LIMIT: number;
 }
@@ -174,6 +182,13 @@ export const coreApiEnvSchema = Joi.object({
   MATCHING_SPEEDUP_PRICE_DIAMOND: Joi.number().integer().min(1).default(50),
   MATCHING_SPEEDUP_MAX_PER_HOUR: Joi.number().integer().min(1).default(3),
   MATCHING_PRIORITY_BOOST_MS: Joi.number().integer().min(0).default(300_000),
+  // Trust score < 100 làm chậm priority matching (docs/services/safety-service.md § 3.2) —
+  // KHÔNG chặn hẳn matching, chỉ làm "trẻ" ảo trong queue; ban thật là UserStatus.Banned
+  MATCHING_TRUST_PENALTY_MS_PER_POINT: Joi.number()
+    .integer()
+    .min(0)
+    .default(2000),
+  MATCHING_TRUST_PENALTY_MAX_MS: Joi.number().integer().min(0).default(120_000),
 
   // Soul Match — Giai đoạn 2 (docs/services/soul-match-service.md § 6); default 2-3 phút theo docs/06
   SOUL_CHAT_DURATION_SECONDS: Joi.number().integer().min(30).default(150),
@@ -224,6 +239,20 @@ export const coreApiEnvSchema = Joi.object({
   // Gift — Giai đoạn 3 (docs/services/gift-service.md); tỉ lệ quy đổi DIA→PTS cho người nhận,
   // PHẢI < 100 (docs/06 § Gift: nhận 1:1 biến gift thành kênh chuyển tiền ngang hàng)
   GIFT_POINTS_RATE_PERCENT: Joi.number().integer().min(0).max(99).default(40),
+
+  // Safety — Giai đoạn 4 (docs/services/safety-service.md)
+  // Không ghép lại nếu có report/block giữa 2 user trong X ngày gần nhất (docs/06)
+  SAFETY_REMATCH_COOLDOWN_DAYS: Joi.number().integer().min(1).default(30),
+  // 1 cặp (reporter, target) chỉ tính 1 report hiệu lực lên trust score mỗi X ngày — chống spam report cùng 1 người
+  SAFETY_REPORT_COOLDOWN_DAYS: Joi.number().integer().min(1).default(7),
+  SAFETY_TRUST_PENALTY_PER_REPORT: Joi.number().integer().min(0).default(5),
+  // Trần tổng điểm trừ/ngày cho 1 target — chặn nhiều reporter khác nhau đánh sập trust score cùng lúc
+  SAFETY_TRUST_PENALTY_DAILY_CAP: Joi.number().integer().min(0).default(20),
+  SAFETY_TRUST_SCORE_FLOOR: Joi.number().integer().default(0),
+
+  // Notification — Giai đoạn 4 (docs/services/notification-service.md § 4)
+  // 'dev' (no-op, chặn cứng ở production) — chưa có FCM/APNs thật, giống ECONOMY_IAP_VERIFIER
+  NOTIFICATION_PUSH_PROVIDER: Joi.string().valid('dev', 'fcm').default('dev'),
 
   THROTTLE_TTL_SECONDS: Joi.number().integer().min(1).default(60),
   THROTTLE_LIMIT: Joi.number().integer().min(1).default(100),

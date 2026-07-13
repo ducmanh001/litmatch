@@ -47,10 +47,10 @@
 
 ## Giai đoạn 4 — Social layer
 
-- [ ] Feed module: post, like, comment
-- [ ] Avatar module: catalog item, ghép avatar
-- [ ] Report/Block, trust score ảnh hưởng matching
-- [ ] Notification module: push (FCM/APNs) + in-app cho match thành công, tin nhắn mới, nhận gift, like/comment — consumer của các event đã publish qua outbox, không chen vào luồng chính
+- [x] Feed module: post, like, comment — [services/feed-service.md](./services/feed-service.md); feed công khai toàn cục (không Follow/fanout), block cắt điểm chạm, counter atomic
+- [x] Avatar module: catalog item, ghép avatar — [services/avatar-service.md](./services/avatar-service.md); multi-layer thật (base/tóc/mặt/trang phục/phụ kiện), mua qua `spendDiamond` generic, chống IDOR lúc trang bị
+- [x] Report/Block, trust score ảnh hưởng matching — [services/safety-service.md](./services/safety-service.md); wire `MATCH_INTERACTION_POLICY` thật (Matching) + guard block 2 chiều (Friend Chat 1-1)
+- [x] Notification module: in-app cho match thành công (ẩn danh — không lộ partnerId), tin nhắn mới, nhận gift, like/comment — [services/notification-service.md](./services/notification-service.md); gọi trực tiếp qua DI cùng transaction hành động gốc (không Outbox/Kafka — quyết định GĐ4, chỉ 1 consumer); push `DevPushProvider` no-op, **chưa có FCM/APNs thật** (nợ kỹ thuật ghi rõ, cần credential)
 
 ## Giai đoạn 5 — Content phụ trợ
 
