@@ -19,7 +19,12 @@ import {
   isUniqueViolation,
   violatedConstraint,
 } from '../../database/postgres-errors';
+import {
+  hasLivekitRegionUrls,
+  resolveLivekitUrl,
+} from '../../common/livekit/livekit-url';
 import { publishRealtimeEvent } from '../../common/realtime/publish-realtime';
+import { UserService } from '../user';
 import {
   PARTY_ROOM_NAME_PREFIX,
   UQ_PARTY_MEMBERS_ACTIVE_USER,
@@ -83,6 +88,7 @@ export class PartyRoomService {
     private readonly memberRepo: Repository<PartyRoomMember>,
     private readonly livekit: PartyLivekitRoomPort,
     private readonly config: ConfigService<CoreApiEnv, true>,
+    private readonly userService: UserService,
     @Inject(PARTY_REDIS) private readonly redis: Redis,
   ) {}
 
@@ -107,6 +113,10 @@ export class PartyRoomService {
       );
     }
 
+    // Chốt URL LiveKit theo region của HOST TRƯỚC khi tạo phòng (GĐ7 — ADR 0005): snapshot
+    // vào row, phòng ghim 1 endpoint trọn đời — cùng triết lý snapshot với speakerLimit.
+    const livekitUrl = await this.resolveHostLivekitUrl(user.userId);
+
     let room: PartyRoom;
     let membership: PartyRoomMember;
     try {
@@ -121,6 +131,7 @@ export class PartyRoomService {
               speakerLimit: this.config.getOrThrow('PARTY_MAX_SPEAKERS', {
                 infer: true,
               }),
+              livekitUrl,
             }),
           );
           const member = await manager.save(
@@ -176,7 +187,7 @@ export class PartyRoomService {
       room,
       membership,
       token: await this.mintToken(room.id, user.userId, PartyRole.Host),
-      livekitUrl: this.config.getOrThrow('LIVEKIT_URL', { infer: true }),
+      livekitUrl: this.livekitUrlOf(room),
     };
   }
 
@@ -260,8 +271,10 @@ export class PartyRoomService {
     return {
       room,
       membership,
+      // URL snapshot của PHÒNG (không phải region người join) — mọi participant về đúng
+      // endpoint đã chốt lúc tạo, kể cả khi họ ở region khác host (ADR 0005)
+      livekitUrl: this.livekitUrlOf(room),
       token: await this.mintToken(roomId, user.userId, membership.role),
-      livekitUrl: this.config.getOrThrow('LIVEKIT_URL', { infer: true }),
     };
   }
 
@@ -566,6 +579,28 @@ export class PartyRoomService {
   }
 
   // ---------- nội bộ ----------
+
+  /**
+   * Chốt URL LiveKit theo region của host (User.region — server derive, cùng nguồn với shard
+   * matching, không nhận từ client) lúc TẠO phòng. Chưa bật multi-region (map rỗng — mặc định
+   * hôm nay) thì trả thẳng LIVEKIT_URL, không tốn thêm query — hành vi y hệt trước GĐ7.
+   */
+  private async resolveHostLivekitUrl(hostUserId: string): Promise<string> {
+    const defaultUrl = this.config.getOrThrow('LIVEKIT_URL', { infer: true });
+    const regionUrls = this.config.getOrThrow('LIVEKIT_REGION_URLS', {
+      infer: true,
+    });
+    if (!hasLivekitRegionUrls(regionUrls)) return defaultUrl;
+    const host = await this.userService.getByIdOrThrow(hostUserId);
+    return resolveLivekitUrl(regionUrls, defaultUrl, host.region);
+  }
+
+  /** URL trả cho client — snapshot của phòng; NULL (row trước migration GĐ7) → LIVEKIT_URL. */
+  private livekitUrlOf(room: PartyRoom): string {
+    return (
+      room.livekitUrl ?? this.config.getOrThrow('LIVEKIT_URL', { infer: true })
+    );
+  }
 
   /** Lock row phòng FOR UPDATE + verify còn active — điểm tuần tự hoá mọi thay đổi state. */
   private async lockActiveRoom(

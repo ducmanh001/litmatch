@@ -11,7 +11,7 @@ tái sử dụng YAML giữa các môi trường (base + overlay patch) — đâ
 YAML**, không phải quyết định kiến trúc/ADR. Nếu sau này cần templating phức tạp hơn (Helm chart,
 giá trị tham số hoá nhiều), đó vẫn chỉ là đổi công cụ tooling, không đụng tới boundary/baseline.
 
-Không dùng Helm ở đây vì: chỉ 3 app, số lượng biến môi trường tuy nhiều (84 key core-api) nhưng
+Không dùng Helm ở đây vì: chỉ 3 app, số lượng biến môi trường tuy nhiều (86 key core-api) nhưng
 không cần logic templating điều kiện phức tạp — kustomize patch/overlay là đủ và không thêm
 dependency ngoài `kubectl`.
 
@@ -86,11 +86,16 @@ rồi `kubectl apply -k k8s/overlays/production`. `media-server` dùng image Liv
   namespace `litmatch` riêng của nó — không phải 2 namespace `litmatch-staging`/`litmatch-production`
   chung 1 cluster. Nếu chọn dùng chung 1 cluster cho cả 2 môi trường, cần đổi tên namespace theo
   môi trường (`litmatch-staging`, `litmatch-production`) — đó là thay đổi ngoài phạm vi PR này.
-- **API Gateway CHƯA CHỐT** (`docs/04-tech-stack.md`: "NestJS custom gateway hoặc Kong — chưa
-  chốt"). Manifest này chỉ có `Service` ClusterIP cho core-api/signaling-gateway, KHÔNG có
-  `Ingress` resource — expose ra ngoài cluster (LoadBalancer/Ingress controller cụ thể) là điểm mở,
-  chờ quyết định Giai đoạn 6/7. Không tự chọn Kong hay NestJS gateway ở đây.
-- **ConfigMap của core-api liệt kê đủ 74/84 biến** trong `CoreApiEnv`
+- **API Gateway ĐÃ CHỐT: nginx-ingress controller**
+  ([ADR 0004](../docs/adr/0004-api-gateway-nginx-ingress.md)) — `base/core-api/ingress.yaml` và
+  `base/signaling-gateway/ingress.yaml` (`ingressClassName: nginx`; signaling-gateway kèm cookie
+  affinity cho Socket.IO polling). Hostname trong Ingress là placeholder REPLACE_ME (dạng
+  DNS-hợp-lệ, TLD `.invalid`) — điền hostname thật theo môi trường. TLS/cert-manager là follow-on
+  (ADR 0004 § Hệ quả), chưa khai `tls:` ở đây. Cluster thật phải cài nginx-ingress controller
+  trước khi apply (không nằm trong manifest này).
+- **ConfigMap của core-api liệt kê đủ 76/86 biến** trong `CoreApiEnv`
+  (số cũ "74/84" trong bản trước đã lệch 1 so với thực tế — đã đối chiếu lại bằng script diff
+  lúc thêm `LIVEKIT_REGION_URLS`: 86 = 76 ConfigMap + 10 Secret, 0 thiếu, 0 thừa)
   (`apps/core-api/src/config/env.validation.ts`) — 10 biến còn lại (credential/connection-string
   có thể chứa mật khẩu) nằm trong Secret manifest placeholder: `JWT_SECRET`, `AUTH_OTP_PEPPER`,
   `DATABASE_URL`, `REDIS_URL`, `ECONOMY_APPLE_SHARED_SECRET`, `ECONOMY_GOOGLE_SA_EMAIL`,
@@ -142,22 +147,23 @@ chưa có metric thật để kiểm chứng tên/label/ngưỡng.
 - Ở tầng networking, RTC dùng dải UDP `50000-50200` — Kubernetes `Service` (ClusterIP hay
   LoadBalancer chuẩn) không dễ dàng share một dải port lớn như vậy cho **nhiều pod cùng lúc**, vì
   mỗi pod LiveKit cần "sở hữu" trọn dải port đó để client map đúng candidate ICE tới đúng pod.
-  Cách phổ biến trong cộng đồng LiveKit self-host là:
-  - `hostNetwork: true` (pod dùng network namespace của Node) — đơn giản nhất nhưng đánh đổi mất
-    cô lập network namespace, và không thể chạy 2 pod LiveKit trên cùng 1 Node (đụng port); hoặc
-  - NodePort/port riêng theo từng pod — phức tạp hơn, cần cơ chế gán/khám phá port tự động mà repo
-    này **chưa có** và **chưa kiểm chứng**.
-  - `base/media-server/deployment.yaml` để `hostNetwork` như **option đã comment sẵn** (không bật
-    mặc định) kèm giải thích đánh đổi — không tự chọn phương án khi chưa có ADR.
-- Vì vậy: `replicas: 1` là mặc định, **không có HorizontalPodAutoscaler cho media-server** — scale
-  ngang thật cho LiveKit cần một quyết định networking (và có thể cả topology/provider) **trước**,
-  không phải một thiếu sót ngẫu nhiên của PR này. Trước khi chạy multi-node LiveKit thật trong
-  k8s ở production, cần một ADR riêng chốt phương án networking RTC (tham khảo
-  `docs/03 § 3.8.A`: "nhu cầu room lớn hơn một node là một quyết định kiến trúc mới").
+  **ĐÃ CHỐT ([ADR 0005](../docs/adr/0005-livekit-hostnetwork-rtc.md))**: `hostNetwork: true` +
+  `dnsPolicy: ClusterFirstWithHostNet` (đã bật trong `base/media-server/deployment.yaml`).
+  Đánh đổi chấp nhận: mất cô lập network namespace, port `7880/7881/50000-50200` phải trống trên
+  Node, tối đa 1 pod media-server / Node; firewall Node phải mở dải UDP cho client (điều kiện hạ
+  tầng lúc deploy thật). Phương án NodePort per-pod bị loại (cần cơ chế gán/khám phá port động
+  chưa có trong repo — lý do đầy đủ trong ADR).
+- `replicas: 1` **vẫn là mặc định, vẫn không có HorizontalPodAutoscaler** — ADR 0005 chỉ gỡ
+  blocker _networking_ cho multi-node; trần "một room vừa một node" (per-room resource,
+  `docs/03 § 3.8.A`) là trục khác và **chưa có benchmark thật** (`loadtest/party-room-livekit.sh`
+  chưa từng chạy trên hạ tầng production — `docs/07-roadmap.md` mục 1). Tăng replica là quyết
+  định riêng sau khi có số liệu.
 - `LIVEKIT_URL` của core-api trỏ `Service` ClusterIP `media-server.litmatch.svc.cluster.local:7880`
   — dùng được cho core-api gọi **control API** (mint token, tạo/xoá room) trong cluster. Đường
   client **kết nối trực tiếp RTC** (docs/03 § 3.7: "client nối thẳng LiveKit bằng token TTL ngắn")
-  KHÔNG được cover bởi Service ClusterIP này — đó chính là phần networking còn mở ở trên.
+  đi qua IP Node nhờ `hostNetwork` (ADR 0005); URL client nhận được resolve theo region qua
+  `LIVEKIT_REGION_URLS` của core-api (fallback `LIVEKIT_URL`) — mọi URL trong map phải cùng
+  **một** cụm LiveKit (chung Redis room state).
 - **LiveKit keys (`keys:` block trong `livekit.yaml`) hiện phải nằm trong nội dung file config**
   (không có cơ chế tách "keys từ Secret riêng" đã kiểm chứng ở version `v1.13.1` đang dùng) —
   `base/media-server/configmap.yaml` chỉ có placeholder `REPLACE_ME_KEY`/`REPLACE_ME_SECRET`,
@@ -169,11 +175,35 @@ chưa có metric thật để kiểm chứng tên/label/ngưỡng.
   CHƯA kiểm chứng chi tiết (response code/body thật của LiveKit `v1.13.1` khi healthy) trong môi
   trường k8s thật, cần xác nhận khi triển khai thật.
 
+## Multi-region (Giai đoạn 7) — pattern overlay theo region
+
+Hiện tại repo chỉ có 2 overlay (`staging`, `production`) cho **một** cluster/region — CHƯA tồn tại
+cluster/region thứ hai, và manifest này **không bịa** một region cụ thể nào. Khi region thứ hai
+thật sự được dựng, cách thêm là:
+
+1. Tạo `k8s/overlays/production-<region>/` bằng cách copy đúng **shape** của
+   `k8s/overlays/production/kustomization.yaml` (resources trỏ `../../base` + danh sách patch +
+   `images:` transformer).
+2. Override giá trị ConfigMap đặc thù region qua patch (vd `LIVEKIT_URL` trỏ media-server của
+   region đó, `LIVEKIT_REGION_URLS` — map đầy đủ region → URL edge, `KAFKA_BROKERS`/`REDIS_URL`
+   nếu hạ tầng managed tách theo region) và image tag do CI ghi đè như production hiện tại.
+3. Mỗi region là một cluster riêng với namespace `litmatch` riêng (cùng nguyên tắc
+   staging/production ở trên) — không nhét nhiều region vào 1 cluster bằng namespace.
+
+**Routing traffic tới region gần nhất (GeoDNS / anycast / global load balancer của một cloud
+provider) là một quyết định RIÊNG, đang mở** — nó bị block bởi việc chọn nhà cung cấp cloud/DNS,
+và repo này hiện **không commit vào AWS/GCP/Azure/bare-metal nào** (đã kiểm tra: manifest không
+chứa annotation/resource đặc thù provider). Không tự mặc định một provider ở đây — xem "Điểm mở"
+bên dưới.
+
 ## Điểm mở cần chủ thread xác nhận lại
 
-1. API Gateway (Kong vs NestJS custom) — chưa chốt, không có Ingress resource ở PR này.
-2. Networking RTC multi-node LiveKit (hostNetwork vs NodePort per-pod vs phương án khác) — cần
-   ADR riêng trước khi tăng `media-server` lên nhiều replicas.
+1. ~~API Gateway~~ — **ĐÃ CHỐT: nginx-ingress controller**
+   ([ADR 0004](../docs/adr/0004-api-gateway-nginx-ingress.md)); còn follow-on TLS/cert-manager
+   (chưa khai `tls:` trong Ingress).
+2. ~~Networking RTC multi-node LiveKit~~ — **ĐÃ CHỐT: `hostNetwork: true`**
+   ([ADR 0005](../docs/adr/0005-livekit-hostnetwork-rtc.md)); tăng `media-server` lên nhiều
+   replicas vẫn chờ benchmark thật (trần room-per-node là trục khác, xem ADR).
 3. Công cụ quản lý Secret cụ thể cho cluster thật (sealed-secrets vs external-secrets/Vault) —
    chưa chốt, chỉ khai tên key cần điền.
 4. HPA theo custom metric (Prometheus + `prometheus-adapter`) — follow-up, chưa làm ở PR này.
@@ -186,3 +216,6 @@ chưa có metric thật để kiểm chứng tên/label/ngưỡng.
    (nếu cluster dùng Prometheus Operator) vào `k8s/base/core-api` và
    `k8s/base/signaling-gateway`. Chưa làm ở PR này vì port/path metrics chưa xác định lúc viết
    manifest này — tránh bịa annotation trỏ endpoint chưa tồn tại.
+7. **Global routing đa region** (GeoDNS vs anycast vs global LB) + TLS/cert-manager + DNS — block
+   bởi việc chọn nhà cung cấp cloud/DNS, chưa chốt (xem mục Multi-region ở trên và ADR 0004 § Hệ
+   quả). Đây là quyết định con người phải chốt tiếp theo cho Giai đoạn 7, không tự mặc định.

@@ -1,0 +1,39 @@
+# Expose signaling-gateway qua nginx-ingress controller — API Gateway đã chốt
+# (docs/adr/0004-api-gateway-nginx-ingress.md).
+# Socket.IO transport polling cần sticky session (điểm mở ghi ở service.yaml từ Giai đoạn 6):
+# chốt bằng cookie affinity ở tầng Ingress — Service giữ sessionAffinity: None.
+# TLS/cert-manager là quyết định follow-on (ADR 0004 § Hệ quả) — CHƯA khai `tls:`.
+# Host là PLACEHOLDER theo convention REPLACE_ME của repo (xem secret.yaml) — viết dạng
+# DNS-hợp-lệ (TLD .invalid dành riêng theo RFC 2606); PHẢI thay bằng hostname thật lúc deploy.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: signaling-gateway
+  namespace: litmatch
+  labels:
+    app.kubernetes.io/name: signaling-gateway
+    app.kubernetes.io/part-of: litmatch
+  annotations:
+    # Sticky session cho Socket.IO polling — cùng client luôn về cùng pod giữa các request poll
+    nginx.ingress.kubernetes.io/affinity: cookie
+    # persistent: giữ session ổn định khi scale out/in (mặc định "balanced" có thể re-balance
+    # làm rớt phiên polling đang sống)
+    nginx.ingress.kubernetes.io/affinity-mode: persistent
+    nginx.ingress.kubernetes.io/session-cookie-name: litmatch-sg-affinity
+    # WebSocket dài hạn — nới khỏi 60s mặc định của nginx, tránh cắt kết nối đang sống
+    nginx.ingress.kubernetes.io/proxy-read-timeout: '3600'
+    nginx.ingress.kubernetes.io/proxy-send-timeout: '3600'
+spec:
+  ingressClassName: nginx
+  rules:
+    # REPLACE_ME: hostname thật của signaling-gateway (vd ws.<domain>)
+    - host: replace-me-signaling.litmatch.invalid
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: signaling-gateway
+                port:
+                  name: http

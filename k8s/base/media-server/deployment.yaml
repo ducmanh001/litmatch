@@ -46,13 +46,14 @@ spec:
         prometheus.io/port: '6789'
         prometheus.io/path: /metrics
     spec:
-      # OPTION (chưa bật mặc định) — bỏ comment nếu cluster thật cần client kết nối trực tiếp
-      # UDP RTC port range mà không qua NAT/LoadBalancer phức tạp:
-      #   hostNetwork: true
-      #   dnsPolicy: ClusterFirstWithHostNet
-      # Đánh đổi: pod dùng network namespace của Node (mất cô lập network), port 7880/7881/50000-
-      # 50200 phải trống trên Node đó, không thể chạy 2 pod media-server trên cùng 1 Node. Đây là
-      # 1 lựa chọn có đánh đổi, không phải khuyến nghị mặc định — quyết định cuối cần ADR riêng.
+      # ADR 0005 (docs/adr/0005-livekit-hostnetwork-rtc.md): hostNetwork để client kết nối trực
+      # tiếp dải UDP RTC 50000-50200 trên IP Node — gỡ blocker networking cho multi-node LiveKit.
+      # Đánh đổi chấp nhận: pod dùng network namespace của Node (mất cô lập network), port
+      # 7880/7881/50000-50200 phải trống trên Node, tối đa 1 pod media-server / Node (scheduler
+      # coi containerPort là host port). LƯU Ý: replicas vẫn = 1 và vẫn KHÔNG có HPA — trần
+      # "một room vừa một node" (per-room resource) là trục khác, chờ benchmark thật (ADR 0005).
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: media-server
           # Cùng digest pin với apps/media-server/docker-compose.yml — nâng version qua PR có

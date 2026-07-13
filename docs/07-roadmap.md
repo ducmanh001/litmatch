@@ -131,7 +131,19 @@ theo custom metric Prometheus (vd độ sâu matching queue) cần thêm `promet
       test PASS, gồm property test double-entry + trigger append-only), unit test lịch 2 tier + DB-down.
 - [ ] Khi module đạt tiêu chí § 3.4, lập ADR + số liệu + migration/rollback plan; chỉ sau khi ADR
       cập nhật invariant/guard mới tách khỏi `core-api` thành deployable riêng
-- [ ] Multi-region deployment cho Signaling Gateway + Media Server, routing user tới region gần nhất (giảm latency thoại)
+- [ ] Multi-region deployment cho Signaling Gateway + Media Server, routing user tới region gần nhất (giảm latency thoại).
+      **Nền tảng đã chốt + xong** (theo quyết định của user): [ADR 0004](./adr/0004-api-gateway-nginx-ingress.md)
+      (API gateway = nginx-ingress) + [ADR 0005](./adr/0005-livekit-hostnetwork-rtc.md) (LiveKit RTC =
+      `hostNetwork: true`, mở khoá chạy >1 node LiveKit — không tự đổi trần 1 room/1 node, việc đó
+      vẫn chờ số liệu benchmark thật của mục 1). Cơ chế chọn LiveKit URL theo region đã chạy thật
+      end-to-end: `LIVEKIT_REGION_URLS` (map region→URL, mặc định rỗng = hành vi y hệt hôm nay),
+      Party Room snapshot URL theo region host lúc tạo phòng (migration `party-room-livekit-url`,
+      cột `livekit_url` NULL cho phòng cũ), Calling dùng region `userA` + fallback an toàn khi 2 bên
+      lệch region (`common/livekit/livekit-url.ts`). Ingress (nginx, sticky cookie cho Socket.IO)
+      cho core-api/signaling-gateway đã thêm. **CHƯA xong** (block bởi 1 quyết định còn lại, chưa
+      chọn nhà cung cấp cloud/DNS nào trong repo): routing traffic thật tới cluster gần nhất
+      (GeoDNS/anycast/global load balancer) — vì mới có 1 region/cluster thật, chưa có gì để route
+      _giữa_ các region cả. Xem `k8s/README.md` mục multi-region.
 - [ ] CQRS/read-replica cho Feed khi lượng đọc vượt xa lượng ghi (fanout-on-write hoặc fanout-on-read tuỳ tỉ lệ follower trung bình)
 - [x] Chaos testing cho luồng tiền (kill Economy giữa transaction, kill matcher giữa lúc ghép cặp) để xác nhận idempotency/outbox hoạt động đúng dưới lỗi thật, không chỉ đúng trên giấy.
       3 kịch bản lỗi inject thật trên Postgres/Redis thật (không mock): (1) crash giữa transaction

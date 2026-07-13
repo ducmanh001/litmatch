@@ -13,6 +13,7 @@ import { FriendChat1752600000000 } from '../../database/migrations/1752600000000
 import { PartyRoomGift1752700000000 } from '../../database/migrations/1752700000000-party-room-gift';
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
 import { Notification1753000000000 } from '../../database/migrations/1753000000000-notification';
+import { PartyRoomLivekitUrl1753500000000 } from '../../database/migrations/1753500000000-party-room-livekit-url';
 
 import { GiftService } from './gift.service';
 import { Gift } from './entities/gift.entity';
@@ -65,6 +66,7 @@ jest.setTimeout(60_000);
 
 const CONFIG: Record<string, unknown> = {
   LIVEKIT_URL: 'ws://localhost:7880',
+  LIVEKIT_REGION_URLS: '', // single-region — resolver GĐ7 không đụng tới ở suite này
   PARTY_MAX_SPEAKERS: 8,
   PARTY_MAX_MEMBERS: 100,
   PARTY_TOKEN_TTL_SECONDS: 120,
@@ -211,6 +213,7 @@ d('Gift integration (Postgres thật)', () => {
         PartyRoomGift1752700000000,
         Safety1752800000000,
         Notification1753000000000,
+        PartyRoomLivekitUrl1753500000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -249,6 +252,7 @@ d('Gift integration (Postgres thật)', () => {
       ds.getRepository(PartyRoomMember),
       livekitStub,
       configStub,
+      userService,
       redisStub,
     );
     // Push chỉ là stub no-op ở suite này — in-app Notification (nguồn sự thật) test thật bên dưới

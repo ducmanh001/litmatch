@@ -8,6 +8,10 @@ import { DomainException } from '@litmatch/common-exceptions';
 import { DataSource, Repository } from 'typeorm';
 
 import { isUniqueViolation } from '../../database/postgres-errors';
+import {
+  hasLivekitRegionUrls,
+  resolveLivekitUrl,
+} from '../../common/livekit/livekit-url';
 import { publishRealtimeEvent } from '../../common/realtime/publish-realtime';
 import { CallingErrors } from './calling.errors';
 import { CallingMetrics } from './calling.metrics';
@@ -20,6 +24,7 @@ import {
 import { LivekitRoomPort } from './ports/livekit-room';
 import { CALLING_REDIS } from './redis/calling-redis.provider';
 import { MatchSessionStatus, MatchType, MatchingService } from '../matching';
+import { UserService } from '../user';
 
 import type {
   CallEndedEventData,
@@ -58,6 +63,7 @@ export class CallingService {
     private readonly matchingService: MatchingService,
     private readonly livekit: LivekitRoomPort,
     private readonly config: ConfigService<CoreApiEnv, true>,
+    private readonly userService: UserService,
     @Inject(CALLING_REDIS) private readonly redis: Redis,
     private readonly metrics: CallingMetrics,
   ) {}
@@ -130,9 +136,7 @@ export class CallingService {
     return {
       call,
       token,
-      livekitUrl: this.config.getOrThrow('LIVEKIT_URL', {
-        infer: true,
-      }),
+      livekitUrl: await this.resolveCallLivekitUrl(call),
     };
   }
 
@@ -231,6 +235,43 @@ export class CallingService {
   }
 
   // ---------- nội bộ ----------
+
+  /**
+   * Chọn LiveKit URL theo region (GĐ7 — ADR 0005). QUY TẮC: dùng region của `call.userAId` —
+   * mốc TẤT ĐỊNH theo call row (không phụ thuộc ai gọi joinCall trước/sau), nên cả 2 bên và
+   * mọi lần re-join đều nhận cùng URL. Chọn userA thay vì "region người gọi" vì 2 client của
+   * cùng 1 call phải về cùng endpoint. Matching đã shard queue theo (matchType, region, ageBand)
+   * — docs/03 § 3.8.B — nên 2 bên cùng region theo cấu tạo; nếu lệch (dữ liệu cũ/user đổi region
+   * sau khi match) chỉ WARN và vẫn dùng region userA: mọi URL trong map cùng MỘT cụm LiveKit
+   * (bất biến ADR 0005) nên call không vỡ, tệ nhất là kém tối ưu latency cho 1 bên.
+   * Mọi lỗi lookup region đều fallback LIVEKIT_URL — chọn URL không bao giờ chặn join call.
+   */
+  private async resolveCallLivekitUrl(call: CallSession): Promise<string> {
+    const defaultUrl = this.config.getOrThrow('LIVEKIT_URL', { infer: true });
+    const regionUrls = this.config.getOrThrow('LIVEKIT_REGION_URLS', {
+      infer: true,
+    });
+    // Chưa bật multi-region (mặc định hôm nay) → không tốn query, hành vi y hệt trước GĐ7
+    if (!hasLivekitRegionUrls(regionUrls)) return defaultUrl;
+
+    try {
+      const [userA, userB] = await Promise.all([
+        this.userService.getByIdOrThrow(call.userAId),
+        this.userService.getByIdOrThrow(call.userBId),
+      ]);
+      if ((userA.region ?? null) !== (userB.region ?? null)) {
+        this.logger.warn(
+          `Region lệch giữa 2 bên call ${call.id} (userA=${userA.region ?? 'null'}, userB=${userB.region ?? 'null'}) — dùng region userA theo quy tắc tất định`,
+        );
+      }
+      return resolveLivekitUrl(regionUrls, defaultUrl, userA.region);
+    } catch (err) {
+      this.logger.warn(
+        `Không resolve được region cho call ${call.id} — fallback LIVEKIT_URL: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return defaultUrl;
+    }
+  }
 
   private async markJoined(callId: string, identity: string): Promise<void> {
     await this.dataSource.transaction(async (manager) => {

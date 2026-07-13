@@ -14,6 +14,7 @@ import {
 import { LivekitWebhookController } from './webhooks/livekit-webhook.controller';
 import { EconomyModule } from '../economy';
 import { MatchingModule } from '../matching';
+import { UserModule } from '../user';
 
 import type Redis from 'ioredis';
 
@@ -22,6 +23,7 @@ import type Redis from 'ioredis';
     TypeOrmModule.forFeature([CallSession]),
     MatchingModule, // đọc MatchSession qua MatchingService (read-only — cùng pattern Soul Match)
     EconomyModule, // billing theo phút qua spendDiamond (DI trong process — docs/03 § 3.7)
+    UserModule, // đọc User.region để chọn LiveKit URL theo region (GĐ7 — ADR 0005)
   ],
   controllers: [CallingController, LivekitWebhookController],
   providers: [

@@ -1,8 +1,8 @@
 # ConfigMap core-api — đối chiếu 1-1 với apps/core-api/src/config/env.validation.ts
-# (CoreApiEnv, 84 key). 10 key có bản chất credential/connection-string chứa mật khẩu nằm ở
+# (CoreApiEnv, 86 key). 10 key có bản chất credential/connection-string chứa mật khẩu nằm ở
 # secret.yaml (JWT_SECRET, AUTH_OTP_PEPPER, DATABASE_URL, REDIS_URL, ECONOMY_APPLE_SHARED_SECRET,
 # ECONOMY_GOOGLE_SA_EMAIL, ECONOMY_GOOGLE_SA_PRIVATE_KEY, ECONOMY_APPLE_PRIVATE_KEY,
-# LIVEKIT_API_KEY, LIVEKIT_API_SECRET) — 74 key còn lại (config thường, không nhạy cảm) ở đây.
+# LIVEKIT_API_KEY, LIVEKIT_API_SECRET) — 76 key còn lại (config thường, không nhạy cảm) ở đây.
 # Giá trị dưới đây là default/placeholder tham khảo .env.example — SỬA qua overlay
 # (configMapGenerator patch hoặc `kubectl edit configmap` sau khi apply) theo môi trường thật,
 # không commit giá trị production thật vào git nếu nó chứa domain/thông tin nội bộ nhạy cảm.
@@ -90,6 +90,10 @@ data:
   # --- livekit (URL thường trỏ Service ClusterIP của media-server trong cùng namespace —
   # xem k8s/base/media-server/service.yaml; key/secret nằm ở Secret vì là credential) ---
   LIVEKIT_URL: 'ws://media-server.litmatch.svc.cluster.local:7880'
+  # JSON map region (User.region) → ws/wss URL edge LiveKit theo region (ADR 0005). Rỗng =
+  # single-region, mọi client dùng LIVEKIT_URL. Khi bật multi-region, override qua overlay theo
+  # region; MỌI URL trong map phải cùng 1 cụm LiveKit (chung Redis) — xem ADR 0005.
+  LIVEKIT_REGION_URLS: ''
 
   # --- calling ---
   CALLING_FREE_CALL_SECONDS: '420'

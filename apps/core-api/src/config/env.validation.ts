@@ -4,6 +4,8 @@ import {
 } from '@litmatch/config-validator';
 import * as Joi from 'joi';
 
+import { parseLivekitRegionUrls } from '../common/livekit/livekit-url';
+
 /**
  * Khớp 1-1 với `coreApiEnvSchema` bên dưới — dùng làm type param cho `ConfigService<CoreApiEnv, true>`
  * (docs/05 § 5.2): `getOrThrow('KEY', { infer: true })` tự suy kiểu, gõ sai/thiếu key báo lỗi
@@ -70,6 +72,7 @@ export interface CoreApiEnv {
   SOUL_CHAT_MESSAGE_MAX_LENGTH: number;
   FRIEND_MESSAGE_MAX_LENGTH: number;
   LIVEKIT_URL: string;
+  LIVEKIT_REGION_URLS: string;
   LIVEKIT_API_KEY: string;
   LIVEKIT_API_SECRET: string;
   CALLING_FREE_CALL_SECONDS: number;
@@ -223,6 +226,17 @@ export const coreApiEnvSchema = Joi.object({
   LIVEKIT_URL: Joi.string()
     .uri({ scheme: ['ws', 'wss'] })
     .default('ws://localhost:7880'),
+  // GĐ7 multi-region (ADR 0005): JSON map region (User.region) → ws/wss URL edge LiveKit.
+  // '' (default) = single-region, mọi client dùng LIVEKIT_URL — deploy hôm nay không đổi gì.
+  // Region null/không có trong map cũng fallback LIVEKIT_URL. BẤT BIẾN: mọi URL trong map phải
+  // cùng MỘT cụm LiveKit (chung Redis room state) — xem docs/adr/0005-livekit-hostnetwork-rtc.md.
+  LIVEKIT_REGION_URLS: Joi.string()
+    .allow('')
+    .default('')
+    .custom((value: string) => {
+      parseLivekitRegionUrls(value); // sai format → throw, Joi báo lỗi với message của Error
+      return value;
+    }, 'JSON map region → LiveKit URL'),
   LIVEKIT_API_KEY: Joi.string().default('devkey'),
   LIVEKIT_API_SECRET: Joi.string()
     .min(16)

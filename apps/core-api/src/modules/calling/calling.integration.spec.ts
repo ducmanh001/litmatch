@@ -70,6 +70,7 @@ jest.setTimeout(60_000);
 
 const CONFIG: Record<string, unknown> = {
   LIVEKIT_URL: 'ws://localhost:7880',
+  LIVEKIT_REGION_URLS: '', // single-region — resolver GĐ7 không đụng tới ở suite này
   CALLING_TOKEN_TTL_SECONDS: 120,
   // free window nhỏ + pending timeout lớn: test tự backdate thay vì ngồi chờ
   CALLING_FREE_CALL_SECONDS: 5,
@@ -293,6 +294,7 @@ d('Calling integration (Postgres thật)', () => {
       matchingService,
       livekitStub,
       configStub,
+      userService,
       // stub publish — realtime end-to-end đã test ở suite signaling-gateway
       { publish: async () => 1 } as never,
       // metrics call drop rate không phải trọng tâm suite này — test riêng ở calling.metrics.spec.ts

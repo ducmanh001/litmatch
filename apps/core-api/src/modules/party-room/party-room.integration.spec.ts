@@ -11,6 +11,7 @@ import { Calling1752500000000 } from '../../database/migrations/1752500000000-ca
 import { FriendChat1752600000000 } from '../../database/migrations/1752600000000-friend-chat';
 import { PartyRoomGift1752700000000 } from '../../database/migrations/1752700000000-party-room-gift';
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
+import { PartyRoomLivekitUrl1753500000000 } from '../../database/migrations/1753500000000-party-room-livekit-url';
 
 import { PartyRoomService } from './party-room.service';
 import { PartyRoomSweeperService } from './jobs/party-room-sweeper.service';
@@ -52,6 +53,8 @@ jest.setTimeout(60_000);
 
 const CONFIG: Record<string, unknown> = {
   LIVEKIT_URL: 'ws://localhost:7880',
+  // mặc định single-region — test multi-region tự override rồi trả lại
+  LIVEKIT_REGION_URLS: '',
   PARTY_MAX_SPEAKERS: 2,
   PARTY_MAX_MEMBERS: 4,
   PARTY_TOKEN_TTL_SECONDS: 120,
@@ -188,6 +191,7 @@ d('Party Room integration (Postgres thật)', () => {
         FriendChat1752600000000,
         PartyRoomGift1752700000000,
         Safety1752800000000,
+        PartyRoomLivekitUrl1753500000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -202,6 +206,11 @@ d('Party Room integration (Postgres thật)', () => {
       ds.getRepository(PartyRoomMember),
       livekitStub,
       configStub,
+      // UserService thật chỉ cần getByIdOrThrow cho region — đọc thẳng repo User của DB test
+      {
+        getByIdOrThrow: async (id: string) =>
+          ds.getRepository(User).findOneByOrFail({ id }),
+      } as never,
       // stub publish — realtime end-to-end đã test ở suite signaling-gateway
       { publish: async () => 1 } as never,
     );
@@ -238,6 +247,32 @@ d('Party Room integration (Postgres thật)', () => {
     expect(token).toBe(`tok:${partyRoomName(room.id)}:${host.id}:pub=true`);
     expect(sfu.created.has(partyRoomName(room.id))).toBe(true);
     expect(await activeMembers(room.id)).toHaveLength(1);
+  });
+
+  it('GĐ7 (ADR 0005): URL LiveKit chốt theo region HOST lúc tạo, đổi config KHÔNG di chuyển phòng đang sống', async () => {
+    CONFIG['LIVEKIT_REGION_URLS'] = JSON.stringify({
+      VN: 'wss://vn.livekit.example',
+    });
+    try {
+      const host = await createUser('r-host'); // createUser đặt region 'VN'
+      const created = await party.createRoom(auth(host.id), 'Phòng region');
+      expect(created.livekitUrl).toBe('wss://vn.livekit.example');
+      // snapshot đã nằm trong DB, không phải chỉ ở response
+      const row = await ds
+        .getRepository(PartyRoom)
+        .findOneByOrFail({ id: created.room.id });
+      expect(row.livekitUrl).toBe('wss://vn.livekit.example');
+
+      // đổi config giữa chừng — người join sau vẫn về đúng endpoint đã chốt (room bất biến)
+      CONFIG['LIVEKIT_REGION_URLS'] = JSON.stringify({
+        VN: 'wss://vn2.livekit.example',
+      });
+      const member = await createUser('r-member');
+      const joined = await party.joinRoom(auth(member.id), created.room.id);
+      expect(joined.livekitUrl).toBe('wss://vn.livekit.example');
+    } finally {
+      CONFIG['LIVEKIT_REGION_URLS'] = ''; // trả lại single-region cho test khác
+    }
   });
 
   it('SFU tạo room fail → phòng vừa tạo bị compensate đóng, trả 503', async () => {
