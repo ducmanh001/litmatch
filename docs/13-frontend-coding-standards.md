@@ -72,9 +72,9 @@ env ngoài `shared/env.ts`, fetch/axios tay, import entry chính `common-dtos`, 
 
 ## 13.3 Cấu trúc feature & naming
 
-- File: **kebab-case toàn bộ**, kể cả component (`user-table.tsx`, `use-report-queue.ts`) —
-  cùng 1 quy ước với backend (§ 5.6), không trộn PascalCase file. Component/type PascalCase,
-  hook `useXxx`, hằng UPPER_SNAKE.
+- Tên file, component/type, hook, hằng, function/variable và contract khác tuân theo
+  [17-naming-conventions.md](./17-naming-conventions.md). FE vẫn dùng file **kebab-case toàn
+  bộ**, kể cả component (`user-table.tsx`, `use-report-queue.ts`); không trộn PascalCase file.
 - Component **named export**, không default export (trừ file Next bắt buộc default:
   `page.tsx`, `layout.tsx`, `error.tsx`) — rename-safe, autocomplete đúng tên.
 - Trong 1 feature (`features/<tên>/`), xếp theo vai trò — chọn dòng ĐẦU TIÊN khớp:
