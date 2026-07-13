@@ -35,9 +35,18 @@ export default defineConfig(() => ({
     },
     include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     reporters: ['default'],
+    // Gate coverage ratchet (docs/07 roadmap, cùng cơ chế chỉ-nâng-không-hạ như core-api).
+    // Baseline đo 2026-07-13: stmts 81.51 / branch 70.33 / funcs 77.77 / lines 82.53. Threshold
+    // giữ buffer ~2-3 điểm chống dao động instrumentation nhưng chỉ được nâng, không được hạ.
     coverage: {
       reportsDirectory: '../../coverage/apps/admin',
       provider: 'v8' as const,
+      thresholds: {
+        statements: 79,
+        branches: 68,
+        functions: 75,
+        lines: 80,
+      },
     },
   },
 }));
