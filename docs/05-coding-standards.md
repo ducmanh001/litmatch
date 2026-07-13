@@ -77,7 +77,8 @@ Tóm tắt bắt buộc:
 
 ## 5.6 Naming convention
 
-- File: kebab-case chuẩn NestJS (`matching.service.ts`, `match-ticket.entity.ts`); class PascalCase; hằng số UPPER_SNAKE.
+- Quy ước đặt tên chuẩn cho mọi identifier nằm tại [17-naming-conventions.md](./17-naming-conventions.md).
+  Mục này chỉ bổ sung quy tắc backend/protocol cụ thể; không tạo một bộ naming song song.
 - DB: bảng snake_case số nhiều (`ledger_entries`, `match_tickets`), cột snake_case — map qua naming strategy của TypeORM, không đặt tên cột camelCase trong DB.
 - Event (nội bộ + Kafka): `<domain>.<subject>.<động-từ-quá-khứ>` — vd `economy.diamond.deducted`, `matching.pair.confirmed`, `call.session.ended`.
 - Kafka topic theo domain: `litmatch.<domain>.events`; consumer group theo app + module: `core-api.notification`.

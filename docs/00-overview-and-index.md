@@ -24,6 +24,7 @@
 | 14  | [14-rule-enforcement-matrix.md](./14-rule-enforcement-matrix.md)       | **Bản đồ rule → enforcement → test → owner**; phân biệt gate máy với mục bắt buộc review tay                                                      |
 | 15  | [15-commit-guidelines.md](./15-commit-guidelines.md)                   | **Chuẩn commit dùng chung**: Conventional Commits, scope, atomicity, verification và ví dụ                                                        |
 | 16  | [16-module-blueprint.md](./16-module-blueprint.md)                     | **Bản thiết kế xây module NestJS**: cây folder/file, public API, ownership, naming, trình tự tạo và Definition of Done                            |
+| 17  | [17-naming-conventions.md](./17-naming-conventions.md)                 | **Quy ước đặt tên dùng chung**: mọi identifier từ code, API, DB, event, config tới metric/test                                                    |
 | —   | [services/economy-service.md](./services/economy-service.md)           | **Đặc tả chi tiết Economy module**: schema ledger, loại tài khoản, bất biến, luồng IAP/VIP, quy tắc concurrency                                   |
 | —   | [services/matching-service.md](./services/matching-service.md)         | **Đặc tả slice M1 Matching**: state machine ticket, shard Redis, double-lock ghép cặp, speed-up qua Economy                                       |
 | —   | [services/party-room-service.md](./services/party-room-service.md)     | **Đặc tả Party Room**: role host/speaker/audience enforce ở SFU, cap speaker dưới lock, lifecycle phòng + sweeper backstop                        |
@@ -43,6 +44,7 @@
 - **Sắp merge 1 PR / vừa viết xong 1 module**: bắt buộc đọc `10-code-review-checklist.md`, chạy qua § 10.0 trước khi đọc lại code.
 - **Không chắc 1 quyết định kiến trúc có đúng không**: đọc `03-architecture.md`, đặc biệt § 3.8 nếu liên quan tới SFU/matching scale/ledger.
 - **Không chắc code nên nằm ở đâu hoặc có nên tách không**: đọc `11-engineering-principles.md`, sau đó đối chiếu `03-architecture.md`, `05-coding-standards.md` và `16-module-blueprint.md`.
+- **Đặt tên bất kỳ identifier mới nào**: đọc `17-naming-conventions.md`, sau đó áp dụng quy tắc boundary cụ thể trong coding standard liên quan.
 
 ## Quy ước khi sửa bộ docs này
 
