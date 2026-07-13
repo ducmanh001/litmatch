@@ -74,6 +74,22 @@ function validateSkill(skillPath) {
     addError(`Skill có frontmatter dư (${extra.join(', ')}): ${skillPath}`);
 }
 
+function validateEslintToolchainDeps() {
+  const packageJson = JSON.parse(
+    readFileSync(join(root, 'package.json'), 'utf8'),
+  );
+  const directDependencies = {
+    ...(packageJson.dependencies ?? {}),
+    ...(packageJson.devDependencies ?? {}),
+  };
+
+  if (!directDependencies['@eslint/js']) {
+    addError(
+      'package.json phải khai báo direct devDependency `@eslint/js` để Nx/ESLint flat config không phụ thuộc transitive và không làm hỏng project graph trên CI.',
+    );
+  }
+}
+
 function changedFiles() {
   if (stagedMode) {
     return git(['diff', '--cached', '--name-status', '--find-renames'])
@@ -229,6 +245,7 @@ function validateMarkdownLinks() {
 validateContextMap();
 validateSkill('.agents/skills/new-module/SKILL.md');
 validateSkill('.agents/skills/review-module/SKILL.md');
+validateEslintToolchainDeps();
 validateDiff();
 validateNeutralWording();
 validateSymlinks();

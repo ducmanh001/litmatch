@@ -26,13 +26,15 @@ test('clean local CI profile uses an empty node_modules volume in Node 22 Linux'
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /node:22-bookworm@sha256:/u);
-  assert.match(result.stdout, /destination=\/workspace\/node_modules/u);
-  assert.match(result.stdout, /destination=\/workspace\/\.nx/u);
+  assert.equal(
+    (result.stdout.match(/--mount type=\*\*\*REDACTED\*\*\*/gu) ?? []).length,
+    3,
+  );
   assert.match(result.stdout, /bash -lc/u);
   assert.match(result.stdout, /safe.directory \/workspace/u);
-  assert.match(result.stdout, /HUSKY=0/u);
-  assert.match(result.stdout, /NX_DAEMON=false/u);
-  assert.match(result.stdout, /source=litmatch-local-ci-pnpm-store/u);
+  assert.match(result.stdout, /--env HUSKY=\*\*\*REDACTED\*\*\*/u);
+  assert.match(result.stdout, /--env NX_DAEMON=\*\*\*REDACTED\*\*\*/u);
+  assert.match(result.stdout, /--env CI=\*\*\*REDACTED\*\*\*/u);
   assert.match(
     result.stdout,
     /pnpm install --store-dir \/pnpm\/store --frozen-lockfile/u,
@@ -50,8 +52,17 @@ test('all local CI profile plans quality, security, test, and Docker smoke stage
   assert.match(result.stdout, /End-to-end smoke tests/u);
   assert.match(result.stdout, /Build Core API image/u);
   assert.match(result.stdout, /Scan Core API runtime image/u);
-  assert.match(result.stdout, /JWT_SECRET=local-ci-jwt-0123456789abcdef-xyz/u);
-  assert.match(result.stdout, /REDIS_URL=redis:\/\/localhost:6379\/15/u);
+  assert.match(result.stdout, /DATABASE_URL=\*\*\*REDACTED\*\*\*/u);
+  assert.match(result.stdout, /REDIS_URL=\*\*\*REDACTED\*\*\*/u);
+  assert.match(result.stdout, /JWT_SECRET=\*\*\*REDACTED\*\*\*/u);
+  assert.match(result.stdout, /AUTH_OTP_PEPPER=\*\*\*REDACTED\*\*\*/u);
+  assert.doesNotMatch(result.stdout, /local-ci-jwt-0123456789abcdef-xyz/u);
+  assert.doesNotMatch(result.stdout, /local-ci-pepper-0123456789/u);
+  assert.doesNotMatch(
+    result.stdout,
+    /litmatch_local@localhost:5432\/litmatch_ci/u,
+  );
+  assert.doesNotMatch(result.stdout, /redis:\/\/localhost:6379\/15/u);
 });
 
 test('local CI rejects an unsupported profile', () => {
