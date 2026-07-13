@@ -39,3 +39,4 @@ Quan hệ với `docs/03-architecture.md`: file 03 mô tả kiến trúc **hiệ
 | [0003](./0003-browser-auth-production-gate.md)        | Browser localStorage chỉ là scaffold, production có gate | 2026-07-13 | Accepted   |
 | [0004](./0004-api-gateway-nginx-ingress.md)           | API Gateway = nginx-ingress controller                   | 2026-07-13 | Accepted   |
 | [0005](./0005-livekit-hostnetwork-rtc.md)             | Networking RTC multi-node LiveKit = hostNetwork          | 2026-07-13 | Accepted   |
+| [0006](./0006-cloudflare-global-routing.md)           | Global routing đa region = Cloudflare Load Balancing     | 2026-07-13 | Accepted   |

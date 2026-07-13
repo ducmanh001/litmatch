@@ -1,0 +1,29 @@
+# Overlay production cho REGION THỨ HAI — hiện là SCAFFOLD CHƯA PROVISION (chưa tồn tại cluster
+# thật nào cho region này, chưa deploy gì). Mục đích: chứng minh pattern multi-region end-to-end
+# (k8s/README.md mục "Multi-region — vận hành khi có ngân sách" + ADR 0006) để đi live nhanh khi
+# có ngân sách cho cluster thứ hai.
+#
+# "region-b" và region code "REGION_B" trong patch là PLACEHOLDER CÓ CHỦ ĐÍCH — chưa có market
+# thứ hai nào được chốt về mặt business. Khi user/team chốt market thật: đổi tên thư mục
+# (vd production-<region-code>), đổi region code + LiveKit URL trong core-api-configmap-patch.yaml
+# theo market đó. Đây chỉ là ví dụ cấu trúc, KHÔNG phải quyết định business.
+#
+# Shape giống hệt k8s/overlays/production/kustomization.yaml (resources ../../base + patches +
+# images). Lưu ý gotcha kustomize đã ghi ở k8s/README.md: mọi patch PHẢI khai
+# metadata.namespace: litmatch vì resource gốc có namespace tường minh.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+patches:
+  - path: core-api-patch.yaml
+  - path: core-api-hpa-patch.yaml
+  - path: core-api-configmap-patch.yaml
+  - path: signaling-gateway-patch.yaml
+  - path: signaling-gateway-hpa-patch.yaml
+  - path: media-server-patch.yaml
+images:
+  - name: ghcr.io/litmatch/core-api
+    newTag: latest # CI ghi đè bằng git SHA lúc deploy thật, giống overlay production
+  - name: ghcr.io/litmatch/signaling-gateway
+    newTag: latest

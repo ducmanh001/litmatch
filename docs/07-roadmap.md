@@ -140,10 +140,17 @@ theo custom metric Prometheus (vd độ sâu matching queue) cần thêm `promet
       Party Room snapshot URL theo region host lúc tạo phòng (migration `party-room-livekit-url`,
       cột `livekit_url` NULL cho phòng cũ), Calling dùng region `userA` + fallback an toàn khi 2 bên
       lệch region (`common/livekit/livekit-url.ts`). Ingress (nginx, sticky cookie cho Socket.IO)
-      cho core-api/signaling-gateway đã thêm. **CHƯA xong** (block bởi 1 quyết định còn lại, chưa
-      chọn nhà cung cấp cloud/DNS nào trong repo): routing traffic thật tới cluster gần nhất
-      (GeoDNS/anycast/global load balancer) — vì mới có 1 region/cluster thật, chưa có gì để route
-      _giữa_ các region cả. Xem `k8s/README.md` mục multi-region.
+      cho core-api/signaling-gateway đã thêm. Quyết định DNS/routing cuối cùng cũng đã chốt:
+      [ADR 0006](./adr/0006-cloudflare-global-routing.md) — **Cloudflare Load Balancing
+      (geo-steering)**, kèm scaffold hoàn chỉnh để kích hoạt: overlay region thứ hai
+      `k8s/overlays/production-region-b/` (region code `REGION_B` là **placeholder** — chưa chốt
+      market thứ hai nào về business, đổi code + URL khi chốt), ConfigMap real-IP cho
+      ingress-nginx sau proxy Cloudflare, runbook ở `k8s/README.md` mục "Multi-region — vận hành
+      khi có ngân sách". **CHƯA phải deployment thật** (cùng tình trạng với benchmark LiveKit ở
+      mục 1): chưa tồn tại cluster region thứ hai, chưa có domain nào trên Cloudflare, chưa
+      provision LB nào — toàn bộ là cấu hình sẵn-để-bật khi có ngân sách hạ tầng, không có gì
+      đang route giữa các region hôm nay. Việc còn lại khi có tiền: mua/dựng cluster thứ hai,
+      delegate DNS, điền region code + hostname thật theo runbook.
 - [ ] CQRS/read-replica cho Feed khi lượng đọc vượt xa lượng ghi (fanout-on-write hoặc fanout-on-read tuỳ tỉ lệ follower trung bình)
 - [x] Chaos testing cho luồng tiền (kill Economy giữa transaction, kill matcher giữa lúc ghép cặp) để xác nhận idempotency/outbox hoạt động đúng dưới lỗi thật, không chỉ đúng trên giấy.
       3 kịch bản lỗi inject thật trên Postgres/Redis thật (không mock): (1) crash giữa transaction
@@ -164,11 +171,12 @@ theo custom metric Prometheus (vd độ sâu matching queue) cần thêm `promet
 liệu/quyết định thật mới mở khoá được, không phải do thiếu công sức: bung shard/worker theo region
 (mục 2) và tách service theo § 3.4 (mục 4) cần **số liệu traffic production thật** — repo hiện không
 có traffic thật để đo, tự chọn ngưỡng sẽ vi phạm chính nguyên tắc "không hardcode threshold theo
-đoán" của repo này. Multi-region deployment (mục 5): hai quyết định kiến trúc từng chặn đã được
-user chốt (ADR 0004 nginx-ingress + ADR 0005 hostNetwork, 2026-07-13) và phần nền tảng + cơ chế
-chọn URL theo region đã code xong — phần còn lại (routing traffic tới region gần nhất) chỉ bị chặn
-bởi việc chọn nhà cung cấp cloud/DNS, và hiện mới có 1 region thật nên chưa có gì để route giữa
-các region. CQRS Feed (mục 6) cần số liệu tỉ lệ đọc/ghi thật, chưa động tới
+đoán" của repo này. Multi-region deployment (mục 5): cả ba quyết định kiến trúc đã được user chốt
+(ADR 0004 nginx-ingress + ADR 0005 hostNetwork + ADR 0006 Cloudflare LB, 2026-07-13), cơ chế chọn
+URL theo region đã code xong và scaffold kích hoạt (overlay region thứ hai + runbook) đã có đủ —
+mục này vẫn để mở vì phần "deployment" theo đúng nghĩa đen chưa xảy ra: chưa có ngân sách/cluster
+cho region thứ hai nên chưa provision gì thật, chỉ còn việc hạ tầng + điền placeholder khi có
+tiền. CQRS Feed (mục 6) cần số liệu tỉ lệ đọc/ghi thật, chưa động tới
 trong đợt này — cùng lý do "không thiết kế cho nhu cầu giả định" (docs/11).
 
 ## Frontend track (song song, không thuộc số Giai đoạn backend)

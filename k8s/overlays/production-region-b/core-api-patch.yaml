@@ -1,0 +1,21 @@
+# Region B — SCAFFOLD chưa provision. Replica/resource copy từ overlay production (region A)
+# làm điểm xuất phát; PHẢI tune lại theo node sizing + traffic thật của region này khi có
+# hardware thật — không có lý do gì để 2 region giống hệt nhau về sizing.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: core-api
+  namespace: litmatch
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+        - name: core-api
+          resources:
+            requests:
+              cpu: '750m'
+              memory: '768Mi'
+            limits:
+              cpu: '1500m'
+              memory: '1536Mi'
