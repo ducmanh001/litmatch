@@ -18,6 +18,7 @@ import {
   SUPPRESS_MARKER,
   findVendorNameViolations,
 } from './vendor-wording.mjs';
+import { workflowPolicyErrors } from '../ci/workflow-policy.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const errors = [];
@@ -72,6 +73,37 @@ function validateSkill(skillPath) {
   const extra = keys.filter((key) => !['name', 'description'].includes(key));
   if (extra.length)
     addError(`Skill có frontmatter dư (${extra.join(', ')}): ${skillPath}`);
+}
+
+function validateEslintToolchainDeps() {
+  const packageJson = JSON.parse(
+    readFileSync(join(root, 'package.json'), 'utf8'),
+  );
+  const directDependencies = {
+    ...(packageJson.dependencies ?? {}),
+    ...(packageJson.devDependencies ?? {}),
+  };
+
+  if (!directDependencies['@eslint/js']) {
+    addError(
+      'package.json phải khai báo direct devDependency `@eslint/js` để Nx/ESLint flat config không phụ thuộc transitive và không làm hỏng project graph trên CI.',
+    );
+  }
+}
+
+function validateGithubWorkflowPolicy() {
+  const ciWorkflow = readFileSync(
+    join(root, '.github/workflows/ci.yml'),
+    'utf8',
+  );
+  const securityWorkflow = readFileSync(
+    join(root, '.github/workflows/security.yml'),
+    'utf8',
+  );
+
+  for (const error of workflowPolicyErrors({ ciWorkflow, securityWorkflow })) {
+    addError(error);
+  }
 }
 
 function changedFiles() {
@@ -150,6 +182,9 @@ const ignoredDirectories = new Set([
 ]);
 const ignoredFiles = new Set([
   'pnpm-lock.yaml',
+  // Gitleaks baseline là report do scanner sinh ra; Message giữ nguyên commit metadata để
+  // baseline match chính xác, nên không phải bề mặt hướng dẫn/code cần wording trung lập.
+  '.gitleaks-baseline.json',
   'apps/core-api/src/database/migrations/1752000000000-economy-ledger.ts',
 ]);
 const textFile = /(?:\.(md|mjs|cjs|js|ts|cts|json|ya?ml|toml)|Dockerfile)$/u;
@@ -226,6 +261,8 @@ function validateMarkdownLinks() {
 validateContextMap();
 validateSkill('.agents/skills/new-module/SKILL.md');
 validateSkill('.agents/skills/review-module/SKILL.md');
+validateEslintToolchainDeps();
+validateGithubWorkflowPolicy();
 validateDiff();
 validateNeutralWording();
 validateSymlinks();

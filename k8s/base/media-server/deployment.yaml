@@ -52,8 +52,18 @@ spec:
       # 7880/7881/50000-50200 phải trống trên Node, tối đa 1 pod media-server / Node (scheduler
       # coi containerPort là host port). LƯU Ý: replicas vẫn = 1 và vẫn KHÔNG có HPA — trần
       # "một room vừa một node" (per-room resource) là trục khác, chờ benchmark thật (ADR 0005).
+      # KSV-0009 exception scoped theo đúng file trong .trivyignore.yaml: ADR 0005 chấp nhận
+      # host networking vì bỏ nó sẽ làm dải UDP RTC công khai của LiveKit không hoạt động. Chỉ
+      # xem lại khi có ADR thay thế.
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: media-server
           # Cùng digest pin với apps/media-server/docker-compose.yml — nâng version qua PR có
@@ -79,6 +89,8 @@ spec:
               mountPath: /etc/livekit.yaml
               subPath: livekit.yaml
               readOnly: true
+            - name: temporary-files
+              mountPath: /tmp
           # LiveKit chưa có custom health controller theo hợp đồng /health/live của Litmatch (đó
           # là hợp đồng riêng của NestJS apps) — dùng HTTP GET path gốc trên cổng control (7880)
           # làm proxy cho "process còn sống và đang lắng nghe". CHƯA kiểm chứng chi tiết response
@@ -111,7 +123,19 @@ spec:
             limits:
               cpu: '2'
               memory: '2Gi'
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            privileged: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ['ALL']
       volumes:
         - name: config
           configMap:
             name: media-server-config
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: 64Mi
