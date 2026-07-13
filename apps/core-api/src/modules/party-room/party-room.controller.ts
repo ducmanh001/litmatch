@@ -27,6 +27,7 @@ import {
   PartyRoomListDto,
   PartyRoomMemberDto,
 } from './dto/party-room.dtos';
+import { ApiCursorPageQuery } from '../../common/decorators/cursor-page-query.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
@@ -54,6 +55,7 @@ export class PartyRoomController {
 
   @Get()
   @ApiOperation({ summary: 'List phòng đang mở — cursor pagination' })
+  @ApiCursorPageQuery()
   @ApiOkResponse({ type: PartyRoomListDto })
   async list(@Query() query: CursorPageQueryDto): Promise<PartyRoomListDto> {
     const { data, meta } = await this.partyRoomService.listRooms(

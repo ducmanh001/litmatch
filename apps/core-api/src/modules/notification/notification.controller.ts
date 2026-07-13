@@ -18,6 +18,7 @@ import { CursorPageQueryDto } from '@litmatch/common-dtos';
 
 import { NotificationService } from './notification.service';
 import { NotificationsPageDto, UnreadCountDto } from './dto/notification.dtos';
+import { ApiCursorPageQuery } from '../../common/decorators/cursor-page-query.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
@@ -30,6 +31,7 @@ export class NotificationController {
 
   @Get()
   @ApiOperation({ summary: 'Danh sách notification, mới nhất trước' })
+  @ApiCursorPageQuery()
   @ApiOkResponse({ type: NotificationsPageDto })
   async list(
     @CurrentUser() user: AuthenticatedUser,

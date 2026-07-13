@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEnum, IsString, Length } from 'class-validator';
 
+import { ApiCursorPageMeta } from '../../../common/decorators/cursor-page-query.decorator';
 import { MESSAGE_CONTENT_HARD_CAP } from '../soul-match.constants';
 import { SoulMatchVerdict } from '../entities/soul-match-rating.entity';
 
@@ -51,7 +52,7 @@ export class SoulMessageDto {
 
 export class SoulMessagesPageDto {
   @ApiProperty({ type: [SoulMessageDto] }) items!: SoulMessageDto[];
-  @ApiProperty() meta!: CursorPageMeta;
+  @ApiCursorPageMeta() meta!: CursorPageMeta;
 }
 
 /**
