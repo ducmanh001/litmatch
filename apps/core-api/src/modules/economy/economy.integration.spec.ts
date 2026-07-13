@@ -14,21 +14,28 @@ import { EconomyMetrics } from './economy.metrics';
 import { EconomyService } from './economy.service';
 import { EconomyErrors } from './economy.errors';
 import { LedgerService } from './services/ledger.service';
-import { LedgerAccount } from './entities/ledger-account.entity';
-import { LedgerEntry } from './entities/ledger-entry.entity';
+import {
+  LedgerAccount,
+  LedgerAccountKind,
+  LedgerCurrency,
+} from './entities/ledger-account.entity';
+import { LedgerDirection, LedgerEntry } from './entities/ledger-entry.entity';
 import { OutboxEvent } from './entities/outbox-event.entity';
 import {
   LedgerTransaction,
   TransactionStatus,
+  TransactionType,
 } from './entities/transaction.entity';
 import { Wallet } from './entities/wallet.entity';
 import { IapProduct, IapProvider, IapReceipt } from './entities/iap.entities';
 import { VipPlan } from './entities/vip-plan.entity';
+import { OutboxRelayService } from './jobs/outbox-relay.service';
 import { ReconciliationService } from './jobs/reconciliation.service';
 import { RefundService } from './services/refund.service';
 
 import type { ConfigService } from '@nestjs/config';
 import type { SchedulerRegistry } from '@nestjs/schedule';
+import type { Producer } from 'kafkajs';
 
 import type { CoreApiEnv } from '../../config/env.validation';
 import type { IapVerifier } from './ports/iap-verifier';
@@ -453,5 +460,216 @@ d('Economy integration (Postgres thật)', () => {
       // Bất biến double-entry phải giữ nguyên SAU MỌI BƯỚC, kể cả bước vừa reject.
       expect((await recon.runOnce()).ok).toBe(true);
     }
+  });
+
+  /**
+   * Chaos testing luồng tiền (docs/07 GĐ7): xác nhận idempotency/outbox đúng dưới LỖI THẬT
+   * (crash giữa transaction, Kafka chết, 2 pod relay dẫm batch), không chỉ đúng trên giấy.
+   * Không mock DB — mọi assert đọc lại từ Postgres thật sau khi lỗi đã xảy ra.
+   */
+  describe('Chaos luồng tiền', () => {
+    /** Relay instance với producer thay thế (seam test) — flushOnce không đụng config/scheduler. */
+    const makeRelay = (producer: Producer): OutboxRelayService => {
+      const relay = new OutboxRelayService(
+        ds,
+        { getOrThrow: () => false } as unknown as ConfigService<
+          CoreApiEnv,
+          true
+        >,
+        { addInterval: () => undefined } as unknown as SchedulerRegistry,
+      );
+      (relay as unknown as { producer: Producer }).producer = producer;
+      return relay;
+    };
+
+    /** Producer giả ghi nhận event id vào sink; delayMs > 0 giữ lock lâu để 2 instance thật sự chồng lấn. */
+    const sinkProducer = (sink: string[], delayMs = 0): Producer =>
+      ({
+        send: async (record: { messages: Array<{ value?: unknown }> }) => {
+          for (const message of record.messages) {
+            sink.push((JSON.parse(String(message.value)) as { id: string }).id);
+          }
+          if (delayMs > 0)
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+          return [];
+        },
+      }) as unknown as Producer;
+
+    const creditEntries = (userId: string, amount: bigint) => [
+      {
+        accountKind: LedgerAccountKind.SystemIap,
+        direction: LedgerDirection.Debit,
+        amount,
+        currency: LedgerCurrency.Diamond,
+      },
+      {
+        accountKind: LedgerAccountKind.UserWallet,
+        userId,
+        direction: LedgerDirection.Credit,
+        amount,
+        currency: LedgerCurrency.Diamond,
+      },
+    ];
+
+    const makeUser = async (nickname: string): Promise<string> => {
+      const repo = ds.getRepository(User);
+      const user = await repo.save(
+        repo.create({ nickname, avatarId: 'default-01', isGuest: false }),
+      );
+      return user.id;
+    };
+
+    const countInt = async (sql: string, params: unknown[] = []) => {
+      const rows: Array<{ c: number }> = await ds.query(sql, params);
+      return Number(rows[0].c);
+    };
+
+    it('crash GIỮA transaction (throw sau khi đã staged sổ/ví/outbox, trước commit) → rollback sạch, retry cùng key ghi sổ đúng 1 lần', async () => {
+      const userId = await makeUser('chaos-mid-txn');
+      const key = 'chaos-mid-txn-1';
+      const countOutboxOfUser = () =>
+        countInt(
+          `SELECT count(*)::int AS c FROM outbox_events WHERE payload->>'userId' = $1`,
+          [userId],
+        );
+      const countEntriesOfUser = () =>
+        countInt(
+          `SELECT count(*)::int AS c FROM ledger_entries le
+             JOIN ledger_accounts la ON la.id = le.account_id
+            WHERE la.user_id = $1`,
+          [userId],
+        );
+
+      // Giả lập process chết NGAY TRƯỚC COMMIT: hook withinTransaction chạy CUỐI CÙNG
+      // trong cùng DB transaction, sau khi transaction/entries/wallet/outbox đã staged.
+      await expect(
+        ledger.record({
+          type: TransactionType.IapPurchase,
+          idempotencyKey: key,
+          actorUserId: userId,
+          entries: creditEntries(userId, 100n),
+          withinTransaction: async () => {
+            throw new Error('chaos: process chết giữa transaction');
+          },
+        }),
+      ).rejects.toThrow('chaos: process chết giữa transaction');
+
+      // (a) idempotency key CHƯA bị tiêu — không có transaction ma chặn retry
+      expect(
+        await ds
+          .getRepository(LedgerTransaction)
+          .countBy({ idempotencyKey: key }),
+      ).toBe(0);
+      // (b) không có ledger entry mồ côi
+      expect(await countEntriesOfUser()).toBe(0);
+      // (c) không có outbox event mồ côi (event ma sẽ bị relay publish → notify khống)
+      expect(await countOutboxOfUser()).toBe(0);
+      // (d) snapshot ví không đổi
+      expect((await economy.getWallet(userId)).balance).toBe('0');
+
+      // Retry ĐÚNG key đó, không inject lỗi → ghi sổ MỚI (không phải replay của lần chết),
+      // và đúng 1 lần: 1 transaction, 1 entry phía user, 1 outbox event, ví +100 không nhân đôi.
+      const retry = await ledger.record({
+        type: TransactionType.IapPurchase,
+        idempotencyKey: key,
+        actorUserId: userId,
+        entries: creditEntries(userId, 100n),
+      });
+      expect(retry.replayed).toBe(false);
+      expect(
+        await ds
+          .getRepository(LedgerTransaction)
+          .countBy({ idempotencyKey: key }),
+      ).toBe(1);
+      expect(await countEntriesOfUser()).toBe(1);
+      expect(await countOutboxOfUser()).toBe(1);
+      expect((await economy.getWallet(userId)).balance).toBe('100');
+    });
+
+    it('2 instance relay flushOnce SONG SONG trên cùng batch → FOR UPDATE SKIP LOCKED chia phần, không event nào publish 2 lần, không deadlock', async () => {
+      // Dọn nhiễu từ các test trước để đếm chính xác batch của riêng test này.
+      // outbox_events không append-only (relay vẫn UPDATE published_at) nên UPDATE trực tiếp hợp lệ.
+      await ds.query(
+        `UPDATE outbox_events SET published_at = now() WHERE published_at IS NULL`,
+      );
+
+      const userId = await makeUser('chaos-outbox-race');
+      const TOTAL = 8;
+      for (let i = 0; i < TOTAL; i++) {
+        await ledger.record({
+          type: TransactionType.IapPurchase,
+          idempotencyKey: `chaos-outbox-race-${i}`,
+          actorUserId: userId,
+          entries: creditEntries(userId, 10n),
+        });
+      }
+
+      const sinkA: string[] = [];
+      const sinkB: string[] = [];
+      const [publishedA, publishedB] = await Promise.all([
+        makeRelay(sinkProducer(sinkA, 25)).flushOnce(),
+        makeRelay(sinkProducer(sinkB, 25)).flushOnce(),
+      ]);
+
+      // Tổng publish = đúng số event, mỗi event đúng 1 lần trên cả 2 instance gộp lại
+      expect(publishedA + publishedB).toBe(TOTAL);
+      const all = [...sinkA, ...sinkB];
+      expect(all.length).toBe(TOTAL);
+      expect(new Set(all).size).toBe(TOTAL);
+      // SKIP LOCKED chia phần thật: 2 instance không xử lý trùng bất kỳ row nào
+      expect(sinkA.filter((id) => sinkB.includes(id))).toEqual([]);
+
+      // DB khớp sink: không còn row chưa publish, không row nào của batch bị đánh dấu lỗi
+      expect(
+        await countInt(
+          `SELECT count(*)::int AS c FROM outbox_events WHERE published_at IS NULL`,
+        ),
+      ).toBe(0);
+      expect(
+        await countInt(
+          `SELECT count(*)::int AS c FROM outbox_events
+            WHERE payload->>'userId' = $1
+              AND (published_at IS NULL OR attempts <> 0)`,
+          [userId],
+        ),
+      ).toBe(0);
+    });
+
+    it('Kafka chết lúc publish → event Ở LẠI outbox với attempts+1, tick sau publish lại đúng 1 lần (at-least-once, không mất event)', async () => {
+      await ds.query(
+        `UPDATE outbox_events SET published_at = now() WHERE published_at IS NULL`,
+      );
+      const userId = await makeUser('chaos-kafka-down');
+      await ledger.record({
+        type: TransactionType.IapPurchase,
+        idempotencyKey: 'chaos-kafka-down-1',
+        actorUserId: userId,
+        entries: creditEntries(userId, 50n),
+      });
+
+      const deadRelay = makeRelay({
+        send: async () => {
+          throw new Error('chaos: Kafka broker unreachable');
+        },
+      } as unknown as Producer);
+      expect(await deadRelay.flushOnce()).toBe(0);
+
+      // Event KHÔNG mất, không bị đánh dấu published khống — chỉ tăng attempts chờ retry
+      const pending: Array<{ id: string; attempts: number }> = await ds.query(
+        `SELECT id, attempts FROM outbox_events WHERE published_at IS NULL`,
+      );
+      expect(pending.length).toBe(1);
+      expect(pending[0].attempts).toBe(1);
+
+      // Kafka sống lại → tick sau publish ĐÚNG event đó, đúng 1 lần
+      const sink: string[] = [];
+      expect(await makeRelay(sinkProducer(sink)).flushOnce()).toBe(1);
+      expect(sink).toEqual([pending[0].id]);
+      expect(
+        await countInt(
+          `SELECT count(*)::int AS c FROM outbox_events WHERE published_at IS NULL`,
+        ),
+      ).toBe(0);
+    });
   });
 });

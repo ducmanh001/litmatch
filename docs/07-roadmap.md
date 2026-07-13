@@ -133,17 +133,30 @@ theo custom metric Prometheus (vd độ sâu matching queue) cần thêm `promet
       cập nhật invariant/guard mới tách khỏi `core-api` thành deployable riêng
 - [ ] Multi-region deployment cho Signaling Gateway + Media Server, routing user tới region gần nhất (giảm latency thoại)
 - [ ] CQRS/read-replica cho Feed khi lượng đọc vượt xa lượng ghi (fanout-on-write hoặc fanout-on-read tuỳ tỉ lệ follower trung bình)
-- [ ] Chaos testing cho luồng tiền (kill Economy giữa transaction, kill matcher giữa lúc ghép cặp) để xác nhận idempotency/outbox hoạt động đúng dưới lỗi thật, không chỉ đúng trên giấy
+- [x] Chaos testing cho luồng tiền (kill Economy giữa transaction, kill matcher giữa lúc ghép cặp) để xác nhận idempotency/outbox hoạt động đúng dưới lỗi thật, không chỉ đúng trên giấy.
+      3 kịch bản lỗi inject thật trên Postgres/Redis thật (không mock): (1) crash giữa transaction
+      Economy qua hook `withinTransaction` của `LedgerService.record()` — rollback đủ (0 transaction/
+      entry/outbox mồ côi, ví không đổi), idempotency key KHÔNG bị tiêu bởi lần fail, retry cùng key
+      thành công đúng 1 lần; (2) 2 instance `OutboxRelayService` chạy `flushOnce()` song song trên
+      cùng batch — `FOR UPDATE SKIP LOCKED` chia batch đúng, không publish trùng; Kafka chết lúc
+      publish — event ở lại outbox (không mất), tick sau publish lại đúng 1 lần; (3) matcher chết
+      giữa `ZPOPMIN` và transaction `tryPair` — không session dở dang, ticket mồ côi được sweeper dọn,
+      sweep lại idempotent; matcher chết giữa commit và publish realtime — client vẫn khám phá match
+      qua poll fallback thật (`GET /matching/tickets/:id`); sweeper chết giữa commit requeue và Redis
+      zadd — không tạo ticket đôi, `requeueIdempotencyKey` được unique constraint DB chặn thật (không
+      chỉ là quy ước đặt tên). Không phát hiện bug production — cơ chế hiện hữu đứng vững dưới lỗi
+      thật. Verify: `pnpm agent:verify economy` + `matching` PASS, integration test thật 39 suite/374
+      test PASS.
 
-**Giai đoạn 7 (đợt này) hoàn tất 2/7 mục** — 3 mục còn lại chưa làm vì đều bị chặn bởi thứ chỉ số
+**Giai đoạn 7 (đợt này) hoàn tất 3/7 mục** — 4 mục còn lại chưa làm vì đều bị chặn bởi thứ chỉ số
 liệu/quyết định thật mới mở khoá được, không phải do thiếu công sức: bung shard/worker theo region
 (mục 2) và tách service theo § 3.4 (mục 4) cần **số liệu traffic production thật** — repo hiện không
 có traffic thật để đo, tự chọn ngưỡng sẽ vi phạm chính nguyên tắc "không hardcode threshold theo
 đoán" của repo này. Multi-region deployment (mục 5) bị chặn bởi hai quyết định kiến trúc chưa chốt
 ở `k8s/README.md` (chọn Ingress/API gateway, và ADR networking RTC multi-node hostNetwork vs
 NodePort cho LiveKit) — làm multi-region trước khi có ADR đó nghĩa là tự quyết kiến trúc thay đội,
-đúng thứ luật số 1 ở AGENTS.md cấm. CQRS Feed (mục 6) và chaos testing (mục 7) chưa động tới trong
-đợt này, để dành.
+đúng thứ luật số 1 ở AGENTS.md cấm. CQRS Feed (mục 6) cần số liệu tỉ lệ đọc/ghi thật, chưa động tới
+trong đợt này — cùng lý do "không thiết kế cho nhu cầu giả định" (docs/11).
 
 ## Frontend track (song song, không thuộc số Giai đoạn backend)
 
