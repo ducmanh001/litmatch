@@ -59,6 +59,14 @@ export const router = createBrowserRouter([
                   ).GiftsPage,
                 }),
               },
+              {
+                path: 'economy',
+                lazy: async () => ({
+                  Component: (
+                    await import('../features/economy/pages/economy-page')
+                  ).EconomyPage,
+                }),
+              },
             ],
           },
         ],
