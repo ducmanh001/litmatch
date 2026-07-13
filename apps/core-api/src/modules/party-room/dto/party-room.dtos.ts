@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsIn, IsNotEmpty, IsString, MaxLength } from 'class-validator';
 
+import { ApiCursorPageMeta } from '../../../common/decorators/cursor-page-query.decorator';
 import {
   PartyRoom,
   PartyRoomCloseReason,
@@ -101,7 +102,7 @@ export class JoinPartyRoomDto {
 
 export class PartyRoomListDto {
   @ApiProperty({ type: [PartyRoomDto] }) data!: PartyRoomDto[];
-  @ApiProperty() meta!: CursorPageMeta;
+  @ApiCursorPageMeta() meta!: CursorPageMeta;
 
   static from(rooms: PartyRoom[], meta: CursorPageMeta): PartyRoomListDto {
     const dto = new PartyRoomListDto();

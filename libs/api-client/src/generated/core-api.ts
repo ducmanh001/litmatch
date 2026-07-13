@@ -1278,7 +1278,9 @@ export interface components {
     };
     MessagesPageDto: {
       items: components['schemas']['MessageDto'][];
-      meta: Record<string, never>;
+      meta: {
+        nextCursor?: string | null;
+      };
     };
     SendFriendMessageDto: {
       content: string;
@@ -1305,7 +1307,9 @@ export interface components {
     };
     SoulMessagesPageDto: {
       items: components['schemas']['SoulMessageDto'][];
-      meta: Record<string, never>;
+      meta: {
+        nextCursor?: string | null;
+      };
     };
     SendSoulMessageDto: {
       content: string;
@@ -1373,7 +1377,9 @@ export interface components {
     };
     PartyRoomListDto: {
       data: components['schemas']['PartyRoomDto'][];
-      meta: Record<string, never>;
+      meta: {
+        nextCursor?: string | null;
+      };
     };
     PartyRoomDetailDto: {
       room: components['schemas']['PartyRoomDto'];
@@ -1891,7 +1897,12 @@ export interface operations {
   };
   EconomyController_listTransactions: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
       header?: never;
       path?: never;
       cookie?: never;
@@ -2138,7 +2149,12 @@ export interface operations {
   };
   NotificationController_list: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
       header?: never;
       path?: never;
       cookie?: never;
@@ -2255,7 +2271,12 @@ export interface operations {
   };
   FriendController_listMessages: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
       header?: never;
       path: {
         id: string;
@@ -2340,7 +2361,12 @@ export interface operations {
   };
   SoulMatchController_listMessages: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
       header?: never;
       path: {
         id: string;
@@ -2533,7 +2559,12 @@ export interface operations {
   };
   PartyRoomController_list: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
       header?: never;
       path?: never;
       cookie?: never;
@@ -2739,7 +2770,12 @@ export interface operations {
   };
   FeedController_listFeed: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
       header?: never;
       path?: never;
       cookie?: never;
@@ -2836,7 +2872,12 @@ export interface operations {
   };
   FeedController_listComments: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
       header?: never;
       path: {
         postId: string;
