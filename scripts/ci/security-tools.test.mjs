@@ -54,6 +54,14 @@ test('plans the checksum-verified actionlint installation', () => {
   assert.match(result.stderr, /Would install actionlint 1\.7\.12/u);
 });
 
+test('plans the checksum-verified ShellCheck installation', () => {
+  const result = dryRun('shellcheck');
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /shellcheck-0\.11\.0\/shellcheck\n$/u);
+  assert.match(result.stderr, /Would install shellcheck 0\.11\.0/u);
+});
+
 test('plans the checksum-verified Trivy installation', () => {
   const result = dryRun('trivy');
 

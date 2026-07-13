@@ -30,6 +30,15 @@ const tools = {
     url: 'https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz',
     binary: 'gitleaks',
   },
+  shellcheck: {
+    version: '0.11.0',
+    sha256: 'b7af85e41cc99489dcc21d66c6d5f3685138f06d34651e6d34b42ec6d54fe6f6',
+    archive: 'shellcheck-v0.11.0.linux.x86_64.tar.gz',
+    url: 'https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.gz',
+    binary: 'shellcheck',
+    archiveMember: 'shellcheck-v0.11.0/shellcheck',
+    stripComponents: 1,
+  },
   trivy: {
     version: '0.72.0',
     sha256: 'bbb64b9695866ce4a7a8f5c9592002c5961cab378577fa3f8a040df362b9b2ea',
@@ -119,7 +128,16 @@ function install() {
     }
 
     mkdirSync(stagedDirectory, { recursive: true });
-    run('tar', ['-xzf', archivePath, '-C', stagedDirectory, tool.binary]);
+    run('tar', [
+      '-xzf',
+      archivePath,
+      '-C',
+      stagedDirectory,
+      ...(tool.stripComponents
+        ? ['--strip-components', String(tool.stripComponents)]
+        : []),
+      tool.archiveMember ?? tool.binary,
+    ]);
     chmodSync(join(stagedDirectory, tool.binary), 0o755);
     rmSync(installDirectory, { recursive: true, force: true });
     renameSync(stagedDirectory, installDirectory);
