@@ -40,6 +40,7 @@ export interface CoreApiEnv {
   ECONOMY_OUTBOX_RELAY_INTERVAL_MS: number;
   ECONOMY_RECONCILIATION_ENABLED: boolean;
   ECONOMY_RECONCILIATION_INTERVAL_MS: number;
+  ECONOMY_RECONCILIATION_FAST_INTERVAL_MS: number;
   ECONOMY_APPLE_WEBHOOK_VERIFIER: 'dev' | 'store';
   ECONOMY_APPLE_ROOT_CA_PEM: string;
   ECONOMY_GOOGLE_RTDN_VERIFIER: 'dev' | 'store';
@@ -148,6 +149,13 @@ export const coreApiEnvSchema = Joi.object({
     .integer()
     .min(10_000)
     .default(300_000),
+  // Tier fast (bất biến Nợ=Có + orphan receipt) chỉ là 1 câu aggregate + 1 câu COUNT → rẻ hơn
+  // nhiều so với tier deep scan sample ví; default 60s = phát hiện lệch nhanh gấp 5 lần deep
+  // (300s) mà vẫn không đáng kể với DB. Min 10s cùng bound với interval deep, chống set quá dày.
+  ECONOMY_RECONCILIATION_FAST_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(10_000)
+    .default(60_000),
 
   // Refund/chargeback (docs/services/economy-service.md § 5)
   // Mặc định 'store' (fail-closed) — thiếu config thì getOrThrow() chết ngay lúc verify thay vì

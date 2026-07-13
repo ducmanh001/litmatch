@@ -112,16 +112,38 @@ theo custom metric Prometheus (vd độ sâu matching queue) cần thêm `promet
 
 > Vì ledger double-entry (Giai đoạn 1) và ticket/shard cho Matching (Giai đoạn 2) đã được **thiết kế đúng ngay từ đầu**, Giai đoạn 7 không phải là sửa lại thiết kế — mà là **vận hành/mở rộng thực sự** những gì đã thiết kế sẵn, khi số liệu traffic thật xác nhận cần (đúng tinh thần MonolithFirst ở § 3.1: quyết định _thiết kế_ chọn sớm, quyết định _khi nào bung ra hạ tầng thật_ thì chờ số liệu).
 
-- [ ] Benchmark LiveKit bằng profile Party Room production, đặt SLO/headroom và cảnh báo theo node;
-      nếu một room chạm trần một node thì lập ADR chọn vertical scale, giới hạn sản phẩm hoặc đổi
-      topology/provider — không giả định thêm node sẽ tự chia một room (§ 3.8.A)
+- [x] Benchmark LiveKit bằng profile Party Room production, đặt SLO/headroom và cảnh báo theo node:
+      `loadtest/party-room-livekit.sh` dùng `lk load-test` (k6 không mở được kết nối WebRTC thật) với
+      profile suy ra từ cấu hình Party Room thật (`PARTY_MAX_MEMBERS=100`, `PARTY_MAX_SPEAKERS=8`,
+      audio-only) → 9 publisher/91 subscriber; mục tiêu SLO/headroom ở `loadtest/party-room-slo.yaml`;
+      rule cảnh báo Prometheus theo node ở `k8s/base/media-server/prometheus-alerts.yaml`. **CHƯA
+      chạy với LiveKit cluster production thật** — số liệu (đặc biệt trần "rooms per node") là placeholder
+      chưa đo; xem `loadtest/README.md` mục 4 trước khi tin số liệu. Quyết định ADR (vertical scale,
+      giới hạn sản phẩm hay đổi topology/provider khi một room chạm trần một node — § 3.8.A) vẫn chờ
+      lần chạy thật đầu tiên, chưa có gì để quyết ở đây.
 - [ ] Bung thêm shard/matcher worker instance cho Matching Queue theo region mới hoặc tiêu chí mới khi traffic khu vực đó đủ lớn — xem § 3.8.B
-- [ ] Mở rộng job đối soát (reconciliation) ledger chạy tần suất cao hơn + cảnh báo tự động khi phát hiện lệch Nợ/Có — xem § 3.8.C
+- [x] Mở rộng job đối soát (reconciliation) ledger chạy tần suất cao hơn + cảnh báo tự động khi phát hiện lệch Nợ/Có — xem § 3.8.C.
+      Tách 2 tier độc lập lịch: fast (bất biến Nợ=Có + orphan receipt, 1 aggregate query, mặc định 60s
+      qua `ECONOMY_RECONCILIATION_FAST_INTERVAL_MS`) và deep (sample ví, giữ cadence cũ 300s). Lệch/run
+      lỗi export qua Prometheus (`economy_reconciliation_mismatch_total`, `economy_reconciliation_last_run_status`,
+      `economy_reconciliation_run_duration_seconds`) để alert rule fire tự động — job vẫn read-only
+      tuyệt đối. Verify: `pnpm agent:verify economy` PASS, integration test thật trên Postgres (39 suite/368
+      test PASS, gồm property test double-entry + trigger append-only), unit test lịch 2 tier + DB-down.
 - [ ] Khi module đạt tiêu chí § 3.4, lập ADR + số liệu + migration/rollback plan; chỉ sau khi ADR
       cập nhật invariant/guard mới tách khỏi `core-api` thành deployable riêng
 - [ ] Multi-region deployment cho Signaling Gateway + Media Server, routing user tới region gần nhất (giảm latency thoại)
 - [ ] CQRS/read-replica cho Feed khi lượng đọc vượt xa lượng ghi (fanout-on-write hoặc fanout-on-read tuỳ tỉ lệ follower trung bình)
 - [ ] Chaos testing cho luồng tiền (kill Economy giữa transaction, kill matcher giữa lúc ghép cặp) để xác nhận idempotency/outbox hoạt động đúng dưới lỗi thật, không chỉ đúng trên giấy
+
+**Giai đoạn 7 (đợt này) hoàn tất 2/7 mục** — 3 mục còn lại chưa làm vì đều bị chặn bởi thứ chỉ số
+liệu/quyết định thật mới mở khoá được, không phải do thiếu công sức: bung shard/worker theo region
+(mục 2) và tách service theo § 3.4 (mục 4) cần **số liệu traffic production thật** — repo hiện không
+có traffic thật để đo, tự chọn ngưỡng sẽ vi phạm chính nguyên tắc "không hardcode threshold theo
+đoán" của repo này. Multi-region deployment (mục 5) bị chặn bởi hai quyết định kiến trúc chưa chốt
+ở `k8s/README.md` (chọn Ingress/API gateway, và ADR networking RTC multi-node hostNetwork vs
+NodePort cho LiveKit) — làm multi-region trước khi có ADR đó nghĩa là tự quyết kiến trúc thay đội,
+đúng thứ luật số 1 ở AGENTS.md cấm. CQRS Feed (mục 6) và chaos testing (mục 7) chưa động tới trong
+đợt này, để dành.
 
 ## Frontend track (song song, không thuộc số Giai đoạn backend)
 

@@ -1,0 +1,82 @@
+# Litmatch — SLO/headroom khởi điểm cho Party Room trên LiveKit self-host (Giai đoạn 7 roadmap:
+# "Benchmark LiveKit bằng profile Party Room production, đặt SLO/headroom và cảnh báo theo node").
+#
+# ĐÂY LÀ MỤC TIÊU VẬN HÀNH KHỞI ĐIỂM, KHÔNG PHẢI SỐ ĐÃ ĐO XÁC NHẬN. Repo này chưa có LiveKit
+# cluster production nào để đo số liệu thật (xem loadtest/README.md mục 4) — mỗi giá trị dưới đây
+# có comment giải thích lý do chọn, dựa trên ngưỡng UX thoại/WebRTC phổ biến trong ngành, KHÔNG
+# phải benchmark riêng của Litmatch. Phải đối chiếu lại bằng traffic production thật (chạy
+# `loadtest/party-room-livekit.sh` + quan sát `k8s/base/media-server/prometheus-alerts.yaml`)
+# trước khi dùng các số này làm ngưỡng cảnh báo cứng (paging) cho on-call thật.
+#
+# Cách dùng: file này KHÔNG được code nào đọc tự động — đây là tài liệu tham chiếu dùng khi phân
+# tích kết quả `party-room-livekit.sh` bằng tay, và làm nguồn số cho
+# `k8s/base/media-server/prometheus-alerts.yaml` (2 file nên đổi cùng nhau nếu chỉnh ngưỡng).
+
+# --- Room join latency: thời gian từ lúc client có join token tới lúc kết nối LiveKit thành công
+#     (ICE + DTLS + SFU accept) — KHÔNG phải latency audio frame-to-frame. Đây là chi phí một lần
+#     lúc vào phòng, không lặp lại liên tục như jitter, nên ngưỡng nới hơn latency thoại thời gian
+#     thực (ITU-T G.114 khuyến nghị one-way latency thoại < 150ms — áp dụng cho audio frame, không
+#     áp dụng trực tiếp cho hành động "join" một lần).
+room_join_latency_ms:
+  p50: 300
+  p95: 800
+  p99: 1500
+  # Canh cứ: 800ms là ngưỡng phổ biến cho "cảm nhận được độ trễ nhưng chưa gây khó chịu" với hành
+  # động one-off (mở app, bấm join phòng) trong các nghiên cứu UX latency (Nielsen Norman Group:
+  # phản hồi > 1s bắt đầu làm gián đoạn luồng suy nghĩ người dùng). p99 nới thêm cho tail do cold
+  # start SFU chọn node/route WebRTC lần đầu.
+
+# --- Packet loss audio: LiveKit expose qua livekit_packet_total{direction,transmission} (xem
+#     k8s/base/media-server/prometheus-alerts.yaml) — TÊN LABEL VALUE (vd "lost"/"retransmitted")
+#     CHƯA được xác nhận trên chính bản LiveKit v1.13.1 đang pin (apps/media-server/docker-compose.yml)
+#     vì môi trường này không có instance thật để `curl :6789/metrics`. Ngưỡng % dưới đây độc lập
+#     với tên metric — áp dụng bất kể lấy số packet loss bằng cách nào.
+audio_packet_loss_percent:
+  warn: 1
+  critical: 3
+  # Canh cứ: Opus (codec audio LiveKit dùng mặc định) có packet loss concealment (PLC) hiệu quả
+  # tới ~1% loss gần như không nghe thấy khác biệt theo thực nghiệm cộng đồng WebRTC (webrtc.org,
+  # nhiều báo cáo đo QoE thoại VoIP) — 1% làm ngưỡng warn (bắt đầu theo dõi), 3% làm ngưỡng
+  # critical (bắt đầu nghe rè/giật rõ ràng, cần hành động).
+
+# --- Tỉ lệ participant join thành công (không timeout/reject) trong 1 cửa sổ quan sát.
+participant_join_success_rate_percent:
+  min: 99
+  # Canh cứ: mục tiêu "3 nines" cho một hành động rời rạc (không phải throughput request/s cao) —
+  # theo tinh thần SLO vận hành phổ biến trong ngành cho hành động join/connect, KHÔNG phải số đo
+  # được từ production Litmatch thật (chưa có traffic thật để tính SLO theo percentile lịch sử).
+
+# --- Track publish failure: publisher (host/speaker) gọi publish nhưng SFU từ chối/lỗi.
+track_publish_failure_rate_percent:
+  warn: 2
+  critical: 5
+  # Canh cứ: publish failure ảnh hưởng trực tiếp trải nghiệm host/speaker (mất tiếng hoàn toàn,
+  # không phải suy giảm dần như packet loss) — ngưỡng thấp hơn packet loss vì đây là lỗi nhị phân
+  # rõ ràng (publish được hoặc không), nên chấp nhận dung sai thấp hơn.
+
+# --- Headroom theo node (dùng cho cảnh báo trong prometheus-alerts.yaml) — nhắc lại docs/03 § 3.5:
+#     "một room phải nằm vừa trên một node", thêm node KHÔNG tự chia nhỏ 1 room đang chạy — nên
+#     phải biết TRƯỚC khi 1 node gần đầy để có thời gian phản ứng (thêm node cho room MỚI, hoặc từ
+#     chối room mới), không phải sau khi node đã bão hoà.
+node_headroom:
+  cpu_percent:
+    warn: 70
+    critical: 85
+    # Canh cứ: benchmark công khai của LiveKit (docs.livekit.io/transport/self-hosting/benchmark —
+    # đọc lúc viết file này) ghi nhận scenario audio-only 10 publisher + 1000 subscriber đạt ~80%
+    # CPU trên node 16-core — đó là benchmark CỦA LIVEKIT với workload KHÁC hẳn Party Room (1 room
+    # rất đông chỉ 10 publisher, khác N room nhỏ 9 publisher/phòng của Litmatch) nên KHÔNG dùng
+    # trực tiếp làm ngưỡng, chỉ dùng để chọn "70/85%" là hợp lý cho SFU CPU-bound: tải publish/
+    # subscribe không tuyến tính êm mà tăng đột ngột theo từng participant/track mới, nên phải có
+    # headroom cảnh báo SỚM trước khi chạm ngưỡng bão hoà thật (thường 90%+ theo benchmark trên).
+  # Số room đang host trên 1 node so với "trần capacity" của node đó. TRẦN CAPACITY này CHƯA CÓ SỐ
+  # THẬT — cần chạy party-room-livekit.sh nhiều lần với N room đồng thời trên 1 node thật (benchmark
+  # LiveKit công khai ở trên chỉ test 1 room rất đông, không phải N room profile Party Room) để đo
+  # được "1 node chứa được bao nhiêu room 100-member/9-publisher trước khi CPU chạm critical".
+  # Đặt placeholder rất bảo thủ, PHẢI thay bằng số đo thật trước khi dùng cảnh báo này để paging.
+  room_count_vs_capacity_ceiling_percent:
+    warn: 60
+    critical: 80
+    capacity_ceiling_placeholder_rooms_per_node: 5
+    # capacity_ceiling_placeholder_rooms_per_node = 5 là ĐOÁN BẢO THỦ (chưa đo), không phải số đo —
+    # xem k8s/base/media-server/prometheus-alerts.yaml để biết cách dùng con số này trong PromQL.

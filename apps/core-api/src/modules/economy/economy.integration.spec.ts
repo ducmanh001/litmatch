@@ -265,9 +265,12 @@ d('Economy integration (Postgres thật)', () => {
       CoreApiEnv,
       true
     >;
-    const recon = new ReconciliationService(ds, stubConfig, {
-      addInterval: () => undefined,
-    } as unknown as SchedulerRegistry);
+    const recon = new ReconciliationService(
+      ds,
+      stubConfig,
+      { addInterval: () => undefined } as unknown as SchedulerRegistry,
+      new EconomyMetrics(new Registry()),
+    );
 
     expect((await recon.runOnce()).ok).toBe(true);
 
@@ -375,6 +378,7 @@ d('Economy integration (Postgres thật)', () => {
       ds,
       { getOrThrow: () => true } as unknown as ConfigService<CoreApiEnv, true>,
       { addInterval: () => undefined } as unknown as SchedulerRegistry,
+      new EconomyMetrics(new Registry()),
     );
     expect((await recon.runOnce()).ok).toBe(true);
   });
@@ -396,6 +400,7 @@ d('Economy integration (Postgres thật)', () => {
       ds,
       { getOrThrow: () => true } as unknown as ConfigService<CoreApiEnv, true>,
       { addInterval: () => undefined } as unknown as SchedulerRegistry,
+      new EconomyMetrics(new Registry()),
     );
     const products = [
       'com.litmatch.diamond.100',
