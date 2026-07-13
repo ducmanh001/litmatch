@@ -14,10 +14,13 @@ import {
 import type { ReactNode } from 'react';
 
 /**
- * Nav sau login khai 1 chỗ — matching/chat/party là placeholder cho phase tính năng
- * (docs/12 § 12.8 bước 3), route chưa tồn tại thì chưa thêm link.
+ * Nav sau login khai 1 chỗ (docs/12 § 12.8 bước 3) — chat/party vẫn là placeholder, thêm
+ * link khi route tương ứng tồn tại.
  */
-const NAV_ITEMS = [{ href: '/home', label: 'Trang chủ' }] as const;
+const NAV_ITEMS = [
+  { href: '/home', label: 'Trang chủ' },
+  { href: '/matching', label: 'Ghép đôi' },
+] as const;
 
 function AppChrome({ children }: { children: ReactNode }) {
   const router = useRouter();
