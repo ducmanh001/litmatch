@@ -10,8 +10,16 @@ import type { EntityManager, Repository } from 'typeorm';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import type { SafetyService } from '../safety';
 
-const me: AuthenticatedUser = { userId: 'user-me', isGuest: false };
-const guest: AuthenticatedUser = { userId: 'user-guest', isGuest: true };
+const me: AuthenticatedUser = {
+  userId: 'user-me',
+  isGuest: false,
+  role: 'user',
+};
+const guest: AuthenticatedUser = {
+  userId: 'user-guest',
+  isGuest: true,
+  role: 'user',
+};
 
 function makePost(overrides: Partial<Post> = {}): Post {
   return Object.assign(new Post(), {

@@ -2,6 +2,7 @@ import { DataSource } from 'typeorm';
 
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
 import { InitAuthUser1751900000000 } from '../../database/migrations/1751900000000-init-auth-user';
+import { UserRole1753600000000 } from '../../database/migrations/1753600000000-user-role';
 import { EconomyLedger1752000000000 } from '../../database/migrations/1752000000000-economy-ledger';
 import { EconomyRefund1752100000000 } from '../../database/migrations/1752100000000-economy-refund';
 import { MatchingCore1752200000000 } from '../../database/migrations/1752200000000-matching-core';
@@ -133,6 +134,7 @@ d('Party Room integration (Postgres thật)', () => {
   const auth = (userId: string): AuthenticatedUser => ({
     userId,
     isGuest: false,
+    role: 'user',
   });
 
   async function createUser(nickname: string): Promise<User> {
@@ -182,6 +184,7 @@ d('Party Room integration (Postgres thật)', () => {
       entities: [User, PartyRoom, PartyRoomMember],
       migrations: [
         InitAuthUser1751900000000,
+        UserRole1753600000000,
         EconomyLedger1752000000000,
         EconomyRefund1752100000000,
         MatchingCore1752200000000,

@@ -2,6 +2,7 @@ import { DataSource } from 'typeorm';
 
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
 import { InitAuthUser1751900000000 } from '../../database/migrations/1751900000000-init-auth-user';
+import { UserRole1753600000000 } from '../../database/migrations/1753600000000-user-role';
 import { MatchingCore1752200000000 } from '../../database/migrations/1752200000000-matching-core';
 import { MatchingGenderPreference1752300000000 } from '../../database/migrations/1752300000000-matching-gender-preference';
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
@@ -101,6 +102,7 @@ d('Feed integration (Postgres thật)', () => {
       entities: [User, Report, Block, Post, Comment, Reaction, Notification],
       migrations: [
         InitAuthUser1751900000000,
+        UserRole1753600000000,
         MatchingCore1752200000000,
         MatchingGenderPreference1752300000000,
         Safety1752800000000,
@@ -148,7 +150,7 @@ d('Feed integration (Postgres thật)', () => {
       createUser('feed-b'),
     ]);
     const post = await feed.createPost(
-      { userId: b.id, isGuest: false },
+      { userId: b.id, isGuest: false, role: 'user' },
       {
         content: 'bài của B',
       },
@@ -156,16 +158,22 @@ d('Feed integration (Postgres thật)', () => {
 
     // Trước khi block: A thấy bình thường
     let page = await feed.listFeed(
-      { userId: a.id, isGuest: false },
+      { userId: a.id, isGuest: false, role: 'user' },
       { limit: 20 },
     );
     expect(page.items.map((p) => p.id)).toContain(post.id);
 
     await safety.block(a.id, b.id); // A block B
-    page = await feed.listFeed({ userId: a.id, isGuest: false }, { limit: 20 });
+    page = await feed.listFeed(
+      { userId: a.id, isGuest: false, role: 'user' },
+      { limit: 20 },
+    );
     expect(page.items.map((p) => p.id)).not.toContain(post.id);
     await expect(
-      feed.getPostOrThrow({ userId: a.id, isGuest: false }, post.id),
+      feed.getPostOrThrow(
+        { userId: a.id, isGuest: false, role: 'user' },
+        post.id,
+      ),
     ).rejects.toMatchObject({ code: FeedErrors.POST_NOT_FOUND });
 
     // Chiều ngược lại (B bị A block) cũng không thấy feed của chính A lọc B — nhưng ở đây ta
@@ -173,7 +181,10 @@ d('Feed integration (Postgres thật)', () => {
     await safety.unblock(a.id, b.id);
     await safety.block(b.id, a.id); // B block A (chiều ngược)
     await expect(
-      feed.getPostOrThrow({ userId: a.id, isGuest: false }, post.id),
+      feed.getPostOrThrow(
+        { userId: a.id, isGuest: false, role: 'user' },
+        post.id,
+      ),
     ).rejects.toMatchObject({ code: FeedErrors.POST_NOT_FOUND });
   });
 
@@ -181,7 +192,7 @@ d('Feed integration (Postgres thật)', () => {
     const author = await createUser('feed-author');
     const guestUser = await createUser('feed-guest', true);
     const post = await feed.createPost(
-      { userId: author.id, isGuest: false },
+      { userId: author.id, isGuest: false, role: 'user' },
       {
         content: 'công khai',
       },
@@ -189,21 +200,25 @@ d('Feed integration (Postgres thật)', () => {
 
     await expect(
       feed.createPost(
-        { userId: guestUser.id, isGuest: true },
+        { userId: guestUser.id, isGuest: true, role: 'user' },
         { content: 'x' },
       ),
     ).rejects.toMatchObject({ code: FeedErrors.GUEST_FORBIDDEN });
     await expect(
-      feed.like({ userId: guestUser.id, isGuest: true }, post.id),
+      feed.like({ userId: guestUser.id, isGuest: true, role: 'user' }, post.id),
     ).rejects.toMatchObject({ code: FeedErrors.GUEST_FORBIDDEN });
     await expect(
-      feed.createComment({ userId: guestUser.id, isGuest: true }, post.id, {
-        content: 'x',
-      }),
+      feed.createComment(
+        { userId: guestUser.id, isGuest: true, role: 'user' },
+        post.id,
+        {
+          content: 'x',
+        },
+      ),
     ).rejects.toMatchObject({ code: FeedErrors.GUEST_FORBIDDEN });
 
     const fetched = await feed.getPostOrThrow(
-      { userId: guestUser.id, isGuest: true },
+      { userId: guestUser.id, isGuest: true, role: 'user' },
       post.id,
     );
     expect(fetched.id).toBe(post.id);
@@ -213,12 +228,12 @@ d('Feed integration (Postgres thật)', () => {
     const author = await createUser('race-author');
     const liker = await createUser('race-liker');
     const post = await feed.createPost(
-      { userId: author.id, isGuest: false },
+      { userId: author.id, isGuest: false, role: 'user' },
       {
         content: 'race test',
       },
     );
-    const user = { userId: liker.id, isGuest: false };
+    const user = { userId: liker.id, isGuest: false, role: 'user' } as const;
 
     await Promise.all(
       Array.from({ length: 5 }, () => feed.like(user, post.id)),
@@ -246,12 +261,12 @@ d('Feed integration (Postgres thật)', () => {
     const author = await createUser('toggle-author');
     const liker = await createUser('toggle-liker');
     const post = await feed.createPost(
-      { userId: author.id, isGuest: false },
+      { userId: author.id, isGuest: false, role: 'user' },
       {
         content: 'toggle test',
       },
     );
-    const user = { userId: liker.id, isGuest: false };
+    const user = { userId: liker.id, isGuest: false, role: 'user' } as const;
 
     await feed.like(user, post.id);
     await feed.unlike(user, post.id);
@@ -268,13 +283,21 @@ d('Feed integration (Postgres thật)', () => {
     const author = await createUser('cmt-author');
     const commenter = await createUser('cmt-commenter');
     const post = await feed.createPost(
-      { userId: author.id, isGuest: false },
+      { userId: author.id, isGuest: false, role: 'user' },
       {
         content: 'cmt test',
       },
     );
-    const authorUser = { userId: author.id, isGuest: false };
-    const commenterUser = { userId: commenter.id, isGuest: false };
+    const authorUser = {
+      userId: author.id,
+      isGuest: false,
+      role: 'user',
+    } as const;
+    const commenterUser = {
+      userId: commenter.id,
+      isGuest: false,
+      role: 'user',
+    } as const;
 
     const comment = await feed.createComment(commenterUser, post.id, {
       content: 'nice',
@@ -315,22 +338,28 @@ d('Feed integration (Postgres thật)', () => {
     const owner = await createUser('idor-owner');
     const outsider = await createUser('idor-outsider');
     const post = await feed.createPost(
-      { userId: owner.id, isGuest: false },
+      { userId: owner.id, isGuest: false, role: 'user' },
       {
         content: 'owner post',
       },
     );
     const comment = await feed.createComment(
-      { userId: owner.id, isGuest: false },
+      { userId: owner.id, isGuest: false, role: 'user' },
       post.id,
       { content: 'owner comment' },
     );
 
     await expect(
-      feed.deletePost({ userId: outsider.id, isGuest: false }, post.id),
+      feed.deletePost(
+        { userId: outsider.id, isGuest: false, role: 'user' },
+        post.id,
+      ),
     ).rejects.toMatchObject({ code: FeedErrors.POST_NOT_FOUND });
     await expect(
-      feed.deleteComment({ userId: outsider.id, isGuest: false }, comment.id),
+      feed.deleteComment(
+        { userId: outsider.id, isGuest: false, role: 'user' },
+        comment.id,
+      ),
     ).rejects.toMatchObject({ code: FeedErrors.COMMENT_NOT_FOUND });
   });
 });

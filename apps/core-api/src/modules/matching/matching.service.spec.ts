@@ -29,7 +29,11 @@ const CONFIG: Record<string, unknown> = {
   MATCHING_TRUST_PENALTY_MAX_MS: 120_000,
 };
 
-const me: AuthenticatedUser = { userId: 'user-me', isGuest: false };
+const me: AuthenticatedUser = {
+  userId: 'user-me',
+  isGuest: false,
+  role: 'user',
+};
 
 function makeTicket(overrides: Partial<MatchTicket> = {}): MatchTicket {
   return Object.assign(new MatchTicket(), {

@@ -2345,6 +2345,105 @@
         "summary": "State hiện tại — poll fallback cho realtime; không lộ move đối phương trước khi resolved",
         "tags": ["mini-game"]
       }
+    },
+    "/api/v1/admin/users/{id}": {
+      "get": {
+        "operationId": "AdminController_getUser",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AdminUserDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Xem profile nội bộ user (status + role) — chỉ admin/moderator",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/users/{id}/ban": {
+      "post": {
+        "operationId": "AdminController_banUser",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AdminUserDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Khoá tài khoản user — audit log, không tự ban chính mình được",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/users/{id}/unban": {
+      "post": {
+        "operationId": "AdminController_unbanUser",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AdminUserDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Mở khoá tài khoản user — audit log",
+        "tags": ["admin"]
+      }
     }
   },
   "info": {
@@ -3245,6 +3344,30 @@
           "move": { "type": "string", "enum": ["rock", "paper", "scissors"] }
         },
         "required": ["move"]
+      },
+      "AdminUserDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "nickname": { "type": "string" },
+          "gender": {
+            "type": "string",
+            "enum": ["unknown", "male", "female", "other"]
+          },
+          "avatarId": { "type": "string" },
+          "isGuest": { "type": "boolean" },
+          "status": { "type": "string", "enum": ["active", "banned"] },
+          "role": { "type": "string", "enum": ["user", "moderator", "admin"] }
+        },
+        "required": [
+          "id",
+          "nickname",
+          "gender",
+          "avatarId",
+          "isGuest",
+          "status",
+          "role"
+        ]
       }
     }
   }

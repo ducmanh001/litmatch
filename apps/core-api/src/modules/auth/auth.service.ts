@@ -139,7 +139,11 @@ export class AuthService {
   }
 
   private async issue(user: User): Promise<AuthTokensDto> {
-    const tokens = await this.tokenService.issueForUser(user.id, user.isGuest);
+    const tokens = await this.tokenService.issueForUser(
+      user.id,
+      user.isGuest,
+      user.role,
+    );
     return { ...tokens, userId: user.id, isGuest: user.isGuest };
   }
 }

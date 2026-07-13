@@ -1,6 +1,9 @@
 import { Column, Entity } from 'typeorm';
+import { Roles } from '@litmatch/common-dtos';
 
 import { BaseAppEntity } from '../../../common/entities/base.entity';
+
+import type { Role } from '@litmatch/common-dtos';
 
 export enum Gender {
   Unknown = 'unknown',
@@ -40,4 +43,13 @@ export class User extends BaseAppEntity {
 
   @Column({ default: false })
   isGuest!: boolean;
+
+  /**
+   * RBAC (docs/12 § 12.7 Task 0) — nhúng vào access token lúc issue/refresh, không nhận từ
+   * client. `type: 'varchar'` tường minh bắt buộc: `Role` là type alias (không phải class/enum
+   * runtime như Gender/UserStatus) nên reflect-metadata không suy ra được cột từ TS type —
+   * thiếu `type` thì TypeORM báo "Data type Object... not supported".
+   */
+  @Column({ type: 'varchar', length: 16, default: Roles.User })
+  role!: Role;
 }

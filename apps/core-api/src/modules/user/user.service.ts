@@ -74,6 +74,36 @@ export class UserService {
       .execute();
   }
 
+  /**
+   * Nhận `manager` để AdminModule ghi CÙNG transaction với audit log (atomic — hành động
+   * nhạy cảm không được thành công 1 nửa: đổi status mà audit fail hoặc ngược lại).
+   */
+  async banUser(manager: EntityManager, userId: string): Promise<User> {
+    return this.setStatus(manager, userId, UserStatus.Banned);
+  }
+
+  async unbanUser(manager: EntityManager, userId: string): Promise<User> {
+    return this.setStatus(manager, userId, UserStatus.Active);
+  }
+
+  private async setStatus(
+    manager: EntityManager,
+    userId: string,
+    status: UserStatus,
+  ): Promise<User> {
+    const repo = manager.getRepository(User);
+    const user = await repo.findOneBy({ id: userId });
+    if (!user) {
+      throw new DomainException(
+        UserErrors.PROFILE_NOT_FOUND,
+        'Không tìm thấy user',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    user.status = status;
+    return repo.save(user);
+  }
+
   async updateProfile(userId: string, dto: UpdateProfileDto): Promise<User> {
     const user = await this.getByIdOrThrow(userId);
 

@@ -2,10 +2,13 @@ import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { Roles } from '@litmatch/common-dtos';
 
 import { TokenService } from './token.service';
 import { AuthErrors } from '../auth.errors';
 import { RefreshToken } from '../entities/refresh-token.entity';
+
+import { UserService } from '../../user';
 
 describe('TokenService', () => {
   const repo = {
@@ -20,6 +23,9 @@ describe('TokenService', () => {
       (key: string) =>
         ({ JWT_ACCESS_TTL_SECONDS: 900, AUTH_REFRESH_TTL_DAYS: 30 })[key],
     ),
+  };
+  const userService = {
+    getByIdOrThrow: jest.fn().mockResolvedValue({ id: 'u1', role: Roles.User }),
   };
   let service: TokenService;
 
@@ -43,13 +49,14 @@ describe('TokenService', () => {
         { provide: getRepositoryToken(RefreshToken), useValue: repo },
         { provide: JwtService, useValue: jwt },
         { provide: ConfigService, useValue: config },
+        { provide: UserService, useValue: userService },
       ],
     }).compile();
     service = moduleRef.get(TokenService);
   });
 
   it('issueForUser trả cặp token, lưu HASH chứ không lưu plaintext', async () => {
-    const tokens = await service.issueForUser('u1', false);
+    const tokens = await service.issueForUser('u1', false, Roles.User);
     expect(tokens.accessToken).toBe('access.jwt');
     expect(tokens.refreshToken.length).toBeGreaterThan(40);
     const saved = repo.save.mock.calls[0][0] as RefreshToken;
@@ -63,6 +70,22 @@ describe('TokenService', () => {
     const result = await service.rotate('refresh-plain');
     expect(result.userId).toBe('u1');
     expect(result.tokens.refreshToken).toBeDefined();
+  });
+
+  it('rotate nhúng role HIỆN TẠI từ DB, không phải role cũ lúc login trước đó', async () => {
+    repo.findOneBy.mockResolvedValue(storedToken());
+    repo.update.mockResolvedValue({ affected: 1 });
+    userService.getByIdOrThrow.mockResolvedValue({
+      id: 'u1',
+      role: Roles.Admin, // nâng quyền từ user → admin giữa 2 lần refresh
+    });
+
+    await service.rotate('refresh-plain');
+
+    expect(jwt.signAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ role: Roles.Admin }),
+      expect.anything(),
+    );
   });
 
   it('token không tồn tại / hết hạn / đã revoke → AUTH_REFRESH_TOKEN_INVALID', async () => {

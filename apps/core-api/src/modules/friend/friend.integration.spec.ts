@@ -2,6 +2,7 @@ import { DataSource } from 'typeorm';
 
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
 import { InitAuthUser1751900000000 } from '../../database/migrations/1751900000000-init-auth-user';
+import { UserRole1753600000000 } from '../../database/migrations/1753600000000-user-role';
 import { MatchingCore1752200000000 } from '../../database/migrations/1752200000000-matching-core';
 import { MatchingGenderPreference1752300000000 } from '../../database/migrations/1752300000000-matching-gender-preference';
 import { SoulMatch1752400000000 } from '../../database/migrations/1752400000000-soul-match';
@@ -120,6 +121,7 @@ d('Friend integration (Postgres thật)', () => {
       ],
       migrations: [
         InitAuthUser1751900000000,
+        UserRole1753600000000,
         MatchingCore1752200000000,
         MatchingGenderPreference1752300000000,
         SoulMatch1752400000000,
