@@ -22,6 +22,10 @@
       "options": {
         "args": ["--port=4300"]
       }
+    },
+    "e2e": {
+      "// note": "e2e tự khởi core-api riêng qua playwright.config.mts (PORT riêng, không qua nx serve — tránh Nx continuous-task singleton lock khi chạy song song core-api-e2e). Cần migration-run chạy trước vì Nx không tự suy ra phụ thuộc đó (không dùng nx serve).",
+      "dependsOn": ["core-api:migration-run"]
     }
   }
 }

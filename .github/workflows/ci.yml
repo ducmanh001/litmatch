@@ -19,6 +19,10 @@ env:
   AUTH_OTP_PEPPER: ci-only-pepper-0123456789
   DATABASE_URL: postgresql://litmatch:litmatch_local@localhost:5432/litmatch
   REDIS_URL: redis://localhost:6379/15
+  # web:e2e (Playwright, browser thật) gọi core-api cross-origin — thiếu biến này thì
+  # CORS_ORIGINS mặc định rỗng (deny-by-default, ADR 0007/Task 0), browser bị chặn ngay ở
+  # preflight, request không bao giờ thành công (không phải app lỗi — do CI thiếu config).
+  CORS_ORIGINS: http://localhost:4200,http://localhost:4300
   NEXT_PUBLIC_API_URL: http://localhost:3000
   NEXT_PUBLIC_SOCKET_URL: http://localhost:3001
   NEXT_PUBLIC_LIVEKIT_URL: ws://localhost:7880

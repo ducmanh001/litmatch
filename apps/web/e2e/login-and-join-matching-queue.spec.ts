@@ -34,10 +34,13 @@ test('đăng nhập OTP, session sống sót qua reload, vào hàng đợi ghép
 
   await expect(page.getByText('Đang tìm người ghép đôi')).toBeVisible();
 
-  // Chờ đúng 1 chu kỳ poll thật (refetchInterval 3s, api.ts) — xác nhận ticket vẫn giữ trạng
-  // thái queued sau khi poll lại, không rớt phiên giữa đường.
-  await page.waitForResponse((res) =>
+  // Chờ đúng 1 chu kỳ poll thật (refetchInterval 3s, api.ts) — assert vào status code, KHÔNG
+  // phải text UI cụ thể: máy dev/CI có thể còn ticket "soul + any" từ lần chạy trước đang chờ
+  // trong queue thật, nên 2 ticket có thể match NHAU giữa lúc test chạy (đúng hành vi nghiệp vụ,
+  // không phải lỗi) — cái cần xác nhận cho ADR 0007 là request sau reload vẫn được xác thực
+  // (200), không phải ticket còn 'queued' hay đã 'matched'.
+  const pollResponse = await page.waitForResponse((res) =>
     res.url().includes('/api/v1/matching/tickets/'),
   );
-  await expect(page.getByText('Đang tìm người ghép đôi')).toBeVisible();
+  expect(pollResponse.status()).toBe(200);
 });
