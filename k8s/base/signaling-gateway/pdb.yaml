@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: signaling-gateway
+  namespace: litmatch
+  labels:
+    app.kubernetes.io/name: signaling-gateway
+    app.kubernetes.io/part-of: litmatch
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: signaling-gateway

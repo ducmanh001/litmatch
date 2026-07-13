@@ -2,6 +2,8 @@
 # Media server KHÔNG chứa business logic (docs/03 § 3.3) — chỉ là config + deployment.
 # Production: keys lấy từ secret manager, không commit key thật vào repo.
 port: 7880
+# Prometheus metrics nội bộ của LiveKit (docs/07 Giai đoạn 6) — cổng riêng, khác control port
+prometheus_port: 6789
 rtc:
   tcp_port: 7881
   port_range_start: 50000

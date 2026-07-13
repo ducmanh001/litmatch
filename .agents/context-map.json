@@ -172,7 +172,9 @@
       ".agents",
       "scripts",
       "docker-compose.yml",
-      "package.json"
+      "package.json",
+      "k8s",
+      "loadtest"
     ],
     "checks": ["pnpm agent:verify infra"]
   },

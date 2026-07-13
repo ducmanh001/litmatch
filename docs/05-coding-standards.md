@@ -73,7 +73,7 @@ Tóm tắt bắt buộc:
 - 4xx cho lỗi client/nghiệp vụ (validate, quyền, trạng thái không cho phép); 5xx chỉ cho lỗi hệ thống — `DomainException` không bao giờ map ra 500.
 - **Bug/bất biến nội bộ bị vi phạm (không phải lỗi client) → `throw new Error(...)` thường, KHÔNG bọc `DomainException`**: dữ liệu inconsistent ("dữ liệu hỏng"), caller gọi sai hợp đồng (tham số phải dương mà nhận âm, thiếu field bắt buộc do lỗi lập trình chứ không phải do request), guard "không bao giờ xảy ra" — những chỗ này không có mã lỗi nghiệp vụ để đặt tên trong `*.errors.ts`, cứ để rơi qua global exception filter mặc định thành 500. `DomainException` chỉ dành cho lỗi đã đặt tên, client sửa được (đủ tiền, sai trạng thái, thiếu quyền...).
 - `httpStatus` của `DomainException` truyền bằng enum `HttpStatus` của `@nestjs/common` (`HttpStatus.CONFLICT`, không phải `409`) — nhất quán với `@HttpCode(HttpStatus.OK)` ở controller (docs/10 § 10.1.G).
-- `traceId` hiện = request-id: lấy từ header `x-request-id` nếu client gửi, không thì UUID sinh tại entry (`libs/logger` `genReqId`) — trả trong mọi error response và ghi kèm mọi log line của request đó. Nâng lên trace context của OpenTelemetry khi dựng tracing thật (Giai đoạn 6/7) — docs mô tả hiện trạng, không mô tả thứ chưa tồn tại như đã có.
+- `traceId` trong error response/mọi log line = request-id: lấy từ header `x-request-id` nếu client gửi, không thì UUID sinh tại entry (`libs/logger` `genReqId`). Từ Giai đoạn 6, mỗi log line còn có thêm `trace_id`/`span_id` của OpenTelemetry (tự động qua `@opentelemetry/instrumentation-pino`, xem `libs/observability/src/lib/tracing.ts`) khi `OTEL_EXPORTER_OTLP_ENDPOINT` được cấu hình — 2 id khác mục đích: request-id ổn định xuyên vòng đời 1 request kể cả khi tracing tắt, trace_id/span_id dùng để nhảy sang dashboard trace khi tracing bật.
 
 ## 5.6 Naming convention
 
@@ -87,7 +87,12 @@ Tóm tắt bắt buộc:
 
 - Structured JSON log (pino qua logger lib chung ở `libs/logger`) — cấm `console.log`. Mỗi line tối thiểu: timestamp, level, context (module), traceId, message.
 - **Cấm log PII/secret**: token, password, OTP, receipt IAP, nội dung tin nhắn, số dư gắn kèm danh tính đầy đủ — danh sách field cấm log (redact list) đặt tập trung trong `libs/logger`, không tự nhớ ở từng chỗ. Ngoại lệ duy nhất: provider **dev-only bị chặn cứng ở production** (throw lúc bootstrap nếu `NODE_ENV=production`, vd `DevSmsProvider`) được log nội dung gửi đi — đó là kênh nhận OTP duy nhất ở local/test; impl thật thì tuân thủ đầy đủ.
-- Metrics Prometheus đặt tên `<domain>_<subject>_<đơn_vị>`: `matching_queue_wait_seconds`, `economy_ledger_write_failures_total`.
+- Metrics Prometheus đặt tên `<domain>_<subject>_<đơn_vị>` — ví dụ thật đã ship từ Giai đoạn 6
+  (`libs/observability`, đăng ký registry riêng mỗi process qua `METRICS_REGISTRY`, phơi qua
+  `/metrics` không JWT/không throttle): `matching_ticket_wait_seconds` (histogram, `MatchingMetrics`),
+  `call_ended_total{reason}` (counter, `CallingMetrics`), `economy_transaction_total{type,result}`
+  (counter, `EconomyMetrics` — ghi tại điểm duy nhất `LedgerService.record()`), cộng
+  `http_request_duration_seconds{method,route,status_code}` dùng chung mọi app.
 - Audit log cho hành động nhạy cảm ([06-domain-rules.md](./06-domain-rules.md)) là **bảng DB append-only** (dữ liệu nghiệp vụ), không phải log text.
 
 ## 5.8 Security baseline

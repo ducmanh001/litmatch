@@ -2,6 +2,7 @@ import { Inject, Module, OnApplicationShutdown } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { MatchingController } from './matching.controller';
+import { MatchingMetrics } from './matching.metrics';
 import { MatchingService } from './matching.service';
 import { MatcherWorkerService } from './jobs/matcher-worker.service';
 import { TicketSweeperService } from './jobs/ticket-sweeper.service';
@@ -30,6 +31,7 @@ import type Redis from 'ioredis';
   controllers: [MatchingController],
   providers: [
     MatchingService,
+    MatchingMetrics,
     MatcherWorkerService,
     TicketSweeperService,
     matchingRedisProvider,

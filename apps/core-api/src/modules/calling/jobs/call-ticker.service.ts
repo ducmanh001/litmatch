@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DomainException } from '@litmatch/common-exceptions';
+import { withSpan } from '@litmatch/observability';
 import { DataSource, LessThan } from 'typeorm';
 
 import { callTickIdempotencyKey } from '../calling.constants';
@@ -71,8 +72,13 @@ export class CallTickerService
     if (this.running) return; // tick trước chưa xong thì bỏ qua, không chồng
     this.running = true;
     try {
-      await this.sweepPending();
-      await this.processActiveCalls();
+      // Bọc span thủ công — tick không có parent context tự nhiên (docs/07 GĐ6, cùng lý do
+      // MatcherWorkerService), giúp thấy nguyên vẹn 1 tick billing chạm cả Calling lẫn Economy
+      // (spendDiamond) trong 1 trace.
+      await withSpan('litmatch.calling', 'calling.ticker.tick', async () => {
+        await this.sweepPending();
+        await this.processActiveCalls();
+      });
     } finally {
       this.running = false;
     }

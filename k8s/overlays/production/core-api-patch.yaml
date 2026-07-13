@@ -1,0 +1,20 @@
+# Production: baseline replicas cao hơn để chịu traffic thật + có headroom trước khi HPA kịp
+# scale thêm; resource limit nới hơn base. Số liệu khởi điểm, điều chỉnh theo benchmark thật.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: core-api
+  namespace: litmatch
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+        - name: core-api
+          resources:
+            requests:
+              cpu: '750m'
+              memory: '768Mi'
+            limits:
+              cpu: '1500m'
+              memory: '1536Mi'

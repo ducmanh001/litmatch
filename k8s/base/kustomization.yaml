@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - core-api
+  - signaling-gateway
+  - media-server
+images:
+  - name: ghcr.io/litmatch/core-api
+    newTag: latest
+  - name: ghcr.io/litmatch/signaling-gateway
+    newTag: latest

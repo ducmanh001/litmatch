@@ -1,0 +1,9 @@
+# Namespace duy nhất cho toàn bộ baseline 3 deployable backend (AGENTS.md luật 1,
+# docs/03-architecture.md § 3.2). Không tạo namespace riêng cho từng app — giữ đơn giản ở quy mô
+# hiện tại, có thể tách sau nếu multi-tenant/multi-team cần cô lập RBAC riêng (chưa có nhu cầu này).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: litmatch
+  labels:
+    app.kubernetes.io/part-of: litmatch

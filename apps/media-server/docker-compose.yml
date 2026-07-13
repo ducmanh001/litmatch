@@ -10,6 +10,7 @@ services:
       - '7880:7880'
       - '7881:7881'
       - '50000-50200:50000-50200/udp'
+      - '6789:6789' # Prometheus metrics nội bộ LiveKit (docs/07 Giai đoạn 6)
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml:ro
     extra_hosts:

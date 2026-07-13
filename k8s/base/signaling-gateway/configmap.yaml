@@ -1,0 +1,16 @@
+# ConfigMap signaling-gateway — đối chiếu apps/signaling-gateway/src/config/env.validation.ts
+# (SignalingEnv). JWT_SECRET và REDIS_URL là credential/connection-string → secret.yaml, không ở đây.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: signaling-gateway-config
+  namespace: litmatch
+  labels:
+    app.kubernetes.io/name: signaling-gateway
+    app.kubernetes.io/part-of: litmatch
+data:
+  NODE_ENV: 'production'
+  LOG_LEVEL: 'info'
+  SIGNALING_PORT: '3001'
+  # Điểm mở: điền domain FE thật khi có — KHÔNG dùng '*'
+  CORS_ORIGINS: ''

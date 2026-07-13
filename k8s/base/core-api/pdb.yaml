@@ -1,0 +1,16 @@
+# minAvailable=1 hợp lý với baseline minReplicas=2 (hpa.yaml) — cho phép rolling upgrade/node
+# drain lấy đi 1 pod mà không làm gián đoạn hoàn toàn service. Nếu sau này minReplicas tăng, cân
+# nhắc đổi sang tỉ lệ % thay vì số tuyệt đối.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: core-api
+  namespace: litmatch
+  labels:
+    app.kubernetes.io/name: core-api
+    app.kubernetes.io/part-of: litmatch
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: core-api

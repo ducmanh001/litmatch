@@ -1,0 +1,50 @@
+# Phương án thay thế cho loadtest/signaling-ws.js — dùng khi framing k6 tự viết tay (Engine.IO/
+# Socket.IO) không hoạt động đúng hoặc cần độ tin cậy cao hơn cho test WebSocket namespace thật.
+#
+# Artillery + plugin cộng đồng `artillery-engine-socketio-v3` có CLIENT Socket.IO thật (dùng đúng
+# `socket.io-client`), không tự viết tay framing — đáng tin hơn cho `/signaling` namespace.
+#
+# CHƯA CHẠY THỬ file này (agent không có quyền cài binary/package ngoài môi trường) — cấu hình
+# dưới đây là bản sketch theo tài liệu công khai của plugin, CẦN xác minh lại tên field chính xác
+# (đặc biệt `namespace`/`auth`) với version plugin thật sự cài, vì community plugin ít khi giữ API
+# ổn định giữa các version. Cài đặt trước khi dùng:
+#
+#   npm install --no-save artillery artillery-engine-socketio-v3
+#   ACCESS_TOKEN=<token thật lấy qua POST /api/v1/auth/guest> \
+#     npx artillery run loadtest/signaling-ws.artillery.yml
+#
+# Nếu plugin không hỗ trợ field nào bên dưới, đọc README của chính plugin
+# (https://www.npmjs.com/package/artillery-engine-socketio-v3) để đối chiếu — đừng đoán mù rồi
+# tin số liệu.
+
+config:
+  target: 'ws://localhost:3001'
+  engines:
+    socketio-v3: {}
+  phases:
+    - name: warm-up
+      duration: 30
+      arrivalRate: 5
+    - name: sustained
+      duration: 120
+      arrivalRate: 20
+  # Ngưỡng khởi điểm — không phải SLO thật, điều chỉnh khi có traffic production (giống mọi
+  # threshold khác trong loadtest/, xem README).
+  ensure:
+    p95: 1500
+    maxErrorRate: 5
+
+scenarios:
+  - name: 'signaling connect + hold + ping'
+    engine: socketio-v3
+    flow:
+      # `namespace` và `auth` CẦN xác minh đúng tên field với plugin thật — đây là chỗ nhiều khả
+      # năng phải sửa sau khi cài. Mục tiêu: mở namespace `/signaling` với
+      # `handshake.auth.token = ACCESS_TOKEN` (đúng field signaling.gateway.ts đọc).
+      - namespace: '/signaling'
+        auth:
+          token: '{{ $processEnvironment.ACCESS_TOKEN }}'
+      - emit:
+          channel: 'ping'
+          data: {}
+      - think: 20

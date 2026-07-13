@@ -1,3 +1,4 @@
+import { Registry } from 'prom-client';
 import { DataSource } from 'typeorm';
 
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
@@ -20,6 +21,7 @@ import { PartyRoomService } from '../party-room/party-room.service';
 import { PartyRoom } from '../party-room/entities/party-room.entity';
 import { PartyRoomMember } from '../party-room/entities/party-room-member.entity';
 import { EconomyService } from '../economy/economy.service';
+import { EconomyMetrics } from '../economy/economy.metrics';
 import { LedgerService } from '../economy/services/ledger.service';
 import { LedgerAccount } from '../economy/entities/ledger-account.entity';
 import { LedgerEntry } from '../economy/entities/ledger-entry.entity';
@@ -217,7 +219,7 @@ d('Gift integration (Postgres thật)', () => {
     await ds.initialize();
     await ds.runMigrations();
 
-    const ledger = new LedgerService(ds);
+    const ledger = new LedgerService(ds, new EconomyMetrics(new Registry()));
     const stubVerifier = {
       verify: async (_p: IapProvider, payload: Record<string, unknown>) => ({
         providerTransactionId: String(payload['devTransactionId']),

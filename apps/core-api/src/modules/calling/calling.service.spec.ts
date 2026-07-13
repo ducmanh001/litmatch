@@ -82,6 +82,7 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
   let manager: { findOne: jest.Mock; save: jest.Mock };
   let dataSource: { transaction: jest.Mock };
   let redis: { publish: jest.Mock };
+  let metrics: { recordEnded: jest.Mock };
   let service: CallingService;
 
   beforeEach(() => {
@@ -106,6 +107,7 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
       ),
     };
     redis = { publish: jest.fn(async () => 1) };
+    metrics = { recordEnded: jest.fn() };
     service = new CallingService(
       dataSource as never,
       callRepo as unknown as Repository<CallSession>,
@@ -113,6 +115,7 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
       livekit as unknown as LivekitRoomPort,
       configStub,
       redis as never,
+      metrics as never,
     );
   });
 
@@ -261,6 +264,8 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
       expect(first.justEnded).toBe(true);
       expect(livekit.deleteRoom).toHaveBeenCalledWith(call.roomName);
       expect(redis.publish).toHaveBeenCalledTimes(2);
+      expect(metrics.recordEnded).toHaveBeenCalledTimes(1);
+      expect(metrics.recordEnded).toHaveBeenCalledWith(CallEndReason.Completed);
       for (const [channel, raw] of redis.publish.mock.calls as [
         string,
         string,
@@ -279,10 +284,12 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
 
       livekit.deleteRoom.mockClear();
       redis.publish.mockClear();
+      metrics.recordEnded.mockClear();
       const second = await service.endById(call.id, CallEndReason.Completed);
       expect(second.justEnded).toBe(false);
       expect(livekit.deleteRoom).not.toHaveBeenCalled();
       expect(redis.publish).not.toHaveBeenCalled();
+      expect(metrics.recordEnded).not.toHaveBeenCalled(); // idempotent — không đếm lặp
     });
 
     it('deleteRoom lỗi (room đã tự đóng) → vẫn end + vẫn publish (best-effort)', async () => {
@@ -292,6 +299,7 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
       const result = await service.endById(call.id, CallEndReason.FreeLimit);
       expect(result.justEnded).toBe(true);
       expect(redis.publish).toHaveBeenCalledTimes(2);
+      expect(metrics.recordEnded).toHaveBeenCalledWith(CallEndReason.FreeLimit);
     });
   });
 });

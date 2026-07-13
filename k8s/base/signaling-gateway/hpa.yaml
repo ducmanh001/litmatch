@@ -1,0 +1,37 @@
+# CPU thấp nên target utilization thấp hơn core-api (connection-bound scale không tuyến tính
+# theo CPU); memory là tín hiệu thực tế hơn cho tải kết nối. Follow-up CHƯA làm: scale theo custom
+# metric "số connection Socket.IO hiện tại" (Prometheus, Giai đoạn 6 metrics) cần prometheus-adapter
+# — không tự bịa cấu hình khi chưa có metric thật để kiểm chứng ngưỡng.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: signaling-gateway
+  namespace: litmatch
+  labels:
+    app.kubernetes.io/name: signaling-gateway
+    app.kubernetes.io/part-of: litmatch
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: signaling-gateway
+  minReplicas: 2
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+    scaleUp:
+      stabilizationWindowSeconds: 60
