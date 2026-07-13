@@ -1,0 +1,29 @@
+# Expose core-api ra ngoài cluster qua nginx-ingress controller — API Gateway đã chốt
+# (docs/adr/0004-api-gateway-nginx-ingress.md). REST thuần, không cần sticky session.
+# TLS/cert-manager là quyết định follow-on (ADR 0004 § Hệ quả) — CHƯA khai `tls:`, production
+# thật phải bổ sung trước khi mở traffic công khai.
+# Host là PLACEHOLDER theo convention REPLACE_ME của repo (xem secret.yaml) — viết dạng
+# DNS-hợp-lệ (lowercase + gạch ngang, TLD .invalid dành riêng theo RFC 2606) để manifest vẫn
+# qua được schema validation; PHẢI thay bằng hostname thật của môi trường lúc deploy.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: core-api
+  namespace: litmatch
+  labels:
+    app.kubernetes.io/name: core-api
+    app.kubernetes.io/part-of: litmatch
+spec:
+  ingressClassName: nginx
+  rules:
+    # REPLACE_ME: hostname thật của core-api (vd api.<domain>)
+    - host: replace-me-core-api.litmatch.invalid
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: core-api
+                port:
+                  name: http

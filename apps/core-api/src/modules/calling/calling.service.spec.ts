@@ -20,6 +20,8 @@ import type { LivekitRoomPort } from './ports/livekit-room';
 const CONFIG: Record<string, unknown> = {
   CALLING_TOKEN_TTL_SECONDS: 120,
   LIVEKIT_URL: 'ws://localhost:7880',
+  // mặc định single-region (backward compat) — test multi-region tự override rồi trả lại
+  LIVEKIT_REGION_URLS: '',
 };
 const configStub = {
   getOrThrow: (key: string) => {
@@ -83,6 +85,7 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
   let dataSource: { transaction: jest.Mock };
   let redis: { publish: jest.Mock };
   let metrics: { recordEnded: jest.Mock };
+  let userService: { getByIdOrThrow: jest.Mock };
   let service: CallingService;
 
   beforeEach(() => {
@@ -108,12 +111,19 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
     };
     redis = { publish: jest.fn(async () => 1) };
     metrics = { recordEnded: jest.fn() };
+    userService = {
+      getByIdOrThrow: jest.fn(async (id: string) => ({
+        id,
+        region: null,
+      })),
+    };
     service = new CallingService(
       dataSource as never,
       callRepo as unknown as Repository<CallSession>,
       matchingService as never,
       livekit as unknown as LivekitRoomPort,
       configStub,
+      userService as never,
       redis as never,
       metrics as never,
     );
@@ -191,6 +201,60 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
       callRepo.findOneByOrFail.mockResolvedValue(existing);
       const result = await service.joinCall(me, 'session-1');
       expect(result.call).toBe(existing);
+    });
+  });
+
+  describe('joinCall — chọn LiveKit URL theo region (GĐ7, ADR 0005)', () => {
+    const REGION_URLS = JSON.stringify({
+      SEA: 'wss://sea.livekit.example',
+      EU: 'wss://eu.livekit.example',
+    });
+
+    function stubRegions(regionA: string | null, regionB: string | null): void {
+      userService.getByIdOrThrow.mockImplementation(async (id: string) => ({
+        id,
+        region: id === me.userId ? regionA : regionB,
+      }));
+    }
+
+    beforeEach(() => {
+      CONFIG.LIVEKIT_REGION_URLS = REGION_URLS;
+    });
+    afterEach(() => {
+      CONFIG.LIVEKIT_REGION_URLS = ''; // trả lại default single-region cho test khác
+    });
+
+    it('map rỗng (single-region hôm nay) → trả LIVEKIT_URL, KHÔNG query region — y hệt trước', async () => {
+      CONFIG.LIVEKIT_REGION_URLS = '';
+      const result = await service.joinCall(me, 'session-1');
+      expect(result.livekitUrl).toBe('ws://localhost:7880');
+      expect(userService.getByIdOrThrow).not.toHaveBeenCalled();
+    });
+
+    it('2 bên cùng region có trong map → URL của region đó (theo userA — tất định)', async () => {
+      stubRegions('SEA', 'SEA');
+      const result = await service.joinCall(me, 'session-1');
+      expect(result.livekitUrl).toBe('wss://sea.livekit.example');
+    });
+
+    it('region không có trong map → fallback LIVEKIT_URL', async () => {
+      stubRegions('NA', 'NA');
+      const result = await service.joinCall(me, 'session-1');
+      expect(result.livekitUrl).toBe('ws://localhost:7880');
+    });
+
+    it('2 bên lệch region → KHÔNG throw, dùng region userA (defensive — matching shard theo region nên đây là edge hiếm)', async () => {
+      stubRegions('EU', 'SEA');
+      const result = await service.joinCall(me, 'session-1');
+      expect(result.livekitUrl).toBe('wss://eu.livekit.example');
+      expect(result.token).toBeDefined(); // call vẫn join bình thường
+    });
+
+    it('lookup region lỗi → fallback LIVEKIT_URL, join KHÔNG bị chặn', async () => {
+      userService.getByIdOrThrow.mockRejectedValue(new Error('db down'));
+      const result = await service.joinCall(me, 'session-1');
+      expect(result.livekitUrl).toBe('ws://localhost:7880');
+      expect(result.token).toBeDefined();
     });
   });
 

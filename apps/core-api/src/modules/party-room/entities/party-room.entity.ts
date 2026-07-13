@@ -46,6 +46,15 @@ export class PartyRoom {
   @Column({ type: 'int' })
   speakerLimit!: number;
 
+  /**
+   * SNAPSHOT URL LiveKit chốt theo region của HOST lúc tạo phòng (GĐ7 — ADR 0005): room sống
+   * trên 1 node/region, mọi participant vào sau nhận đúng URL này bất kể region của họ và bất
+   * kể LIVEKIT_REGION_URLS đổi giữa chừng — đổi config không bao giờ di chuyển phòng đang sống.
+   * NULL = phòng tạo trước migration này → fallback LIVEKIT_URL lúc trả về.
+   */
+  @Column({ type: 'varchar', length: 512, nullable: true })
+  livekitUrl!: string | null;
+
   @Column({ type: 'varchar', length: 32, nullable: true })
   closeReason!: PartyRoomCloseReason | null;
 

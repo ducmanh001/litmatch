@@ -113,6 +113,13 @@ Luồng `Matching → Calling → Economy` chạm vào nhiều module, không th
 - Multi-region cần đo latency và placement thực tế: room mới ưu tiên node phù hợp theo region/load;
   người vào room đang tồn tại phải đi tới room đó, không được hứa mọi participant luôn có media
   path gần nhất.
+- **Đã chốt (ADR 0005)**: networking RTC multi-node trong k8s dùng `hostNetwork: true`
+  (`k8s/base/media-server`). Tầng ứng dụng chọn endpoint theo region qua `LIVEKIT_REGION_URLS`
+  (map region → URL, fallback `LIVEKIT_URL`; mọi URL cùng MỘT cụm LiveKit chung Redis): Party Room
+  ghim URL theo region của host lúc tạo (snapshot cột `livekit_url`), Calling resolve theo region
+  của userA trong session (2 bên cùng region theo shard matching § 3.8.B). ADR 0005 KHÔNG đổi trần
+  "một room vừa một node" — tăng replica media-server vẫn chờ benchmark thật.
+- Edge/API Gateway expose core-api/signaling-gateway đã chốt nginx-ingress (ADR 0004).
 - Capacity phải được chứng minh bằng benchmark theo workload của dự án và dashboard production.
   Không dùng con số marketing hoặc benchmark khác codec/bitrate làm SLO. Party Room phải giữ cap
   cứng cho tới khi có bằng chứng tải; nhu cầu room lớn hơn một node là một quyết định kiến trúc mới.

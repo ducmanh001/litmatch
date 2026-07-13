@@ -12,11 +12,16 @@ import {
 } from './ports/livekit-party-room';
 import { PARTY_REDIS, partyRedisProvider } from './redis/party-redis.provider';
 import { PartyLivekitWebhookController } from './webhooks/party-livekit-webhook.controller';
+import { UserModule } from '../user';
 
 import type Redis from 'ioredis';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([PartyRoom, PartyRoomMember])],
+  imports: [
+    TypeOrmModule.forFeature([PartyRoom, PartyRoomMember]),
+    // đọc User.region của host để chốt LiveKit URL theo region lúc tạo phòng (GĐ7 — ADR 0005)
+    UserModule,
+  ],
   controllers: [PartyRoomController, PartyLivekitWebhookController],
   providers: [
     PartyRoomService,
