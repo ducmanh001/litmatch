@@ -164,10 +164,11 @@ theo custom metric Prometheus (vd độ sâu matching queue) cần thêm `promet
 liệu/quyết định thật mới mở khoá được, không phải do thiếu công sức: bung shard/worker theo region
 (mục 2) và tách service theo § 3.4 (mục 4) cần **số liệu traffic production thật** — repo hiện không
 có traffic thật để đo, tự chọn ngưỡng sẽ vi phạm chính nguyên tắc "không hardcode threshold theo
-đoán" của repo này. Multi-region deployment (mục 5) bị chặn bởi hai quyết định kiến trúc chưa chốt
-ở `k8s/README.md` (chọn Ingress/API gateway, và ADR networking RTC multi-node hostNetwork vs
-NodePort cho LiveKit) — làm multi-region trước khi có ADR đó nghĩa là tự quyết kiến trúc thay đội,
-đúng thứ luật số 1 ở AGENTS.md cấm. CQRS Feed (mục 6) cần số liệu tỉ lệ đọc/ghi thật, chưa động tới
+đoán" của repo này. Multi-region deployment (mục 5): hai quyết định kiến trúc từng chặn đã được
+user chốt (ADR 0004 nginx-ingress + ADR 0005 hostNetwork, 2026-07-13) và phần nền tảng + cơ chế
+chọn URL theo region đã code xong — phần còn lại (routing traffic tới region gần nhất) chỉ bị chặn
+bởi việc chọn nhà cung cấp cloud/DNS, và hiện mới có 1 region thật nên chưa có gì để route giữa
+các region. CQRS Feed (mục 6) cần số liệu tỉ lệ đọc/ghi thật, chưa động tới
 trong đợt này — cùng lý do "không thiết kế cho nhu cầu giả định" (docs/11).
 
 ## Frontend track (song song, không thuộc số Giai đoạn backend)
