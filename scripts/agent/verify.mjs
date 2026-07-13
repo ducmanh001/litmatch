@@ -46,6 +46,12 @@ const scopes = {
     openapi: true,
     integration: true,
   },
+  content: {
+    projects: ['core-api'],
+    requiredTargets: ['lint', 'test', 'build'],
+    openapi: true,
+    integration: true,
+  },
   signaling: {
     projects: ['signaling-gateway'],
     requiredTargets: ['lint', 'test', 'build'],

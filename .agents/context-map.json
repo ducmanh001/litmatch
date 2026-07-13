@@ -117,6 +117,35 @@
     ],
     "checks": ["pnpm agent:verify signaling"]
   },
+  "content": {
+    "description": "Content phụ trợ Giai đoạn 5: Movie Match (đồng bộ playback qua WebSocket, tái dùng Friend Chat), Palm Match (template random theo input), Mini game (rock-paper-scissors 2 người, thấp ưu tiên nhất)",
+    "read": [
+      "AGENTS.md",
+      "apps/core-api/AGENTS.md",
+      "docs/02-domain-model.md",
+      "docs/03-architecture.md",
+      "docs/06-domain-rules.md",
+      "docs/services/friend-service.md",
+      "docs/services/realtime-gateway.md",
+      "docs/services/movie-match-service.md",
+      "docs/services/palm-match-service.md",
+      "docs/services/mini-game-service.md",
+      "docs/10-code-review-checklist.md"
+    ],
+    "paths": [
+      "apps/core-api/src/modules/movie-match",
+      "apps/core-api/src/modules/palm-match",
+      "apps/core-api/src/modules/mini-game"
+    ],
+    "invariants": [
+      "Movie Match/Mini game chỉ cho phép giữa 2 user đã là bạn (Friendship có sẵn) — không tự chế quan hệ mới",
+      "Movie Match tái dùng Conversation của Friend Chat cho chat, không tạo chat riêng",
+      "Playback state là UX ephemeral, không phải nguồn sự thật tài chính — last-write-wins chấp nhận được, KHÔNG áp lock kiểu ledger",
+      "Mini game: move của 1 bên không được lộ cho bên kia trước khi cả 2 đã nộp move",
+      "1 user chỉ có 1 Movie Match session / 1 Mini game session active tại 1 thời điểm (cùng tinh thần 1-user-1-queue)"
+    ],
+    "checks": ["pnpm agent:verify content"]
+  },
   "media": {
     "description": "LiveKit/SFU và media runtime",
     "read": [

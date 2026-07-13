@@ -22,7 +22,10 @@ import { FeedModule } from '../modules/feed';
 import { FriendModule } from '../modules/friend';
 import { GiftModule } from '../modules/gift';
 import { MatchingModule } from '../modules/matching';
+import { MiniGameModule } from '../modules/mini-game';
+import { MovieMatchModule } from '../modules/movie-match';
 import { NotificationModule } from '../modules/notification';
+import { PalmMatchModule } from '../modules/palm-match';
 import { PartyRoomModule } from '../modules/party-room';
 import { SafetyModule } from '../modules/safety';
 import { SoulMatchModule } from '../modules/soul-match';
@@ -81,6 +84,9 @@ import { ReadinessService } from './readiness.service';
     FeedModule,
     NotificationModule,
     AvatarModule,
+    MovieMatchModule,
+    PalmMatchModule,
+    MiniGameModule,
   ],
   controllers: [HealthController],
   providers: [

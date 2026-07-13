@@ -917,6 +917,159 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/movie-match/sessions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Tạo phiên xem chung với 1 bạn — idempotent (trả lại session cũ nếu đã active đúng cặp) */
+    post: operations['MovieMatchController_createSession'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/movie-match/sessions/{id}/state': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Cập nhật playback state (last-write-wins, không lock) — publish cho bên còn lại */
+    patch: operations['MovieMatchController_updateState'];
+    trace?: never;
+  };
+  '/api/v1/movie-match/sessions/{id}/end': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Kết thúc phiên xem chung — chỉ 1 trong 2 participant */
+    post: operations['MovieMatchController_endSession'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/movie-match/sessions/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** State hiện tại — poll fallback cho realtime */
+    get: operations['MovieMatchController_getSession'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/palm-match/reading': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Nội dung bói toán giải trí — deterministic theo user + category + ngày server (guest dùng được) */
+    get: operations['PalmMatchController_getReading'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/mini-game/sessions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Tạo ván oẳn tù tì với 1 bạn — idempotent (trả lại ván cũ nếu đang chờ move đúng cặp) */
+    post: operations['MiniGameController_createSession'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/mini-game/sessions/{id}/moves': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Nộp move — chỉ nộp được 1 lần, không đổi lại được; resolve khi cả 2 đã nộp */
+    post: operations['MiniGameController_submitMove'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/mini-game/sessions/{id}/cancel': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Huỷ ván đang chờ move — chỉ 1 trong 2 participant */
+    post: operations['MiniGameController_cancelSession'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/mini-game/sessions/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** State hiện tại — poll fallback cho realtime; không lộ move đối phương trước khi resolved */
+    get: operations['MiniGameController_getSession'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1309,6 +1462,63 @@ export interface components {
     AvatarConfigDto: {
       userId: string;
       layers: components['schemas']['AvatarAssetDto'][];
+    };
+    CreateMovieSessionDto: {
+      /** @description userId của bạn muốn xem chung — phải đã là bạn */
+      friendUserId: string;
+      videoUrl: string;
+    };
+    MovieSessionDto: {
+      id: string;
+      /** @description userId của người bạn còn lại trong phiên (không phải caller) */
+      partnerUserId: string;
+      videoUrl: string;
+      positionSeconds: number;
+      isPlaying: boolean;
+      /** Format: date-time */
+      positionUpdatedAt: string;
+      status: string;
+      /** Format: date-time */
+      endedAt: string | null;
+      endReason: string | null;
+    };
+    UpdateMovieStateDto: {
+      /** @description Vị trí phát hiện tại (giây) */
+      positionSeconds: number;
+      isPlaying: boolean;
+    };
+    PalmMatchReadingDto: {
+      /** @enum {string} */
+      category: 'love' | 'career' | 'health' | 'general';
+      content: string;
+      /** @description Ngày server (UTC, YYYY-MM-DD) dùng làm seed */
+      forDate: string;
+    };
+    CreateMiniGameSessionDto: {
+      /** @description userId của bạn muốn chơi cùng — phải đã là bạn */
+      friendUserId: string;
+      /**
+       * @default rock_paper_scissors
+       * @enum {string}
+       */
+      gameType: 'rock_paper_scissors';
+    };
+    MiniGameSessionDto: {
+      id: string;
+      /** @description userId của người bạn còn lại trong ván (không phải caller) */
+      partnerUserId: string;
+      gameType: string;
+      status: string;
+      myMove: string | null;
+      opponentHasMoved: boolean;
+      opponentMove?: string | null;
+      winnerUserId: string | null;
+      /** Format: date-time */
+      resolvedAt: string | null;
+    };
+    SubmitMiniGameMoveDto: {
+      /** @enum {string} */
+      move: 'rock' | 'paper' | 'scissors';
     };
   };
   responses: never;
@@ -2936,6 +3146,253 @@ export interface operations {
         content: {
           'application/json': {
             data: components['schemas']['AvatarConfigDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  MovieMatchController_createSession: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateMovieSessionDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['MovieSessionDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  MovieMatchController_updateState: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateMovieStateDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['MovieSessionDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  MovieMatchController_endSession: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['MovieSessionDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  MovieMatchController_getSession: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['MovieSessionDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  PalmMatchController_getReading: {
+    parameters: {
+      query: {
+        category: 'love' | 'career' | 'health' | 'general';
+        targetName?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['PalmMatchReadingDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  MiniGameController_createSession: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateMiniGameSessionDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['MiniGameSessionDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  MiniGameController_submitMove: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SubmitMiniGameMoveDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['MiniGameSessionDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  MiniGameController_cancelSession: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['MiniGameSessionDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  MiniGameController_getSession: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['MiniGameSessionDto'];
             meta?: {
               [key: string]: unknown;
             };
