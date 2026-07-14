@@ -2936,6 +2936,158 @@
         "summary": "Duyệt user theo tiêu chí gender/tuổi — loại block/report 2 chiều, chỉ xem profile (chưa có CTA khác). Filter khu vực thuộc về Nearby (W5), chưa có ở đây.",
         "tags": ["discovery"]
       }
+    },
+    "/api/v1/mood/presets": {
+      "get": {
+        "operationId": "MoodController_listPresets",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/MoodPresetDto" }
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Catalog mood preset đang bật",
+        "tags": ["mood"]
+      }
+    },
+    "/api/v1/mood/status/me": {
+      "get": {
+        "operationId": "MoodController_getMyStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MoodStatusResponseDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Mood hiện tại của chính mình",
+        "tags": ["mood"]
+      }
+    },
+    "/api/v1/mood/status/{userId}": {
+      "get": {
+        "operationId": "MoodController_getStatus",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MoodStatusResponseDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Mood công khai của 1 user — ẩn nếu có block 2 chiều (docs/services/mood-service.md § 3)",
+        "tags": ["mood"]
+      }
+    },
+    "/api/v1/mood/status": {
+      "post": {
+        "operationId": "MoodController_setStatus",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SetMoodDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MoodStatusResponseDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Set mood theo preset — auto-approve (W1 preset-only)",
+        "tags": ["mood"]
+      },
+      "delete": {
+        "operationId": "MoodController_clearStatus",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Tắt mood hiện tại",
+        "tags": ["mood"]
+      }
     }
   },
   "info": {
@@ -4058,6 +4210,41 @@
           "nextCursor": { "type": "string", "nullable": true }
         },
         "required": ["items", "nextCursor"]
+      },
+      "MoodPresetDto": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "string" },
+          "label": { "type": "string" },
+          "emoji": { "type": "string" }
+        },
+        "required": ["code", "label", "emoji"]
+      },
+      "CurrentMoodDto": {
+        "type": "object",
+        "properties": {
+          "preset": { "$ref": "#/components/schemas/MoodPresetDto" },
+          "setAt": { "format": "date-time", "type": "string" },
+          "expiresAt": { "format": "date-time", "type": "string" }
+        },
+        "required": ["preset", "setAt", "expiresAt"]
+      },
+      "MoodStatusResponseDto": {
+        "type": "object",
+        "properties": {
+          "mood": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [{ "$ref": "#/components/schemas/CurrentMoodDto" }]
+          }
+        }
+      },
+      "SetMoodDto": {
+        "type": "object",
+        "properties": {
+          "presetCode": { "type": "string", "example": "happy" }
+        },
+        "required": ["presetCode"]
       }
     }
   }

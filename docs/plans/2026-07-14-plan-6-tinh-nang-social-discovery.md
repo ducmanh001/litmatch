@@ -198,7 +198,7 @@ match, Nearby đôn lên W4 (kèm CTA mời match), video thành W5.
 
 | Đợt    | Nội dung                                                                                                                                                                                                | Ước lượng BE       |
 | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| **W1** | Module `discovery` phần **browse-only** (migration + settings + browse filter + `getHiddenUserIds`) + module `mood` **preset-only**. _Browse đã code xong 2026-07-14 (chờ verify + commit); còn mood._  | ~4–6 ngày          |
+| **W1** | Module `discovery` phần **browse-only** + module `mood` **preset-only**. _HOÀN TẤT 2026-07-14 — cả 2 đã `review-module verify` PASS + commit (d48a161 discovery, mood cùng ngày)._                      | ~4–6 ngày          |
 | **W2** | **Streak** trong friend (entity + on-write + warning cron + DTO/realtime)                                                                                                                               | ~2–3 ngày          |
 | **W3** | **Feed P1** (audience) + **Stories P4** (entity, ring, seen, reply→DM)                                                                                                                                  | ~5–6 ngày          |
 | **W4** | **Nearby** (location + quantize/jitter + nearby endpoint + safety guard metrics, bật HCM/HN trước) + **CTA "mời Voice/Soul Match"** trên profile browse/nearby (§ 3.1)                                  | ~5–7 ngày          |

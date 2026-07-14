@@ -241,6 +241,31 @@
   matching/chat, chỉ ảnh hưởng 1 tính năng duyệt), nhưng rate-limit/pattern-detect cho report vẫn
   phải nằm ở Safety module, không phải việc của Discovery.
 
+**Mood status — append-only đơn giản nhưng dễ sai vì tưởng cần state machine**
+
+- **Update/xoá dòng `mood_status_events` thay vì insert dòng mới** — set/clear PHẢI append-only
+  (đúng tinh thần ledger/report); "mood hiện tại" derive từ dòng MỚI NHẤT khi đọc, không có cột
+  mutable nào đại diện trạng thái hiện tại.
+- **Cron dọn mood hết hạn thay vì derive-khi-đọc** — không có tài nguyên (SFU, ledger, resource
+  ngoài) cần dọn cho 1 dòng hết hạn; cron ở đây là over-engineering, chỉ cần so `expiresAt` với
+  giờ server tại thời điểm đọc.
+- **Thiếu unique constraint idempotency ở DB cho set/clear** — client retry (mất mạng) tạo 2 dòng
+  cho cùng 1 intent; đúng như Economy, check-rồi-insert ở code không đủ, phải là unique constraint
+  DB + catch unique-violation-rồi-đọc-lại.
+- **Thêm mood vào `PublicProfileDto` dùng chung** — DTO đó có bất biến ẩn danh dùng ở Soul Match
+  reveal + Friend list; mood phải là composition riêng (`getPublicMood`) do call site tự gộp, không
+  sửa DTO gốc.
+- **Wire `getPublicMood` vào card ẩn danh trước-match Soul Match** — phá invariant ẩn danh
+  (docs/06); đây là kỷ luật ở CALL SITE, không có cờ nào trong Mood service tự chặn được vì service
+  không biết ngữ cảnh gọi.
+- **Dùng nhầm `SafetyService.getHiddenUserIds` (bao gồm report) thay vì `getBlockedUserIds`** —
+  Mood chỉ ẩn theo block active (2 chiều), không xét report; nhầm hàm sẽ ẩn quá mức so với thiết
+  kế (khác Discovery, nơi report cũng ẩn vĩnh viễn — 2 tính năng có ngữ nghĩa khác nhau, không dùng
+  chung 1 hàm).
+- **Scaffold cột `status` (approve/pending) khi chưa ship free-text** — W1 chỉ preset (auto-approve
+  toàn bộ); thêm cột cho 1 tính năng (free-text + moderation) chưa có timeline là dựng abstraction
+  để dành (docs/11) — thêm bằng migration mới khi free-text thật sự ship.
+
 **Movie Match — phòng xem chung, dễ nhầm với Party Room/Calling nhưng KHÔNG có tiền/SFU**
 
 - **Tự chế lại quan hệ "được xem chung với ai"** thay vì tái dùng `Friendship` đã có — tạo bảng

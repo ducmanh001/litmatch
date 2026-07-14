@@ -32,6 +32,11 @@
   không phải số tuổi/ngày sinh) và **không sửa `PublicProfileDto`** dùng chung ở Soul Match
   reveal + Friend list (2 nơi đó có bất biến "giữ ẩn danh, không tuổi chính xác" từ trước) —
   Discovery compose DTO riêng đè lên `PublicProfileDto`.
+- **Mood không bao giờ hiện ở card ẩn danh trước-match Soul Match**: giữ invariant ẩn danh —
+  `MoodService.getPublicMood` không được wire vào luồng reveal trước khi cả 2 `like`. Ẩn 2 chiều
+  nếu có block active (khác Discovery — không xét report, xem
+  [10-code-review-checklist.md § Mood](./10-code-review-checklist.md)). Chi tiết:
+  [services/mood-service.md](./services/mood-service.md).
 
 > Đây là danh sách tối thiểu, không đầy đủ. Khi phát hiện thêm 1 domain rule quan trọng trong lúc build, bổ sung vào file này ngay (không để trôi mất trong lịch sử chat).
 

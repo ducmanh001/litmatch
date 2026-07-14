@@ -27,6 +27,7 @@ import { FriendModule } from '../modules/friend';
 import { GiftModule } from '../modules/gift';
 import { MatchingModule } from '../modules/matching';
 import { MiniGameModule } from '../modules/mini-game';
+import { MoodModule } from '../modules/mood';
 import { MovieMatchModule } from '../modules/movie-match';
 import { NotificationModule } from '../modules/notification';
 import { PalmMatchModule } from '../modules/palm-match';
@@ -94,6 +95,7 @@ import { ReadinessService } from './readiness.service';
     MiniGameModule,
     AdminModule,
     DiscoveryModule,
+    MoodModule,
   ],
   controllers: [HealthController],
   providers: [

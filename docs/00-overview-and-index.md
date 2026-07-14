@@ -34,6 +34,7 @@
 | —   | [services/notification-service.md](./services/notification-service.md) | **Đặc tả Notification**: gọi trực tiếp qua DI (không Outbox/Kafka) cho match/message/gift/like-comment, push DevPushProvider (chưa FCM/APNs thật)                  |
 | —   | [services/avatar-service.md](./services/avatar-service.md)             | **Đặc tả Avatar**: multi-layer ghép hình (base/tóc/trang phục/phụ kiện), mua item qua spendDiamond generic, chống IDOR lúc trang bị                                |
 | —   | [services/discovery-service.md](./services/discovery-service.md)       | **Đặc tả Discovery (browse-only W1)**: filter gender/tuổi (khu vực dành cho Nearby W5), loại block+report vĩnh viễn, card composition không sửa `PublicProfileDto` |
+| —   | [services/mood-service.md](./services/mood-service.md)                 | **Đặc tả Mood (preset-only W1)**: append-only set/clear, "mood hiện tại" derive khi đọc, composition qua `getPublicMood`, ẩn 2 chiều khi block                     |
 | —   | [adr/](./adr/README.md)                                                | Architecture Decision Records — lịch sử các quyết định đã chốt (bối cảnh, phương án loại, hệ quả); 03 là trạng thái đích, ADR là lý do lịch sử                     |
 | —   | [sources.md](./sources.md)                                             | Nguồn tham khảo đã dùng để nghiên cứu bộ docs này                                                                                                                  |
 

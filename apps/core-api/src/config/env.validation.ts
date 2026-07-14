@@ -103,6 +103,7 @@ export interface CoreApiEnv {
   PALM_MATCH_TARGET_NAME_MAX_LENGTH: number;
   DISCOVERY_GUEST_VISIBLE: boolean;
   DISCOVERY_AGE_BUCKETS: string;
+  MOOD_STATUS_TTL_HOURS: number;
   THROTTLE_TTL_SECONDS: number;
   THROTTLE_LIMIT: number;
 }
@@ -327,6 +328,10 @@ export const coreApiEnvSchema = Joi.object({
   // Mốc tuổi tăng dần, phân tách dấu phẩy — bucket rộng, không lộ tuổi chính xác (vd 18,25,31,41
   // → 18-24, 25-30, 31-40, 41+); parse mảng ở service, không parse ở Joi cho đơn giản
   DISCOVERY_AGE_BUCKETS: Joi.string().default('18,25,31,41'),
+
+  // Mood — preset-only W1 (docs/services/mood-service.md)
+  // TTL mood tính từ lúc set (snapshot vào expiresAt) — hết hạn = derive khi đọc, không cron
+  MOOD_STATUS_TTL_HOURS: Joi.number().integer().min(1).default(24),
 
   THROTTLE_TTL_SECONDS: Joi.number().integer().min(1).default(60),
   THROTTLE_LIMIT: Joi.number().integer().min(1).default(100),
