@@ -66,6 +66,38 @@ describe('usePartyRoomMedia', () => {
     unmount();
   });
 
+  it('mic bị từ chối quyền → error được set, room vẫn giữ nguyên (không rớt kết nối)', async () => {
+    const room = fakeRoom();
+    const deniedError = new Error('Permission denied');
+    room.localParticipant.setMicrophoneEnabled = vi
+      .fn()
+      .mockRejectedValue(deniedError);
+    vi.spyOn(livekit, 'connectMediaRoom').mockResolvedValue(room as never);
+    vi.spyOn(livekit, 'disconnectMediaRoom').mockResolvedValue(undefined);
+    vi.spyOn(apiClient, 'POST').mockResolvedValue({
+      data: {
+        data: {
+          room: { id: 'r1' },
+          membership: {},
+          token: 'tok',
+          livekitUrl: 'ws://x',
+        },
+      },
+    } as never);
+
+    const { result, unmount } = renderHook(
+      () => usePartyRoomMedia('room-1', true),
+      { wrapper },
+    );
+
+    act(() => result.current.connect());
+    await waitFor(() => expect(result.current.error).toBe(deniedError));
+    // Room vẫn kết nối (host/speaker vẫn nghe được) — chỉ mic publish thất bại.
+    expect(result.current.room).toBe(room);
+
+    unmount();
+  });
+
   it('cleanup gọi disconnectMediaRoom khi unmount', async () => {
     const room = fakeRoom();
     vi.spyOn(livekit, 'connectMediaRoom').mockResolvedValue(room as never);

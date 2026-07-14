@@ -19,15 +19,30 @@ import { parseCorsOrigins } from './common/cors/cors-origins';
 import { METRICS_REGISTRY } from './common/metrics/metrics.constants';
 
 import type { CoreApiEnv } from './config/env.validation';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { Registry } from 'prom-client';
 
 async function bootstrap(): Promise<void> {
-  // rawBody: webhook LiveKit verify chữ ký trên NGUYÊN VĂN body (calling/webhooks — spec § 3)
-  const app = await NestFactory.create(AppModule, {
+  // rawBody: webhook LiveKit verify chữ ký trên NGUYÊN VĂN body (calling/webhooks — spec § 3).
+  // bodyParser:false — LiveKit gửi webhook với Content-Type: application/webhook+json (không
+  // chuẩn), cần 1 parser JSON riêng khớp đúng type đó. NHƯNG Nest tự đăng ký parser mặc định
+  // dựa vào TÊN HÀM middleware ('jsonParser'), không phân biệt theo content-type filter — nếu
+  // để Nest tự đăng ký (bodyParser mặc định true) rồi tự thêm 1 express.json() riêng, Nest thấy
+  // "đã có jsonParser rồi" và ÂM THẦM BỎ QUA parser 'application/json' thật, vỡ toàn bộ API
+  // (phát hiện qua UX audit 2026-07-14 — mọi request JSON bình thường trả lỗi validate sai vì
+  // body không được parse). Tắt tự động, tự đăng ký cả 2 tường minh bên dưới theo đúng thứ tự.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true,
     rawBody: true,
+    bodyParser: false,
   });
   app.useLogger(app.get(Logger));
+
+  app.useBodyParser('json'); // mặc định — 'application/json', đại đa số request thật
+  app.useBodyParser('urlencoded', { extended: true });
+  // LiveKit — content-type riêng, rawBody vẫn bật vì app tạo với `rawBody: true` ở trên
+  // (INestApplication#useBodyParser tự áp dụng cờ đó cho mọi parser đăng ký thủ công).
+  app.useBodyParser('json', { type: 'application/webhook+json' });
 
   const config = app.get<ConfigService<CoreApiEnv, true>>(ConfigService);
 

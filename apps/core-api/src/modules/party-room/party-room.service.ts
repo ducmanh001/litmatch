@@ -13,6 +13,7 @@ import {
   decodeCursor,
 } from '@litmatch/common-dtos';
 import { DomainException } from '@litmatch/common-exceptions';
+import { isUUID } from 'class-validator';
 import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
 
 import {
@@ -45,6 +46,8 @@ import { PARTY_REDIS } from './redis/party-redis.provider';
 
 import type {
   CursorPageMeta,
+  PartyHostDisconnectedEventData,
+  PartyHostReconnectedEventData,
   PartyMemberJoinedEventData,
   PartyMemberLeftEventData,
   PartyRoleChangedEventData,
@@ -199,8 +202,8 @@ export class PartyRoomService {
     user: AuthenticatedUser,
     roomId: string,
   ): Promise<JoinPartyRoomResult> {
-    const { room, membership, isNewJoin } = await this.dataSource.transaction(
-      async (manager) => {
+    const { room, membership, isNewJoin, hostReconnected } =
+      await this.dataSource.transaction(async (manager) => {
         const lockedRoom = await this.lockActiveRoom(manager, roomId);
 
         const existing = await manager.findOneBy(PartyRoomMember, {
@@ -209,7 +212,22 @@ export class PartyRoomService {
           leftAt: IsNull(),
         });
         if (existing) {
-          return { room: lockedRoom, membership: existing, isNewJoin: false };
+          // Host tự kết nối lại trong lúc grace (spec § 4) — huỷ lịch đóng. Lock CÙNG row với
+          // grace-check (`closeRoomById` guard trong PartyRoomSweeperService) nên Postgres tự
+          // serialize: bên nào lock trước thắng, không có race đóng nhầm phòng vừa hồi phục.
+          const hostReconnected =
+            existing.role === PartyRole.Host &&
+            lockedRoom.hostDisconnectedAt !== null;
+          if (hostReconnected) {
+            lockedRoom.hostDisconnectedAt = null;
+            await manager.save(lockedRoom);
+          }
+          return {
+            room: lockedRoom,
+            membership: existing,
+            isNewJoin: false,
+            hostReconnected,
+          };
         }
 
         // Đếm DƯỚI lock phòng — DB và SFU (maxParticipants) cùng 1 giới hạn từ 1 config
@@ -236,7 +254,12 @@ export class PartyRoomService {
               role: PartyRole.Audience,
             }),
           );
-          return { room: lockedRoom, membership: member, isNewJoin: true };
+          return {
+            room: lockedRoom,
+            membership: member,
+            isNewJoin: true,
+            hostReconnected: false,
+          };
         } catch (err) {
           if (
             isUniqueViolation(err) &&
@@ -250,8 +273,7 @@ export class PartyRoomService {
           }
           throw err;
         }
-      },
-    );
+      });
 
     if (isNewJoin) {
       await this.publishToRoomMembers(
@@ -266,6 +288,12 @@ export class PartyRoomService {
         },
         { excludeUserId: user.userId },
       );
+    }
+    if (hostReconnected) {
+      await this.publishToRoomMembers(roomId, {
+        event: RealtimeEvents.PartyHostReconnected,
+        data: { roomId } satisfies PartyHostReconnectedEventData,
+      });
     }
 
     return {
@@ -506,6 +534,10 @@ export class PartyRoomService {
   async handleWebhookEvent(event: PartyWebhookEvent): Promise<void> {
     if (!event.roomName?.startsWith(PARTY_ROOM_NAME_PREFIX)) return;
     const roomId = event.roomName.slice(PARTY_ROOM_NAME_PREFIX.length);
+    // roomId là PK kiểu uuid — query thẳng bằng chuỗi không phải UUID hợp lệ (room LiveKit lạ,
+    // dữ liệu hỏng, hoặc test) sẽ ném lỗi DB (invalid input syntax) thay vì no-op êm như nhánh
+    // !room ngay dưới; chặn ở đây để hành vi nhất quán cho mọi roomName không khớp record thật.
+    if (!isUUID(roomId)) return;
     const room = await this.roomRepo.findOneBy({ id: roomId });
     if (!room) return;
 
@@ -526,10 +558,17 @@ export class PartyRoomService {
   /**
    * Đóng phòng idempotent — endpoint host-leave, webhook và sweeper cùng đi qua đây.
    * Chỉ lời gọi thực hiện transition mới dọn SFU + publish (không bắn đôi khi retry).
+   *
+   * `guard` (tuỳ chọn) được đánh giá TRÊN CHÍNH row đã lock, TRONG CÙNG transaction — dùng cho
+   * grace-check host disconnect (`PartyRoomSweeperService`): host có thể rejoin (clear
+   * `hostDisconnectedAt` — cũng lock row này, xem `joinRoom`) đúng lúc grace-check đang chạy;
+   * Postgres serialize 2 transaction cùng lock 1 row nên không có race — bên thua thấy state đã
+   * đổi ngay khi lock được cấp, `guard` fail thì không đóng.
    */
   async closeRoomById(
     roomId: string,
     reason: PartyRoomCloseReason,
+    guard?: (room: PartyRoom) => boolean,
   ): Promise<ClosePartyRoomResult> {
     const result = await this.dataSource.transaction(async (manager) => {
       const room = await manager.findOne(PartyRoom, {
@@ -537,6 +576,9 @@ export class PartyRoomService {
         lock: { mode: 'pessimistic_write' },
       });
       if (!room || room.status === PartyRoomStatus.Closed) {
+        return { closed: false, memberIds: [] as string[] };
+      }
+      if (guard !== undefined && !guard(room)) {
         return { closed: false, memberIds: [] as string[] };
       }
       const activeMembers = await manager.findBy(PartyRoomMember, {
@@ -628,7 +670,11 @@ export class PartyRoomService {
     return room;
   }
 
-  /** participant_left từ SFU: host rớt → đóng phòng (spec § 4); member thường → mark rời. */
+  /**
+   * participant_left từ SFU: host rớt NGOÀI Ý MUỐN → chờ grace host tự kết nối lại (spec § 4,
+   * KHÁC với host chủ động rời qua REST `leaveRoom` — nhánh đó vẫn đóng ngay); member thường →
+   * mark rời.
+   */
   private async handleParticipantLeft(
     roomId: string,
     identity: string,
@@ -641,7 +687,7 @@ export class PartyRoomService {
     if (!membership) return; // đã rời qua REST trước đó — webhook retry/đuổi sau là no-op
 
     if (membership.role === PartyRole.Host) {
-      await this.closeRoomById(roomId, PartyRoomCloseReason.HostLeft);
+      await this.markHostDisconnected(roomId);
       return;
     }
     const marked = await this.dataSource.transaction(async (manager) => {
@@ -662,6 +708,32 @@ export class PartyRoomService {
       await this.publishToRoomMembers(roomId, {
         event: RealtimeEvents.PartyMemberLeft,
         data: { roomId, userId: identity } satisfies PartyMemberLeftEventData,
+      });
+    }
+  }
+
+  /**
+   * Set `hostDisconnectedAt` dưới lock — KHÔNG đóng phòng ngay, KHÔNG mark membership host rời
+   * (host vẫn active để `joinRoom` nhận ra là rejoin, không tạo membership mới). Idempotent:
+   * webhook lặp lại (LiveKit retry) không dời mốc — nếu dời, host rớt liên tục sẽ treo phòng
+   * "chờ mãi" thay vì có 1 hạn cố định từ lần rớt ĐẦU TIÊN.
+   */
+  private async markHostDisconnected(roomId: string): Promise<void> {
+    const marked = await this.dataSource.transaction(async (manager) => {
+      const room = await manager.findOne(PartyRoom, {
+        where: { id: roomId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!room || room.status !== PartyRoomStatus.Active) return false;
+      if (room.hostDisconnectedAt !== null) return false;
+      room.hostDisconnectedAt = new Date();
+      await manager.save(room);
+      return true;
+    });
+    if (marked) {
+      await this.publishToRoomMembers(roomId, {
+        event: RealtimeEvents.PartyHostDisconnected,
+        data: { roomId } satisfies PartyHostDisconnectedEventData,
       });
     }
   }

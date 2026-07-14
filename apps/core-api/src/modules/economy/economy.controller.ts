@@ -17,7 +17,12 @@ import { Throttle, minutes } from '@nestjs/throttler';
 import { CursorPageQueryDto } from '@litmatch/common-dtos';
 
 import { EconomyService } from './economy.service';
-import { PurchaseVipDto, VerifyIapDto, WalletDto } from './dto/economy.dtos';
+import {
+  IapProductDto,
+  PurchaseVipDto,
+  VerifyIapDto,
+  WalletDto,
+} from './dto/economy.dtos';
 import { ApiCursorPageQuery } from '../../common/decorators/cursor-page-query.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import {
@@ -38,6 +43,13 @@ export class EconomyController {
   @ApiOkResponse({ type: WalletDto })
   getWallet(@CurrentUser() user: AuthenticatedUser): Promise<WalletDto> {
     return this.economyService.getWallet(user.userId);
+  }
+
+  @Get('iap/products')
+  @ApiOperation({ summary: 'Catalog gói diamond đang bán (active)' })
+  @ApiOkResponse({ type: IapProductDto, isArray: true })
+  listIapProducts(): Promise<IapProductDto[]> {
+    return this.economyService.listIapProducts();
   }
 
   @Post('iap/verify')

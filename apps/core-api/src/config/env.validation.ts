@@ -74,6 +74,7 @@ export interface CoreApiEnv {
   FRIEND_MESSAGE_MAX_LENGTH: number;
   LIVEKIT_URL: string;
   LIVEKIT_REGION_URLS: string;
+  LIVEKIT_API_URL: string;
   LIVEKIT_API_KEY: string;
   LIVEKIT_API_SECRET: string;
   CALLING_FREE_CALL_SECONDS: number;
@@ -88,6 +89,8 @@ export interface CoreApiEnv {
   PARTY_SWEEPER_INTERVAL_MS: number;
   PARTY_STALE_ROOM_SECONDS: number;
   PARTY_TITLE_MAX_LENGTH: number;
+  PARTY_HOST_DISCONNECT_GRACE_SECONDS: number;
+  PARTY_HOST_GRACE_CHECK_INTERVAL_MS: number;
   GIFT_POINTS_RATE_PERCENT: number;
   SAFETY_REMATCH_COOLDOWN_DAYS: number;
   SAFETY_REPORT_COOLDOWN_DAYS: number;
@@ -98,6 +101,8 @@ export interface CoreApiEnv {
   MOVIE_MATCH_URL_MAX_LENGTH: number;
   MOVIE_MATCH_ALLOWED_VIDEO_HOSTS: string;
   PALM_MATCH_TARGET_NAME_MAX_LENGTH: number;
+  DISCOVERY_GUEST_VISIBLE: boolean;
+  DISCOVERY_AGE_BUCKETS: string;
   THROTTLE_TTL_SECONDS: number;
   THROTTLE_LIMIT: number;
 }
@@ -245,6 +250,15 @@ export const coreApiEnvSchema = Joi.object({
       parseLivekitRegionUrls(value); // sai format → throw, Joi báo lỗi với message của Error
       return value;
     }, 'JSON map region → LiveKit URL'),
+  // Endpoint server-to-server (RoomServiceClient: createRoom/deleteRoom/updateParticipant...)
+  // — KHÁC LIVEKIT_URL (endpoint client/browser dùng để join media). '' (default) = derive từ
+  // LIVEKIT_URL như trước (đúng khi client và server cùng trỏ 1 địa chỉ LiveKit thật). Phải tách
+  // riêng khi LIVEKIT_URL trỏ qua 1 proxy/CDN chỉ dành cho client (vd TLS tunnel LAN cho mobile
+  // dev) — proxy đó không nhất thiết forward đúng path Twirp RPC hay có cert server tin được.
+  LIVEKIT_API_URL: Joi.string()
+    .uri({ scheme: ['http', 'https'] })
+    .allow('')
+    .default(''),
   LIVEKIT_API_KEY: Joi.string().default('devkey'),
   LIVEKIT_API_SECRET: Joi.string()
     .min(16)
@@ -268,6 +282,18 @@ export const coreApiEnvSchema = Joi.object({
   // Phòng active mà không còn member active quá N giây → sweeper đóng (webhook có thể rớt)
   PARTY_STALE_ROOM_SECONDS: Joi.number().integer().min(30).default(120),
   PARTY_TITLE_MAX_LENGTH: Joi.number().integer().min(1).max(500).default(100),
+  // Host rớt kết nối NGOÀI Ý MUỐN (webhook participant_left) — chờ tự kết nối lại trước khi
+  // đóng phòng (host_left); REST leave chủ động vẫn đóng ngay, không qua grace này (§ 4)
+  PARTY_HOST_DISCONNECT_GRACE_SECONDS: Joi.number()
+    .integer()
+    .min(5)
+    .default(15),
+  // Tần suất quét phòng hết grace — tách riêng PARTY_SWEEPER_INTERVAL_MS (30s, backstop khác
+  // hẳn: phòng vô chủ hoàn toàn) vì grace ngắn hơn nhiều, cần phát hiện sát giờ hơn
+  PARTY_HOST_GRACE_CHECK_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(1000)
+    .default(5000),
 
   // Gift — Giai đoạn 3 (docs/services/gift-service.md); tỉ lệ quy đổi DIA→PTS cho người nhận,
   // PHẢI < 100 (docs/06 § Gift: nhận 1:1 biến gift thành kênh chuyển tiền ngang hàng)
@@ -294,6 +320,13 @@ export const coreApiEnvSchema = Joi.object({
 
   // Palm Match — Giai đoạn 5 (docs/services/palm-match-service.md § 5)
   PALM_MATCH_TARGET_NAME_MAX_LENGTH: Joi.number().integer().min(1).default(50),
+
+  // Discovery — browse-only W1 (docs/services/discovery-service.md)
+  // Guest chưa gắn phone/social có xuất hiện trong browse không — chặn farm guest làm loãng pool
+  DISCOVERY_GUEST_VISIBLE: Joi.boolean().default(false),
+  // Mốc tuổi tăng dần, phân tách dấu phẩy — bucket rộng, không lộ tuổi chính xác (vd 18,25,31,41
+  // → 18-24, 25-30, 31-40, 41+); parse mảng ở service, không parse ở Joi cho đơn giản
+  DISCOVERY_AGE_BUCKETS: Joi.string().default('18,25,31,41'),
 
   THROTTLE_TTL_SECONDS: Joi.number().integer().min(1).default(60),
   THROTTLE_LIMIT: Joi.number().integer().min(1).default(100),

@@ -7,7 +7,9 @@
 :root {
   --background: #ffffff;
   --foreground: #111827;
-  --card: #ffffff;
+  /* Phải khác --background — bong bóng chat/hover state dùng bg-card không viền, không bóng
+     đổ, nên trùng màu nền là vô hình (docs/13 § 13.9, phát hiện qua UX audit 2026-07-14). */
+  --card: #f4f4f5;
   --muted: #f4f4f5;
   --muted-foreground: #6b7280;
   --border: #e5e7eb;

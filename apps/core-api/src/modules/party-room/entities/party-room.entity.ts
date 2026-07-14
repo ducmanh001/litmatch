@@ -61,6 +61,16 @@ export class PartyRoom {
   @Column({ type: 'timestamptz', nullable: true })
   closedAt!: Date | null;
 
+  /**
+   * Set khi webhook SFU báo host mất kết nối NGOÀI Ý MUỐN (participant_left) — KHÔNG set khi
+   * host chủ động rời qua REST (đóng ngay, không qua cột này). Còn active + không null nghĩa là
+   * đang trong grace period chờ host tự kết nối lại; host rejoin thì clear về null (cùng
+   * transaction lock với `joinRoom`); hết PARTY_HOST_DISCONNECT_GRACE_SECONDS mà vẫn không null
+   * thì grace-check đóng phòng với lý do `host_left` như cũ (party-room-service.md § 4).
+   */
+  @Column({ type: 'timestamptz', nullable: true })
+  hostDisconnectedAt!: Date | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 

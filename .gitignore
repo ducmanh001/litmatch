@@ -15,6 +15,9 @@ out-tsc/
 .env.local
 .env.*.local
 
+# chứng chỉ TLS tự ký cho dev LAN (test qua HTTPS trên thiết bị khác) — không commit private key
+.dev-certs/
+
 # test
 coverage/
 

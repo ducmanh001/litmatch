@@ -21,6 +21,8 @@ export class VerifyIapDto {
   productId!: string;
 
   @ApiProperty({
+    type: 'object',
+    additionalProperties: true,
     description:
       'Payload theo provider: apple {receiptData}, google {purchaseToken}; dev verifier nhận {devTransactionId}',
   })
@@ -33,6 +35,18 @@ export class PurchaseVipDto {
   @IsString()
   @IsNotEmpty()
   planId!: string;
+}
+
+export class IapProductDto {
+  @ApiProperty({ example: 'com.litmatch.diamond.100' })
+  productId!: string;
+  @ApiProperty({ enum: IapProvider })
+  provider!: IapProvider;
+  @ApiProperty({
+    example: '100',
+    description: 'Số diamond nhận được (bigint dạng chuỗi)',
+  })
+  diamonds!: string;
 }
 
 export class WalletDto {
