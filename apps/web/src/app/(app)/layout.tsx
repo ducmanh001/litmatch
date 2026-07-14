@@ -16,6 +16,7 @@ import type { ReactNode } from 'react';
 /** Nav sau login khai 1 chỗ (docs/12 § 12.8 bước 3). */
 const NAV_ITEMS = [
   { href: '/home', label: 'Trang chủ' },
+  { href: '/feed', label: 'Bảng tin' },
   { href: '/matching', label: 'Ghép đôi' },
   { href: '/friends', label: 'Bạn bè' },
   { href: '/party', label: 'Phòng nhóm' },
