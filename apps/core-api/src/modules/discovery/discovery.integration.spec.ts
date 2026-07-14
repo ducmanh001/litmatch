@@ -7,6 +7,7 @@ import { MatchingCore1752200000000 } from '../../database/migrations/17522000000
 import { MatchingGenderPreference1752300000000 } from '../../database/migrations/1752300000000-matching-gender-preference';
 import { UserRole1753600000000 } from '../../database/migrations/1753600000000-user-role';
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
+import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
 import { ReportStatus1753800000000 } from '../../database/migrations/1753800000000-report-status';
 import { DiscoveryUsersIndex1754000000000 } from '../../database/migrations/1754000000000-discovery-users-index';
 import { DiscoveryNearby1754600000000 } from '../../database/migrations/1754600000000-discovery-nearby';
@@ -117,6 +118,7 @@ d('Discovery integration (Postgres thật)', () => {
         MatchingCore1752200000000,
         MatchingGenderPreference1752300000000,
         Safety1752800000000,
+        ReportTargetVideo1754900000000,
         ReportStatus1753800000000,
         DiscoveryUsersIndex1754000000000,
         DiscoveryNearby1754600000000,

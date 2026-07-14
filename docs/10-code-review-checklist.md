@@ -226,6 +226,29 @@
 - Animation/hiệu ứng tặng quà bắn ra ở client trước khi server xác nhận giao dịch tiền thành công → user thấy hiệu ứng nhưng giao dịch thực tế fail, gây hiểu lầm/khiếu nại
 - Catalog quà có giá đổi theo thời gian (khuyến mãi) nhưng client cache giá cũ và server không kiểm tra lại giá tại đúng thời điểm tặng
 
+**Video ngắn (short-video, W5) — dễ sai vì tưởng chỉ là CRUD content**
+
+- **Nhận body video trực tiếp qua NestJS thay vì presigned URL** — video là file lớn, đi qua
+  NestJS (buffer/stream trong process) tốn memory/CPU vô ích và không cần thiết; đúng thiết kế là
+  server chỉ issue URL, client upload thẳng lên storage.
+- **Chặn transition bằng `SELECT ... FOR UPDATE` như `MatchTicket`** — video không tranh chấp gay
+  gắt như ghép cặp, conditional UPDATE (`WHERE status = 'từ'`) đã đủ an toàn; thêm pessimistic
+  lock là phức tạp hoá không cần thiết (YAGNI).
+- **Insert Report/video-view rồi ĐỌC LẠI trong CÙNG 1 transaction Postgres khi bắt unique
+  violation** — Postgres abort toàn bộ transaction ngay khi 1 statement lỗi, câu đọc lại sau đó
+  luôn nhận `"current transaction is aborted"` chứ không phải dữ liệu; chỉ bọc transaction khi
+  thật sự có side-effect thứ 2 cần atomic cùng insert đó.
+- **Report video trừ luôn trust score như report user** — video không phải "chủ tài khoản", trừ
+  điểm sai đối tượng; report video chỉ nên đếm distinct reporter để tự quyết auto-hide, không
+  chạm `adjustTrustScore`.
+- **Đếm view mà không loại self-view hoặc không có unique (video, viewer)** — tác giả tự F5 video
+  của mình để tăng viewCount, hoặc 1 viewer F5 nhiều lần bị đếm nhiều lần.
+- **Cộng viewCount ở MỖI lần cập nhật watch-time thay vì chỉ đúng 1 lần lúc vượt ngưỡng qualified**
+  — user xem lại/tua video nhiều lần trong 1 session sẽ bị đếm view tăng liên tục thay vì 1 view.
+  cho phiên xem đó.
+- **Cho video lọt vào luồng reveal ẩn danh của Soul Match** — vi phạm bất biến "ẩn danh tới khi
+  unlock", cùng lớp lỗi với Mood status.
+
 **Avatar / Item / Inventory — nơi dễ bị duplicate item**
 
 - Đổi/trang bị item không kiểm tra user thực sự sở hữu item đó (IDOR trên `itemId`) → mặc item của người khác

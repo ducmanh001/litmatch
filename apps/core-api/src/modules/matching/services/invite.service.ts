@@ -472,6 +472,15 @@ export class InviteService {
    * `uq_match_tickets_active_user` (1 trong 2 bên đang bận queue/session khác) rollback toàn bộ,
    * invite giữ nguyên Pending để thử lại sau; unique violation ở idempotency_key là replay accept
    * cũ → đọc lại đúng 2 ticket đã tạo.
+   *
+   * LƯU Ý (giới hạn đã biết): nhánh đọc lại theo `idempotencyKey` bên dưới, nếu THẬT SỰ chạy
+   * (insert lỗi unique + đọc lại trong CÙNG 1 transaction Postgres), sẽ vỡ vì Postgres abort
+   * toàn bộ transaction ngay khi 1 statement lỗi — câu SELECT sau đó nhận
+   * "current transaction is aborted" (bắt được lỗi y hệt ở `SafetyService.reportVideo`, đã sửa
+   * bằng cách bỏ transaction bọc ngoài). Nhánh này hiện KHÔNG unreachable trong thực tế vì
+   * `precheckAccept` đã khoá `FOR UPDATE` row invite trước — request accept thứ 2 luôn thấy
+   * invite đã `accepted` và trả về sớm ở đó, không bao giờ chạy tới insert ticket lần 2. Nếu sau
+   * này bỏ lock đó, phải tách bước tạo ticket ra 1 transaction/savepoint riêng.
    */
   private async createMatchedTickets(
     manager: EntityManager,

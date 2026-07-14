@@ -14,6 +14,16 @@ export enum ReportReason {
   Other = 'other',
 }
 
+/**
+ * Loại đối tượng bị report (W5, docs/services/short-video-service.md § 5) — mặc định `User` để
+ * hành vi cũ (report user) KHÔNG đổi. `Video`: KHÔNG đụng trust score cá nhân (khác `User` — chỉ
+ * đếm distinct reporter để module `short-video` tự quyết auto-hide, xem `SafetyService.reportVideo`).
+ */
+export enum ReportTargetType {
+  User = 'user',
+  Video = 'video',
+}
+
 /** Trạng thái xử lý report của moderator (docs/12 § 12.7 Admin — moderation queue). */
 export enum ReportStatus {
   Pending = 'pending',
@@ -33,6 +43,7 @@ export enum ReportStatus {
 @Index(['reporterUserId', 'targetUserId', 'createdAt'])
 @Index(['targetUserId', 'createdAt'])
 @Index(['status', 'createdAt'])
+@Index(['targetVideoId', 'createdAt'])
 export class Report {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -40,8 +51,16 @@ export class Report {
   @Column({ type: 'uuid' })
   reporterUserId!: string;
 
-  @Column({ type: 'uuid' })
-  targetUserId!: string;
+  @Column({ length: 8, default: ReportTargetType.User })
+  targetType!: ReportTargetType;
+
+  /** NULL khi `targetType=video` — mặc định 'user' giữ hành vi cũ 100% không đổi. */
+  @Column({ type: 'uuid', nullable: true })
+  targetUserId!: string | null;
+
+  /** NULL khi `targetType=user`. KHÔNG có FK sang bảng `videos` — `short-video` sở hữu bảng đó, tự validate tồn tại trước khi gọi. */
+  @Column({ type: 'uuid', nullable: true })
+  targetVideoId!: string | null;
 
   @Column({ length: 32 })
   reason!: ReportReason;

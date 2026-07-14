@@ -33,6 +33,7 @@ import { NotificationModule } from '../modules/notification';
 import { PalmMatchModule } from '../modules/palm-match';
 import { PartyRoomModule } from '../modules/party-room';
 import { SafetyModule } from '../modules/safety';
+import { ShortVideoModule } from '../modules/short-video';
 import { SoulMatchModule } from '../modules/soul-match';
 import { UserModule } from '../modules/user';
 
@@ -96,6 +97,7 @@ import { ReadinessService } from './readiness.service';
     AdminModule,
     DiscoveryModule,
     MoodModule,
+    ShortVideoModule,
   ],
   controllers: [HealthController],
   providers: [

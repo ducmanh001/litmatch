@@ -8,13 +8,18 @@ import { User, UserService } from '../user';
 import { Report, ReportStatus, SafetyService } from '../safety';
 import { Gift, GiftService } from '../gift';
 import { EconomyService } from '../economy';
+import { ShortVideoService, Video } from '../short-video';
 
 import { AdminErrors } from './admin.errors';
 
 import type { UserPage, UserPageFilter } from '../user';
 import type { ReportPage, ReportPageFilter } from '../safety';
 import type { CreateGiftInput, UpdateGiftInput } from '../gift';
-import type { CursorPageMeta } from '@litmatch/common-dtos';
+import type {
+  CursorPage,
+  CursorPageMeta,
+  CursorPageQueryDto,
+} from '@litmatch/common-dtos';
 import type { TransactionView, WalletView } from '../economy';
 
 @Injectable()
@@ -25,6 +30,7 @@ export class AdminService {
     private readonly safetyService: SafetyService,
     private readonly giftService: GiftService,
     private readonly economyService: EconomyService,
+    private readonly shortVideoService: ShortVideoService,
     private readonly auditLogService: AuditLogService,
   ) {}
 
@@ -120,6 +126,62 @@ export class AdminService {
         manager,
       );
       return report;
+    });
+  }
+
+  /** `VIDEO_MODERATION_MODE=pre` — video chờ duyệt trước khi public. */
+  async listPendingVideos(
+    query: CursorPageQueryDto,
+  ): Promise<CursorPage<Video>> {
+    return this.shortVideoService.listPendingReview(query);
+  }
+
+  async approveVideo(actorUserId: string, videoId: string): Promise<Video> {
+    return this.dataSource.transaction(async (manager) => {
+      const video = await this.shortVideoService.adminApprove(videoId, manager);
+      await this.auditLogService.record(
+        {
+          actorUserId,
+          action: 'video.approved',
+          targetType: 'video',
+          targetId: videoId,
+        },
+        manager,
+      );
+      return video;
+    });
+  }
+
+  async rejectVideo(actorUserId: string, videoId: string): Promise<Video> {
+    return this.dataSource.transaction(async (manager) => {
+      const video = await this.shortVideoService.adminReject(videoId, manager);
+      await this.auditLogService.record(
+        {
+          actorUserId,
+          action: 'video.rejected',
+          targetType: 'video',
+          targetId: videoId,
+        },
+        manager,
+      );
+      return video;
+    });
+  }
+
+  /** Gỡ thủ công 1 video đang published — bổ sung cho auto-hide theo ngưỡng report. */
+  async removeVideo(actorUserId: string, videoId: string): Promise<Video> {
+    return this.dataSource.transaction(async (manager) => {
+      const video = await this.shortVideoService.adminRemove(videoId, manager);
+      await this.auditLogService.record(
+        {
+          actorUserId,
+          action: 'video.removed',
+          targetType: 'video',
+          targetId: videoId,
+        },
+        manager,
+      );
+      return video;
     });
   }
 

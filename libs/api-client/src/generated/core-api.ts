@@ -1411,6 +1411,74 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/admin/videos/pending': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Video chờ duyệt trước khi public (VIDEO_MODERATION_MODE=pre) — cursor pagination */
+    get: operations['AdminController_listPendingVideos'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/videos/{id}/approve': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Duyệt video pending_review → published — audit log */
+    post: operations['AdminController_approveVideo'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/videos/{id}/reject': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Từ chối video pending_review → rejected — audit log */
+    post: operations['AdminController_rejectVideo'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/videos/{id}/remove': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Gỡ thủ công video published → removed (bổ sung cho auto-hide theo ngưỡng report) — audit log */
+    post: operations['AdminController_removeVideo'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/admin/gifts': {
     parameters: {
       query?: never;
@@ -1492,6 +1560,161 @@ export interface paths {
     /** Hoàn tiền thủ công 1 giao dịch — bút toán đảo, audit log, không sửa/xoá giao dịch gốc */
     post: operations['AdminController_refundTransaction'];
     delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/videos/upload-intent': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Xin URL upload presigned — body video KHÔNG gửi qua endpoint này, upload thẳng lên storage */
+    post: operations['ShortVideoController_createUploadIntent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/videos/{id}/finalize': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Báo đã upload xong — chuyển sang processing rồi transcode */
+    post: operations['ShortVideoController_finalizeUpload'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/videos': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Danh sách video published — sort=recent (default) | ranked */
+    get: operations['ShortVideoController_list'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/videos/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Chi tiết 1 video — tác giả xem được mọi status, người khác chỉ published */
+    get: operations['ShortVideoController_getVideo'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/videos/{id}/report': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Report video — vượt ngưỡng distinct reporter thì tự động ẩn (không đụng trust score cá nhân) */
+    post: operations['ShortVideoController_reportVideo'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/videos/{id}/views': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Ghi nhận watch-time — self-view không đếm */
+    post: operations['ShortVideoController_recordView'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/videos/{id}/reactions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Thả tim video */
+    post: operations['ShortVideoController_like'];
+    /** Bỏ tim video */
+    delete: operations['ShortVideoController_unlike'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/videos/{id}/comments': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Danh sách bình luận video */
+    get: operations['ShortVideoController_listComments'];
+    put?: never;
+    /** Bình luận video */
+    post: operations['ShortVideoController_createComment'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/videos/{id}/comments/{commentId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Xoá bình luận — tác giả comment hoặc tác giả video */
+    delete: operations['ShortVideoController_deleteComment'];
     options?: never;
     head?: never;
     patch?: never;
@@ -2205,7 +2428,10 @@ export interface components {
     AdminReportDto: {
       id: string;
       reporterUserId: string;
-      targetUserId: string;
+      /** @enum {string} */
+      targetType: 'user' | 'video';
+      targetUserId: string | null;
+      targetVideoId: string | null;
       /** @enum {string} */
       reason:
         'harassment' | 'spam' | 'underage' | 'inappropriate_content' | 'other';
@@ -2219,6 +2445,28 @@ export interface components {
     AdminReportsPageDto: {
       items: components['schemas']['AdminReportDto'][];
       total: number;
+    };
+    AdminVideoDto: {
+      id: string;
+      authorUserId: string;
+      /** @enum {string} */
+      status:
+        | 'uploading'
+        | 'processing'
+        | 'pending_review'
+        | 'published'
+        | 'removed'
+        | 'rejected'
+        | 'failed';
+      playbackUrl: string | null;
+      thumbnailUrl: string | null;
+      caption: string | null;
+      /** Format: date-time */
+      createdAt: string;
+    };
+    AdminVideosPageDto: {
+      items: components['schemas']['AdminVideoDto'][];
+      nextCursor: string | null;
     };
     AdminGiftDto: {
       id: string;
@@ -2273,6 +2521,63 @@ export interface components {
     RefundResultDto: {
       transactionId: string;
       reversalTransactionId: string;
+    };
+    CreateUploadIntentDto: {
+      caption?: string;
+    };
+    UploadIntentDto: {
+      videoId: string;
+      uploadUrl: string;
+    };
+    VideoDto: {
+      id: string;
+      authorUserId: string;
+      /** @enum {string} */
+      status:
+        | 'uploading'
+        | 'processing'
+        | 'pending_review'
+        | 'published'
+        | 'removed'
+        | 'rejected'
+        | 'failed';
+      playbackUrl: string | null;
+      thumbnailUrl: string | null;
+      caption: string | null;
+      durationSeconds: number | null;
+      viewCount: number;
+      likeCount: number;
+      commentCount: number;
+      /** Format: date-time */
+      createdAt: string;
+    };
+    VideosPageDto: {
+      items: components['schemas']['VideoDto'][];
+      nextCursor: string | null;
+    };
+    ReportVideoDto: {
+      /** @enum {string} */
+      reason:
+        'harassment' | 'spam' | 'underage' | 'inappropriate_content' | 'other';
+      description?: string;
+    };
+    RecordViewDto: {
+      watchTimeMs: number;
+    };
+    CreateVideoCommentDto: {
+      content: string;
+    };
+    VideoCommentDto: {
+      id: string;
+      videoId: string;
+      authorUserId: string;
+      content: string;
+      /** Format: date-time */
+      createdAt: string;
+    };
+    VideoCommentsPageDto: {
+      items: components['schemas']['VideoCommentDto'][];
+      nextCursor: string | null;
     };
     DiscoveryCardDto: {
       profile: components['schemas']['PublicProfileDto'];
@@ -4797,6 +5102,113 @@ export interface operations {
       };
     };
   };
+  AdminController_listPendingVideos: {
+    parameters: {
+      query?: {
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminVideosPageDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_approveVideo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminVideoDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_rejectVideo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminVideoDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_removeVideo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminVideoDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
   AdminController_listGifts: {
     parameters: {
       query?: never;
@@ -4963,6 +5375,298 @@ export interface operations {
             };
           };
         };
+      };
+    };
+  };
+  ShortVideoController_createUploadIntent: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10) */
+        'Idempotency-Key': string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateUploadIntentDto'];
+      };
+    };
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['UploadIntentDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  ShortVideoController_finalizeUpload: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['VideoDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  ShortVideoController_list: {
+    parameters: {
+      query?: {
+        sort?: 'recent' | 'ranked';
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['VideosPageDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  ShortVideoController_getVideo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['VideoDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  ShortVideoController_reportVideo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ReportVideoDto'];
+      };
+    };
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ShortVideoController_recordView: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RecordViewDto'];
+      };
+    };
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ShortVideoController_like: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['ReactionStatusDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  ShortVideoController_unlike: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['ReactionStatusDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  ShortVideoController_listComments: {
+    parameters: {
+      query?: {
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['VideoCommentsPageDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  ShortVideoController_createComment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateVideoCommentDto'];
+      };
+    };
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['VideoCommentDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  ShortVideoController_deleteComment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+        commentId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
     };
   };

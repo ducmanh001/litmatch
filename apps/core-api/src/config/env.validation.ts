@@ -119,6 +119,17 @@ export interface CoreApiEnv {
   MOOD_STATUS_TTL_HOURS: number;
   STORY_TTL_HOURS: number;
   STORY_SWEEPER_INTERVAL_MS: number;
+  VIDEO_CAPTION_MAX_LENGTH: number;
+  VIDEO_MODERATION_MODE: 'pre' | 'post';
+  VIDEO_QUALIFIED_VIEW_MIN_MS: number;
+  VIDEO_UPLOAD_TIMEOUT_SECONDS: number;
+  VIDEO_SWEEPER_INTERVAL_MS: number;
+  VIDEO_REPORT_AUTOHIDE_THRESHOLD: number;
+  VIDEO_RANK_WEIGHT_VIEW: number;
+  VIDEO_RANK_WEIGHT_LIKE: number;
+  VIDEO_RANK_WEIGHT_COMMENT: number;
+  VIDEO_RANK_TIME_DECAY_HOURS: number;
+  VIDEO_RANKING_JOB_INTERVAL_MS: number;
   THROTTLE_TTL_SECONDS: number;
   THROTTLE_LIMIT: number;
 }
@@ -403,6 +414,30 @@ export const coreApiEnvSchema = Joi.object({
     .integer()
     .min(60_000)
     .default(3_600_000),
+
+  // Video ngắn — W5, hướng Momo (docs/services/short-video-service.md)
+  VIDEO_CAPTION_MAX_LENGTH: Joi.number().integer().min(1).default(500),
+  // pre = duyệt trước khi public (dating app VN, mặc định an toàn); post = public ngay, duyệt sau
+  VIDEO_MODERATION_MODE: Joi.string().valid('pre', 'post').default('pre'),
+  // Watch-time tối thiểu để tính 1 view "qualified" — cộng Video.viewCount đúng 1 lần khi vượt ngưỡng
+  VIDEO_QUALIFIED_VIEW_MIN_MS: Joi.number().integer().min(0).default(3_000),
+  // Video kẹt ở 'uploading' quá lâu (client bỏ dở/crash giữa chừng) → sweeper expire sang 'failed'
+  VIDEO_UPLOAD_TIMEOUT_SECONDS: Joi.number().integer().min(60).default(3_600),
+  VIDEO_SWEEPER_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(60_000)
+    .default(3_600_000),
+  // Số distinct reporter để auto-hide (published → removed) — KHÔNG phải trust-score cá nhân
+  VIDEO_REPORT_AUTOHIDE_THRESHOLD: Joi.number().integer().min(1).default(5),
+  // rankScore = view*W_VIEW + like*W_LIKE + comment*W_COMMENT, decay theo giờ kể từ createdAt
+  VIDEO_RANK_WEIGHT_VIEW: Joi.number().min(0).default(1),
+  VIDEO_RANK_WEIGHT_LIKE: Joi.number().min(0).default(3),
+  VIDEO_RANK_WEIGHT_COMMENT: Joi.number().min(0).default(5),
+  VIDEO_RANK_TIME_DECAY_HOURS: Joi.number().positive().default(48),
+  VIDEO_RANKING_JOB_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(60_000)
+    .default(1_800_000),
 
   THROTTLE_TTL_SECONDS: Joi.number().integer().min(1).default(60),
   THROTTLE_LIMIT: Joi.number().integer().min(1).default(100),

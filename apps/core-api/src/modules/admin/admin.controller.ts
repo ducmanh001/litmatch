@@ -44,6 +44,11 @@ import {
   RefundResultDto,
   RefundTransactionDto,
 } from './dto/admin-economy.dto';
+import {
+  AdminVideoDto,
+  AdminVideosPageDto,
+  ListPendingVideosQueryDto,
+} from './dto/admin-video.dto';
 
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 
@@ -148,6 +153,67 @@ export class AdminController {
   ): Promise<AdminReportDto> {
     return AdminReportDto.from(
       await this.adminService.dismissReport(actor.userId, id),
+    );
+  }
+
+  @Get('videos/pending')
+  @ApiOperation({
+    summary:
+      'Video chờ duyệt trước khi public (VIDEO_MODERATION_MODE=pre) — cursor pagination',
+  })
+  @ApiCursorPageQuery()
+  @ApiOkResponse({ type: AdminVideosPageDto })
+  async listPendingVideos(
+    @Query() query: ListPendingVideosQueryDto,
+  ): Promise<AdminVideosPageDto> {
+    return AdminVideosPageDto.from(
+      await this.adminService.listPendingVideos(query),
+    );
+  }
+
+  @Post('videos/:id/approve')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Duyệt video pending_review → published — audit log',
+  })
+  @ApiOkResponse({ type: AdminVideoDto })
+  async approveVideo(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<AdminVideoDto> {
+    return AdminVideoDto.from(
+      await this.adminService.approveVideo(actor.userId, id),
+    );
+  }
+
+  @Post('videos/:id/reject')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Từ chối video pending_review → rejected — audit log',
+  })
+  @ApiOkResponse({ type: AdminVideoDto })
+  async rejectVideo(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<AdminVideoDto> {
+    return AdminVideoDto.from(
+      await this.adminService.rejectVideo(actor.userId, id),
+    );
+  }
+
+  @Post('videos/:id/remove')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Gỡ thủ công video published → removed (bổ sung cho auto-hide theo ngưỡng report) — audit log',
+  })
+  @ApiOkResponse({ type: AdminVideoDto })
+  async removeVideo(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<AdminVideoDto> {
+    return AdminVideoDto.from(
+      await this.adminService.removeVideo(actor.userId, id),
     );
   }
 

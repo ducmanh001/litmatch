@@ -9,6 +9,7 @@ import { MatchingCore1752200000000 } from '../../database/migrations/17522000000
 import { EconomyLedger1752000000000 } from '../../database/migrations/1752000000000-economy-ledger';
 import { EconomyRefund1752100000000 } from '../../database/migrations/1752100000000-economy-refund';
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
+import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
 import { PartyRoomGift1752700000000 } from '../../database/migrations/1752700000000-party-room-gift';
 import { ReportStatus1753800000000 } from '../../database/migrations/1753800000000-report-status';
 import { AuditLogService } from '../../common/audit/audit-log.service';
@@ -136,6 +137,7 @@ d('Admin integration (Postgres thật)', () => {
         EconomyRefund1752100000000,
         MatchingCore1752200000000,
         Safety1752800000000,
+        ReportTargetVideo1754900000000,
         PartyRoomGift1752700000000,
         AdminAuditLog1753700000000,
         ReportStatus1753800000000,
@@ -184,12 +186,15 @@ d('Admin integration (Postgres thật)', () => {
     const auditLogService = new AuditLogService(
       ds.getRepository(AdminAuditLog),
     );
+    // Video moderation không phải trọng tâm suite này (test riêng ở short-video.integration.spec.ts) — stub.
+    const shortVideoServiceStub = {} as never;
     admin = new AdminService(
       ds,
       userService,
       safetyService,
       giftService,
       economyService,
+      shortVideoServiceStub,
       auditLogService,
     );
   });

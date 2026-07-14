@@ -10,6 +10,7 @@ import { MatchingGenderPreference1752300000000 } from '../../database/migrations
 import { SoulMatch1752400000000 } from '../../database/migrations/1752400000000-soul-match';
 import { FriendChat1752600000000 } from '../../database/migrations/1752600000000-friend-chat';
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
+import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
 
 import { SoulMatchService } from './soul-match.service';
 import { SoulMatchErrors } from './soul-match.errors';
@@ -193,6 +194,7 @@ d('Soul Match integration (Postgres thật)', () => {
         SoulMatch1752400000000,
         FriendChat1752600000000,
         Safety1752800000000,
+        ReportTargetVideo1754900000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,

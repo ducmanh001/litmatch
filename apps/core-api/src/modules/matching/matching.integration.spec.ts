@@ -10,6 +10,7 @@ import { EconomyRefund1752100000000 } from '../../database/migrations/1752100000
 import { MatchingCore1752200000000 } from '../../database/migrations/1752200000000-matching-core';
 import { MatchingGenderPreference1752300000000 } from '../../database/migrations/1752300000000-matching-gender-preference';
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
+import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
 import { MatchInvite1754700000000 } from '../../database/migrations/1754700000000-match-invite';
 import { AuthIdentity } from '../auth/entities/auth-identity.entity';
 import { PhoneOtp } from '../auth/entities/phone-otp.entity';
@@ -236,6 +237,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
         MatchingCore1752200000000,
         MatchingGenderPreference1752300000000,
         Safety1752800000000,
+        ReportTargetVideo1754900000000,
         MatchInvite1754700000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),

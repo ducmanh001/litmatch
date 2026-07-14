@@ -72,6 +72,20 @@
   Friendship; mời Voice Match (kể cả qua CTA invite) chỉ vào cuộc gọi tính phí theo phút, không
   có đường nào khác tạo Friendship từ Voice. Chi tiết:
   [services/matching-service.md § 9.3](./services/matching-service.md#invite).
+- **Video ngắn (W5) — conditional UPDATE thay vì SELECT FOR UPDATE cho state machine**: mọi
+  transition `Video.status` thi hành bằng 1 câu `UPDATE ... WHERE status = 'từ'` (thua race = no-op),
+  không pessimistic lock như `MatchTicket` — video không tranh chấp gay gắt như ghép cặp. Report
+  video vượt `VIDEO_REPORT_AUTOHIDE_THRESHOLD` distinct reporter → tự động `published→removed`,
+  KHÔNG đụng trust score cá nhân (khác report user). `VIDEO_MODERATION_MODE=pre` mặc định (duyệt
+  trước khi public). Cấm video ở phase ẩn danh Soul Match — cùng bất biến với Mood. Chi tiết:
+  [services/short-video-service.md](./services/short-video-service.md).
+- **Insert-rồi-đọc-lại khi unique violation PHẢI KHÔNG nằm trong 1 transaction Postgres explicit**
+  nếu bước đọc chỉ chạy khi bước insert đã LỖI: Postgres abort toàn bộ transaction ngay khi 1
+  statement lỗi, câu đọc lại sau đó nhận `"current transaction is aborted"` thay vì dữ liệu — bắt
+  được qua test thật ở `SafetyService.reportVideo` (2026-07-14). Chỉ bọc transaction khi có ÍT
+  NHẤT 1 side-effect khác PHẢI atomic cùng insert đó (vd `report()` insert + trừ trust score);
+  nếu không có side-effect thứ 2, để insert/catch/đọc-lại chạy như các statement độc lập (cùng
+  pattern `FeedService.createPost`).
 
 > Đây là danh sách tối thiểu, không đầy đủ. Khi phát hiện thêm 1 domain rule quan trọng trong lúc build, bổ sung vào file này ngay (không để trôi mất trong lịch sử chat).
 

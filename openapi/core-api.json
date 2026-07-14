@@ -3130,6 +3130,148 @@
         "tags": ["admin"]
       }
     },
+    "/api/v1/admin/videos/pending": {
+      "get": {
+        "operationId": "AdminController_listPendingVideos",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminVideosPageDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Video chờ duyệt trước khi public (VIDEO_MODERATION_MODE=pre) — cursor pagination",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/videos/{id}/approve": {
+      "post": {
+        "operationId": "AdminController_approveVideo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AdminVideoDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Duyệt video pending_review → published — audit log",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/videos/{id}/reject": {
+      "post": {
+        "operationId": "AdminController_rejectVideo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AdminVideoDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Từ chối video pending_review → rejected — audit log",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/videos/{id}/remove": {
+      "post": {
+        "operationId": "AdminController_removeVideo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AdminVideoDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Gỡ thủ công video published → removed (bổ sung cho auto-hide theo ngưỡng report) — audit log",
+        "tags": ["admin"]
+      }
+    },
     "/api/v1/admin/gifts": {
       "get": {
         "operationId": "AdminController_listGifts",
@@ -3353,6 +3495,394 @@
         "security": [{ "bearer": [] }],
         "summary": "Hoàn tiền thủ công 1 giao dịch — bút toán đảo, audit log, không sửa/xoá giao dịch gốc",
         "tags": ["admin"]
+      }
+    },
+    "/api/v1/videos/upload-intent": {
+      "post": {
+        "operationId": "ShortVideoController_createUploadIntent",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateUploadIntentDto" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/UploadIntentDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Xin URL upload presigned — body video KHÔNG gửi qua endpoint này, upload thẳng lên storage",
+        "tags": ["short-video"]
+      }
+    },
+    "/api/v1/videos/{id}/finalize": {
+      "post": {
+        "operationId": "ShortVideoController_finalizeUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/VideoDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Báo đã upload xong — chuyển sang processing rồi transcode",
+        "tags": ["short-video"]
+      }
+    },
+    "/api/v1/videos": {
+      "get": {
+        "operationId": "ShortVideoController_list",
+        "parameters": [
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "recent",
+              "type": "string",
+              "enum": ["recent", "ranked"]
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/VideosPageDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Danh sách video published — sort=recent (default) | ranked",
+        "tags": ["short-video"]
+      }
+    },
+    "/api/v1/videos/{id}": {
+      "get": {
+        "operationId": "ShortVideoController_getVideo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/VideoDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Chi tiết 1 video — tác giả xem được mọi status, người khác chỉ published",
+        "tags": ["short-video"]
+      }
+    },
+    "/api/v1/videos/{id}/report": {
+      "post": {
+        "operationId": "ShortVideoController_reportVideo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ReportVideoDto" }
+            }
+          }
+        },
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Report video — vượt ngưỡng distinct reporter thì tự động ẩn (không đụng trust score cá nhân)",
+        "tags": ["short-video"]
+      }
+    },
+    "/api/v1/videos/{id}/views": {
+      "post": {
+        "operationId": "ShortVideoController_recordView",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RecordViewDto" }
+            }
+          }
+        },
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Ghi nhận watch-time — self-view không đếm",
+        "tags": ["short-video"]
+      }
+    },
+    "/api/v1/videos/{id}/reactions": {
+      "post": {
+        "operationId": "ShortVideoController_like",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReactionStatusDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Thả tim video",
+        "tags": ["short-video"]
+      },
+      "delete": {
+        "operationId": "ShortVideoController_unlike",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReactionStatusDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Bỏ tim video",
+        "tags": ["short-video"]
+      }
+    },
+    "/api/v1/videos/{id}/comments": {
+      "post": {
+        "operationId": "ShortVideoController_createComment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateVideoCommentDto" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/VideoCommentDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Bình luận video",
+        "tags": ["short-video"]
+      },
+      "get": {
+        "operationId": "ShortVideoController_listComments",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/VideoCommentsPageDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Danh sách bình luận video",
+        "tags": ["short-video"]
+      }
+    },
+    "/api/v1/videos/{id}/comments/{commentId}": {
+      "delete": {
+        "operationId": "ShortVideoController_deleteComment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "commentId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Xoá bình luận — tác giả comment hoặc tác giả video",
+        "tags": ["short-video"]
       }
     },
     "/api/v1/discovery/browse": {
@@ -4778,7 +5308,9 @@
         "properties": {
           "id": { "type": "string" },
           "reporterUserId": { "type": "string" },
-          "targetUserId": { "type": "string" },
+          "targetType": { "type": "string", "enum": ["user", "video"] },
+          "targetUserId": { "type": "string", "nullable": true },
+          "targetVideoId": { "type": "string", "nullable": true },
           "reason": {
             "type": "string",
             "enum": [
@@ -4800,7 +5332,9 @@
         "required": [
           "id",
           "reporterUserId",
+          "targetType",
           "targetUserId",
+          "targetVideoId",
           "reason",
           "description",
           "trustPenaltyApplied",
@@ -4818,6 +5352,49 @@
           "total": { "type": "number" }
         },
         "required": ["items", "total"]
+      },
+      "AdminVideoDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "authorUserId": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": [
+              "uploading",
+              "processing",
+              "pending_review",
+              "published",
+              "removed",
+              "rejected",
+              "failed"
+            ]
+          },
+          "playbackUrl": { "type": "string", "nullable": true },
+          "thumbnailUrl": { "type": "string", "nullable": true },
+          "caption": { "type": "string", "nullable": true },
+          "createdAt": { "format": "date-time", "type": "string" }
+        },
+        "required": [
+          "id",
+          "authorUserId",
+          "status",
+          "playbackUrl",
+          "thumbnailUrl",
+          "caption",
+          "createdAt"
+        ]
+      },
+      "AdminVideosPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AdminVideoDto" }
+          },
+          "nextCursor": { "type": "string", "nullable": true }
+        },
+        "required": ["items", "nextCursor"]
       },
       "AdminGiftDto": {
         "type": "object",
@@ -4921,6 +5498,118 @@
           "reversalTransactionId": { "type": "string" }
         },
         "required": ["transactionId", "reversalTransactionId"]
+      },
+      "CreateUploadIntentDto": {
+        "type": "object",
+        "properties": { "caption": { "type": "string" } }
+      },
+      "UploadIntentDto": {
+        "type": "object",
+        "properties": {
+          "videoId": { "type": "string" },
+          "uploadUrl": { "type": "string" }
+        },
+        "required": ["videoId", "uploadUrl"]
+      },
+      "VideoDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "authorUserId": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": [
+              "uploading",
+              "processing",
+              "pending_review",
+              "published",
+              "removed",
+              "rejected",
+              "failed"
+            ]
+          },
+          "playbackUrl": { "type": "string", "nullable": true },
+          "thumbnailUrl": { "type": "string", "nullable": true },
+          "caption": { "type": "string", "nullable": true },
+          "durationSeconds": { "type": "number", "nullable": true },
+          "viewCount": { "type": "number" },
+          "likeCount": { "type": "number" },
+          "commentCount": { "type": "number" },
+          "createdAt": { "format": "date-time", "type": "string" }
+        },
+        "required": [
+          "id",
+          "authorUserId",
+          "status",
+          "playbackUrl",
+          "thumbnailUrl",
+          "caption",
+          "durationSeconds",
+          "viewCount",
+          "likeCount",
+          "commentCount",
+          "createdAt"
+        ]
+      },
+      "VideosPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/VideoDto" }
+          },
+          "nextCursor": { "type": "string", "nullable": true }
+        },
+        "required": ["items", "nextCursor"]
+      },
+      "ReportVideoDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "harassment",
+              "spam",
+              "underage",
+              "inappropriate_content",
+              "other"
+            ]
+          },
+          "description": { "type": "string" }
+        },
+        "required": ["reason"]
+      },
+      "RecordViewDto": {
+        "type": "object",
+        "properties": { "watchTimeMs": { "type": "number", "minimum": 0 } },
+        "required": ["watchTimeMs"]
+      },
+      "CreateVideoCommentDto": {
+        "type": "object",
+        "properties": { "content": { "type": "string" } },
+        "required": ["content"]
+      },
+      "VideoCommentDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "videoId": { "type": "string" },
+          "authorUserId": { "type": "string" },
+          "content": { "type": "string" },
+          "createdAt": { "format": "date-time", "type": "string" }
+        },
+        "required": ["id", "videoId", "authorUserId", "content", "createdAt"]
+      },
+      "VideoCommentsPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/VideoCommentDto" }
+          },
+          "nextCursor": { "type": "string", "nullable": true }
+        },
+        "required": ["items", "nextCursor"]
       },
       "DiscoveryCardDto": {
         "type": "object",

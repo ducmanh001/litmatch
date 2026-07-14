@@ -13,6 +13,7 @@ import { Calling1752500000000 } from '../../database/migrations/1752500000000-ca
 import { FriendChat1752600000000 } from '../../database/migrations/1752600000000-friend-chat';
 import { PartyRoomGift1752700000000 } from '../../database/migrations/1752700000000-party-room-gift';
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
+import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
 import { Notification1753000000000 } from '../../database/migrations/1753000000000-notification';
 import { PartyRoomLivekitUrl1753500000000 } from '../../database/migrations/1753500000000-party-room-livekit-url';
 import { PartyRoomHostDisconnectGrace1753900000000 } from '../../database/migrations/1753900000000-party-room-host-disconnect-grace';
@@ -216,6 +217,7 @@ d('Gift integration (Postgres thật)', () => {
         FriendChat1752600000000,
         PartyRoomGift1752700000000,
         Safety1752800000000,
+        ReportTargetVideo1754900000000,
         Notification1753000000000,
         PartyRoomLivekitUrl1753500000000,
         PartyRoomHostDisconnectGrace1753900000000,
