@@ -2,12 +2,16 @@ import { Inject, Module, OnApplicationShutdown } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { MatchingController } from './matching.controller';
+import { InviteController } from './invite.controller';
 import { MatchingMetrics } from './matching.metrics';
 import { MatchingService } from './matching.service';
+import { InviteService } from './services/invite.service';
 import { MatcherWorkerService } from './jobs/matcher-worker.service';
 import { TicketSweeperService } from './jobs/ticket-sweeper.service';
+import { InviteSweeperService } from './jobs/invite-sweeper.service';
 import { MatchTicket } from './entities/match-ticket.entity';
 import { MatchSession } from './entities/match-session.entity';
+import { MatchInvite } from './entities/match-invite.entity';
 import { MATCH_INTERACTION_POLICY } from './ports/interaction-policy';
 import {
   MATCHING_REDIS,
@@ -22,18 +26,20 @@ import type Redis from 'ioredis';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([MatchTicket, MatchSession]),
+    TypeOrmModule.forFeature([MatchTicket, MatchSession, MatchInvite]),
     UserModule,
     EconomyModule,
     SafetyModule,
     NotificationModule,
   ],
-  controllers: [MatchingController],
+  controllers: [MatchingController, InviteController],
   providers: [
     MatchingService,
+    InviteService,
     MatchingMetrics,
     MatcherWorkerService,
     TicketSweeperService,
+    InviteSweeperService,
     matchingRedisProvider,
     // Safety module cung cấp implementation thật (docs/services/safety-service.md § 6) —
     // SafetyService.canPair thoả mãn MatchInteractionPolicy bằng structural typing

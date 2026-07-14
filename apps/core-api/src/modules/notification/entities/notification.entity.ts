@@ -14,6 +14,7 @@ export enum NotificationType {
   PostCommented = 'post_commented',
   StreakMilestone = 'streak_milestone',
   StreakAtRisk = 'streak_at_risk',
+  MatchInviteReceived = 'match_invite_received',
 }
 
 /**

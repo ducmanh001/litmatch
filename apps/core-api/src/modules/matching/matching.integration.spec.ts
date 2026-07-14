@@ -10,6 +10,7 @@ import { EconomyRefund1752100000000 } from '../../database/migrations/1752100000
 import { MatchingCore1752200000000 } from '../../database/migrations/1752200000000-matching-core';
 import { MatchingGenderPreference1752300000000 } from '../../database/migrations/1752300000000-matching-gender-preference';
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
+import { MatchInvite1754700000000 } from '../../database/migrations/1754700000000-match-invite';
 import { AuthIdentity } from '../auth/entities/auth-identity.entity';
 import { PhoneOtp } from '../auth/entities/phone-otp.entity';
 import { RefreshToken } from '../auth/entities/refresh-token.entity';
@@ -34,6 +35,8 @@ import { requeueIdempotencyKey } from './matching.constants';
 import { MatchingMetrics } from './matching.metrics';
 import { MatchingService } from './matching.service';
 import { MatchingErrors } from './matching.errors';
+import { InviteService } from './services/invite.service';
+import { InviteSweeperService } from './jobs/invite-sweeper.service';
 import { MatcherWorkerService } from './jobs/matcher-worker.service';
 import { TicketSweeperService } from './jobs/ticket-sweeper.service';
 import {
@@ -46,6 +49,7 @@ import {
   MatchSession,
   MatchSessionStatus,
 } from './entities/match-session.entity';
+import { MatchInvite, MatchInviteStatus } from './entities/match-invite.entity';
 import {
   MATCHING_ACTIVE_SHARDS_KEY,
   matchingShardKey,
@@ -96,6 +100,10 @@ const CONFIG: Record<string, unknown> = {
   MATCHING_TRUST_PENALTY_MAX_MS: 120_000,
   USER_DEFAULT_AVATAR_ID: 'default-01',
   AUTH_MIN_AGE: 18,
+  // timeout lớn để invite không tự "già" giữa lúc suite chạy chậm; test hết hạn tự backdate thủ công
+  MATCHING_INVITE_TTL_SECONDS: 3600,
+  MATCHING_INVITE_RATE_LIMIT_PER_HOUR: 10,
+  MATCHING_INVITE_SWEEPER_INTERVAL_MS: 60_000,
 };
 const configStub = {
   getOrThrow: (key: string) => {
@@ -118,11 +126,25 @@ d('Matching integration (Postgres + Redis thật)', () => {
   let worker: MatcherWorkerService;
   let workerB: MatcherWorkerService; // instance thứ 2 — giả lập 2 pod matcher song song
   let sweeper: TicketSweeperService;
+  let invite: InviteService;
+  let inviteSweeper: InviteSweeperService;
+  const notifications: Array<{
+    userId: string;
+    payload: Record<string, unknown>;
+  }> = [];
   /** Policy stub thay cho Safety module (chưa tồn tại ở M1) — set để giả lập block SAU khi enqueue. */
   const blockedPairs = new Set<string>();
   const policyStub: MatchInteractionPolicy = {
     canPair: async (a, b) =>
       !blockedPairs.has(`${a}|${b}`) && !blockedPairs.has(`${b}|${a}`),
+  };
+  /** Hidden-set stub thay cho Safety module — giả lập block/report ở tầng Discovery/Invite. */
+  const hiddenPairs = new Set<string>();
+  const safetyStub = {
+    getHiddenUserIds: async (userId: string) =>
+      [...hiddenPairs]
+        .filter((p) => p.startsWith(`${userId}|`))
+        .map((p) => p.split('|')[1]),
   };
 
   const auth = (userId: string): AuthenticatedUser => ({
@@ -204,6 +226,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
         OutboxEvent,
         MatchTicket,
         MatchSession,
+        MatchInvite,
       ],
       migrations: [
         InitAuthUser1751900000000,
@@ -213,6 +236,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
         MatchingCore1752200000000,
         MatchingGenderPreference1752300000000,
         Safety1752800000000,
+        MatchInvite1754700000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -240,9 +264,17 @@ d('Matching integration (Postgres + Redis thật)', () => {
       stubVerifier,
     );
     const userService = new UserService(ds.getRepository(User), configStub);
-    // Notification không phải trọng tâm suite này (test riêng ở notification.service.spec.ts) — stub no-op
+    // Notification không phải trọng tâm suite này (test riêng ở notification.service.spec.ts) — stub,
+    // chỉ ghi lại lời gọi `create` để test Invite xác nhận CÓ gửi thông báo, không assert nội dung push.
     const notificationStub = {
       createWithManager: async () => ({ id: 'notif-stub' }),
+      create: async (input: {
+        userId: string;
+        payload: Record<string, unknown>;
+      }) => {
+        notifications.push({ userId: input.userId, payload: input.payload });
+        return { id: `notif-${notifications.length}`, ...input };
+      },
       sendPush: async () => undefined,
     };
     matching = new MatchingService(
@@ -272,10 +304,23 @@ d('Matching integration (Postgres + Redis thật)', () => {
       metrics,
     );
     sweeper = new TicketSweeperService(ds, configStub, schedulerStub, redis);
+    invite = new InviteService(
+      ds,
+      ds.getRepository(MatchInvite),
+      userService,
+      safetyStub as never,
+      notificationStub as never,
+      policyStub,
+      redis,
+      configStub,
+    );
+    inviteSweeper = new InviteSweeperService(ds, configStub, schedulerStub);
   });
 
   beforeEach(async () => {
     blockedPairs.clear();
+    hiddenPairs.clear();
+    notifications.length = 0;
     await redis.flushdb(); // chỉ db 15 của suite này
   });
 
@@ -988,5 +1033,254 @@ d('Matching integration (Postgres + Redis thật)', () => {
       (await ds.getRepository(MatchTicket).findOneByOrFail({ id: requeued.id }))
         .status,
     ).toBe(MatchTicketStatus.Expired);
+  });
+
+  describe('Invite — CTA mời Voice/Soul Match (W4)', () => {
+    it('create → notification cho invitee; accept tạo trực tiếp ticket Matched + session PendingConfirm, bỏ qua hàng đợi', async () => {
+      const [a, b] = await Promise.all([
+        createUser('invite-a'),
+        createUser('invite-b'),
+      ]);
+
+      const created = await invite.createInvite(auth(a.id), {
+        inviteeUserId: b.id,
+        matchType: MatchType.Voice,
+      });
+      expect(created.status).toBe(MatchInviteStatus.Pending);
+      expect(notifications).toHaveLength(1);
+      expect(notifications[0]).toMatchObject({
+        userId: b.id,
+        payload: { inviteId: created.id, inviterUserId: a.id },
+      });
+
+      const {
+        invite: accepted,
+        session,
+        inviteeTicketId,
+      } = await invite.acceptInvite(auth(b.id), created.id);
+      expect(accepted.status).toBe(MatchInviteStatus.Accepted);
+      expect(session.status).toBe(MatchSessionStatus.PendingConfirm);
+
+      const tickets = await ds
+        .getRepository(MatchTicket)
+        .findBy({ userId: In([a.id, b.id]) });
+      expect(tickets).toHaveLength(2);
+      for (const t of tickets) {
+        expect(t.status).toBe(MatchTicketStatus.Matched);
+        expect(t.sessionId).toBe(session.id);
+      }
+      const inviteeTicket = tickets.find((t) => t.userId === b.id);
+      expect(inviteeTicket?.id).toBe(inviteeTicketId);
+
+      // Bỏ qua hàng đợi shard — không có gì trong Redis cho 2 ticket này
+      const shard = matchingShardKey(
+        MatchType.Voice,
+        'VN',
+        inviteeTicket?.ageBand ?? -999,
+      );
+      expect(await redis.zcard(shard)).toBe(0);
+
+      // Từ đây luồng y hệt auto-match: cả 2 confirmTicket() → Confirmed
+      const ticketA = tickets.find((t) => t.userId === a.id);
+      await matching.confirmTicket(auth(a.id), (ticketA as MatchTicket).id);
+      const confirmedB = await matching.confirmTicket(
+        auth(b.id),
+        inviteeTicketId,
+      );
+      expect(confirmedB.status).toBe(MatchTicketStatus.Confirmed);
+    });
+
+    it('mời người đang trong hidden-set (block/report) → INVITE_TARGET_UNAVAILABLE, không tạo invite', async () => {
+      const [a, b] = await Promise.all([
+        createUser('invite-hidden-a'),
+        createUser('invite-hidden-b'),
+      ]);
+      hiddenPairs.add(`${a.id}|${b.id}`);
+
+      await expect(
+        invite.createInvite(auth(a.id), {
+          inviteeUserId: b.id,
+          matchType: MatchType.Voice,
+        }),
+      ).rejects.toMatchObject({
+        code: MatchingErrors.INVITE_TARGET_UNAVAILABLE,
+      });
+      expect(
+        await ds
+          .getRepository(MatchInvite)
+          .countBy({ inviterUserId: a.id, inviteeUserId: b.id }),
+      ).toBe(0);
+    });
+
+    it('đã có 1 invite PENDING tới đúng người → INVITE_ALREADY_PENDING (unique DB)', async () => {
+      const [a, b] = await Promise.all([
+        createUser('invite-dup-a'),
+        createUser('invite-dup-b'),
+      ]);
+      await invite.createInvite(auth(a.id), {
+        inviteeUserId: b.id,
+        matchType: MatchType.Voice,
+      });
+      await expect(
+        invite.createInvite(auth(a.id), {
+          inviteeUserId: b.id,
+          matchType: MatchType.Soul,
+        }),
+      ).rejects.toMatchObject({
+        code: MatchingErrors.INVITE_ALREADY_PENDING,
+      });
+    });
+
+    it('block phát sinh SAU khi mời, TRƯỚC khi accept → tự Declined + INVITE_TARGET_UNAVAILABLE (re-check tại thời điểm accept)', async () => {
+      const [a, b] = await Promise.all([
+        createUser('invite-lateblock-a'),
+        createUser('invite-lateblock-b'),
+      ]);
+      const created = await invite.createInvite(auth(a.id), {
+        inviteeUserId: b.id,
+        matchType: MatchType.Voice,
+      });
+
+      blockedPairs.add(`${a.id}|${b.id}`);
+      await expect(
+        invite.acceptInvite(auth(b.id), created.id),
+      ).rejects.toMatchObject({
+        code: MatchingErrors.INVITE_TARGET_UNAVAILABLE,
+      });
+
+      const reloaded = await ds
+        .getRepository(MatchInvite)
+        .findOneByOrFail({ id: created.id });
+      expect(reloaded.status).toBe(MatchInviteStatus.Declined);
+    });
+
+    it('invitee đang bận (đã joinQueue riêng) lúc accept → INVITE_ACCEPT_USER_BUSY, invite giữ nguyên Pending để thử lại', async () => {
+      const [a, b] = await Promise.all([
+        createUser('invite-busy-a'),
+        createUser('invite-busy-b'),
+      ]);
+      const created = await invite.createInvite(auth(a.id), {
+        inviteeUserId: b.id,
+        matchType: MatchType.Voice,
+      });
+      // b tự vào queue auto-match riêng — chiếm slot UQ_ACTIVE_USER
+      await matching.joinQueue(
+        auth(b.id),
+        { matchType: MatchType.Voice },
+        'busy-key',
+      );
+
+      await expect(
+        invite.acceptInvite(auth(b.id), created.id),
+      ).rejects.toMatchObject({
+        code: MatchingErrors.INVITE_ACCEPT_USER_BUSY,
+      });
+
+      const reloaded = await ds
+        .getRepository(MatchInvite)
+        .findOneByOrFail({ id: created.id });
+      expect(reloaded.status).toBe(MatchInviteStatus.Pending); // rollback toàn bộ, không mất lượt
+
+      // b rời queue rồi accept lại → thành công
+      const bTicket = await ds
+        .getRepository(MatchTicket)
+        .findOneByOrFail({ userId: b.id, status: MatchTicketStatus.Queued });
+      await matching.cancelTicket(auth(b.id), bTicket.id);
+      const result = await invite.acceptInvite(auth(b.id), created.id);
+      expect(result.invite.status).toBe(MatchInviteStatus.Accepted);
+    });
+
+    it('accept lặp lại (retry mạng) → idempotent, trả lại ĐÚNG session/ticket cũ, không tạo đôi', async () => {
+      const [a, b] = await Promise.all([
+        createUser('invite-replay-a'),
+        createUser('invite-replay-b'),
+      ]);
+      const created = await invite.createInvite(auth(a.id), {
+        inviteeUserId: b.id,
+        matchType: MatchType.Voice,
+      });
+      const first = await invite.acceptInvite(auth(b.id), created.id);
+      const second = await invite.acceptInvite(auth(b.id), created.id);
+
+      expect(second.session.id).toBe(first.session.id);
+      expect(second.inviteeTicketId).toBe(first.inviteeTicketId);
+      expect(
+        await ds
+          .getRepository(MatchTicket)
+          .countBy({ userId: In([a.id, b.id]) }),
+      ).toBe(2); // không tạo ticket đôi
+    });
+
+    it('decline → Declined, accept sau đó bị chặn (INVITE_INVALID_TRANSITION)', async () => {
+      const [a, b] = await Promise.all([
+        createUser('invite-decline-a'),
+        createUser('invite-decline-b'),
+      ]);
+      const created = await invite.createInvite(auth(a.id), {
+        inviteeUserId: b.id,
+        matchType: MatchType.Voice,
+      });
+      const declined = await invite.declineInvite(auth(b.id), created.id);
+      expect(declined.status).toBe(MatchInviteStatus.Declined);
+
+      await expect(
+        invite.acceptInvite(auth(b.id), created.id),
+      ).rejects.toMatchObject({
+        code: MatchingErrors.INVITE_INVALID_TRANSITION,
+      });
+    });
+
+    it('cancel bởi inviter → Cancelled; invitee không cancel được (INVITE_FORBIDDEN)', async () => {
+      const [a, b] = await Promise.all([
+        createUser('invite-cancel-a'),
+        createUser('invite-cancel-b'),
+      ]);
+      const created = await invite.createInvite(auth(a.id), {
+        inviteeUserId: b.id,
+        matchType: MatchType.Voice,
+      });
+      await expect(
+        invite.cancelInvite(auth(b.id), created.id),
+      ).rejects.toMatchObject({
+        code: MatchingErrors.INVITE_FORBIDDEN,
+      });
+      const cancelled = await invite.cancelInvite(auth(a.id), created.id);
+      expect(cancelled.status).toBe(MatchInviteStatus.Cancelled);
+    });
+
+    it('sweeper chuyển Pending quá hạn → Expired; listReceivedInvites chỉ hiện Pending', async () => {
+      const [a, b] = await Promise.all([
+        createUser('invite-sweep-a'),
+        createUser('invite-sweep-b'),
+      ]);
+      const willExpire = await invite.createInvite(auth(a.id), {
+        inviteeUserId: b.id,
+        matchType: MatchType.Voice,
+      });
+      const stillPending = await invite.createInvite(auth(a.id), {
+        inviteeUserId: (await createUser('invite-sweep-c')).id,
+        matchType: MatchType.Voice,
+      });
+
+      await ds.query(
+        `UPDATE match_invites SET expires_at = now() - interval '1 hour' WHERE id = $1`,
+        [willExpire.id],
+      );
+      const swept = await inviteSweeper.runOnce();
+      expect(swept).toBeGreaterThanOrEqual(1);
+
+      const reloaded = await ds
+        .getRepository(MatchInvite)
+        .findOneByOrFail({ id: willExpire.id });
+      expect(reloaded.status).toBe(MatchInviteStatus.Expired);
+
+      const page = await invite.listReceivedInvites(auth(b.id), { limit: 20 });
+      expect(page.items.map((i) => i.id)).not.toContain(willExpire.id);
+
+      const stillPendingReloaded = await ds
+        .getRepository(MatchInvite)
+        .findOneByOrFail({ id: stillPending.id });
+      expect(stillPendingReloaded.status).toBe(MatchInviteStatus.Pending);
+    });
   });
 });

@@ -588,6 +588,215 @@
         "tags": ["matching"]
       }
     },
+    "/api/v1/matching/invites": {
+      "post": {
+        "operationId": "InviteController_createInvite",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateInviteDto" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/MatchInviteDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Mời Voice/Soul Match trực tiếp tới 1 user — 409 nếu đã có lời mời đang chờ tới đúng người này",
+        "tags": ["matching"]
+      },
+      "get": {
+        "operationId": "InviteController_listReceived",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MatchInvitesPageDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Danh sách lời mời ĐANG CHỜ phản hồi gửi tới chính mình",
+        "tags": ["matching"]
+      }
+    },
+    "/api/v1/matching/invites/{id}": {
+      "get": {
+        "operationId": "InviteController_getInvite",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/MatchInviteDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Chi tiết 1 lời mời — chỉ inviter/invitee xem được",
+        "tags": ["matching"]
+      }
+    },
+    "/api/v1/matching/invites/{id}/accept": {
+      "post": {
+        "operationId": "InviteController_accept",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MatchInviteAcceptedDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Chấp nhận lời mời — tạo trực tiếp ticket/session, gọi confirmTicket(inviteeTicketId) tiếp theo như auto-match",
+        "tags": ["matching"]
+      }
+    },
+    "/api/v1/matching/invites/{id}/decline": {
+      "post": {
+        "operationId": "InviteController_decline",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/MatchInviteDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Từ chối lời mời — chỉ invitee",
+        "tags": ["matching"]
+      }
+    },
+    "/api/v1/matching/invites/{id}/cancel": {
+      "post": {
+        "operationId": "InviteController_cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/MatchInviteDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Huỷ lời mời đã gửi — chỉ inviter, trước khi có phản hồi",
+        "tags": ["matching"]
+      }
+    },
     "/api/v1/safety/reports": {
       "post": {
         "operationId": "SafetyController_createReport",
@@ -3206,7 +3415,107 @@
           }
         },
         "security": [{ "bearer": [] }],
-        "summary": "Duyệt user theo tiêu chí gender/tuổi — loại block/report 2 chiều, chỉ xem profile (chưa có CTA khác). Filter khu vực thuộc về Nearby (W5), chưa có ở đây.",
+        "summary": "Duyệt user theo tiêu chí gender/tuổi — loại block/report 2 chiều, chỉ xem profile. Filter khu vực thuộc về Nearby.",
+        "tags": ["discovery"]
+      }
+    },
+    "/api/v1/discovery/nearby/location": {
+      "put": {
+        "operationId": "DiscoveryController_setLocation",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SetLocationDto" }
+            }
+          }
+        },
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Ghi vị trí hiện tại — server tự quantize ~500m, không lưu/trả toạ độ thô.",
+        "tags": ["discovery"]
+      }
+    },
+    "/api/v1/discovery/nearby/visible": {
+      "put": {
+        "operationId": "DiscoveryController_setVisible",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SetNearbyVisibleDto" }
+            }
+          }
+        },
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Bật/tắt hiển thị Nearby (opt-in, mặc định tắt) — tắt sẽ xoá vị trí đã lưu.",
+        "tags": ["discovery"]
+      }
+    },
+    "/api/v1/discovery/nearby": {
+      "get": {
+        "operationId": "DiscoveryController_nearby",
+        "parameters": [
+          {
+            "name": "gender",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["unknown", "male", "female", "other"]
+            }
+          },
+          {
+            "name": "ageMin",
+            "required": false,
+            "in": "query",
+            "schema": { "minimum": 18, "maximum": 100, "type": "number" }
+          },
+          {
+            "name": "ageMax",
+            "required": false,
+            "in": "query",
+            "schema": { "minimum": 18, "maximum": 100, "type": "number" }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/NearbyCardsPageDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Duyệt user gần vị trí đã bật Nearby (reciprocity) — chỉ trả distance bucket, không bao giờ trả km/toạ độ chính xác.",
         "tags": ["discovery"]
       }
     },
@@ -3637,6 +3946,73 @@
         },
         "required": ["transactionId", "replayed", "ticket"]
       },
+      "CreateInviteDto": {
+        "type": "object",
+        "properties": {
+          "inviteeUserId": {
+            "type": "string",
+            "description": "userId người được mời"
+          },
+          "matchType": {
+            "type": "string",
+            "enum": ["soul", "voice"],
+            "example": "voice"
+          }
+        },
+        "required": ["inviteeUserId", "matchType"]
+      },
+      "MatchInviteDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "inviterUserId": { "type": "string" },
+          "inviteeUserId": { "type": "string" },
+          "matchType": { "type": "string", "enum": ["soul", "voice"] },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "accepted", "declined", "expired", "cancelled"]
+          },
+          "expiresAt": { "format": "date-time", "type": "string" },
+          "sessionId": { "type": "string", "nullable": true },
+          "createdAt": { "format": "date-time", "type": "string" }
+        },
+        "required": [
+          "id",
+          "inviterUserId",
+          "inviteeUserId",
+          "matchType",
+          "status",
+          "expiresAt",
+          "sessionId",
+          "createdAt"
+        ]
+      },
+      "MatchInvitesPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/MatchInviteDto" }
+          },
+          "nextCursor": { "type": "string", "nullable": true }
+        },
+        "required": ["items", "nextCursor"]
+      },
+      "MatchInviteAcceptedDto": {
+        "type": "object",
+        "properties": {
+          "invite": { "$ref": "#/components/schemas/MatchInviteDto" },
+          "sessionId": {
+            "type": "string",
+            "description": "sessionId — cùng khái niệm session của auto-match"
+          },
+          "inviteeTicketId": {
+            "type": "string",
+            "description": "ticketId CỦA CHÍNH NGƯỜI ACCEPT — gọi confirmTicket(ticketId) như auto-match"
+          }
+        },
+        "required": ["invite", "sessionId", "inviteeTicketId"]
+      },
       "CreateReportDto": {
         "type": "object",
         "properties": {
@@ -3692,7 +4068,8 @@
               "post_liked",
               "post_commented",
               "streak_milestone",
-              "streak_at_risk"
+              "streak_at_risk",
+              "match_invite_received"
             ]
           },
           "payload": { "type": "object" },
@@ -4559,6 +4936,38 @@
           "items": {
             "type": "array",
             "items": { "$ref": "#/components/schemas/DiscoveryCardDto" }
+          },
+          "nextCursor": { "type": "string", "nullable": true }
+        },
+        "required": ["items", "nextCursor"]
+      },
+      "SetLocationDto": {
+        "type": "object",
+        "properties": {
+          "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+          "lon": { "type": "number", "minimum": -180, "maximum": 180 }
+        },
+        "required": ["lat", "lon"]
+      },
+      "SetNearbyVisibleDto": {
+        "type": "object",
+        "properties": { "visible": { "type": "boolean" } },
+        "required": ["visible"]
+      },
+      "NearbyCardDto": {
+        "type": "object",
+        "properties": {
+          "profile": { "$ref": "#/components/schemas/PublicProfileDto" },
+          "distanceBucket": { "type": "string" }
+        },
+        "required": ["profile", "distanceBucket"]
+      },
+      "NearbyCardsPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/NearbyCardDto" }
           },
           "nextCursor": { "type": "string", "nullable": true }
         },

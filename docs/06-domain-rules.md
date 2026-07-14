@@ -54,6 +54,24 @@
   schema). Reply story → DM qua `FriendService.sendMessage`, snapshot `mediaUrl` vào
   `Message.attachment` NGAY LÚC REPLY vì story chết sau TTL còn message sống mãi. Chi tiết:
   [services/feed-service.md § 8](./services/feed-service.md).
+- **Nearby (W4) — reciprocity 2 chiều bắt buộc + KHÔNG BAO GIỜ trả toạ độ/khoảng cách chính
+  xác**: chưa bật `nearbyVisible` (opt-in, mặc định tắt) thì không xem được nearby của người
+  khác. Toạ độ quantize ~500m NGAY LÚC GHI (không lưu toạ độ thô) + jitter tất định theo
+  cặp-theo-ngày trước khi tính bucket hiển thị — 3 lớp chống trilateration cộng với rate limit
+  ghi/đọc. Loại trừ banned/guest/block/report dùng LẠI đúng bộ luật của Discovery browse (không
+  tự chế luật riêng). Chi tiết: [services/discovery-service.md § 8](./services/discovery-service.md#nearby).
+- **CTA "mời Voice/Soul Match" (W4) — directed invite, KHÔNG phải friend-request flow mới**:
+  accept tạo trực tiếp `MatchTicket`/`MatchSession` bỏ qua hàng đợi shard, tái dùng nguyên
+  `canPair`/invariant 1-user-1-queue của auto-match; KHÔNG check gender preference (đây là
+  consent trực tiếp, khác anonymous auto-pairing). `canPair` phải re-check TẠI THỜI ĐIỂM accept
+  (block có thể phát sinh sau khi mời) — chuyển invite sang `declined` và COMMIT trước khi throw
+  lỗi (throw trong cùng transaction sẽ rollback luôn phần ghi `declined`, đã bắt qua test thật).
+  Rate limit chống spam mời ĐỐI XỨNG cho mọi user, không hard-code phân biệt giới tính trong
+  logic. Chi tiết: [services/matching-service.md § 9](./services/matching-service.md#invite).
+- **Voice Match KHÔNG tạo Friendship** — chỉ Soul Match có cơ chế like/reveal 2 chiều dẫn tới
+  Friendship; mời Voice Match (kể cả qua CTA invite) chỉ vào cuộc gọi tính phí theo phút, không
+  có đường nào khác tạo Friendship từ Voice. Chi tiết:
+  [services/matching-service.md § 9.3](./services/matching-service.md#invite).
 
 > Đây là danh sách tối thiểu, không đầy đủ. Khi phát hiện thêm 1 domain rule quan trọng trong lúc build, bổ sung vào file này ngay (không để trôi mất trong lịch sử chat).
 

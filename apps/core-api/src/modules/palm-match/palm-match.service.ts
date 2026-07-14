@@ -4,13 +4,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@litmatch/common-exceptions';
 import { Repository } from 'typeorm';
 
+import { fnv1aHash } from '../../common/hash/fnv1a';
 import { todayUtc } from '../../common/date/utc-date';
 import { palmMatchSeedInput } from './palm-match.constants';
 import {
   PalmMatchCategory,
   PalmReadingTemplate,
 } from './entities/palm-reading-template.entity';
-import { fnv1aHash } from './palm-match.hash';
 import { PalmMatchErrors } from './palm-match.errors';
 
 import type { CoreApiEnv } from '../../config/env.validation';

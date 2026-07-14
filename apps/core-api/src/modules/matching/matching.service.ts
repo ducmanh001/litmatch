@@ -13,10 +13,11 @@ import { publishRealtimeEvent } from '../../common/realtime/publish-realtime';
 import {
   DEFAULT_REGION,
   SPEEDUP_RATE_WINDOW_SECONDS,
-  UNKNOWN_AGE_BAND,
   UQ_ACTIVE_USER,
+  ageBandOf,
   joinIdempotencyKey,
   speedupIdempotencyKey,
+  trustPenaltyMsOf,
 } from './matching.constants';
 import { MatchingErrors } from './matching.errors';
 import {
@@ -482,20 +483,10 @@ export class MatchingService {
   }
 
   private ageBandOf(birthDate: string | null): number {
-    if (!birthDate) return UNKNOWN_AGE_BAND;
     const bandSize = this.config.getOrThrow('MATCHING_AGE_BAND_SIZE', {
       infer: true,
     });
-    const birth = new Date(birthDate);
-    if (Number.isNaN(birth.getTime())) return UNKNOWN_AGE_BAND;
-    const now = new Date();
-    let age = now.getFullYear() - birth.getFullYear();
-    const beforeBirthday =
-      now.getMonth() < birth.getMonth() ||
-      (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate());
-    if (beforeBirthday) age -= 1;
-    if (age < 0) return UNKNOWN_AGE_BAND;
-    return Math.floor(age / bandSize);
+    return ageBandOf(birthDate, bandSize);
   }
 
   /**
@@ -510,6 +501,6 @@ export class MatchingService {
     const maxMs = this.config.getOrThrow('MATCHING_TRUST_PENALTY_MAX_MS', {
       infer: true,
     });
-    return Math.min(maxMs, Math.max(0, 100 - trustScore) * perPoint);
+    return trustPenaltyMsOf(trustScore, perPoint, maxMs);
   }
 }

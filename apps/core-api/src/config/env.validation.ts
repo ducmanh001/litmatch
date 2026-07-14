@@ -106,6 +106,16 @@ export interface CoreApiEnv {
   PALM_MATCH_TARGET_NAME_MAX_LENGTH: number;
   DISCOVERY_GUEST_VISIBLE: boolean;
   DISCOVERY_AGE_BUCKETS: string;
+  DISCOVERY_LOCATION_QUANTIZE_DEGREES: number;
+  DISCOVERY_LOCATION_FRESHNESS_HOURS: number;
+  DISCOVERY_NEARBY_RADIUS_KM: number;
+  DISCOVERY_DISTANCE_BUCKETS_KM: string;
+  DISCOVERY_LOCATION_UPDATE_RATE_LIMIT_PER_HOUR: number;
+  DISCOVERY_NEARBY_QUERY_RATE_LIMIT_PER_HOUR: number;
+  DISCOVERY_NEARBY_CANDIDATE_CAP: number;
+  MATCHING_INVITE_TTL_SECONDS: number;
+  MATCHING_INVITE_RATE_LIMIT_PER_HOUR: number;
+  MATCHING_INVITE_SWEEPER_INTERVAL_MS: number;
   MOOD_STATUS_TTL_HOURS: number;
   STORY_TTL_HOURS: number;
   STORY_SWEEPER_INTERVAL_MS: number;
@@ -343,6 +353,44 @@ export const coreApiEnvSchema = Joi.object({
   // Mốc tuổi tăng dần, phân tách dấu phẩy — bucket rộng, không lộ tuổi chính xác (vd 18,25,31,41
   // → 18-24, 25-30, 31-40, 41+); parse mảng ở service, không parse ở Joi cho đơn giản
   DISCOVERY_AGE_BUCKETS: Joi.string().default('18,25,31,41'),
+
+  // Nearby — W4 (docs/services/discovery-service.md § Nearby)
+  // Lưới quantize toạ độ tại nguồn (độ) — ~0.0045° xấp xỉ 500m ở vĩ độ Việt Nam (10-21°N);
+  // xấp xỉ do 1° kinh độ co lại theo cos(lat), chấp nhận sai số cho MVP (không cần PostGIS)
+  DISCOVERY_LOCATION_QUANTIZE_DEGREES: Joi.number().positive().default(0.0045),
+  // Vị trí quá hạn tự biến mất khỏi nearby (derive khi đọc, không cron dọn `user_locations`)
+  DISCOVERY_LOCATION_FRESHNESS_HOURS: Joi.number().integer().min(1).default(24),
+  // Bán kính tìm kiếm tối đa — dùng làm bounding-box prefilter trước khi tính haversine chính xác
+  DISCOVERY_NEARBY_RADIUS_KM: Joi.number().positive().default(20),
+  // Mốc khoảng cách tăng dần (km), phân tách dấu phẩy — API chỉ trả bucket, không bao giờ trả
+  // khoảng cách/toạ độ chính xác (vd 1,3,5,10,20 → "<1km", "1-3km", ... "20km+")
+  DISCOVERY_DISTANCE_BUCKETS_KM: Joi.string().default('1,3,5,10,20'),
+  // Chống spam cập nhật vị trí (rò rỉ lộ trình di chuyển) — số lần ghi vị trí tối đa/giờ
+  DISCOVERY_LOCATION_UPDATE_RATE_LIMIT_PER_HOUR: Joi.number()
+    .integer()
+    .min(1)
+    .default(12),
+  // Chống dò quét trilateration bằng nhiều truy vấn liên tiếp — số lần truy vấn nearby tối đa/giờ
+  DISCOVERY_NEARBY_QUERY_RATE_LIMIT_PER_HOUR: Joi.number()
+    .integer()
+    .min(1)
+    .default(30),
+  // Trần an toàn số candidate lấy từ DB trước khi sort/paginate ở app (MVP: bounding-box btree +
+  // haversine, không PostGIS — xem docs/services/discovery-service.md § Nearby)
+  DISCOVERY_NEARBY_CANDIDATE_CAP: Joi.number().integer().min(1).default(500),
+
+  // CTA mời Voice/Soul Match — W4, mở rộng module `matching` (docs/services/matching-service.md § Invite)
+  // Invite hết hạn nếu người nhận không phản hồi — sweeper chuyển Pending → Expired
+  MATCHING_INVITE_TTL_SECONDS: Joi.number().integer().min(30).default(3_600),
+  // Đối xứng cho mọi user (không phân biệt giới tính trong logic) — chống spam mời hàng loạt
+  MATCHING_INVITE_RATE_LIMIT_PER_HOUR: Joi.number()
+    .integer()
+    .min(1)
+    .default(10),
+  MATCHING_INVITE_SWEEPER_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(10_000)
+    .default(60_000),
 
   // Mood — preset-only W1 (docs/services/mood-service.md)
   // TTL mood tính từ lúc set (snapshot vào expiresAt) — hết hạn = derive khi đọc, không cron

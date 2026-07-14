@@ -346,6 +346,92 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/matching/invites': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Danh sách lời mời ĐANG CHỜ phản hồi gửi tới chính mình */
+    get: operations['InviteController_listReceived'];
+    put?: never;
+    /** Mời Voice/Soul Match trực tiếp tới 1 user — 409 nếu đã có lời mời đang chờ tới đúng người này */
+    post: operations['InviteController_createInvite'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/matching/invites/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Chi tiết 1 lời mời — chỉ inviter/invitee xem được */
+    get: operations['InviteController_getInvite'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/matching/invites/{id}/accept': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Chấp nhận lời mời — tạo trực tiếp ticket/session, gọi confirmTicket(inviteeTicketId) tiếp theo như auto-match */
+    post: operations['InviteController_accept'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/matching/invites/{id}/decline': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Từ chối lời mời — chỉ invitee */
+    post: operations['InviteController_decline'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/matching/invites/{id}/cancel': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Huỷ lời mời đã gửi — chỉ inviter, trước khi có phản hồi */
+    post: operations['InviteController_cancel'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/safety/reports': {
     parameters: {
       query?: never;
@@ -1418,8 +1504,59 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Duyệt user theo tiêu chí gender/tuổi — loại block/report 2 chiều, chỉ xem profile (chưa có CTA khác). Filter khu vực thuộc về Nearby (W5), chưa có ở đây. */
+    /** Duyệt user theo tiêu chí gender/tuổi — loại block/report 2 chiều, chỉ xem profile. Filter khu vực thuộc về Nearby. */
     get: operations['DiscoveryController_browse'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/discovery/nearby/location': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Ghi vị trí hiện tại — server tự quantize ~500m, không lưu/trả toạ độ thô. */
+    put: operations['DiscoveryController_setLocation'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/discovery/nearby/visible': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Bật/tắt hiển thị Nearby (opt-in, mặc định tắt) — tắt sẽ xoá vị trí đã lưu. */
+    put: operations['DiscoveryController_setVisible'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/discovery/nearby': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Duyệt user gần vị trí đã bật Nearby (reciprocity) — chỉ trả distance bucket, không bao giờ trả km/toạ độ chính xác. */
+    get: operations['DiscoveryController_nearby'];
     put?: never;
     post?: never;
     delete?: never;
@@ -1654,6 +1791,40 @@ export interface components {
       replayed: boolean;
       ticket: components['schemas']['TicketDto'];
     };
+    CreateInviteDto: {
+      /** @description userId người được mời */
+      inviteeUserId: string;
+      /**
+       * @example voice
+       * @enum {string}
+       */
+      matchType: 'soul' | 'voice';
+    };
+    MatchInviteDto: {
+      id: string;
+      inviterUserId: string;
+      inviteeUserId: string;
+      /** @enum {string} */
+      matchType: 'soul' | 'voice';
+      /** @enum {string} */
+      status: 'pending' | 'accepted' | 'declined' | 'expired' | 'cancelled';
+      /** Format: date-time */
+      expiresAt: string;
+      sessionId: string | null;
+      /** Format: date-time */
+      createdAt: string;
+    };
+    MatchInvitesPageDto: {
+      items: components['schemas']['MatchInviteDto'][];
+      nextCursor: string | null;
+    };
+    MatchInviteAcceptedDto: {
+      invite: components['schemas']['MatchInviteDto'];
+      /** @description sessionId — cùng khái niệm session của auto-match */
+      sessionId: string;
+      /** @description ticketId CỦA CHÍNH NGƯỜI ACCEPT — gọi confirmTicket(ticketId) như auto-match */
+      inviteeTicketId: string;
+    };
     CreateReportDto: {
       targetUserId: string;
       /** @enum {string} */
@@ -1683,7 +1854,8 @@ export interface components {
         | 'post_liked'
         | 'post_commented'
         | 'streak_milestone'
-        | 'streak_at_risk';
+        | 'streak_at_risk'
+        | 'match_invite_received';
       payload: Record<string, never>;
       readAt: Record<string, never> | null;
       /** Format: date-time */
@@ -2108,6 +2280,21 @@ export interface components {
     };
     DiscoveryCardsPageDto: {
       items: components['schemas']['DiscoveryCardDto'][];
+      nextCursor: string | null;
+    };
+    SetLocationDto: {
+      lat: number;
+      lon: number;
+    };
+    SetNearbyVisibleDto: {
+      visible: boolean;
+    };
+    NearbyCardDto: {
+      profile: components['schemas']['PublicProfileDto'];
+      distanceBucket: string;
+    };
+    NearbyCardsPageDto: {
+      items: components['schemas']['NearbyCardDto'][];
       nextCursor: string | null;
     };
     MoodPresetDto: {
@@ -2666,6 +2853,167 @@ export interface operations {
         content: {
           'application/json': {
             data: components['schemas']['SpeedupResultDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  InviteController_listReceived: {
+    parameters: {
+      query?: {
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['MatchInvitesPageDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  InviteController_createInvite: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateInviteDto'];
+      };
+    };
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['MatchInviteDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  InviteController_getInvite: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['MatchInviteDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  InviteController_accept: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['MatchInviteAcceptedDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  InviteController_decline: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['MatchInviteDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  InviteController_cancel: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['MatchInviteDto'];
             meta?: {
               [key: string]: unknown;
             };
@@ -4642,6 +4990,80 @@ export interface operations {
         content: {
           'application/json': {
             data: components['schemas']['DiscoveryCardsPageDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  DiscoveryController_setLocation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SetLocationDto'];
+      };
+    };
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  DiscoveryController_setVisible: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SetNearbyVisibleDto'];
+      };
+    };
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  DiscoveryController_nearby: {
+    parameters: {
+      query?: {
+        gender?: 'unknown' | 'male' | 'female' | 'other';
+        ageMin?: number;
+        ageMax?: number;
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['NearbyCardsPageDto'];
             meta?: {
               [key: string]: unknown;
             };

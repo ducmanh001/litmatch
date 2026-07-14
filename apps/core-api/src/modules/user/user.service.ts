@@ -227,6 +227,46 @@ export class UserService {
     }));
   }
 
+  /**
+   * Duyệt user active theo 1 tập userId cho trước (Nearby — Discovery đã tự lọc candidate qua
+   * `user_locations`/`discovery_settings` của chính module Discovery, chỉ cần User module áp
+   * lại cùng bộ luật status/gender/age/guest như `browsePage`, không tự chế luật riêng ở
+   * Discovery — tránh 2 nơi định nghĩa "user hợp lệ để hiện" khác nhau).
+   */
+  async findActiveByIds(
+    userIds: string[],
+    filter: Pick<
+      UserBrowseFilter,
+      'gender' | 'ageMin' | 'ageMax' | 'excludeGuests'
+    >,
+  ): Promise<User[]> {
+    if (userIds.length === 0) return [];
+
+    const qb = this.userRepo
+      .createQueryBuilder('u')
+      .where('u.status = :status', { status: UserStatus.Active })
+      .andWhere('u.id IN (:...userIds)', { userIds });
+
+    if (filter.gender) {
+      qb.andWhere('u.gender = :gender', { gender: filter.gender });
+    }
+    if (filter.ageMin !== undefined) {
+      qb.andWhere('u.birthDate IS NOT NULL AND u.birthDate <= :maxBirthDate', {
+        maxBirthDate: this.ageCutoffDate(filter.ageMin),
+      });
+    }
+    if (filter.ageMax !== undefined) {
+      qb.andWhere('u.birthDate IS NOT NULL AND u.birthDate > :minBirthDate', {
+        minBirthDate: this.ageCutoffDate(filter.ageMax + 1),
+      });
+    }
+    if (filter.excludeGuests) {
+      qb.andWhere('u.isGuest = false');
+    }
+
+    return qb.getMany();
+  }
+
   /** Ngày cutoff cho "tuổi >= years" — birthDate <= cutoff (cùng công thức `assertBirthDateAllowed`). */
   private ageCutoffDate(years: number): string {
     const now = new Date();

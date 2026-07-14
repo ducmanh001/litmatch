@@ -283,6 +283,49 @@
   matching/chat, chỉ ảnh hưởng 1 tính năng duyệt), nhưng rate-limit/pattern-detect cho report vẫn
   phải nằm ở Safety module, không phải việc của Discovery.
 
+**Nearby (W4) — mở rộng Discovery bằng vị trí thật, rủi ro privacy cao hơn hẳn browse thường**
+
+- **Lưu toạ độ thô dù chỉ tạm thời** — quantize PHẢI xảy ra ở tầng service TRƯỚC khi entity chạm
+  DB, không phải "quantize lúc đọc" (khi đó bản ghi DB đã là toạ độ thật, backup/leak DB vẫn lộ vị
+  trí chính xác). Kiểm tra bằng cách hỏi: nếu dump thẳng bảng `user_locations` ra, có suy ra được
+  toạ độ thật hơn độ phân giải quantize không?
+- **API trả số km/toạ độ chính xác ở bất kỳ field nào** (kể cả field debug/internal) — chỉ được
+  phép trả `distanceBucket` dạng chuỗi. Field như `distanceKm: number` dù không hiển thị lên UI vẫn
+  là lỗi vì client có thể đọc trực tiếp response.
+- **Thiếu jitter, chỉ dựa vào quantize** — quantize alone vẫn cho phép trilateration nếu attacker
+  query từ nhiều vị trí giả lập rồi lấy giao 3 vòng tròn khoảng cách; jitter tất định theo
+  cặp-theo-ngày là lớp phòng thủ thứ 2 bắt buộc, không phải optional.
+- **Reciprocity 1 chiều** — chỉ check "target có opt-in không" mà quên check "chính người gọi API
+  có opt-in không" (hoặc ngược lại) → lộ vị trí người dùng chưa từng đồng ý hiển thị.
+- **Tắt `nearbyVisible` không xoá vị trí cũ** — dữ liệu vị trí "mồ côi" (owner đã tắt tính năng)
+  vẫn còn trong DB là rủi ro privacy/compliance âm thầm; tắt phải xoá `user_locations` CÙNG
+  transaction với việc set cờ tắt, không phải job dọn rác chạy sau.
+- **Rate limit ghi vị trí thiếu** — không giới hạn tần suất update vị trí cho phép suy ra **lộ
+  trình di chuyển** theo thời gian thực (rủi ro nghiêm trọng hơn nhiều so với 1 điểm vị trí tĩnh),
+  khác hẳn mức độ rủi ro của rate-limit thông thường.
+
+**Matching Invite (CTA "mời Voice/Soul Match", W4) — directed invite tái dùng pipeline matching, dễ sai vì tưởng chỉ là ghi thêm 1 bảng**
+
+- **Ghi transition trạng thái rồi throw lỗi trong CÙNG transaction** — nếu 1 nhánh cần "chuyển
+  invite sang trạng thái X rồi báo lỗi cho client", throw trong transaction đang ghi X sẽ ROLLBACK
+  luôn phần ghi đó (Postgres transaction semantics); phải tách 2 transaction, transaction ghi
+  trạng thái COMMIT xong mới throw ở tầng gọi. Lỗi này chỉ phát hiện được qua test thật (assert
+  trạng thái DB sau khi gọi API lỗi), không phải review đọc mắt.
+- **Tạo ticket trực tiếp bỏ qua invariant 1-user-1-queue** — accept invite tạo `MatchTicket` mới
+  không qua `joinQueue()` bình thường; nếu quên tái dùng ĐÚNG partial unique index
+  (`uq_match_tickets_active_user`) khi insert, 1 user có thể vừa nằm trong invite vừa nằm trong
+  hàng đợi auto-match cùng lúc — phá bất biến đã có từ Matching gốc.
+- **Không re-check `canPair`/block tại thời điểm accept** — chỉ check lúc TẠO invite là không đủ;
+  khoảng thời gian chờ invitee phản hồi có thể đủ để 1 bên block bên kia, phải verify lại đúng lúc
+  accept (§ 10.0.C), không tin trạng thái lúc tạo còn đúng.
+- **Rate-limit chống spam mời phân biệt cứng theo giới tính trong code** — dù mục tiêu là bảo vệ
+  nhóm dễ bị spam hơn, hard-code ngưỡng khác nhau theo giới tính là quyết định sản phẩm/pháp lý
+  nhạy cảm, không phải quyết định kỹ thuật tự ý; mặc định dùng ngưỡng đối xứng, theo dõi số liệu
+  rồi quyết định sau nếu cần siết thêm.
+- **Nhầm invite là friend-request** — không tự thêm bảng/flow "kết bạn" song song; invite chỉ là
+  lối vào có chủ đích cho `MatchTicket`/`MatchSession` đã có, Friendship vẫn chỉ tạo qua đúng 1
+  con đường hiện có (double-like sau Soul Match).
+
 **Mood status — append-only đơn giản nhưng dễ sai vì tưởng cần state machine**
 
 - **Update/xoá dòng `mood_status_events` thay vì insert dòng mới** — set/clear PHẢI append-only
