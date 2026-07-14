@@ -41,9 +41,13 @@ export function useFeed() {
 export function useCreatePost() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: CreatePostDto) => {
+    mutationFn: async (input: {
+      body: CreatePostDto;
+      idempotencyKey: string;
+    }) => {
       const res = await apiClient.POST('/api/v1/feed/posts', {
-        body: input,
+        params: { header: { 'Idempotency-Key': input.idempotencyKey } },
+        body: input.body,
       });
       return res.data?.data;
     },

@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 
 import { useCreatePost } from '../api';
 import { createPostSchema } from '../create-post-schema';
+import { useIdempotencyKey } from '../../../shared/idempotency/use-idempotency-key';
 
 import type { CreatePostForm } from '../create-post-schema';
 
@@ -15,6 +16,7 @@ export function PostComposer() {
     defaultValues: { content: '', imageUrl: '' },
   });
   const createPost = useCreatePost();
+  const { key: idempotencyKey, resetKey } = useIdempotencyKey();
 
   const message =
     form.formState.errors.content?.message ??
@@ -28,13 +30,19 @@ export function PostComposer() {
   const onSubmit = form.handleSubmit((values) => {
     createPost.mutate(
       {
-        content: values.content === '' ? undefined : values.content,
-        imageUrl: values.imageUrl === '' ? undefined : values.imageUrl,
+        body: {
+          content: values.content === '' ? undefined : values.content,
+          imageUrl: values.imageUrl === '' ? undefined : values.imageUrl,
+          // Composer chưa có UI chọn audience — giữ hành vi hiện tại (luôn public).
+          audience: 'public',
+        },
+        idempotencyKey,
       },
       {
         onSuccess: (posted) => {
           if (posted === undefined) return;
           form.reset({ content: '', imageUrl: '' });
+          resetKey();
         },
       },
     );
