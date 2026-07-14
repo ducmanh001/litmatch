@@ -44,6 +44,10 @@ export const RealtimeEvents = {
   CallEnded: 'call.ended',
   /** Message mới trong chat 1-1 lâu dài giữa 2 bạn (khác chat ẩn danh Soul Match). */
   FriendMessage: 'friend.message',
+  /** Streak vừa tăng và chạm mốc milestone (STREAK_MILESTONE_DAYS) — không bắn cho ngày thường. */
+  FriendStreakIncreased: 'friend.streak.increased',
+  /** Cron cảnh báo streak sắp mất (chưa nhắn hôm nay, qua mốc giờ cảnh báo) — không ghi streak. */
+  FriendStreakAtRisk: 'friend.streak.at_risk',
   /** Member vào/ra Party Room (fanout cho member active còn lại trong phòng). */
   PartyMemberJoined: 'party.member.joined',
   PartyMemberLeft: 'party.member.left',
@@ -123,6 +127,15 @@ export interface FriendMessageEventData {
   senderUserId: string;
   content: string;
   sentAt: string;
+}
+
+export interface FriendStreakIncreasedEventData {
+  conversationId: string;
+  currentStreak: number;
+}
+
+export interface FriendStreakAtRiskEventData {
+  conversationId: string;
 }
 
 export interface PartyMemberJoinedEventData {

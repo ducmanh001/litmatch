@@ -214,6 +214,10 @@ d('Soul Match integration (Postgres thật)', () => {
     friendService = new FriendService(
       ds.getRepository(Friendship),
       conversationService,
+      // stub — suite này chỉ dùng ensureFriendship/areFriends, không gọi sendMessage/streak
+      {
+        recordActivity: async () => ({ streak: {}, milestoneHit: null }),
+      } as never,
       // stub — guard block test riêng ở suite friend.integration, suite này không chạm block
       { isBlocked: async () => false } as never,
       notificationStub as never,

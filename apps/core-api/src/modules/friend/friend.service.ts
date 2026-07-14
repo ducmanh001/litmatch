@@ -12,16 +12,19 @@ import { Friendship, FriendshipSource } from './entities/friendship.entity';
 import { Message } from './entities/message.entity';
 import { FRIEND_REDIS } from './redis/friend-redis.provider';
 import { ConversationService } from './services/conversation.service';
+import { StreakService } from './services/streak.service';
 import { NotificationService, NotificationType } from '../notification';
 import { SafetyService } from '../safety';
 
 import type {
   CursorPage,
   FriendMessageEventData,
+  FriendStreakIncreasedEventData,
   RealtimeEnvelope,
 } from '@litmatch/common-dtos';
 import type Redis from 'ioredis';
 import type { CoreApiEnv } from '../../config/env.validation';
+import type { DisplayStreak } from './services/streak.service';
 
 /** Kết quả tạo quan hệ — `created=false` nghĩa là cặp đã là bạn từ trước (idempotent). */
 export interface EnsureFriendshipResult {
@@ -48,6 +51,7 @@ export class FriendService {
     @InjectRepository(Friendship)
     private readonly friendshipRepo: Repository<Friendship>,
     private readonly conversationService: ConversationService,
+    private readonly streakService: StreakService,
     private readonly safetyService: SafetyService,
     private readonly notificationService: NotificationService,
     private readonly config: ConfigService<CoreApiEnv, true>,
@@ -163,6 +167,15 @@ export class FriendService {
     return conversation;
   }
 
+  /** Streak hiện tại — derive khi đọc, guard membership (docs/10 § 10.1.D). */
+  async getStreak(
+    userId: string,
+    conversationId: string,
+  ): Promise<DisplayStreak | null> {
+    await this.getConversationForMember(userId, conversationId);
+    return this.streakService.getDisplayStreak(conversationId);
+  }
+
   /** List message theo cursor — guard membership (docs/10 § 10.1.D). */
   async listMessages(
     userId: string,
@@ -221,6 +234,35 @@ export class FriendService {
       content,
       idempotencyKey,
     );
+
+    // On-write streak (docs/services/streak-service.md) — tự transaction riêng, khoá row streak
+    // FOR UPDATE bên trong. Idempotent tự nhiên: replay message (retry idempotency) gọi lại đây
+    // không tăng streak lần 2 (guard lastConfirmedDate !== today ở StreakService).
+    try {
+      const { milestoneHit } = await this.streakService.recordActivity(
+        conversation,
+        userId,
+      );
+      if (milestoneHit !== null) {
+        const streakEnvelope: RealtimeEnvelope<FriendStreakIncreasedEventData> =
+          {
+            event: RealtimeEvents.FriendStreakIncreased,
+            data: { conversationId, currentStreak: milestoneHit },
+          };
+        await Promise.all(
+          [userId, partnerId].map((uid) =>
+            publishRealtimeEvent(this.redis, this.logger, uid, streakEnvelope),
+          ),
+        );
+      }
+    } catch (err) {
+      // Streak là phụ — message đã gửi thành công không được rollback vì lỗi tính streak.
+      this.logger.error(
+        `Tính streak cho conversation ${conversationId} lỗi (bỏ qua, message vẫn gửi thành công): ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
 
     const envelope: RealtimeEnvelope<FriendMessageEventData> = {
       event: RealtimeEvents.FriendMessage,

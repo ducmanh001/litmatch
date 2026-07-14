@@ -926,6 +926,39 @@
         "tags": ["friends"]
       }
     },
+    "/api/v1/conversations/{id}/streak": {
+      "get": {
+        "operationId": "FriendController_getStreak",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/StreakDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Streak trò chuyện — derive khi đọc, chưa có streak nào trả current=0",
+        "tags": ["friends"]
+      }
+    },
     "/api/v1/soul-match/sessions/{id}": {
       "get": {
         "operationId": "SoulMatchController_getSession",
@@ -3417,7 +3450,9 @@
               "friend_message",
               "gift_received",
               "post_liked",
-              "post_commented"
+              "post_commented",
+              "streak_milestone",
+              "streak_at_risk"
             ]
           },
           "payload": { "type": "object" },
@@ -3498,6 +3533,15 @@
           }
         },
         "required": ["items", "meta"]
+      },
+      "StreakDto": {
+        "type": "object",
+        "properties": {
+          "current": { "type": "number" },
+          "longest": { "type": "number" },
+          "isActive": { "type": "boolean" }
+        },
+        "required": ["current", "longest", "isActive"]
       },
       "SendFriendMessageDto": {
         "type": "object",

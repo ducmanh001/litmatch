@@ -25,6 +25,7 @@ import {
   MessageDto,
   MessagesPageDto,
   SendFriendMessageDto,
+  StreakDto,
 } from './dto/friend.dtos';
 import { ApiCursorPageQuery } from '../../common/decorators/cursor-page-query.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -103,6 +104,20 @@ export class FriendController {
       items: page.items.map((m) => MessageDto.from(m)),
       meta: page.meta,
     };
+  }
+
+  @Get('conversations/:id/streak')
+  @ApiOperation({
+    summary:
+      'Streak trò chuyện — derive khi đọc, chưa có streak nào trả current=0',
+  })
+  @ApiOkResponse({ type: StreakDto })
+  async getStreak(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<StreakDto> {
+    const streak = await this.friendService.getStreak(user.userId, id);
+    return streak ? StreakDto.from(streak) : StreakDto.empty();
   }
 
   @Post('conversations/:id/messages')

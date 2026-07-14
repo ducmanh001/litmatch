@@ -8,6 +8,7 @@ import { PublicProfileDto } from '../../user';
 import type { CursorPageMeta } from '@litmatch/common-dtos';
 import type { FriendListEntry } from '../friend.service';
 import type { Message } from '../entities/message.entity';
+import type { DisplayStreak } from '../services/streak.service';
 
 export class SendFriendMessageDto {
   @ApiProperty({ maxLength: MESSAGE_CONTENT_HARD_CAP })
@@ -46,6 +47,29 @@ export class ConversationDto {
   static from(id: string): ConversationDto {
     const dto = new ConversationDto();
     dto.id = id;
+    return dto;
+  }
+}
+
+export class StreakDto {
+  @ApiProperty() current!: number;
+  @ApiProperty() longest!: number;
+  @ApiProperty() isActive!: boolean;
+
+  static from(streak: DisplayStreak): StreakDto {
+    const dto = new StreakDto();
+    dto.current = streak.current;
+    dto.longest = streak.longest;
+    dto.isActive = streak.isActive;
+    return dto;
+  }
+
+  /** Chưa từng có message nào cả 2 chiều cùng ngày — chưa có streak. */
+  static empty(): StreakDto {
+    const dto = new StreakDto();
+    dto.current = 0;
+    dto.longest = 0;
+    dto.isActive = false;
     return dto;
   }
 }

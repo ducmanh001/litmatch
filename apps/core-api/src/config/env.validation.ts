@@ -72,6 +72,9 @@ export interface CoreApiEnv {
   SOUL_RATING_WINDOW_SECONDS: number;
   SOUL_CHAT_MESSAGE_MAX_LENGTH: number;
   FRIEND_MESSAGE_MAX_LENGTH: number;
+  STREAK_MILESTONE_DAYS: string;
+  STREAK_WARNING_HOURS: number;
+  STREAK_WARNING_CHECK_INTERVAL_MS: number;
   LIVEKIT_URL: string;
   LIVEKIT_REGION_URLS: string;
   LIVEKIT_API_URL: string;
@@ -235,6 +238,16 @@ export const coreApiEnvSchema = Joi.object({
     .min(1)
     .max(4000)
     .default(2000),
+
+  // Streak trò chuyện (docs/services/streak-service.md, mở rộng module friend — W2)
+  // Mốc ngày chạm milestone (realtime + notification), phân tách dấu phẩy, tăng dần
+  STREAK_MILESTONE_DAYS: Joi.string().default('3,7,14,30,50,100'),
+  // Giờ UTC trong ngày (0-23) — cron chỉ cảnh báo SAU mốc giờ này (gần hết ngày mà chưa nhắn)
+  STREAK_WARNING_HOURS: Joi.number().integer().min(0).max(23).default(20),
+  STREAK_WARNING_CHECK_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(60_000)
+    .default(3_600_000),
 
   // Calling — Giai đoạn 2 (docs/services/calling-service.md § 6); key/secret khớp livekit.yaml
   LIVEKIT_URL: Joi.string()

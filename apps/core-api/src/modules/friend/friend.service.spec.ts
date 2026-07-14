@@ -12,6 +12,7 @@ import type { EntityManager, Repository } from 'typeorm';
 import type { CoreApiEnv } from '../../config/env.validation';
 import type { Friendship } from './entities/friendship.entity';
 import type { ConversationService } from './services/conversation.service';
+import type { StreakService } from './services/streak.service';
 
 const USER_A = 'user-a';
 const USER_B = 'user-b';
@@ -44,6 +45,7 @@ describe('FriendService (unit — mock repo/conversationService/redis)', () => {
   };
   let safetyService: { isBlocked: jest.Mock };
   let notificationService: { create: jest.Mock; sendPush: jest.Mock };
+  let streakService: { recordActivity: jest.Mock };
   let redis: { publish: jest.Mock };
   let service: FriendService;
 
@@ -74,10 +76,17 @@ describe('FriendService (unit — mock repo/conversationService/redis)', () => {
         meta: { nextCursor: null },
       })),
     };
+    streakService = {
+      recordActivity: jest.fn(async () => ({
+        streak: {},
+        milestoneHit: null,
+      })),
+    };
     redis = { publish: jest.fn(async () => 1) };
     service = new FriendService(
       friendshipRepo as unknown as Repository<Friendship>,
       conversationService as unknown as ConversationService,
+      streakService as unknown as StreakService,
       safetyService as never,
       notificationService as never,
       configStub,
@@ -270,6 +279,40 @@ describe('FriendService (unit — mock repo/conversationService/redis)', () => {
         expect(c.envelope.data.senderUserId).toBe(USER_A); // không che, khác Soul Match
         expect(c.envelope.data.content).toBe('xin chào');
       }
+    });
+
+    it('gọi streakService.recordActivity SAU KHI message đã persist', async () => {
+      await service.sendMessage(USER_A, 'conv-1', 'hi', 'k1');
+      expect(streakService.recordActivity).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'conv-1' }),
+        USER_A,
+      );
+    });
+
+    it('trúng milestone → publish thêm friend.streak.increased cho CẢ 2', async () => {
+      streakService.recordActivity.mockResolvedValue({
+        streak: {},
+        milestoneHit: 7,
+      });
+      await service.sendMessage(USER_A, 'conv-1', 'hi', 'k1');
+      // 2 lần cho friend.message + 2 lần cho friend.streak.increased
+      expect(redis.publish).toHaveBeenCalledTimes(4);
+      const streakCalls = redis.publish.mock.calls
+        .map(([, raw]: [string, string]) => JSON.parse(raw))
+        .filter(
+          (e: { event: string }) => e.event === 'friend.streak.increased',
+        );
+      expect(streakCalls).toHaveLength(2);
+      expect(streakCalls[0].data).toEqual({
+        conversationId: 'conv-1',
+        currentStreak: 7,
+      });
+    });
+
+    it('streakService lỗi → KHÔNG làm fail message đã gửi thành công', async () => {
+      streakService.recordActivity.mockRejectedValue(new Error('boom'));
+      const message = await service.sendMessage(USER_A, 'conv-1', 'hi', 'k1');
+      expect(message.id).toBe('msg-1');
     });
   });
 });

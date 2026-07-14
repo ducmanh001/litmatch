@@ -485,6 +485,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/conversations/{id}/streak': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Streak trò chuyện — derive khi đọc, chưa có streak nào trả current=0 */
+    get: operations['FriendController_getStreak'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/soul-match/sessions/{id}': {
     parameters: {
       query?: never;
@@ -1562,7 +1579,9 @@ export interface components {
         | 'friend_message'
         | 'gift_received'
         | 'post_liked'
-        | 'post_commented';
+        | 'post_commented'
+        | 'streak_milestone'
+        | 'streak_at_risk';
       payload: Record<string, never>;
       readAt: Record<string, never> | null;
       /** Format: date-time */
@@ -1599,6 +1618,11 @@ export interface components {
       meta: {
         nextCursor?: string | null;
       };
+    };
+    StreakDto: {
+      current: number;
+      longest: number;
+      isActive: boolean;
     };
     SendFriendMessageDto: {
       content: string;
@@ -2777,6 +2801,32 @@ export interface operations {
         content: {
           'application/json': {
             data: components['schemas']['MessageDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  FriendController_getStreak: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['StreakDto'];
             meta?: {
               [key: string]: unknown;
             };

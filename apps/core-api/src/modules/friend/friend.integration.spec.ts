@@ -8,13 +8,16 @@ import { MatchingGenderPreference1752300000000 } from '../../database/migrations
 import { SoulMatch1752400000000 } from '../../database/migrations/1752400000000-soul-match';
 import { FriendChat1752600000000 } from '../../database/migrations/1752600000000-friend-chat';
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
+import { ConversationStreak1754200000000 } from '../../database/migrations/1754200000000-conversation-streak';
 
 import { FriendService } from './friend.service';
 import { FriendErrors } from './friend.errors';
 import { Conversation } from './entities/conversation.entity';
+import { ConversationStreak } from './entities/conversation-streak.entity';
 import { Friendship, FriendshipSource } from './entities/friendship.entity';
 import { Message } from './entities/message.entity';
 import { ConversationService } from './services/conversation.service';
+import { StreakService, addDaysUtc, todayUtc } from './services/streak.service';
 import { MatchSession } from '../matching/entities/match-session.entity';
 import { MatchTicket } from '../matching/entities/match-ticket.entity';
 import { SafetyService } from '../safety';
@@ -52,6 +55,9 @@ const CONFIG: Record<string, unknown> = {
   SAFETY_TRUST_PENALTY_PER_REPORT: 5,
   SAFETY_TRUST_PENALTY_DAILY_CAP: 20,
   SAFETY_TRUST_SCORE_FLOOR: 0,
+  STREAK_MILESTONE_DAYS: '3,7,14',
+  // 0 — test không phụ thuộc giờ thật lúc CI chạy (findConversationsNeedingWarning so UTC hour)
+  STREAK_WARNING_HOURS: 0,
 };
 const configStub = {
   getOrThrow: (key: string) => {
@@ -64,6 +70,7 @@ d('Friend integration (Postgres thật)', () => {
   let ds: DataSource;
   let friend: FriendService;
   let safety: SafetyService;
+  let streakService: StreakService;
 
   async function createUser(nickname: string): Promise<User> {
     const repo = ds.getRepository(User);
@@ -82,6 +89,22 @@ d('Friend integration (Postgres thật)', () => {
   async function ensureFriendship(a: User, b: User): Promise<void> {
     await ds.transaction((manager) =>
       friend.ensureFriendship(manager, a.id, b.id, FriendshipSource.SoulMatch),
+    );
+  }
+
+  /** Giả lập "đã N ngày kể từ lần confirm gần nhất" — set thẳng cột date (pattern party-room grace test). */
+  async function setLastConfirmedDaysAgo(
+    conversationId: string,
+    daysAgo: number,
+  ): Promise<void> {
+    const date = addDaysUtc(todayUtc(), -daysAgo);
+    await ds.getRepository(ConversationStreak).update(
+      { conversationId },
+      {
+        lastConfirmedDate: date,
+        userLowLastActiveDate: date,
+        userHighLastActiveDate: date,
+      },
     );
   }
 
@@ -116,6 +139,7 @@ d('Friend integration (Postgres thật)', () => {
         Friendship,
         Conversation,
         Message,
+        ConversationStreak,
         Report,
         Block,
       ],
@@ -127,6 +151,7 @@ d('Friend integration (Postgres thật)', () => {
         SoulMatch1752400000000,
         FriendChat1752600000000,
         Safety1752800000000,
+        ConversationStreak1754200000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -138,6 +163,11 @@ d('Friend integration (Postgres thật)', () => {
     const conversationService = new ConversationService(
       ds.getRepository(Conversation),
       ds.getRepository(Message),
+    );
+    streakService = new StreakService(
+      ds,
+      ds.getRepository(ConversationStreak),
+      configStub,
     );
     // Stub tối thiểu — chỉ cần không throw để SafetyService.block() validate target tồn tại;
     // các method khác của UserService không liên quan tới guard block ở suite này.
@@ -154,6 +184,7 @@ d('Friend integration (Postgres thật)', () => {
     friend = new FriendService(
       ds.getRepository(Friendship),
       conversationService,
+      streakService,
       safety,
       // Notification không phải trọng tâm suite này (test riêng ở notification.service.spec.ts) — stub no-op
       {
@@ -355,5 +386,144 @@ d('Friend integration (Postgres thật)', () => {
     expect(
       list.find((e) => e.partnerId === oldFriend.id)?.lastMessageAt,
     ).toBeNull();
+  });
+
+  describe('streak (docs/services/streak-service.md)', () => {
+    it('chỉ 1 chiều nhắn trong ngày → chưa có streak', async () => {
+      const [a, b] = await Promise.all([
+        createUser('st-one-a'),
+        createUser('st-one-b'),
+      ]);
+      await ensureFriendship(a, b);
+      const conv = await friend.getConversationWithFriend(a.id, b.id);
+      await friend.sendMessage(a.id, conv.id, 'hi', 'k1');
+
+      const streak = await friend.getStreak(a.id, conv.id);
+      expect(streak).toEqual({ current: 0, longest: 0, isActive: false });
+    });
+
+    it('cả 2 chiều nhắn trong ngày lần đầu → streak = 1', async () => {
+      const [a, b] = await Promise.all([
+        createUser('st-both-a'),
+        createUser('st-both-b'),
+      ]);
+      await ensureFriendship(a, b);
+      const conv = await friend.getConversationWithFriend(a.id, b.id);
+      await friend.sendMessage(a.id, conv.id, 'hi', 'k1');
+      await friend.sendMessage(b.id, conv.id, 'chao', 'k2');
+
+      const streak = await friend.getStreak(a.id, conv.id);
+      expect(streak).toEqual({ current: 1, longest: 1, isActive: true });
+    });
+
+    it('gọi sendMessage nhiều lần trong CÙNG ngày không tăng streak thêm lần nào', async () => {
+      const [a, b] = await Promise.all([
+        createUser('st-dup-a'),
+        createUser('st-dup-b'),
+      ]);
+      await ensureFriendship(a, b);
+      const conv = await friend.getConversationWithFriend(a.id, b.id);
+      await friend.sendMessage(a.id, conv.id, 'hi', 'k1');
+      await friend.sendMessage(b.id, conv.id, 'chao', 'k2');
+      await friend.sendMessage(a.id, conv.id, 'lai la toi', 'k3');
+      await friend.sendMessage(b.id, conv.id, 'lai la toi 2', 'k4');
+
+      const streak = await friend.getStreak(a.id, conv.id);
+      expect(streak?.current).toBe(1);
+    });
+
+    it('gapDays=1 (hôm qua đã confirm) → tăng liên tục ngày kế tiếp', async () => {
+      const [a, b] = await Promise.all([
+        createUser('st-gap1-a'),
+        createUser('st-gap1-b'),
+      ]);
+      await ensureFriendship(a, b);
+      const conv = await friend.getConversationWithFriend(a.id, b.id);
+      await friend.sendMessage(a.id, conv.id, 'hi', 'k1');
+      await friend.sendMessage(b.id, conv.id, 'chao', 'k2');
+      await setLastConfirmedDaysAgo(conv.id, 1);
+
+      await friend.sendMessage(a.id, conv.id, 'hom nay', 'k3');
+      await friend.sendMessage(b.id, conv.id, 'hom nay 2', 'k4');
+
+      const streak = await friend.getStreak(a.id, conv.id);
+      expect(streak).toEqual({ current: 2, longest: 2, isActive: true });
+    });
+
+    it('gapDays=2 (lỡ đúng 1 ngày) → grace cứu, streak vẫn tăng thay vì reset', async () => {
+      const [a, b] = await Promise.all([
+        createUser('st-gap2-a'),
+        createUser('st-gap2-b'),
+      ]);
+      await ensureFriendship(a, b);
+      const conv = await friend.getConversationWithFriend(a.id, b.id);
+      await friend.sendMessage(a.id, conv.id, 'hi', 'k1');
+      await friend.sendMessage(b.id, conv.id, 'chao', 'k2');
+      await setLastConfirmedDaysAgo(conv.id, 2);
+
+      await friend.sendMessage(a.id, conv.id, 'sau grace', 'k3');
+      await friend.sendMessage(b.id, conv.id, 'sau grace 2', 'k4');
+
+      const streak = await friend.getStreak(a.id, conv.id);
+      expect(streak).toEqual({ current: 2, longest: 2, isActive: true }); // KHÔNG reset về 1
+      const row = await ds
+        .getRepository(ConversationStreak)
+        .findOneByOrFail({ conversationId: conv.id });
+      expect(row.graceUsedForDate).not.toBeNull();
+    });
+
+    it('gapDays>=3 (lỡ từ 2 ngày trở lên) → reset về 1, longest giữ nguyên', async () => {
+      const [a, b] = await Promise.all([
+        createUser('st-gap3-a'),
+        createUser('st-gap3-b'),
+      ]);
+      await ensureFriendship(a, b);
+      const conv = await friend.getConversationWithFriend(a.id, b.id);
+      await friend.sendMessage(a.id, conv.id, 'hi', 'k1');
+      await friend.sendMessage(b.id, conv.id, 'chao', 'k2');
+      await setLastConfirmedDaysAgo(conv.id, 4);
+
+      await friend.sendMessage(a.id, conv.id, 'sau reset', 'k3');
+      await friend.sendMessage(b.id, conv.id, 'sau reset 2', 'k4');
+
+      const streak = await friend.getStreak(a.id, conv.id);
+      expect(streak).toEqual({ current: 1, longest: 1, isActive: true });
+    });
+
+    it('RACE: 2 bên gửi message gần như đồng thời lúc streak lần đầu chạm mốc cùng ngày → vẫn đúng 1 lần tăng', async () => {
+      const [a, b] = await Promise.all([
+        createUser('st-race-a'),
+        createUser('st-race-b'),
+      ]);
+      await ensureFriendship(a, b);
+      const conv = await friend.getConversationWithFriend(a.id, b.id);
+
+      await Promise.all([
+        friend.sendMessage(a.id, conv.id, 'hi', 'k1'),
+        friend.sendMessage(b.id, conv.id, 'chao', 'k2'),
+      ]);
+
+      const streak = await friend.getStreak(a.id, conv.id);
+      expect(streak?.current).toBe(1); // không phải 2 — lock FOR UPDATE serialize đúng
+    });
+
+    it('findConversationsNeedingWarning: chỉ báo conversation gapDays=1, không báo trùng trong ngày', async () => {
+      const [a, b] = await Promise.all([
+        createUser('st-warn-a'),
+        createUser('st-warn-b'),
+      ]);
+      await ensureFriendship(a, b);
+      const conv = await friend.getConversationWithFriend(a.id, b.id);
+      await friend.sendMessage(a.id, conv.id, 'hi', 'k1');
+      await friend.sendMessage(b.id, conv.id, 'chao', 'k2');
+      await setLastConfirmedDaysAgo(conv.id, 1); // hôm qua đã confirm, hôm nay chưa
+
+      const needing = await streakService.findConversationsNeedingWarning();
+      expect(needing).toContain(conv.id);
+
+      await streakService.markWarningSent(conv.id);
+      const afterMark = await streakService.findConversationsNeedingWarning();
+      expect(afterMark).not.toContain(conv.id); // đã cảnh báo hôm nay — không báo lại
+    });
   });
 });

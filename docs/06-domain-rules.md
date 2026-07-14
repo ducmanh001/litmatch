@@ -37,6 +37,12 @@
   nếu có block active (khác Discovery — không xét report, xem
   [10-code-review-checklist.md § Mood](./10-code-review-checklist.md)). Chi tiết:
   [services/mood-service.md](./services/mood-service.md).
+- **Streak chỉ tăng khi CẢ 2 CHIỀU nhắn trong cùng 1 ngày UTC (server clock)** — không dùng
+  timezone local của client (chống spoof + tránh mơ hồ giữa 2 user khác múi giờ). 1 ngày lỡ được
+  grace cứu tự động (không phải tài nguyên giới hạn dùng-hết); lỡ từ 2 ngày trở lên reset về 1.
+  Block chặn `sendMessage` sẵn → streak tự ngừng, không cần logic riêng. Thưởng diamond theo
+  milestone (nếu làm sau) bắt buộc qua `LedgerEntry`, không cộng thẳng. Chi tiết:
+  [services/streak-service.md](./services/streak-service.md).
 
 > Đây là danh sách tối thiểu, không đầy đủ. Khi phát hiện thêm 1 domain rule quan trọng trong lúc build, bổ sung vào file này ngay (không để trôi mất trong lịch sử chat).
 

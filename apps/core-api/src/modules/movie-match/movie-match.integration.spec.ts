@@ -165,6 +165,10 @@ d('Movie Match integration (Postgres thật)', () => {
     friend = new FriendService(
       ds.getRepository(Friendship),
       conversationService,
+      // stub — suite này chỉ dùng ensureFriendship/areFriends, không gọi sendMessage/streak
+      {
+        recordActivity: async () => ({ streak: {}, milestoneHit: null }),
+      } as never,
       safety,
       {
         create: async () => ({ id: 'notif-stub' }),

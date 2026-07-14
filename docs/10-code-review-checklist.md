@@ -153,6 +153,28 @@
 - **Quên guard membership theo conversationId**: endpoint list/send message không check caller có phải 1 trong 2 user của conversation → IDOR đọc/gửi vào chat của người khác (docs/10 § 10.1.D); conversation không tồn tại và caller không phải thành viên phải trả **cùng 1 mã lỗi**, không làm oracle dò conversationId
 - **Coi block/report là guard bắt buộc trước khi Safety module tồn tại**: thêm 1 policy interface/bảng giả để "chừa chỗ" cho tính năng chưa có bảng dữ liệu thật là over-engineering (docs/11) — ghi rõ thành nợ kỹ thuật tường minh trong docs thay vì tự chế guard rỗng
 
+**Streak trò chuyện — race 2 bên gửi gần như đồng thời, dễ sai vì tưởng chỉ cần đếm ngày**
+
+- **Check-rồi-tăng không atomic**: đọc `lastActiveDate` 2 bên rồi mới UPDATE `currentStreak` ở
+  câu lệnh riêng → 2 request gần như đồng thời (2 bên cùng gửi tin lúc streak vừa đủ điều kiện
+  tăng) đọc cùng state cũ, tăng đôi hoặc mất lượt tăng. Phải khoá row `conversation_streaks` bằng
+  `SELECT ... FOR UPDATE` TRONG transaction rồi mới quyết định tăng/reset (test RACE thật bằng
+  `Promise.all` 2 `sendMessage` gần như đồng thời, không chỉ mock).
+- **Dùng timezone local của client để tính "ngày"** — phá bất biến docs/06; ngày luôn derive từ
+  giờ SERVER tại thời điểm xử lý request, không tin timezone/ngày client tự gửi lên.
+- **Cron tính/ghi `currentStreak`** thay vì chỉ on-write — cron chỉ được đọc + cảnh báo, ghi
+  `lastWarningSentAt`; bất kỳ chỗ nào khác ngoài `recordActivity` (on-write trong `sendMessage`)
+  mà ghi `currentStreak`/`longestStreak` là sai kiến trúc của tính năng này.
+- **Thiếu guard "cả 2 chiều"** — chỉ cần 1 bên nhắn liên tục nhiều tin trong ngày mà tăng streak
+  là bug; phải xác nhận CẢ 2 `lastActiveDate` đều là hôm nay trước khi tăng (chat rỗng 1 chiều
+  không được tính).
+- **Grace cho gap từ 2 ngày trở lên** hoặc **grace làm tăng streak nhiều hơn 1 lần cho cùng 1
+  khoảng trống** — grace chỉ áp dụng đúng `gapDays == 2` (lỡ đúng 1 ngày), gap lớn hơn luôn reset;
+  gọi lại `recordActivity` nhiều lần cùng ngày không được tăng thêm (guard
+  `lastConfirmedDate != today`).
+- **Milestone cộng thẳng diamond không qua ledger** — nếu sau này thưởng tiền theo mốc, bắt buộc
+  đi qua `LedgerEntry` double-entry (docs/03 § 3.8.C), không tự cộng field số dư.
+
 **Calling/Signaling/SFU — nơi dễ leak tài nguyên**
 
 - Không giải phóng room trên SFU khi call kết thúc → leak resource, media server quá tải dần
