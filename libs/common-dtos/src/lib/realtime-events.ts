@@ -51,6 +51,14 @@ export const RealtimeEvents = {
   PartyRoleChanged: 'party.role.changed',
   /** Phòng đóng (host rời, hết member, sweeper) — client phải rời UI phòng. */
   PartyRoomClosed: 'party.room.closed',
+  /**
+   * Host rớt kết nối NGOÀI Ý MUỐN (webhook participant_left) — phòng CHƯA đóng, đang trong grace
+   * chờ host tự kết nối lại (party-room-service.md § 4). Chỉ gợi ý refetch sớm, REST poll
+   * `GET /party/rooms/:id` (field `hostDisconnectedAt`) vẫn là nguồn sự thật.
+   */
+  PartyHostDisconnected: 'party.host.disconnected',
+  /** Host đã kết nối lại trong lúc grace — huỷ lịch đóng phòng. */
+  PartyHostReconnected: 'party.host.reconnected',
   /** Quà tặng trong Party Room — publish SAU khi transaction tiền commit (docs/10 § Gift). */
   GiftSent: 'gift.sent',
   /** Movie Match: phiên xem chung mới được tạo (docs/services/movie-match-service.md § 5). */
@@ -139,6 +147,14 @@ export interface PartyRoomClosedEventData {
   roomId: string;
   /** host_left | empty | swept (party-room-service.md § 4). */
   reason: string;
+}
+
+export interface PartyHostDisconnectedEventData {
+  roomId: string;
+}
+
+export interface PartyHostReconnectedEventData {
+  roomId: string;
 }
 
 export interface GiftSentEventData {

@@ -88,6 +88,8 @@ export interface CoreApiEnv {
   PARTY_SWEEPER_INTERVAL_MS: number;
   PARTY_STALE_ROOM_SECONDS: number;
   PARTY_TITLE_MAX_LENGTH: number;
+  PARTY_HOST_DISCONNECT_GRACE_SECONDS: number;
+  PARTY_HOST_GRACE_CHECK_INTERVAL_MS: number;
   GIFT_POINTS_RATE_PERCENT: number;
   SAFETY_REMATCH_COOLDOWN_DAYS: number;
   SAFETY_REPORT_COOLDOWN_DAYS: number;
@@ -268,6 +270,18 @@ export const coreApiEnvSchema = Joi.object({
   // Phòng active mà không còn member active quá N giây → sweeper đóng (webhook có thể rớt)
   PARTY_STALE_ROOM_SECONDS: Joi.number().integer().min(30).default(120),
   PARTY_TITLE_MAX_LENGTH: Joi.number().integer().min(1).max(500).default(100),
+  // Host rớt kết nối NGOÀI Ý MUỐN (webhook participant_left) — chờ tự kết nối lại trước khi
+  // đóng phòng (host_left); REST leave chủ động vẫn đóng ngay, không qua grace này (§ 4)
+  PARTY_HOST_DISCONNECT_GRACE_SECONDS: Joi.number()
+    .integer()
+    .min(5)
+    .default(15),
+  // Tần suất quét phòng hết grace — tách riêng PARTY_SWEEPER_INTERVAL_MS (30s, backstop khác
+  // hẳn: phòng vô chủ hoàn toàn) vì grace ngắn hơn nhiều, cần phát hiện sát giờ hơn
+  PARTY_HOST_GRACE_CHECK_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(1000)
+    .default(5000),
 
   // Gift — Giai đoạn 3 (docs/services/gift-service.md); tỉ lệ quy đổi DIA→PTS cho người nhận,
   // PHẢI < 100 (docs/06 § Gift: nhận 1:1 biến gift thành kênh chuyển tiền ngang hàng)

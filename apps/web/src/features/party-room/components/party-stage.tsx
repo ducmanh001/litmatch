@@ -20,6 +20,8 @@ import { MemberList } from './member-list';
 import { PartyAudio } from './party-audio';
 
 import type {
+  PartyHostDisconnectedEventData,
+  PartyHostReconnectedEventData,
   PartyMemberJoinedEventData,
   PartyMemberLeftEventData,
   PartyRoleChangedEventData,
@@ -83,6 +85,18 @@ export function PartyStage({ roomId }: { roomId: string }) {
         media.disconnect();
         invalidateDetail();
       }
+    },
+  );
+  useRealtimeEvent<PartyHostDisconnectedEventData>(
+    RealtimeEvents.PartyHostDisconnected,
+    (data) => {
+      if (data.roomId === roomId) invalidateDetail();
+    },
+  );
+  useRealtimeEvent<PartyHostReconnectedEventData>(
+    RealtimeEvents.PartyHostReconnected,
+    (data) => {
+      if (data.roomId === roomId) invalidateDetail();
     },
   );
 
@@ -165,9 +179,13 @@ export function PartyStage({ roomId }: { roomId: string }) {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">{room.title}</h1>
+      {room.hostDisconnectedAt !== null && (
+        <p className="text-sm text-muted-foreground">
+          Host đang mất kết nối — phòng sẽ tự đóng nếu host không quay lại kịp.
+        </p>
+      )}
       {media.room !== null && <PartyAudio room={media.room} />}
-      {(media.roomDisconnected ||
-        (media.room === null && mediaErrorMessage !== undefined)) && (
+      {(media.roomDisconnected || mediaErrorMessage !== undefined) && (
         <div className="space-y-2">
           <p role="alert" className="text-sm text-destructive">
             {media.roomDisconnected
