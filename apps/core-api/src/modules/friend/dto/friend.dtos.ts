@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, Length } from 'class-validator';
 
 import { ApiCursorPageMeta } from '../../../common/decorators/cursor-page-query.decorator';
@@ -18,11 +18,19 @@ export class SendFriendMessageDto {
   content!: string;
 }
 
+export class MessageAttachmentDto {
+  @ApiProperty() kind!: string;
+  @ApiProperty({ type: 'object', additionalProperties: true })
+  payload!: Record<string, unknown>;
+}
+
 export class MessageDto {
   @ApiProperty() id!: string;
   @ApiProperty() conversationId!: string;
   @ApiProperty() senderUserId!: string;
   @ApiProperty() content!: string;
+  @ApiPropertyOptional({ type: MessageAttachmentDto, nullable: true })
+  attachment!: MessageAttachmentDto | null;
   @ApiProperty() sentAt!: Date;
 
   static from(message: Message): MessageDto {
@@ -31,6 +39,7 @@ export class MessageDto {
     dto.conversationId = message.conversationId;
     dto.senderUserId = message.senderUserId;
     dto.content = message.content;
+    dto.attachment = message.attachment;
     dto.sentAt = message.createdAt;
     return dto;
   }

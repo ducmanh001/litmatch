@@ -4,14 +4,15 @@ import { buildCursorPage, decodeCursor } from '@litmatch/common-dtos';
 import { DomainException } from '@litmatch/common-exceptions';
 import { Repository } from 'typeorm';
 
+import { canonicalPair } from '../../../common/entities/canonical-pair';
 import { isUniqueViolation } from '../../../database/postgres-errors';
 import { messageIdempotencyKey } from '../friend.constants';
 import { FriendErrors } from '../friend.errors';
-import { canonicalPair } from '../friend.service';
 import { Conversation } from '../entities/conversation.entity';
 import { Message } from '../entities/message.entity';
 
 import type { CursorPage } from '@litmatch/common-dtos';
+import type { MessageAttachment } from '../entities/message.entity';
 
 /**
  * Sub-service nghiệp vụ Conversation/Message (docs/05 § 5.3 services/) — chỉ FriendService
@@ -40,12 +41,17 @@ export class ConversationService {
     return this.conversationRepo.findOneBy({ id });
   }
 
-  /** Gửi message — Idempotency-Key bắt buộc, unique DB (docs/05 § 5.10). */
+  /**
+   * Gửi message — Idempotency-Key bắt buộc, unique DB (docs/05 § 5.10). `attachment` CHỈ set bởi
+   * lời gọi nội bộ qua DI (vd Feed reply-to-story) — HTTP controller không có field này trong
+   * DTO nên client không tự gắn attachment tuỳ ý được (docs/10 § 10.0.B).
+   */
   async sendMessage(
     conversation: Conversation,
     senderUserId: string,
     content: string,
     idempotencyKey: string,
+    attachment: MessageAttachment | null = null,
   ): Promise<Message> {
     const prefixedKey = messageIdempotencyKey(senderUserId, idempotencyKey);
     let message: Message;
@@ -56,6 +62,7 @@ export class ConversationService {
           senderUserId,
           content,
           idempotencyKey: prefixedKey,
+          attachment,
         }),
       );
     } catch (err) {

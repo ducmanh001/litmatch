@@ -43,6 +43,17 @@
   Block chặn `sendMessage` sẵn → streak tự ngừng, không cần logic riêng. Thưởng diamond theo
   milestone (nếu làm sau) bắt buộc qua `LedgerEntry`, không cộng thẳng. Chi tiết:
   [services/streak-service.md](./services/streak-service.md).
+- **`Post.audience` (`public|friends|only_me`) enforce ở GUARD TRUNG TÂM (`getPostOrThrow`)**,
+  không phải riêng lẻ từng endpoint — đi thẳng URL `GET /posts/:id` không phải cách né audience;
+  vi phạm audience/block/không tồn tại trả CÙNG mã lỗi (oracle-safe). Feed toàn cục chỉ hiện
+  `public` — `friends`/`only_me` chỉ qua profile timeline. Chi tiết:
+  [services/feed-service.md § 7](./services/feed-service.md).
+- **Story ephemeral — hết hạn = filter lúc đọc là nguồn sự thật, sweeper chỉ dọn rác**: KHÔNG
+  soft-delete/audit như `Post` (hard-delete khi sweeper chạy, cascade `story_views`). Ring stories
+  chỉ bạn bè + mình (quyết định chốt, không phân phối rộng hơn dù `audience=public` tồn tại trên
+  schema). Reply story → DM qua `FriendService.sendMessage`, snapshot `mediaUrl` vào
+  `Message.attachment` NGAY LÚC REPLY vì story chết sau TTL còn message sống mãi. Chi tiết:
+  [services/feed-service.md § 8](./services/feed-service.md).
 
 > Đây là danh sách tối thiểu, không đầy đủ. Khi phát hiện thêm 1 domain rule quan trọng trong lúc build, bổ sung vào file này ngay (không để trôi mất trong lịch sử chat).
 

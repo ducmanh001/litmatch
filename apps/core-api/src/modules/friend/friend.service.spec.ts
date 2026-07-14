@@ -1,6 +1,7 @@
 import { DomainException } from '@litmatch/common-exceptions';
 
-import { FriendService, canonicalPair } from './friend.service';
+import { canonicalPair } from '../../common/entities/canonical-pair';
+import { FriendService } from './friend.service';
 import { FriendErrors } from './friend.errors';
 import { Conversation } from './entities/conversation.entity';
 import { Message } from './entities/message.entity';

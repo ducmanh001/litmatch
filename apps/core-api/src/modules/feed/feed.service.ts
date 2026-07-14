@@ -5,10 +5,12 @@ import { DomainException } from '@litmatch/common-exceptions';
 import { DataSource, Repository } from 'typeorm';
 
 import { isUniqueViolation } from '../../database/postgres-errors';
+import { feedPostIdempotencyKey } from './feed.constants';
 import { FeedErrors } from './feed.errors';
 import { Comment } from './entities/comment.entity';
-import { Post } from './entities/post.entity';
+import { Post, PostAudience } from './entities/post.entity';
 import { Reaction } from './entities/reaction.entity';
+import { FriendService } from '../friend';
 import { NotificationService, NotificationType } from '../notification';
 import { SafetyService } from '../safety';
 
@@ -31,10 +33,20 @@ export class FeedService {
     @InjectRepository(Reaction)
     private readonly reactionRepo: Repository<Reaction>,
     private readonly safetyService: SafetyService,
+    private readonly friendService: FriendService,
     private readonly notificationService: NotificationService,
   ) {}
 
-  async createPost(user: AuthenticatedUser, dto: CreatePostDto): Promise<Post> {
+  /**
+   * Idempotent theo `idempotencyKey` (unique DB, prefix theo user — retry mất mạng không tạo
+   * đôi bài, docs/05 § 5.10). `audience` mặc định `public` — không đổi hành vi cũ khi client chưa
+   * gửi field này.
+   */
+  async createPost(
+    user: AuthenticatedUser,
+    dto: CreatePostDto,
+    idempotencyKey: string,
+  ): Promise<Post> {
     this.assertNotGuest(user);
     if (!dto.content && !dto.imageUrl) {
       throw new DomainException(
@@ -43,16 +55,41 @@ export class FeedService {
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
-    return this.postRepo.save(
-      this.postRepo.create({
-        authorUserId: user.userId,
-        content: dto.content ?? null,
-        imageUrl: dto.imageUrl ?? null,
-      }),
-    );
+    const key = feedPostIdempotencyKey(user.userId, idempotencyKey);
+    try {
+      return await this.postRepo.save(
+        this.postRepo.create({
+          authorUserId: user.userId,
+          content: dto.content ?? null,
+          imageUrl: dto.imageUrl ?? null,
+          audience: dto.audience ?? PostAudience.Public,
+          idempotencyKey: key,
+        }),
+      );
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      const existing = await this.postRepo.findOneBy({ idempotencyKey: key });
+      if (
+        existing &&
+        existing.content === (dto.content ?? null) &&
+        existing.imageUrl === (dto.imageUrl ?? null)
+      ) {
+        return existing; // replay — client retry sau timeout mạng
+      }
+      throw new DomainException(
+        FeedErrors.POST_IDEMPOTENCY_CONFLICT,
+        'Idempotency-Key đã dùng cho 1 bài viết khác nội dung',
+        HttpStatus.CONFLICT,
+      );
+    }
   }
 
-  /** Feed công khai toàn cục — loại tác giả đang block/bị block (docs/services/feed-service.md § 3). */
+  /**
+   * Feed công khai toàn cục — CHỈ `audience=public` (docs/services/feed-service.md § 7): trộn
+   * `friends`/`only_me` vào đây sẽ bắt buộc check quan hệ bạn cho từng tác giả trên 1 trang lớn,
+   * quá tốn cho 1 feed discovery; xem bài `friends`/`only_me` qua `listUserTimeline` (1 tác giả).
+   * Loại tác giả đang block/bị block (docs/services/feed-service.md § 3).
+   */
   async listFeed(
     user: AuthenticatedUser,
     query: CursorPageQueryDto,
@@ -61,7 +98,8 @@ export class FeedService {
 
     const qb = this.postRepo
       .createQueryBuilder('p')
-      .where('p.deletedAt IS NULL');
+      .where('p.deletedAt IS NULL')
+      .andWhere('p.audience = :audience', { audience: PostAudience.Public });
 
     if (query.cursor) {
       const payload = decodeCursor<{ seq?: unknown }>(query.cursor);
@@ -90,8 +128,64 @@ export class FeedService {
   }
 
   /**
-   * Tồn tại + chưa xoá + không nằm trong quan hệ block với caller — CÙNG mã lỗi cho cả 3 trường
-   * hợp (không tồn tại/đã xoá/bị block) để không lộ ai block ai (docs/services/feed-service.md § 3).
+   * Profile timeline — bài của 1 tác giả theo góc nhìn `viewer` (docs/services/feed-service.md
+   * § 7): tự xem mình → mọi audience; là bạn → `public`+`friends`; người lạ → chỉ `public`.
+   * Block 2 chiều → trả rỗng (KHÔNG throw) — nhìn giống hệt "tác giả chưa đăng bài nào", cùng
+   * tinh thần oracle-safe (không lộ trạng thái block qua hành vi khác với 0 bài viết).
+   */
+  async listUserTimeline(
+    viewer: AuthenticatedUser,
+    authorUserId: string,
+    query: CursorPageQueryDto,
+  ): Promise<CursorPage<Post>> {
+    const isSelf = viewer.userId === authorUserId;
+    if (!isSelf) {
+      const blocked =
+        (await this.safetyService.isBlocked(viewer.userId, authorUserId)) ||
+        (await this.safetyService.isBlocked(authorUserId, viewer.userId));
+      if (blocked) return { items: [], meta: { nextCursor: null } };
+    }
+    const audiences = isSelf
+      ? [PostAudience.Public, PostAudience.Friends, PostAudience.OnlyMe]
+      : (await this.friendService.areFriends(viewer.userId, authorUserId))
+        ? [PostAudience.Public, PostAudience.Friends]
+        : [PostAudience.Public];
+
+    const qb = this.postRepo
+      .createQueryBuilder('p')
+      .where('p.authorUserId = :authorUserId', { authorUserId })
+      .andWhere('p.deletedAt IS NULL')
+      .andWhere('p.audience IN (:...audiences)', { audiences });
+
+    if (query.cursor) {
+      const payload = decodeCursor<{ seq?: unknown }>(query.cursor);
+      if (
+        !payload ||
+        typeof payload.seq !== 'string' ||
+        !/^\d+$/.test(payload.seq)
+      ) {
+        throw new DomainException(
+          FeedErrors.CURSOR_INVALID,
+          'Cursor không hợp lệ',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      qb.andWhere('p.seq < :afterSeq', { afterSeq: payload.seq });
+    }
+
+    const rows = await qb
+      .orderBy('p.seq', 'DESC')
+      .take(query.limit + 1)
+      .getMany();
+    return buildCursorPage(rows, query.limit, (last) => ({ seq: last.seq }));
+  }
+
+  /**
+   * Tồn tại + chưa xoá + không block + đúng audience cho phép `user` xem — CÙNG mã lỗi cho MỌI
+   * trường hợp vi phạm (không tồn tại/đã xoá/bị block/audience không cho phép) để không lộ lý do
+   * thật (docs/services/feed-service.md § 3, § 7). Guard trung tâm — dùng lại ở comment/like/xoá
+   * nên audience tự động chặn luôn tương tác với bài `friends`/`only_me` mà `user` không được xem,
+   * không phải chặn riêng lẻ ở từng action.
    */
   async getPostOrThrow(user: AuthenticatedUser, postId: string): Promise<Post> {
     const post = await this.postRepo.findOneBy({ id: postId });
@@ -106,7 +200,14 @@ export class FeedService {
       const blocked =
         (await this.safetyService.isBlocked(user.userId, post.authorUserId)) ||
         (await this.safetyService.isBlocked(post.authorUserId, user.userId));
-      if (blocked) {
+      const audienceAllowed =
+        post.audience === PostAudience.Public ||
+        (post.audience === PostAudience.Friends &&
+          (await this.friendService.areFriends(
+            user.userId,
+            post.authorUserId,
+          )));
+      if (blocked || !audienceAllowed) {
         throw new DomainException(
           FeedErrors.POST_NOT_FOUND,
           'Không tìm thấy bài viết',

@@ -58,3 +58,55 @@ mutable/cặp, unique DB `(postId, userId)` chặn double-like race; unlike xoá
 - Không có Follow/personalized feed, không fanout, không edit post/comment (chỉ tạo + xoá mềm).
 - Không upload ảnh thật (chỉ nhận URL) — thêm storage/CDN là quyết định hạ tầng riêng.
 - Không cascade lọc block cho toàn bộ commenter trong thread (§ 3).
+
+## 7. Audience per-post (W3 — docs/plans/2026-07-14-plan-6-tinh-nang-social-discovery.md § 3.3)
+
+`Post.audience` (`public | friends | only_me`, mặc định `public` — không đổi hành vi bài cũ):
+
+- **Feed toàn cục (`GET /feed/posts`) CHỈ hiện `audience=public`** — trộn `friends`/`only_me` vào
+  đây bắt buộc check quan hệ bạn cho TỪNG tác giả trên 1 trang lớn, quá tốn cho 1 feed discovery.
+- **Profile timeline (`GET /feed/users/:userId/posts`)** — filter theo QUAN HỆ với 1 tác giả
+  (1 check, không phải N): tự xem mình → mọi audience; là bạn (`FriendService.areFriends`) →
+  `public`+`friends`; người lạ → chỉ `public`.
+- **`getPostOrThrow` (guard trung tâm dùng lại ở comment/like/xoá) cũng enforce audience** — đi
+  thẳng URL `GET /posts/:id` không phải cách né audience; vi phạm audience/block/không tồn tại
+  đều trả CÙNG mã lỗi `POST_NOT_FOUND` (oracle-safe, không lộ lý do thật).
+- `createPost` **idempotent theo Idempotency-Key** (unique DB) — client retry mất mạng không tạo
+  đôi bài; cùng key khác nội dung → 409 `POST_IDEMPOTENCY_CONFLICT`.
+
+## 8. Stories (W3, entity riêng `Story`/`StoryView` — KHÔNG dùng chung `Post`)
+
+Ephemeral — KHÁC `Post` (không soft-delete/audit trail): hết hạn = filter lúc đọc
+(`expiresAt <= now()`) là nguồn sự thật; `StorySweeperService` (pattern Party Room) hard-delete
+định kỳ chỉ dọn rác, không phải chốt correctness. `story_views` cascade xoá theo FK khi story bị
+sweeper xoá.
+
+- **Ring (`GET /stories/ring`): chỉ story của mình + bạn bè** (quyết định chốt
+  [docs/plans/2026-07-14-plan-6-tinh-nang-social-discovery.md § 6](../plans/2026-07-14-plan-6-tinh-nang-social-discovery.md))
+  — `FriendService.listFriendIds` gộp toàn bộ graph bạn bè, loại tác giả đang block 2 chiều.
+  `audience=public` tồn tại trên schema nhưng CHƯA có kênh phân phối rộng hơn ring ở W3 — không
+  lộ khác biệt hành vi nào cho tới khi có discovery rộng hơn (backlog).
+- **`getStoryOrThrow`**: tồn tại + chưa hết hạn + không block + đúng audience (`public` luôn qua;
+  `friends` cần `areFriends`) — CÙNG mã lỗi `STORY_NOT_FOUND` cho mọi vi phạm.
+- **Self-view không đếm** — tác giả xem story của mình không tạo `StoryView`. Xem lại nhiều lần =
+  idempotent (unique `(storyId, viewerId)`).
+- **Danh sách người xem CHỈ tác giả truy vấn được**, lọc block HIỆN TẠI lúc đọc — viewer đã xem
+  trước khi bị block vẫn bị ẩn khỏi danh sách nếu block xảy ra SAU đó (docs/10 § 10.0.C).
+- **Reply story → DM thật qua `FriendService.sendMessage`** với `attachment` snapshot
+  `{ kind: 'story_reply', payload: { storyId, mediaUrl } }` — story chết sau TTL, message sống
+  mãi nên phải snapshot `mediaUrl` NGAY LÚC REPLY. Đi trọn pipeline idempotency/block/
+  realtime/notification sẵn có của Friend Chat. Chỉ reply được nếu là bạn của tác giả (cần
+  `Conversation` thật) — trường hợp story `audience=public` từ người lạ (hiếm, chưa có kênh phân
+  phối rộng ở W3): dịch lỗi Friend module sang `FEED_STORY_REPLY_REQUIRES_FRIENDSHIP` riêng, KHÔNG
+  phụ thuộc mã lỗi nội bộ của module khác (docs/16 § 16.4).
+- `Message.attachment` (jsonb, nullable) — cột trung lập `friend` sở hữu, dùng cho story reply
+  (ở đây) và video share vào chat (backlog sau, xem
+  [docs/plans/2026-07-14-plan-6-tinh-nang-social-discovery.md § 2](../plans/2026-07-14-plan-6-tinh-nang-social-discovery.md)).
+
+Config: `STORY_TTL_HOURS` (mặc định 24), `STORY_SWEEPER_INTERVAL_MS` (mặc định 3600000).
+
+### Ngoài scope W3 Stories
+
+- Chưa có xoá story sớm (chỉ tự hết hạn theo TTL).
+- `audience=public` chưa có kênh phân phối ngoài ring bạn bè (điểm nối tương lai với Discovery).
+- Chưa giới hạn số lần grace/replay cho reply (dùng chung rate-limit toàn cục, không riêng).

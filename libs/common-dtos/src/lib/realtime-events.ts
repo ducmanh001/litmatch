@@ -126,6 +126,8 @@ export interface FriendMessageEventData {
   /** KHÔNG ẩn danh (2 bên đã unlock profile khi thành bạn) — khác SoulMessageEventData. */
   senderUserId: string;
   content: string;
+  /** NULL cho message thường — set khi reply story/video share (docs/services/feed-service.md § 8). */
+  attachment: { kind: string; payload: Record<string, unknown> } | null;
   sentAt: string;
 }
 

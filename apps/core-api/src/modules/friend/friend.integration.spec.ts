@@ -1,5 +1,6 @@
 import { DataSource } from 'typeorm';
 
+import { addDaysUtc, todayUtc } from '../../common/date/utc-date';
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
 import { InitAuthUser1751900000000 } from '../../database/migrations/1751900000000-init-auth-user';
 import { UserRole1753600000000 } from '../../database/migrations/1753600000000-user-role';
@@ -9,6 +10,7 @@ import { SoulMatch1752400000000 } from '../../database/migrations/1752400000000-
 import { FriendChat1752600000000 } from '../../database/migrations/1752600000000-friend-chat';
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
 import { ConversationStreak1754200000000 } from '../../database/migrations/1754200000000-conversation-streak';
+import { MessageAttachment1754400000000 } from '../../database/migrations/1754400000000-message-attachment';
 
 import { FriendService } from './friend.service';
 import { FriendErrors } from './friend.errors';
@@ -17,7 +19,7 @@ import { ConversationStreak } from './entities/conversation-streak.entity';
 import { Friendship, FriendshipSource } from './entities/friendship.entity';
 import { Message } from './entities/message.entity';
 import { ConversationService } from './services/conversation.service';
-import { StreakService, addDaysUtc, todayUtc } from './services/streak.service';
+import { StreakService } from './services/streak.service';
 import { MatchSession } from '../matching/entities/match-session.entity';
 import { MatchTicket } from '../matching/entities/match-ticket.entity';
 import { SafetyService } from '../safety';
@@ -152,6 +154,7 @@ d('Friend integration (Postgres thật)', () => {
         FriendChat1752600000000,
         Safety1752800000000,
         ConversationStreak1754200000000,
+        MessageAttachment1754400000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,

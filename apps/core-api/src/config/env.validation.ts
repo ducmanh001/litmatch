@@ -107,6 +107,8 @@ export interface CoreApiEnv {
   DISCOVERY_GUEST_VISIBLE: boolean;
   DISCOVERY_AGE_BUCKETS: string;
   MOOD_STATUS_TTL_HOURS: number;
+  STORY_TTL_HOURS: number;
+  STORY_SWEEPER_INTERVAL_MS: number;
   THROTTLE_TTL_SECONDS: number;
   THROTTLE_LIMIT: number;
 }
@@ -345,6 +347,14 @@ export const coreApiEnvSchema = Joi.object({
   // Mood — preset-only W1 (docs/services/mood-service.md)
   // TTL mood tính từ lúc set (snapshot vào expiresAt) — hết hạn = derive khi đọc, không cron
   MOOD_STATUS_TTL_HOURS: Joi.number().integer().min(1).default(24),
+
+  // Stories — W3 (docs/services/feed-service.md § 8)
+  // TTL story tính từ lúc tạo (snapshot vào expiresAt) — hết hạn = filter lúc đọc, sweeper chỉ dọn rác
+  STORY_TTL_HOURS: Joi.number().integer().min(1).default(24),
+  STORY_SWEEPER_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(60_000)
+    .default(3_600_000),
 
   THROTTLE_TTL_SECONDS: Joi.number().integer().min(1).default(60),
   THROTTLE_LIMIT: Joi.number().integer().min(1).default(100),

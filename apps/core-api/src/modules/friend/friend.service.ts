@@ -5,6 +5,7 @@ import { RealtimeEvents } from '@litmatch/common-dtos';
 import { DomainException } from '@litmatch/common-exceptions';
 import { EntityManager, Repository } from 'typeorm';
 
+import { canonicalPair } from '../../common/entities/canonical-pair';
 import { publishRealtimeEvent } from '../../common/realtime/publish-realtime';
 import { FriendErrors } from './friend.errors';
 import { Conversation } from './entities/conversation.entity';
@@ -24,6 +25,7 @@ import type {
 } from '@litmatch/common-dtos';
 import type Redis from 'ioredis';
 import type { CoreApiEnv } from '../../config/env.validation';
+import type { MessageAttachment } from './entities/message.entity';
 import type { DisplayStreak } from './services/streak.service';
 
 /** Kết quả tạo quan hệ — `created=false` nghĩa là cặp đã là bạn từ trước (idempotent). */
@@ -100,6 +102,24 @@ export class FriendService {
     if (userAId === userBId) return false;
     const [userLowId, userHighId] = canonicalPair(userAId, userBId);
     return this.friendshipRepo.exists({ where: { userLowId, userHighId } });
+  }
+
+  /**
+   * Toàn bộ userId đang là bạn — dùng cho các module cần lọc theo TOÀN BỘ graph bạn bè (vd
+   * Stories ring `authorUserId IN (self, ...friendIds)`), khác `areFriends` (1 cặp/lần).
+   */
+  async listFriendIds(userId: string): Promise<string[]> {
+    const rows = await this.friendshipRepo
+      .createQueryBuilder('f')
+      .select([
+        'f.user_low_id AS user_low_id',
+        'f.user_high_id AS user_high_id',
+      ])
+      .where('f.userLowId = :userId OR f.userHighId = :userId', { userId })
+      .getRawMany<{ user_low_id: string; user_high_id: string }>();
+    return rows.map((r) =>
+      r.user_low_id === userId ? r.user_high_id : r.user_low_id,
+    );
   }
 
   /** Danh sách bạn sort theo chat gần nhất (bạn mới, chưa chat lần nào → sort theo friendSince). */
@@ -191,12 +211,15 @@ export class FriendService {
    * Gửi message — guard membership + block (2 chiều) + validate độ dài + publish realtime sau
    * persist. Block trả CÙNG mã lỗi/status với "không phải thành viên" (docs/services/
    * safety-service.md § 6) — không tiết lộ ai block ai qua mã lỗi khác nhau, tránh oracle.
+   * `attachment` chỉ dùng cho lời gọi nội bộ qua DI (vd Feed reply-to-story) — xem
+   * `ConversationService.sendMessage`.
    */
   async sendMessage(
     userId: string,
     conversationId: string,
     content: string,
     idempotencyKey: string,
+    attachment: MessageAttachment | null = null,
   ): Promise<Message> {
     const conversation = await this.getConversationForMember(
       userId,
@@ -233,6 +256,7 @@ export class FriendService {
       userId,
       content,
       idempotencyKey,
+      attachment,
     );
 
     // On-write streak (docs/services/streak-service.md) — tự transaction riêng, khoá row streak
@@ -271,6 +295,7 @@ export class FriendService {
         messageId: message.id,
         senderUserId: message.senderUserId,
         content: message.content,
+        attachment: message.attachment,
         sentAt: message.createdAt.toISOString(),
       },
     };
@@ -327,9 +352,4 @@ export class FriendService {
     }
     return conversation;
   }
-}
-
-/** Chuẩn hoá cặp 2 chiều về (low, high) theo so sánh chuỗi uuid — 1 quan hệ chỉ có 1 dòng. */
-export function canonicalPair(a: string, b: string): [string, string] {
-  return a < b ? [a, b] : [b, a];
 }

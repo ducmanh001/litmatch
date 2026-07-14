@@ -1542,7 +1542,15 @@
     "/api/v1/feed/posts": {
       "post": {
         "operationId": "FeedController_createPost",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1569,7 +1577,7 @@
           }
         },
         "security": [{ "bearer": [] }],
-        "summary": "Đăng bài — guest bị chặn (docs/06)",
+        "summary": "Đăng bài — guest bị chặn (docs/06), audience mặc định public",
         "tags": ["feed"]
       },
       "get": {
@@ -1609,6 +1617,53 @@
         },
         "security": [{ "bearer": [] }],
         "summary": "Feed công khai toàn cục, mới nhất trước — loại tác giả đang block/bị block",
+        "tags": ["feed"]
+      }
+    },
+    "/api/v1/feed/users/{userId}/posts": {
+      "get": {
+        "operationId": "FeedController_listUserTimeline",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/PostsPageDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Timeline 1 tác giả — audience tự khớp quan hệ (mình/bạn/người lạ), docs/services/feed-service.md § 7",
         "tags": ["feed"]
       }
     },
@@ -1862,6 +1917,191 @@
         "security": [{ "bearer": [] }],
         "summary": "Trạng thái thả tim của chính mình + tổng đếm",
         "tags": ["feed"]
+      }
+    },
+    "/api/v1/stories": {
+      "post": {
+        "operationId": "StoryController_createStory",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateStoryDto" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/StoryDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Đăng story — hết hạn sau STORY_TTL_HOURS, guest bị chặn",
+        "tags": ["stories"]
+      }
+    },
+    "/api/v1/stories/ring": {
+      "get": {
+        "operationId": "StoryController_getRing",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/StoryDto" }
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Story còn hạn của mình + bạn bè (Ring stories: chỉ bạn bè + mình)",
+        "tags": ["stories"]
+      }
+    },
+    "/api/v1/stories/{storyId}": {
+      "get": {
+        "operationId": "StoryController_viewStory",
+        "parameters": [
+          {
+            "name": "storyId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/StoryDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Xem 1 story — ghi seen-state (trừ tự xem mình), 404 nếu hết hạn/bị block/audience không cho phép",
+        "tags": ["stories"]
+      }
+    },
+    "/api/v1/stories/{storyId}/viewers": {
+      "get": {
+        "operationId": "StoryController_listViewers",
+        "parameters": [
+          {
+            "name": "storyId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/StoryViewersDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Danh sách người đã xem — chỉ tác giả, lọc block hiện tại lúc đọc",
+        "tags": ["stories"]
+      }
+    },
+    "/api/v1/stories/{storyId}/reply": {
+      "post": {
+        "operationId": "StoryController_replyToStory",
+        "parameters": [
+          {
+            "name": "storyId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ReplyToStoryDto" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/MessageDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Trả lời story → gửi DM cho tác giả (chỉ bạn bè), snapshot mediaUrl vào attachment",
+        "tags": ["stories"]
       }
     },
     "/api/v1/avatar/catalog": {
@@ -3501,6 +3741,14 @@
         "properties": { "id": { "type": "string" } },
         "required": ["id"]
       },
+      "MessageAttachmentDto": {
+        "type": "object",
+        "properties": {
+          "kind": { "type": "string" },
+          "payload": { "type": "object", "additionalProperties": true }
+        },
+        "required": ["kind", "payload"]
+      },
       "MessageDto": {
         "type": "object",
         "properties": {
@@ -3508,6 +3756,11 @@
           "conversationId": { "type": "string" },
           "senderUserId": { "type": "string" },
           "content": { "type": "string" },
+          "attachment": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [{ "$ref": "#/components/schemas/MessageAttachmentDto" }]
+          },
           "sentAt": { "format": "date-time", "type": "string" }
         },
         "required": [
@@ -3813,7 +4066,12 @@
         "type": "object",
         "properties": {
           "content": { "type": "string" },
-          "imageUrl": { "type": "string" }
+          "imageUrl": { "type": "string" },
+          "audience": {
+            "type": "string",
+            "enum": ["public", "friends", "only_me"],
+            "default": "public"
+          }
         }
       },
       "PostDto": {
@@ -3823,6 +4081,10 @@
           "authorUserId": { "type": "string" },
           "content": { "type": "string", "nullable": true },
           "imageUrl": { "type": "string", "nullable": true },
+          "audience": {
+            "type": "string",
+            "enum": ["public", "friends", "only_me"]
+          },
           "likeCount": { "type": "number" },
           "commentCount": { "type": "number" },
           "createdAt": { "format": "date-time", "type": "string" }
@@ -3832,6 +4094,7 @@
           "authorUserId",
           "content",
           "imageUrl",
+          "audience",
           "likeCount",
           "commentCount",
           "createdAt"
@@ -3882,6 +4145,52 @@
           "likeCount": { "type": "number" }
         },
         "required": ["liked", "likeCount"]
+      },
+      "CreateStoryDto": {
+        "type": "object",
+        "properties": {
+          "mediaUrl": { "type": "string" },
+          "caption": { "type": "string" },
+          "audience": {
+            "type": "string",
+            "enum": ["public", "friends"],
+            "default": "friends"
+          }
+        },
+        "required": ["mediaUrl"]
+      },
+      "StoryDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "authorUserId": { "type": "string" },
+          "mediaUrl": { "type": "string" },
+          "caption": { "type": "string", "nullable": true },
+          "audience": { "type": "string", "enum": ["public", "friends"] },
+          "expiresAt": { "format": "date-time", "type": "string" },
+          "createdAt": { "format": "date-time", "type": "string" }
+        },
+        "required": [
+          "id",
+          "authorUserId",
+          "mediaUrl",
+          "caption",
+          "audience",
+          "expiresAt",
+          "createdAt"
+        ]
+      },
+      "StoryViewersDto": {
+        "type": "object",
+        "properties": {
+          "viewerIds": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["viewerIds"]
+      },
+      "ReplyToStoryDto": {
+        "type": "object",
+        "properties": { "content": { "type": "string" } },
+        "required": ["content"]
       },
       "AvatarAssetDto": {
         "type": "object",

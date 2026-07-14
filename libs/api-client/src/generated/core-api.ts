@@ -752,8 +752,25 @@ export interface paths {
     /** Feed công khai toàn cục, mới nhất trước — loại tác giả đang block/bị block */
     get: operations['FeedController_listFeed'];
     put?: never;
-    /** Đăng bài — guest bị chặn (docs/06) */
+    /** Đăng bài — guest bị chặn (docs/06), audience mặc định public */
     post: operations['FeedController_createPost'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/feed/users/{userId}/posts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Timeline 1 tác giả — audience tự khớp quan hệ (mình/bạn/người lạ), docs/services/feed-service.md § 7 */
+    get: operations['FeedController_listUserTimeline'];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -827,6 +844,91 @@ export interface paths {
     post: operations['FeedController_like'];
     /** Bỏ thả tim — idempotent */
     delete: operations['FeedController_unlike'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/stories': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Đăng story — hết hạn sau STORY_TTL_HOURS, guest bị chặn */
+    post: operations['StoryController_createStory'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/stories/ring': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Story còn hạn của mình + bạn bè (Ring stories: chỉ bạn bè + mình) */
+    get: operations['StoryController_getRing'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/stories/{storyId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Xem 1 story — ghi seen-state (trừ tự xem mình), 404 nếu hết hạn/bị block/audience không cho phép */
+    get: operations['StoryController_viewStory'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/stories/{storyId}/viewers': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Danh sách người đã xem — chỉ tác giả, lọc block hiện tại lúc đọc */
+    get: operations['StoryController_listViewers'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/stories/{storyId}/reply': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Trả lời story → gửi DM cho tác giả (chỉ bạn bè), snapshot mediaUrl vào attachment */
+    post: operations['StoryController_replyToStory'];
+    delete?: never;
     options?: never;
     head?: never;
     patch?: never;
@@ -1605,11 +1707,18 @@ export interface components {
     ConversationDto: {
       id: string;
     };
+    MessageAttachmentDto: {
+      kind: string;
+      payload: {
+        [key: string]: unknown;
+      };
+    };
     MessageDto: {
       id: string;
       conversationId: string;
       senderUserId: string;
       content: string;
+      attachment?: components['schemas']['MessageAttachmentDto'] | null;
       /** Format: date-time */
       sentAt: string;
     };
@@ -1760,12 +1869,19 @@ export interface components {
     CreatePostDto: {
       content?: string;
       imageUrl?: string;
+      /**
+       * @default public
+       * @enum {string}
+       */
+      audience: 'public' | 'friends' | 'only_me';
     };
     PostDto: {
       id: string;
       authorUserId: string;
       content: string | null;
       imageUrl: string | null;
+      /** @enum {string} */
+      audience: 'public' | 'friends' | 'only_me';
       likeCount: number;
       commentCount: number;
       /** Format: date-time */
@@ -1793,6 +1909,33 @@ export interface components {
     ReactionStatusDto: {
       liked: boolean;
       likeCount: number;
+    };
+    CreateStoryDto: {
+      mediaUrl: string;
+      caption?: string;
+      /**
+       * @default friends
+       * @enum {string}
+       */
+      audience: 'public' | 'friends';
+    };
+    StoryDto: {
+      id: string;
+      authorUserId: string;
+      mediaUrl: string;
+      caption: string | null;
+      /** @enum {string} */
+      audience: 'public' | 'friends';
+      /** Format: date-time */
+      expiresAt: string;
+      /** Format: date-time */
+      createdAt: string;
+    };
+    StoryViewersDto: {
+      viewerIds: string[];
+    };
+    ReplyToStoryDto: {
+      content: string;
     };
     AvatarAssetDto: {
       id: string;
@@ -3302,7 +3445,10 @@ export interface operations {
   FeedController_createPost: {
     parameters: {
       query?: never;
-      header?: never;
+      header: {
+        /** @description Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10) */
+        'Idempotency-Key': string;
+      };
       path?: never;
       cookie?: never;
     };
@@ -3319,6 +3465,37 @@ export interface operations {
         content: {
           'application/json': {
             data: components['schemas']['PostDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  FeedController_listUserTimeline: {
+    parameters: {
+      query?: {
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
+      header?: never;
+      path: {
+        userId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['PostsPageDto'];
             meta?: {
               [key: string]: unknown;
             };
@@ -3522,6 +3699,146 @@ export interface operations {
         content: {
           'application/json': {
             data: components['schemas']['ReactionStatusDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  StoryController_createStory: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10) */
+        'Idempotency-Key': string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateStoryDto'];
+      };
+    };
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['StoryDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  StoryController_getRing: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['StoryDto'][];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  StoryController_viewStory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        storyId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['StoryDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  StoryController_listViewers: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        storyId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['StoryViewersDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  StoryController_replyToStory: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10) */
+        'Idempotency-Key': string;
+      };
+      path: {
+        storyId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ReplyToStoryDto'];
+      };
+    };
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['MessageDto'];
             meta?: {
               [key: string]: unknown;
             };

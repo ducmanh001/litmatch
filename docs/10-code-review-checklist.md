@@ -199,6 +199,26 @@
 - Xoá bài viết chỉ xoá ở DB chính nhưng không xoá khỏi cache/feed đã fanout cho follower → bài đã xoá vẫn hiện với người khác
 - Like/reaction đếm bằng cách tăng trực tiếp 1 cột counter không transaction → đếm sai khi nhiều request đồng thời (dùng bảng riêng lưu ai đã like + đếm bằng `COUNT` hoặc counter có transaction/atomic increment)
 - Block giữa 2 user không lọc bài/comment cũ đã hiển thị trước đó, chỉ chặn tương tác mới
+- **Audience per-post chỉ check ở 1 endpoint, không phải guard trung tâm** — thêm `friends`/
+  `only_me` mà chỉ lọc ở list feed, quên áp lại ở `getPostOrThrow` (dùng chung cho get/comment/
+  like/xoá) → đi thẳng URL `GET /posts/:id` bỏ qua hoàn toàn audience, biến field đó thành trang
+  trí không có tác dụng.
+- **Feed toàn cục trộn cả `friends`/`only_me`** — bắt buộc check quan hệ bạn cho TỪNG tác giả
+  trên 1 trang lớn (N+1 kiểu quan hệ), sai vị trí đặt cost; audience khác `public` chỉ nên lộ qua
+  truy vấn 1-tác-giả (profile timeline), không phải feed discovery nhiều tác giả.
+- **Story dùng chung bảng/soft-delete với `Post`** — Story ephemeral (hết hạn = filter lúc đọc),
+  KHÔNG cần audit trail như Post; nhét chung 1 bảng buộc phải thêm cột phân biệt + logic rẽ nhánh
+  không cần thiết, đúng dạng "tự chế lại 1 khái niệm đã khác nhau" (docs/11).
+- **Cron sweeper story bị coi là chốt correctness** — đọc "story hiện tại" mà không tự filter
+  `expiresAt` (chờ sweeper xoá) thì có khoảng hở hiện story đã hết hạn tới khi sweeper chạy;
+  sweeper chỉ dọn rác, read-path PHẢI tự filter độc lập.
+- **Seen-list (viewers) không lọc block hiện tại lúc đọc** — chỉ chặn tạo `StoryView` mới khi
+  đang block, không lọc lại danh sách cũ → viewer đã xem trước khi bị block vẫn lộ trong danh
+  sách nếu không re-check tại thời điểm ĐỌC (docs/10 § 10.0.C).
+- **Reply story → DM bỏ qua bất biến "chỉ bạn bè mới có Conversation"** — tự tạo Conversation/
+  gửi thẳng vào DB thay vì đi qua `FriendService.sendMessage`/`getConversationWithFriend` sẽ phá
+  bất biến "có Friendship ⟺ có Conversation" và bỏ lỡ toàn bộ pipeline
+  idempotency/block/realtime/notification đã có sẵn.
 
 **Gift — giao điểm Economy + Realtime, dễ nhân đôi giá trị**
 
