@@ -78,6 +78,24 @@ Hai đoạn code giống nhau chưa chắc có cùng ý nghĩa. Chỉ đưa vào
 helper dùng chung khi cả ý nghĩa, contract và cách thay đổi thực sự giống nhau.
 Tránh tạo `interfaces/`, `helpers/`, `repositories/` hoặc folder rỗng để dành.
 
+**Đặt pure function ở đâu:** tự hỏi input/output của nó có nhắc tới khái niệm
+nghiệp vụ của riêng một module không (entity, id trong ngữ cảnh domain, error
+code...).
+
+- Không nhắc — chỉ thao tác trên kiểu nguyên thuỷ (string/number/Date/array) —
+  đây là hạ tầng trung lập. Nếu đã có bằng chứng ≥2 module cần cùng một hành vi
+  đó (không phải suy đoán trước), gộp vào `common/` (`apps/<app>/src/common/`
+  cho hạ tầng riêng app, `libs/` cho hạ tầng dùng chéo app) và mọi nơi cùng
+  import 1 bản. Không giữ bản riêng "cho gọn" ở module — hai bản độc lập của
+  cùng một phép tính (vd chuẩn hoá cặp id 2 chiều, tính ngày UTC) là bug tiềm
+  ẩn (một bên sửa, bên kia lệch), không phải khác biệt phong cách.
+- Có nhắc tới khái niệm riêng của module — giữ trong module. Cần state/dependency
+  của service (`this.repo`, `this.config`...) thì là method (`private` nếu chỉ
+  dùng nội bộ, không mã hoá `private`/kiểu dữ liệu vào tên — [17-naming-conventions.md](./17-naming-conventions.md)).
+  Nếu là pure function nhưng chỉ 1 file dùng, để top-level trong file đó và
+  **không export** (export một helper nội bộ ra ngoài khi chỉ có một chỗ gọi là
+  dấu hiệu nó nên là `private` hoặc nên xét lại có thật sự domain-specific không).
+
 ### KISS và YAGNI
 
 Giải pháp nhỏ nhất đáp ứng đúng business rule hiện tại là mặc định. Không xây

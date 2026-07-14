@@ -4,7 +4,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@litmatch/common-exceptions';
 import { Repository } from 'typeorm';
 
-import { palmMatchSeedInput, todayUtcDateString } from './palm-match.constants';
+import { todayUtc } from '../../common/date/utc-date';
+import { palmMatchSeedInput } from './palm-match.constants';
 import {
   PalmMatchCategory,
   PalmReadingTemplate,
@@ -56,8 +57,8 @@ export class PalmMatchService {
       );
     }
 
-    // `new Date()` gọi TẠI ĐÂY, lúc request tới — không cache/tính sẵn (spec § 1).
-    const forDate = todayUtcDateString(new Date());
+    // Tính TẠI ĐÂY, lúc request tới — không cache/tính sẵn (spec § 1).
+    const forDate = todayUtc();
     const seed = fnv1aHash(palmMatchSeedInput(userId, category, forDate));
     const template = templates[seed % templates.length];
 

@@ -1,9 +1,9 @@
 import {
-  StreakService,
   addDaysUtc,
   daysBetweenUtc,
   todayUtc,
-} from './streak.service';
+} from '../../../common/date/utc-date';
+import { StreakService } from './streak.service';
 import { ConversationStreak } from '../entities/conversation-streak.entity';
 
 import type { ConfigService } from '@nestjs/config';
