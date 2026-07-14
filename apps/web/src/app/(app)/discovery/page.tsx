@@ -26,8 +26,12 @@ export default function DiscoveryPage() {
   >(null);
 
   const filter = { gender, ageMin: undefined, ageMax: undefined };
-  const browseQuery = useBrowse(filter);
-  const nearbyQuery = useNearby(filter);
+  // Chỉ gọi API của nhánh đang active — nearby luôn 403 khi chưa bật nearbyVisible, gọi cả 2
+  // song song sẽ có 1 nhánh luôn lỗi vô ích (phát hiện qua verify thật bằng browser thật).
+  const browseQuery = useBrowse(filter, { enabled: mode === 'browse' });
+  const nearbyQuery = useNearby(filter, {
+    enabled: mode === 'nearby' && nearbyEnabled,
+  });
 
   const createInvite = useCreateInvite();
 

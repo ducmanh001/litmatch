@@ -26,8 +26,14 @@ export const discoveryKeys = {
 };
 
 /** Duyệt user theo gender/tuổi (docs/services/discovery-service.md § 1-7) — lặp lại nhiều lần,
- * không tạo state ticket/queue nào (khác bộ lọc lúc ghép cặp của Matching). */
-export function useBrowse(filter: BrowseFilter) {
+ * không tạo state ticket/queue nào (khác bộ lọc lúc ghép cặp của Matching). `enabled` mặc định
+ * true — trang /discovery TẮT hẳn nhánh không active (mode) để không gọi cả 2 API song song
+ * (nearby luôn 403 khi chưa bật `nearbyVisible`, gọi mà không dùng chỉ tổ tốn request/gây lỗi
+ * console giả — phát hiện qua verify thật bằng browser thật). */
+export function useBrowse(
+  filter: BrowseFilter,
+  options?: { enabled?: boolean },
+) {
   return useInfiniteQuery({
     queryKey: discoveryKeys.browse(filter),
     queryFn: async ({ pageParam }) => {
@@ -40,11 +46,15 @@ export function useBrowse(filter: BrowseFilter) {
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage?.nextCursor ?? undefined,
+    enabled: options?.enabled ?? true,
   });
 }
 
 /** Nearby (docs/services/discovery-service.md § 8) — chỉ thấy nhau khi CẢ HAI đã bật `nearbyVisible`. */
-export function useNearby(filter: BrowseFilter) {
+export function useNearby(
+  filter: BrowseFilter,
+  options?: { enabled?: boolean },
+) {
   return useInfiniteQuery({
     queryKey: discoveryKeys.nearby(filter),
     queryFn: async ({ pageParam }) => {
@@ -57,6 +67,7 @@ export function useNearby(filter: BrowseFilter) {
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage?.nextCursor ?? undefined,
+    enabled: options?.enabled ?? true,
   });
 }
 

@@ -19,7 +19,9 @@ import { MovieSessionView } from '../../../../features/movie-match/components/mo
 export function WatchTogetherView({ sessionId }: { sessionId: string }) {
   const session = useSession(sessionId);
   const partnerUserId = session.data?.partnerUserId;
-  const conversation = useConversationWithFriend(partnerUserId ?? '');
+  const conversation = useConversationWithFriend(partnerUserId ?? '', {
+    enabled: partnerUserId !== undefined,
+  });
 
   return (
     <div className="flex flex-1 flex-col">

@@ -49,7 +49,16 @@ export function QueueStatusPanel() {
   useRealtimeEvent<MatchMatchedEventData>(
     RealtimeEvents.MatchMatched,
     (data) => {
-      if (data.ticketId === ticketId) invalidateTicket();
+      if (data.ticketId === ticketId) {
+        invalidateTicket();
+        return;
+      }
+      // Ticket lạ trong khi CHƯA có ticket nào — đây là lời mời (Discovery/Invite) mình gửi vừa
+      // được chấp nhận: backend cố ý publish CÙNG event `match.matched` cho cả 2 bên
+      // (invite.service.ts#acceptInvite) để FE không cần logic riêng, chỉ cần nhận ticketId rồi
+      // đi tiếp y hệt luồng auto-match (matched → xác nhận → vào phòng). Không nhận khi ĐANG có
+      // ticket khác — tránh nhảy khỏi phiên đang xử lý dở.
+      if (ticketId === null) setTicketId(data.ticketId);
     },
   );
   useRealtimeEvent<MatchConfirmedEventData>(

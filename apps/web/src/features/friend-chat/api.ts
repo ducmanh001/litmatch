@@ -34,7 +34,10 @@ export function useFriends() {
   });
 }
 
-export function useConversationWithFriend(friendUserId: string) {
+export function useConversationWithFriend(
+  friendUserId: string,
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: friendChatKeys.conversation(friendUserId),
     queryFn: async () => {
@@ -44,6 +47,7 @@ export function useConversationWithFriend(friendUserId: string) {
       );
       return res.data?.data;
     },
+    enabled: options?.enabled ?? true,
   });
 }
 

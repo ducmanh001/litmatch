@@ -22,7 +22,14 @@ let authRefreshInFlight: Promise<void> | null = null;
 
 function getSocket(): Socket {
   if (socket === null) {
-    socket = io(env.NEXT_PUBLIC_SOCKET_URL, {
+    // `SignalingGateway` đăng ký ở namespace `/signaling` (apps/signaling-gateway/src/app/
+    // signaling.gateway.ts — `@WebSocketGateway({ namespace: '/signaling' })`), KHÔNG phải
+    // namespace mặc định `/`. Thiếu suffix này thì handshake vẫn "thành công" ở tầng transport
+    // (Engine.IO không biết gì về namespace) nhưng client rơi vào namespace `/` không tồn tại
+    // gateway nào lắng nghe — không bao giờ authenticate, không join room, không bao giờ nhận
+    // được event nào, mà không có lỗi nào hiện ra (phát hiện qua verify thật bằng browser thật,
+    // không phải unit test — REST poll fallback ở mọi feature đã che mất triệu chứng bấy lâu).
+    socket = io(`${env.NEXT_PUBLIC_SOCKET_URL}/signaling`, {
       // Gateway verify JWT lúc handshake — callback lấy token tươi mỗi lần (re)connect.
       auth: (cb) => cb({ token: tokenStore.getAccessToken() }),
       autoConnect: false,
