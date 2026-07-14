@@ -34,3 +34,6 @@ vitest.config.*.timestamp*
 # Next.js
 .next
 out
+
+# TypeScript incremental build cache
+*.tsbuildinfo

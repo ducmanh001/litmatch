@@ -11,7 +11,7 @@ export function FriendsList() {
 
   if (friends.isPending) {
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm text-slate-500 dark:text-slate-400">
         Đang tải danh sách bạn bè…
       </p>
     );
@@ -32,11 +32,11 @@ export function FriendsList() {
 
   if (list.length === 0) {
     return (
-      <div className="space-y-2">
-        <p className="text-sm text-muted-foreground">
+      <div className="space-y-2 rounded-2xl border border-black/5 bg-white px-4 py-6 text-center dark:border-white/10 dark:bg-surf">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           Chưa có bạn bè — ghép đôi để kết bạn.
         </p>
-        <Link href="/matching" className="text-sm text-primary underline">
+        <Link href="/matching" className="text-sm font-bold text-irisl">
           Tìm ghép đôi
         </Link>
       </div>
@@ -44,22 +44,23 @@ export function FriendsList() {
   }
 
   return (
-    <ul className="divide-y divide-border">
+    <ul className="divide-y divide-black/5 dark:divide-white/10">
       {list.map((friend) => (
         <li key={friend.conversationId}>
           <Link
             href={`/chat/${friend.profile.id}`}
-            className="flex items-center gap-3 py-3 hover:bg-card"
+            className="flex items-center gap-3 py-3"
           >
             <FriendAvatar
               userId={friend.profile.id}
               nickname={friend.profile.nickname}
+              size={52}
             />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">
+              <p className="truncate text-sm font-bold">
                 {friend.profile.nickname}
               </p>
-              <p className="truncate text-xs text-muted-foreground">
+              <p className="truncate text-sm text-slate-500 dark:text-slate-400">
                 {friend.lastMessageAt !== null
                   ? `Nhắn gần nhất ${new Date(friend.lastMessageAt).toLocaleDateString('vi-VN')}`
                   : `Bạn từ ${new Date(friend.friendSince).toLocaleDateString('vi-VN')}`}

@@ -5,16 +5,13 @@ import { isApiError } from '@litmatch/api-client';
 import { useForm } from 'react-hook-form';
 
 import { useIdempotencyKey } from '../../../shared/idempotency/use-idempotency-key';
+import { Button } from '../../../shared/ui/button';
+import { MatchIcon, MicIcon } from '../../../shared/ui/icons';
 import { useJoinQueue } from '../api';
 import { joinQueueSchema } from '../join-queue-schema';
 
 import type { TicketDto } from '../api';
 import type { JoinQueueForm } from '../join-queue-schema';
-
-const inputClass =
-  'h-10 w-full rounded-md border border-border bg-card px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring';
-const buttonClass =
-  'h-10 w-full rounded-md bg-primary font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50';
 
 export function MatchTypePicker({
   onJoined,
@@ -49,27 +46,58 @@ export function MatchTypePicker({
   });
 
   return (
-    <form className="space-y-4" onSubmit={onSubmit} noValidate>
-      <div className="space-y-1.5">
-        <span className="text-sm font-medium">Chọn kiểu ghép đôi</span>
-        <div className="flex gap-3">
-          <label className="flex flex-1 items-center gap-2 rounded-md border border-border p-3 text-sm has-[:checked]:border-primary">
-            <input type="radio" value="soul" {...form.register('matchType')} />
-            Soul Match — chat ẩn danh
+    <form className="space-y-6" onSubmit={onSubmit} noValidate>
+      <div className="space-y-3">
+        <h2 className="text-sm font-extrabold tracking-wide text-slate-500 dark:text-slate-400">
+          Chọn kiểu ghép đôi
+        </h2>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="group relative flex cursor-pointer flex-col rounded-2xl border border-black/5 bg-white p-4 transition-colors has-[:checked]:border-transparent has-[:checked]:bg-gradient-to-br has-[:checked]:from-irisl has-[:checked]:to-irisl has-[:checked]:text-white has-[:checked]:shadow-lg has-[:checked]:shadow-iris/25 has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-iris dark:border-white/5 dark:bg-surf">
+            <input
+              type="radio"
+              value="soul"
+              className="sr-only"
+              {...form.register('matchType')}
+            />
+            <MatchIcon
+              width={24}
+              height={24}
+              className="mb-6 text-irisl group-has-[:checked]:text-white"
+            />
+            <p className="font-bold">Soul Match</p>
+            <p className="mt-0.5 text-xs text-slate-500 group-has-[:checked]:text-white/80 dark:text-slate-400">
+              Chat ẩn danh 2-3 phút
+            </p>
           </label>
-          <label className="flex flex-1 items-center gap-2 rounded-md border border-border p-3 text-sm has-[:checked]:border-primary">
-            <input type="radio" value="voice" {...form.register('matchType')} />
-            Voice Match — gọi thoại
+          <label className="group relative flex cursor-pointer flex-col rounded-2xl border border-black/5 bg-white p-4 transition-colors has-[:checked]:border-transparent has-[:checked]:bg-gradient-to-br has-[:checked]:from-irisl has-[:checked]:to-irisl has-[:checked]:text-white has-[:checked]:shadow-lg has-[:checked]:shadow-iris/25 has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-iris dark:border-white/5 dark:bg-surf">
+            <input
+              type="radio"
+              value="voice"
+              className="sr-only"
+              {...form.register('matchType')}
+            />
+            <MicIcon
+              width={24}
+              height={24}
+              className="mb-6 text-irisl group-has-[:checked]:text-white"
+            />
+            <p className="font-bold">Voice Match</p>
+            <p className="mt-0.5 text-xs text-slate-500 group-has-[:checked]:text-white/80 dark:text-slate-400">
+              Nghe giọng ~7 phút
+            </p>
           </label>
         </div>
       </div>
-      <div className="space-y-1.5">
-        <label htmlFor="genderPreference" className="text-sm font-medium">
+      <div className="space-y-2">
+        <label
+          htmlFor="genderPreference"
+          className="block text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500"
+        >
           Giới tính muốn ghép
         </label>
         <select
           id="genderPreference"
-          className={inputClass}
+          className="h-12 w-full rounded-xl border border-black/5 bg-white px-4 text-sm outline-none focus:border-irisl dark:border-white/10 dark:bg-surf"
           {...form.register('genderPreference')}
         >
           <option value="any">Bất kỳ</option>
@@ -82,13 +110,9 @@ export function MatchTypePicker({
           {message}
         </p>
       )}
-      <button
-        type="submit"
-        className={buttonClass}
-        disabled={joinQueue.isPending}
-      >
+      <Button type="submit" className="w-full" disabled={joinQueue.isPending}>
         {joinQueue.isPending ? 'Đang vào hàng đợi…' : 'Tìm ghép đôi'}
-      </button>
+      </Button>
     </form>
   );
 }

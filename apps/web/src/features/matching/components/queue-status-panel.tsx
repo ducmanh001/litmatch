@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useRealtimeEvent } from '../../../shared/realtime/use-realtime-event';
+import { Button } from '../../../shared/ui/button';
 import {
   matchingKeys,
   useCancelTicket,
@@ -21,10 +22,12 @@ import type {
   MatchMatchedEventData,
 } from '@litmatch/common-dtos/pure';
 
-const primaryButtonClass =
-  'h-10 w-full rounded-md bg-primary font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50';
-const secondaryButtonClass =
-  'h-10 w-full rounded-md border border-border font-medium hover:bg-card disabled:opacity-50';
+/** Pill "Huỷ tìm kiếm" của soul-match.html — viền, không nền, chỉ tô mờ khi hover. */
+const OUTLINE_PILL =
+  'border-black/10 bg-transparent hover:bg-black/5 dark:border-white/10 dark:bg-transparent dark:hover:bg-white/5';
+/** Card trắng/surf viền mảnh dùng chung cho mọi trạng thái hàng đợi (không có mockup riêng). */
+const STATE_CARD =
+  'rounded-2xl border border-black/5 bg-white dark:border-white/5 dark:bg-surf';
 
 export function QueueStatusPanel() {
   const router = useRouter();
@@ -73,7 +76,9 @@ export function QueueStatusPanel() {
 
   if (ticketQuery.isPending) {
     return (
-      <p className="text-sm text-muted-foreground">Đang tải trạng thái…</p>
+      <p className="text-center text-sm text-slate-500 dark:text-slate-400">
+        Đang tải trạng thái…
+      </p>
     );
   }
 
@@ -82,17 +87,18 @@ export function QueueStatusPanel() {
       ? ticketQuery.error.message
       : 'Có lỗi xảy ra, thử lại.';
     return (
-      <div className="space-y-3">
+      <div className={`${STATE_CARD} space-y-3 p-5`}>
         <p role="alert" className="text-sm text-destructive">
           {message}
         </p>
-        <button
+        <Button
           type="button"
-          className={secondaryButtonClass}
+          variant="secondary"
+          className={`w-full ${OUTLINE_PILL}`}
           onClick={() => setTicketId(null)}
         >
           Quay lại
-        </button>
+        </Button>
       </div>
     );
   }
@@ -102,63 +108,84 @@ export function QueueStatusPanel() {
   switch (ticket.status) {
     case 'queued':
       return (
-        <div className="space-y-3">
-          <p className="text-sm">
-            Đang tìm người ghép đôi… (vào hàng đợi lúc{' '}
-            {new Date(ticket.enqueuedAt).toLocaleTimeString('vi-VN')})
-          </p>
-          <div className="flex flex-wrap items-start gap-2">
+        <div
+          className={`${STATE_CARD} flex flex-col items-center gap-6 px-8 py-10 text-center`}
+        >
+          <div className="relative flex h-40 w-40 items-center justify-center">
+            <span className="pulsering absolute h-40 w-40 rounded-full border border-iris/40" />
+            <span className="pulsering2 absolute h-40 w-40 rounded-full border border-iris/40" />
+            <div className="relative z-10 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-irisl to-irisl text-4xl">
+              🔮
+            </div>
+          </div>
+          <div className="space-y-1">
+            <p className="font-display text-lg italic">
+              Đang tìm người ghép đôi…
+            </p>
+            <p className="font-mono text-xs text-slate-500 dark:text-slate-400">
+              (vào hàng đợi lúc{' '}
+              {new Date(ticket.enqueuedAt).toLocaleTimeString('vi-VN')})
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-2">
             <SpeedupButton ticketId={ticket.id} />
-            <button
+            <Button
               type="button"
-              className="h-9 rounded-md border border-border px-3 text-sm hover:bg-card disabled:opacity-50"
+              variant="secondary"
+              size="sm"
+              className={OUTLINE_PILL}
               disabled={cancelTicket.isPending}
               onClick={() => cancelTicket.mutate()}
             >
               {cancelTicket.isPending ? 'Đang huỷ…' : 'Huỷ'}
-            </button>
+            </Button>
           </div>
         </div>
       );
     case 'matched':
       return (
-        <div className="space-y-3">
-          <p className="text-sm">
-            Đã tìm thấy đối phương — xác nhận sớm để bắt đầu, nếu không ticket
-            sẽ hết hạn.
+        <div
+          className={`${STATE_CARD} flex flex-col items-center gap-4 px-6 py-8 text-center`}
+        >
+          <p className="font-display text-lg italic">Đã tìm thấy đối phương</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Xác nhận sớm để bắt đầu, nếu không ticket sẽ hết hạn.
           </p>
-          <button
+          <Button
             type="button"
-            className={primaryButtonClass}
+            className="w-full"
             disabled={confirmTicket.isPending}
             onClick={() => confirmTicket.mutate()}
           >
             {confirmTicket.isPending ? 'Đang xác nhận…' : 'Xác nhận'}
-          </button>
+          </Button>
         </div>
       );
     case 'confirmed':
       return (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-center text-sm text-slate-500 dark:text-slate-400">
           Đã xác nhận — đang chuyển vào phòng…
         </p>
       );
     case 'expired':
     case 'cancelled':
       return (
-        <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">
+        <div
+          className={`${STATE_CARD} flex flex-col items-center gap-4 px-6 py-8 text-center`}
+        >
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             {ticket.status === 'expired'
               ? 'Ticket đã hết hạn.'
               : 'Đã huỷ ticket.'}
           </p>
-          <button
+          <Button
             type="button"
-            className={secondaryButtonClass}
+            variant="secondary"
+            className={OUTLINE_PILL}
             onClick={() => setTicketId(null)}
           >
             Tìm lại
-          </button>
+          </Button>
         </div>
       );
   }

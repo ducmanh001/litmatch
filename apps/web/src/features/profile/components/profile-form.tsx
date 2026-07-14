@@ -49,29 +49,30 @@ export function ProfileForm({ profile }: { profile: MyProfileDto }) {
     });
   });
 
+  const labelClass =
+    'mb-2 block text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500';
+  const inputClass =
+    'h-12 w-full rounded-xl bg-slate-100 px-4 text-sm outline-none focus:ring-2 focus:ring-iris dark:bg-surf2';
+
   return (
-    <form className="max-w-md space-y-4" onSubmit={onSubmit} noValidate>
-      <div className="space-y-1.5">
-        <label htmlFor="nickname" className="text-sm font-medium">
+    <form className="space-y-5" onSubmit={onSubmit} noValidate>
+      <div>
+        <label htmlFor="nickname" className={labelClass}>
           Biệt danh
         </label>
         <input
           id="nickname"
           type="text"
-          className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+          className={inputClass}
           {...form.register('nickname')}
         />
       </div>
 
-      <div className="space-y-1.5">
-        <label htmlFor="gender" className="text-sm font-medium">
+      <div>
+        <label htmlFor="gender" className={labelClass}>
           Giới tính
         </label>
-        <select
-          id="gender"
-          className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-          {...form.register('gender')}
-        >
+        <select id="gender" className={inputClass} {...form.register('gender')}>
           {GENDER_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -80,34 +81,34 @@ export function ProfileForm({ profile }: { profile: MyProfileDto }) {
         </select>
       </div>
 
-      <div className="space-y-1.5">
-        <label htmlFor="birthDate" className="text-sm font-medium">
+      <div>
+        <label htmlFor="birthDate" className={labelClass}>
           Ngày sinh
         </label>
         <input
           id="birthDate"
           type="date"
-          className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+          className={inputClass}
           {...form.register('birthDate')}
         />
       </div>
 
-      <div className="space-y-1.5">
-        <label htmlFor="region" className="text-sm font-medium">
+      <div>
+        <label htmlFor="region" className={labelClass}>
           Khu vực (mã ISO 2 ký tự, vd VN)
         </label>
         <input
           id="region"
           type="text"
           maxLength={2}
-          className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm uppercase focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+          className={`${inputClass} uppercase`}
           {...form.register('region')}
         />
       </div>
 
       <button
         type="submit"
-        className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+        className="w-full rounded-full bg-irisl py-3.5 font-bold text-white shadow-lg shadow-iris/30 disabled:opacity-50"
         disabled={updateProfile.isPending}
       >
         {updateProfile.isPending ? 'Đang lưu…' : 'Lưu thay đổi'}
@@ -119,7 +120,7 @@ export function ProfileForm({ profile }: { profile: MyProfileDto }) {
         </p>
       )}
       {updateProfile.isSuccess && (
-        <p className="text-sm text-primary">Đã lưu hồ sơ.</p>
+        <p className="text-sm font-semibold text-irisl">Đã lưu hồ sơ.</p>
       )}
     </form>
   );

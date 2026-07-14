@@ -6,9 +6,11 @@ export const metadata: Metadata = { title: 'Phòng nhóm' };
 
 export default function PartyPage() {
   return (
-    <section className="mx-auto max-w-md space-y-4">
-      <h1 className="text-2xl font-semibold">Phòng nhóm</h1>
+    <div className="space-y-5">
+      <h1 className="font-display px-5 text-2xl font-semibold italic">
+        Phòng nhóm
+      </h1>
       <RoomList />
-    </section>
+    </div>
   );
 }

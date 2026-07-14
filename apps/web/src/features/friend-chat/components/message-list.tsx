@@ -18,7 +18,11 @@ export function MessageList({ conversationId }: { conversationId: string }) {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   if (messages.isPending) {
-    return <p className="text-sm text-muted-foreground">Đang tải tin nhắn…</p>;
+    return (
+      <p className="text-sm text-slate-500 dark:text-slate-400">
+        Đang tải tin nhắn…
+      </p>
+    );
   }
 
   if (messages.isError) {
@@ -36,21 +40,21 @@ export function MessageList({ conversationId }: { conversationId: string }) {
 
   if (items.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm text-slate-500 dark:text-slate-400">
         Chưa có tin nhắn nào — bắt đầu trò chuyện đi!
       </p>
     );
   }
 
   return (
-    <ul className="space-y-2">
+    <ul className="space-y-3">
       {items.map((message) => (
         <li
           key={message.id}
           className={
             message.senderUserId === me?.id
-              ? 'ml-auto max-w-[80%] rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground'
-              : 'mr-auto max-w-[80%] rounded-lg bg-card px-3 py-2 text-sm'
+              ? 'ml-auto max-w-[75%] rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-sm text-primary-foreground'
+              : 'mr-auto max-w-[75%] rounded-2xl rounded-bl-md border border-black/5 bg-white px-4 py-2.5 text-sm dark:border-white/5 dark:bg-surf'
           }
         >
           {message.content}

@@ -6,9 +6,9 @@ export const metadata: Metadata = { title: 'Ghép đôi' };
 
 export default function MatchingPage() {
   return (
-    <section className="mx-auto max-w-md space-y-4">
-      <h1 className="text-2xl font-semibold">Ghép đôi</h1>
+    <div className="space-y-6 px-5">
+      <h1 className="font-display text-2xl font-semibold italic">Ghép đôi</h1>
       <QueueStatusPanel />
-    </section>
+    </div>
   );
 }

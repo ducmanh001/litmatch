@@ -119,7 +119,11 @@ export function PartyStage({ roomId }: { roomId: string }) {
   }, [isMember, mediaRoom, connect]);
 
   if (detail.isPending || me.isPending) {
-    return <p className="text-sm text-muted-foreground">Đang tải…</p>;
+    return (
+      <p className="px-5 py-16 text-center text-sm text-slate-500 dark:text-slate-400">
+        Đang tải…
+      </p>
+    );
   }
 
   if (detail.isError) {
@@ -127,7 +131,10 @@ export function PartyStage({ roomId }: { roomId: string }) {
       ? detail.error.message
       : 'Có lỗi xảy ra, thử lại.';
     return (
-      <p role="alert" className="text-sm text-destructive">
+      <p
+        role="alert"
+        className="px-5 py-16 text-center text-sm text-destructive"
+      >
         {message}
       </p>
     );
@@ -139,13 +146,13 @@ export function PartyStage({ roomId }: { roomId: string }) {
 
   if (room.status === 'closed') {
     return (
-      <div className="space-y-2">
-        <p className="text-sm text-muted-foreground">
+      <div className="space-y-3 px-5 py-16 text-center">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           {room.closeReason !== null
             ? (CLOSE_REASON_LABEL[room.closeReason] ?? room.closeReason)
             : 'Phòng đã đóng'}
         </p>
-        <Link href="/party" className="text-sm text-primary underline">
+        <Link href="/party" className="text-sm font-bold text-irisl underline">
           Về danh sách phòng
         </Link>
       </div>
@@ -154,9 +161,11 @@ export function PartyStage({ roomId }: { roomId: string }) {
 
   if (!isMember || myMembership === undefined) {
     return (
-      <div className="space-y-3">
-        <h1 className="text-xl font-semibold">{room.title}</h1>
-        <p className="text-sm text-muted-foreground">
+      <div className="space-y-4 px-5 pb-6 pt-8 text-center">
+        <h1 className="font-display text-2xl font-semibold italic">
+          {room.title}
+        </h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           Tối đa {room.speakerLimit} người nói
         </p>
         {mediaErrorMessage !== undefined && (
@@ -166,7 +175,7 @@ export function PartyStage({ roomId }: { roomId: string }) {
         )}
         <button
           type="button"
-          className="h-10 w-full rounded-md bg-primary font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          className="w-full rounded-full bg-gradient-to-br from-irisl to-irisl py-3 font-bold text-white shadow-lg shadow-iris/30 disabled:opacity-50"
           disabled={media.isConnecting}
           onClick={media.connect}
         >
@@ -177,16 +186,42 @@ export function PartyStage({ roomId }: { roomId: string }) {
   }
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-semibold">{room.title}</h1>
+    <div className="space-y-5 pb-6">
+      <div className="flex items-center justify-between px-5 pt-6">
+        <div>
+          <p className="text-sm font-bold">{room.title}</p>
+          <p className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            {detail.data.members.length} người đang nghe
+          </p>
+        </div>
+        <button
+          type="button"
+          className="rounded-full bg-slate-100 px-4 py-2 text-xs font-bold disabled:opacity-50 dark:bg-surf2"
+          disabled={leaveRoom.isPending}
+          onClick={() =>
+            leaveRoom.mutate(undefined, {
+              onSuccess: () => {
+                media.disconnect();
+                router.push('/party');
+              },
+            })
+          }
+        >
+          {leaveRoom.isPending ? 'Đang rời…' : 'Rời phòng'}
+        </button>
+      </div>
+
       {room.hostDisconnectedAt !== null && (
-        <p className="text-sm text-muted-foreground">
+        <p className="px-5 text-sm text-slate-500 dark:text-slate-400">
           Host đang mất kết nối — phòng sẽ tự đóng nếu host không quay lại kịp.
         </p>
       )}
+
       {media.room !== null && <PartyAudio room={media.room} />}
+
       {(media.roomDisconnected || mediaErrorMessage !== undefined) && (
-        <div className="space-y-2">
+        <div className="space-y-2 px-5">
           <p role="alert" className="text-sm text-destructive">
             {media.roomDisconnected
               ? 'Mất kết nối phòng thoại.'
@@ -194,33 +229,20 @@ export function PartyStage({ roomId }: { roomId: string }) {
           </p>
           <button
             type="button"
-            className="h-9 rounded-md border border-border px-3 text-sm hover:bg-card"
+            className="h-9 rounded-full border border-black/10 px-4 text-sm font-bold hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
             onClick={media.connect}
           >
             Kết nối lại
           </button>
         </div>
       )}
+
       <MemberList
         roomId={roomId}
         members={detail.data.members}
         isHost={myMembership.role === 'host'}
+        speakerLimit={room.speakerLimit}
       />
-      <button
-        type="button"
-        className="h-9 rounded-md border border-border px-3 text-sm hover:bg-card disabled:opacity-50"
-        disabled={leaveRoom.isPending}
-        onClick={() =>
-          leaveRoom.mutate(undefined, {
-            onSuccess: () => {
-              media.disconnect();
-              router.push('/party');
-            },
-          })
-        }
-      >
-        {leaveRoom.isPending ? 'Đang rời…' : 'Rời phòng'}
-      </button>
     </div>
   );
 }

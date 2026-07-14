@@ -15,15 +15,22 @@ export function hashToHue(id: string): number {
 export function FriendAvatar({
   userId,
   nickname,
+  size = 40,
 }: {
   userId: string;
   nickname: string;
+  size?: number;
 }) {
   const hue = hashToHue(userId);
   return (
     <div
-      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-medium text-white"
-      style={{ backgroundColor: `hsl(${hue}, 60%, 45%)` }}
+      className="flex shrink-0 items-center justify-center rounded-full font-bold text-white"
+      style={{
+        backgroundColor: `hsl(${hue}, 60%, 45%)`,
+        width: size,
+        height: size,
+        fontSize: size * 0.4,
+      }}
       aria-hidden="true"
     >
       {nickname.charAt(0).toUpperCase()}

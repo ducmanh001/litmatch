@@ -2,6 +2,28 @@
 
 import { useLike, useReactionStatus, useUnlike } from '../api';
 
+import type { SVGProps } from 'react';
+
+function HeartIcon({
+  filled,
+  ...props
+}: SVGProps<SVGSVGElement> & { filled: boolean }) {
+  return (
+    <svg
+      width={18}
+      height={18}
+      viewBox="0 0 24 24"
+      fill={filled ? 'currentColor' : 'none'}
+      stroke="currentColor"
+      strokeWidth={2}
+      aria-hidden
+      {...props}
+    >
+      <path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.6l-1-1a5.5 5.5 0 00-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 000-7.8z" />
+    </svg>
+  );
+}
+
 export function LikeButton({
   postId,
   fallbackLikeCount,
@@ -23,13 +45,12 @@ export function LikeButton({
       aria-pressed={liked}
       disabled={pending}
       onClick={() => (liked ? unlike.mutate() : like.mutate())}
-      className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm disabled:opacity-50 ${
-        liked
-          ? 'border-primary text-primary'
-          : 'border-border text-muted-foreground hover:text-foreground'
+      className={`flex items-center gap-1.5 disabled:opacity-50 ${
+        liked ? 'text-rose-500' : 'text-slate-500 dark:text-slate-400'
       }`}
     >
-      {liked ? '♥' : '♡'} {likeCount}
+      <HeartIcon filled={liked} />
+      <span className="text-xs font-semibold">{likeCount}</span>
     </button>
   );
 }

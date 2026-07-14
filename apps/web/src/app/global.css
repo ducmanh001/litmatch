@@ -1,24 +1,46 @@
 @import 'tailwindcss';
 
+/* Tailwind v4 mặc định dark theo prefers-color-scheme — app này chuyển theme bằng class
+   `.dark` trên <html> (ThemeSwitcher, docs/13 § 13.9), nên phải khai lại variant. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /*
  * Design tokens của web (docs/13 § 13.9) — 1 nơi duy nhất khai màu/radius có ngữ nghĩa.
- * Đổi theme = đổi biến ở :root, không sửa className rải rác.
+ * Đổi theme = đổi biến ở :root/.dark, không sửa className rải rác.
+ * Bảng màu + font lấy đúng từ layouts/web/*.html (bản dựng UI tham khảo) — 2 theme: tối (mặc
+ * định) và sáng, chuyển bằng class `dark` trên <html> (bỏ theme "cam" phụ trong mockup).
  */
 :root {
-  --background: #ffffff;
-  --foreground: #111827;
+  --background: #fbf3ef; /* paper */
+  --foreground: #0f172a; /* slate-900 */
   /* Phải khác --background — bong bóng chat/hover state dùng bg-card không viền, không bóng
      đổ, nên trùng màu nền là vô hình (docs/13 § 13.9, phát hiện qua UX audit 2026-07-14). */
-  --card: #f4f4f5;
-  --muted: #f4f4f5;
-  --muted-foreground: #6b7280;
-  --border: #e5e7eb;
-  --primary: #e11d48;
-  --primary-foreground: #fff1f2;
-  --destructive: #dc2626;
+  --card: #ffffff;
+  --muted: #f1f5f9; /* slate-100 */
+  --muted-foreground: #64748b; /* slate-500 */
+  --border: rgb(0 0 0 / 5%);
+  --primary: #e8577c; /* iris — không đổi theo theme */
+  --primary-foreground: #ffffff;
+  --accent: #f2a65a; /* aqua — không đổi theo theme */
+  --accent-foreground: #1b1420;
+  --diamond: #4fc3d9;
+  --diamond-foreground: #0369a1; /* sky-600, đúng như mockup dùng cho chip diamond ở light */
+  --destructive: #e11d48; /* rose-600 */
+  --destructive-foreground: #fff1f2;
+  --ring: #e8577c;
+  --radius: 1rem;
+}
+
+.dark {
+  --background: #1b1420; /* ink */
+  --foreground: #fafafa; /* slate-50 */
+  --card: #241b29; /* surf */
+  --muted: #4a2e45; /* surf2 */
+  --muted-foreground: #94a3b8; /* slate-400 */
+  --border: rgb(255 255 255 / 10%);
+  --diamond-foreground: #4fc3d9; /* dark: chip diamond dùng luôn màu diamond, đúng mockup */
+  --destructive: #f43f5e; /* rose-500 — đủ tương phản trên nền tối */
   --destructive-foreground: #fef2f2;
-  --ring: #f43f5e;
-  --radius: 0.75rem;
 }
 
 @theme inline {
@@ -30,14 +52,166 @@
   --color-border: var(--border);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-diamond: var(--diamond);
+  --color-diamond-foreground: var(--diamond-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-ring: var(--ring);
   --radius-md: var(--radius);
+
+  /* Tên màu y hệt layouts/web/*.html — cho phép copy class thẳng từ mockup (bg-surf,
+     text-irisl, bg-iris/10, from-irisl, ...) mà không cần dịch qua tên token ngữ nghĩa. */
+  --color-ink: #1b1420;
+  --color-surf: #241b29;
+  --color-surf2: #4a2e45;
+  --color-paper: #fbf3ef;
+  --color-iris: #e8577c;
+  --color-irisl: #e8577c;
+  --color-aqua: #f2a65a;
+  --color-aqual: #f2a65a;
+  --color-diamond: #4fc3d9;
+
+  --font-display: var(--font-fraunces);
+  --font-body: var(--font-be-vietnam-pro);
+  --font-mono: var(--font-ibm-plex-mono);
 }
 
 body {
   background-color: var(--background);
   color: var(--foreground);
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Hiệu ứng trang trí lấy nguyên từ layouts/web/index.html + login.html. */
+.glow::before,
+.glow::after {
+  content: '';
+  position: absolute;
+  width: 480px;
+  height: 480px;
+  border-radius: 9999px;
+  filter: blur(110px);
+  z-index: 0;
+}
+.glow::before {
+  background: var(--color-irisl);
+  opacity: 0.2;
+  top: -8%;
+  left: 28%;
+}
+.glow::after {
+  background: var(--color-aqual);
+  opacity: 0.14;
+  top: -2%;
+  left: 48%;
+}
+:root:not(.dark) .glow::before {
+  opacity: 0.1;
+}
+:root:not(.dark) .glow::after {
+  opacity: 0.08;
+}
+
+@keyframes pulsering {
+  0% {
+    transform: scale(0.75);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+.pulsering {
+  animation: pulsering 2.6s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+}
+.pulsering2 {
+  animation: pulsering 2.6s cubic-bezier(0.2, 0.6, 0.4, 1) 0.9s infinite;
+}
+
+@keyframes floatslow {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+.floatslow {
+  animation: floatslow 5s ease-in-out infinite;
+}
+
+.theme-dot {
+  transition: transform 0.15s ease;
+}
+.theme-dot[data-active='true'] {
+  box-shadow:
+    0 0 0 2px var(--color-paper),
+    0 0 0 4px var(--color-irisl);
+}
+.dark .theme-dot[data-active='true'] {
+  box-shadow:
+    0 0 0 2px var(--color-ink),
+    0 0 0 4px var(--color-irisl);
+}
+
+/* Vòng phát sáng quanh avatar khi "đang nói" — lấy từ layouts/web/voice-match.html
+   (.speak-ring) + layouts/web/party-room.html (cùng tên, thông số gần giống nhau). */
+@keyframes speakpulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.15;
+  }
+}
+.speak-ring {
+  position: absolute;
+  inset: -4px;
+  z-index: 0;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, var(--color-irisl), var(--color-aqual));
+  animation: speakpulse 1.6s ease-in-out infinite;
+}
+.speak-ring2 {
+  animation-delay: 0.4s;
+}
+
+/* Thanh sóng âm trang trí trong cuộc gọi thoại — layouts/web/voice-match.html (.wave-bar). */
+@keyframes wavebar {
+  0%,
+  100% {
+    height: 8px;
+  }
+  50% {
+    height: 26px;
+  }
+}
+.wave-bar {
+  width: 4px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--color-irisl), var(--color-aqual));
+  animation: wavebar 1s ease-in-out infinite;
 }

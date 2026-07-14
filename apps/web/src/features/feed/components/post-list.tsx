@@ -17,11 +17,16 @@ export function PostList() {
       <PostComposer />
 
       {feed.isPending && (
-        <p className="text-sm text-muted-foreground">Đang tải bảng tin…</p>
+        <p className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+          Đang tải bảng tin…
+        </p>
       )}
 
       {feed.isError && (
-        <p role="alert" className="text-sm text-destructive">
+        <p
+          role="alert"
+          className="rounded-2xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+        >
           {isApiError(feed.error)
             ? feed.error.message
             : 'Có lỗi xảy ra, thử lại.'}
@@ -29,13 +34,13 @@ export function PostList() {
       )}
 
       {!feed.isPending && !feed.isError && items.length === 0 && (
-        <p className="text-sm text-muted-foreground">
+        <p className="py-10 text-center text-sm text-slate-500 dark:text-slate-400">
           Chưa có bài viết nào — hãy là người đầu tiên đăng bài.
         </p>
       )}
 
       {items.length > 0 && (
-        <div>
+        <div className="space-y-4">
           {items.map((post) => (
             <PostCard key={post.id} post={post} />
           ))}
@@ -45,7 +50,7 @@ export function PostList() {
       {hasNextPage && (
         <button
           type="button"
-          className="h-9 w-full rounded-md border border-border text-sm hover:bg-card disabled:opacity-50"
+          className="h-10 w-full rounded-full border border-black/5 text-sm font-semibold hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/5"
           disabled={isFetchingNextPage}
           onClick={() => void fetchNextPage()}
         >

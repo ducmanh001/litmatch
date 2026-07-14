@@ -10,9 +10,5 @@ export default async function ChatPage({
   params: Promise<{ friendUserId: string }>;
 }) {
   const { friendUserId } = await params;
-  return (
-    <section className="mx-auto max-w-md space-y-4">
-      <ConversationThread friendUserId={friendUserId} />
-    </section>
-  );
+  return <ConversationThread friendUserId={friendUserId} />;
 }

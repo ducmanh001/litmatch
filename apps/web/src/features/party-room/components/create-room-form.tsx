@@ -42,12 +42,12 @@ export function CreateRoomForm() {
           type="text"
           aria-label="Tên phòng"
           placeholder="Đặt tên cho phòng…"
-          className="h-10 flex-1 rounded-md border border-border bg-card px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+          className="h-11 flex-1 rounded-full border border-black/5 bg-white px-4 text-sm outline-none focus:ring-2 focus:ring-iris dark:border-white/5 dark:bg-surf"
           {...form.register('title')}
         />
         <button
           type="submit"
-          className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          className="h-11 shrink-0 rounded-full bg-gradient-to-br from-irisl to-irisl px-5 text-sm font-bold text-white shadow-lg shadow-iris/30 disabled:opacity-50"
           disabled={createRoom.isPending}
         >
           {createRoom.isPending ? 'Đang tạo…' : 'Tạo phòng'}

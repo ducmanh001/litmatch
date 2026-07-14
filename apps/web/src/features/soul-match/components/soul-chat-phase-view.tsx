@@ -39,7 +39,9 @@ export function SoulChatPhaseView({ sessionId }: { sessionId: string }) {
 
   if (session.isPending) {
     return (
-      <p className="text-sm text-muted-foreground">Đang tải phòng chat…</p>
+      <p className="px-5 py-4 text-center text-sm text-slate-500 dark:text-slate-400">
+        Đang tải phòng chat…
+      </p>
     );
   }
 
@@ -48,7 +50,7 @@ export function SoulChatPhaseView({ sessionId }: { sessionId: string }) {
       ? session.error.message
       : 'Có lỗi xảy ra, thử lại.';
     return (
-      <p role="alert" className="text-sm text-destructive">
+      <p role="alert" className="px-5 py-4 text-sm text-destructive">
         {message}
       </p>
     );
@@ -59,23 +61,27 @@ export function SoulChatPhaseView({ sessionId }: { sessionId: string }) {
 
   if (s.phase === 'closed') {
     return (
-      <div className="space-y-3">
-        {s.matched ? (
-          <SoulPartnerCard sessionId={sessionId} />
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Không match lần này — lịch sử chat ẩn danh không đọc lại được nữa.
-          </p>
-        )}
-        <Link href="/matching" className="text-sm text-primary underline">
-          Tìm ghép đôi tiếp
-        </Link>
+      <div className="flex flex-1 flex-col">
+        {s.matched && <SoulPartnerCard sessionId={sessionId} />}
+        <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
+          {!s.matched && (
+            <p className="mb-8 text-sm text-slate-500 dark:text-slate-400">
+              Không match lần này — lịch sử chat ẩn danh không đọc lại được nữa.
+            </p>
+          )}
+          <Link
+            href="/matching"
+            className="w-full rounded-full bg-gradient-to-br from-irisl to-irisl py-3 text-center text-sm font-bold text-white shadow-lg shadow-iris/30"
+          >
+            Tìm ghép đôi tiếp
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-1 flex-col">
       {/* `matched` là live check (Friendship), không đợi phase sang closed — báo ngay khi
           cả 2 đã thích nhau dù vẫn còn đang chat/đánh giá. */}
       {s.matched && <SoulPartnerCard sessionId={sessionId} />}

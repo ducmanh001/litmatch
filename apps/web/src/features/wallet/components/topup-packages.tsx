@@ -3,6 +3,7 @@
 import { isApiError } from '@litmatch/api-client';
 
 import { useIdempotencyKey } from '../../../shared/idempotency/use-idempotency-key';
+import { DiamondIcon } from '../../../shared/ui/icons';
 import { useIapProducts, useVerifyIap } from '../api';
 
 /**
@@ -16,7 +17,11 @@ export function TopupPackages() {
   const { key, resetKey } = useIdempotencyKey();
 
   if (products.isPending) {
-    return <p className="text-sm text-muted-foreground">Đang tải gói nạp…</p>;
+    return (
+      <p className="text-sm text-slate-500 dark:text-slate-400">
+        Đang tải gói nạp…
+      </p>
+    );
   }
 
   if (products.isError) {
@@ -34,7 +39,7 @@ export function TopupPackages() {
 
   if (items.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm text-slate-500 dark:text-slate-400">
         Chưa có gói nạp nào đang bán.
       </p>
     );
@@ -48,11 +53,11 @@ export function TopupPackages() {
 
   return (
     <div className="space-y-3">
-      <p className="rounded-md bg-card px-3 py-2 text-xs text-muted-foreground">
+      <p className="rounded-2xl bg-slate-100 px-4 py-3 text-xs text-slate-500 dark:bg-surf2 dark:text-slate-400">
         Chế độ test (dev) — không phải thanh toán thật, chỉ dùng để kiểm thử
         luồng nạp.
       </p>
-      <ul className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {items.map((product) => (
           <li key={product.productId}>
             <button
@@ -68,12 +73,13 @@ export function TopupPackages() {
                   { onSuccess: () => resetKey() },
                 )
               }
-              className="w-full rounded-md border border-border p-4 text-left hover:bg-card disabled:opacity-50"
+              className="w-full rounded-2xl border border-black/5 bg-white p-4 text-left transition hover:border-diamond/50 disabled:opacity-50 dark:border-white/10 dark:bg-surf"
             >
-              <p className="text-lg font-semibold">
+              <p className="flex items-center gap-1.5 text-lg font-extrabold">
+                <DiamondIcon className="text-diamond" width={15} height={15} />
                 {product.diamonds} kim cương
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 {verifyIap.isPending ? 'Đang xử lý…' : 'Nạp ngay (test)'}
               </p>
             </button>
@@ -86,7 +92,7 @@ export function TopupPackages() {
         </p>
       )}
       {verifyIap.isSuccess && (
-        <p className="text-sm text-primary">
+        <p className="text-sm font-semibold text-irisl">
           Nạp thành công — số dư đã cập nhật.
         </p>
       )}

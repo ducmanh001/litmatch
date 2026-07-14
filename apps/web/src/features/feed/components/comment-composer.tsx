@@ -40,12 +40,12 @@ export function CommentComposer({ postId }: { postId: string }) {
           type="text"
           aria-label="Nội dung bình luận"
           placeholder="Viết bình luận…"
-          className="h-10 flex-1 rounded-md border border-border bg-card px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+          className="h-10 flex-1 rounded-full border border-black/5 bg-white px-4 text-sm focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-iris dark:border-white/10 dark:bg-surf"
           {...form.register('content')}
         />
         <button
           type="submit"
-          className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          className="h-10 rounded-full bg-irisl px-5 text-sm font-bold text-white disabled:opacity-50"
           disabled={createComment.isPending}
         >
           {createComment.isPending ? 'Đang gửi…' : 'Gửi'}

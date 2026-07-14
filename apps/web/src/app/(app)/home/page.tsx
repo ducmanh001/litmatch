@@ -1,29 +1,160 @@
+'use client';
+
 import Link from 'next/link';
 
-import type { Metadata } from 'next';
+import { useCurrentUser } from '../../../shared/auth/use-current-user';
+import {
+  DiamondIcon,
+  MatchIcon,
+  MicIcon,
+  PartyIcon,
+  ProfileIcon,
+} from '../../../shared/ui/icons';
+import { useRoomList } from '../../../features/party-room/api';
+import { useWallet } from '../../../features/wallet/api';
 
-export const metadata: Metadata = { title: 'Trang chủ' };
+const MODES = [
+  {
+    title: 'Soul Match',
+    description: 'Chat ẩn danh 2-3 phút',
+    Icon: MatchIcon,
+    highlight: true,
+  },
+  {
+    title: 'Voice Match',
+    description: 'Nghe giọng ~7 phút',
+    Icon: MicIcon,
+    highlight: false,
+  },
+] as const;
 
-/**
- * Placeholder vùng sau login — chat/party vào theo phase tính năng
- * (docs/12 § 12.8 bước 3), mỗi feature 1 thư mục trong features/.
- */
-export default function HomePage() {
+function TrendingRooms() {
+  const { data, isPending, isError } = useRoomList();
+  const rooms =
+    data?.pages.flatMap((page) => page?.data ?? []).slice(0, 6) ?? [];
+
+  if (isPending) {
+    return (
+      <p className="px-5 text-sm text-slate-500 dark:text-slate-400">
+        Đang tải phòng…
+      </p>
+    );
+  }
+  if (isError) {
+    return (
+      <p role="alert" className="px-5 text-sm text-destructive">
+        Không tải được danh sách phòng.
+      </p>
+    );
+  }
+  if (rooms.length === 0) {
+    return (
+      <p className="px-5 text-sm text-slate-500 dark:text-slate-400">
+        Chưa có phòng nào đang hoạt động.
+      </p>
+    );
+  }
   return (
-    <section className="space-y-4">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold">Chào mừng đến Litmatch</h1>
-        <p className="text-muted-foreground">
-          Bắt đầu bằng cách tìm người ghép đôi — chat và party room sẽ xuất hiện
-          ở đây theo từng phase.
-        </p>
+    <div className="no-scrollbar flex gap-3 overflow-x-auto px-5 pb-2">
+      {rooms.map((room) => (
+        <Link
+          key={room.id}
+          href={`/party/${room.id}`}
+          className="w-40 shrink-0 rounded-2xl border border-black/5 bg-white p-3 dark:border-white/5 dark:bg-surf"
+        >
+          <p className="text-sm font-bold leading-tight">{room.title}</p>
+          <p className="mt-1 flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            Tối đa {room.speakerLimit} người nói
+          </p>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+/** Trang chủ — đúng layouts/web/home.html: top bar + chế độ ghép đôi + phòng đang hoạt động. */
+export default function HomePage() {
+  const { data: user } = useCurrentUser();
+  const { data: wallet } = useWallet();
+
+  return (
+    <div>
+      <div className="mb-6 flex items-center justify-between px-5">
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-iris/30 bg-slate-100 dark:bg-surf2">
+            <ProfileIcon width={22} height={22} className="text-slate-400" />
+          </span>
+          <div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Chào buổi tối 👋
+            </p>
+            <p className="text-sm font-bold">{user?.nickname ?? '…'}</p>
+          </div>
+        </div>
+        <Link
+          href="/wallet"
+          className="flex items-center gap-1 rounded-full bg-diamond/15 px-3 py-2 text-xs font-extrabold text-sky-600 dark:text-diamond"
+        >
+          <DiamondIcon /> {wallet?.balance ?? 0}
+        </Link>
       </div>
+
+      <div className="mb-6 px-5">
+        <h2 className="mb-3 text-sm font-extrabold tracking-wide text-slate-500 dark:text-slate-400">
+          GHÉP ĐÔI NGAY
+        </h2>
+        <div className="grid grid-cols-2 gap-3">
+          {MODES.map(({ title, description, Icon, highlight }) => (
+            <Link
+              key={title}
+              href="/matching"
+              className={
+                highlight
+                  ? 'rounded-2xl bg-gradient-to-br from-irisl to-irisl p-4 text-white shadow-lg shadow-iris/25'
+                  : 'rounded-2xl border border-black/5 bg-white p-4 dark:border-white/5 dark:bg-surf'
+              }
+            >
+              <Icon
+                width={24}
+                height={24}
+                className={`mb-6 ${highlight ? '' : 'text-irisl'}`}
+              />
+              <p className="font-bold">{title}</p>
+              <p
+                className={`mt-0.5 text-xs ${highlight ? 'text-white/80' : 'text-slate-500 dark:text-slate-400'}`}
+              >
+                {description}
+              </p>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <div className="mb-3 flex items-center justify-between px-5">
+          <h2 className="text-sm font-extrabold tracking-wide text-slate-500 dark:text-slate-400">
+            PHÒNG ĐANG HOẠT ĐỘNG 🔥
+          </h2>
+          <Link href="/party" className="text-xs font-bold text-irisl">
+            Xem tất cả →
+          </Link>
+        </div>
+        <TrendingRooms />
+      </div>
+
       <Link
-        href="/matching"
-        className="inline-flex h-10 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+        href="/party"
+        className="mx-5 flex items-center gap-4 rounded-2xl border border-black/5 bg-white p-4 dark:border-white/5 dark:bg-surf"
       >
-        Tìm ghép đôi
+        <PartyIcon width={24} height={24} className="shrink-0 text-irisl" />
+        <div>
+          <p className="text-sm font-bold">Tạo phòng của riêng bạn</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Mời bạn bè và người lạ cùng trò chuyện trong phòng voice.
+          </p>
+        </div>
       </Link>
-    </section>
+    </div>
   );
 }

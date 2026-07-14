@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form';
 import { useCreatePost } from '../api';
 import { createPostSchema } from '../create-post-schema';
 import { useIdempotencyKey } from '../../../shared/idempotency/use-idempotency-key';
+import { ProfileIcon } from '../../../shared/ui/icons';
 
 import type { CreatePostForm } from '../create-post-schema';
 
@@ -50,22 +51,27 @@ export function PostComposer() {
 
   return (
     <form
-      className="space-y-2 rounded-md border border-border p-3"
+      className="space-y-3 rounded-2xl border border-black/5 bg-white px-4 py-3.5 dark:border-white/5 dark:bg-surf"
       onSubmit={onSubmit}
       noValidate
     >
-      <textarea
-        aria-label="Nội dung bài viết"
-        placeholder="Bạn đang nghĩ gì?"
-        rows={3}
-        className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-        {...form.register('content')}
-      />
+      <div className="flex items-center gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-irisl text-white">
+          <ProfileIcon width={16} height={16} />
+        </div>
+        <textarea
+          aria-label="Nội dung bài viết"
+          placeholder="Bạn đang nghĩ gì?"
+          rows={1}
+          className="w-full flex-1 resize-none border-0 bg-transparent p-0 text-sm placeholder:text-slate-400 focus-visible:outline-none"
+          {...form.register('content')}
+        />
+      </div>
       <input
         type="text"
         aria-label="Đường dẫn ảnh (không bắt buộc)"
         placeholder="Đường dẫn ảnh (không bắt buộc)"
-        className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+        className="h-10 w-full rounded-xl border border-black/5 bg-transparent px-3 text-sm placeholder:text-slate-400 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-iris dark:border-white/10"
         {...form.register('imageUrl')}
       />
       <div className="flex items-center justify-between">
@@ -78,10 +84,10 @@ export function PostComposer() {
         )}
         <button
           type="submit"
-          className="h-9 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          className="rounded-full bg-irisl px-5 py-2 text-sm font-bold text-white disabled:opacity-50"
           disabled={createPost.isPending}
         >
-          {createPost.isPending ? 'Đang đăng…' : 'Đăng bài'}
+          {createPost.isPending ? 'Đang đăng…' : 'Đăng'}
         </button>
       </div>
     </form>
