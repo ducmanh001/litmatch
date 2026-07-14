@@ -52,6 +52,9 @@ export class PartyRoomDto {
   @ApiProperty({ enum: PartyRoomCloseReason, nullable: true })
   closeReason!: PartyRoomCloseReason | null;
   @ApiProperty() createdAt!: Date;
+  /** Host đang trong grace chờ tự kết nối lại (party-room-service.md § 4) — null = bình thường. */
+  @ApiProperty({ type: String, format: 'date-time', nullable: true })
+  hostDisconnectedAt!: Date | null;
 
   static from(room: PartyRoom): PartyRoomDto {
     const dto = new PartyRoomDto();
@@ -62,6 +65,7 @@ export class PartyRoomDto {
     dto.speakerLimit = room.speakerLimit;
     dto.closeReason = room.closeReason;
     dto.createdAt = room.createdAt;
+    dto.hostDisconnectedAt = room.hostDisconnectedAt;
     return dto;
   }
 }

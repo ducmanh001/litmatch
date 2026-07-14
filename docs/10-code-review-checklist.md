@@ -199,6 +199,7 @@
 - **Tin dữ liệu tính ở client để quyết định cho phép hành động** (giá hiển thị, số dư còn lại, VIP còn hạn) thay vì luôn dựa trên response mới nhất từ server — client lệch một nhịp so với server (do cache, do request khác vừa chạy) là ra quyết định sai
 - **Reconnect socket nhưng không refetch REST**: coi im lặng trong lúc mất kết nối là "không có gì đổi" — event đã miss trong lúc rớt mạng không được server gửi lại, UI lệch khỏi state thật cho tới lần F5 tiếp theo (cấm ở [13 § 13.8](./13-frontend-coding-standards.md))
 - **Guard route/ẩn UI theo role bị coi là chốt chặn thật**: route bị ẩn nhưng API đứng sau vẫn không có guard ở server, hoặc 1 đường khác (deep link, gọi thẳng hàm) bỏ qua được UI đã ẩn — enforcement thật luôn ở backend guard ([12 § 12.9](./12-frontend-architecture.md)), ẩn ở FE chỉ là UX
+- **Effect tự-kết-nối-lại retry vô hạn vì gate theo `isPending`/`error` thay vì theo "đã thử chưa"**: effect kiểu "đã là member/đã có session thì tự `connect()` lại" mà điều kiện chạy lại dựa vào `isPending`/`error` của chính mutation đó sẽ có khoảng hở — REST của bước 1 (vd join room) luôn xong nhanh hơn bước 2 phụ thuộc nó (vd LiveKit `room.connect()`), nên effect thấy "chưa kết nối, không pending, không lỗi (hoặc đã lỗi ổn định)" và tự gọi lại liên tục, nhanh hơn round-trip thật — nếu request đó bắt đầu bị rate-limit thì lặp vô hạn không backoff (đúng dạng "chọn sai chiến lược cho tài nguyên tranh chấp" ở § 10.1.C, bắt được thật ở Party Room: 1636 request `join` trong ~6 giây). Chốt đúng là gate bằng 1 ref/flag "đã tự thử chưa" cho vòng đời component, chỉ tự thử đúng 1 lần; mọi lần sau là hành động thủ công của user (nút "Kết nối lại").
 
 **Distributed system (cross-cutting, áp dụng cả khi còn là modular monolith lẫn khi đã tách service)**
 
@@ -213,6 +214,32 @@
 - Trust score bị hạ nhưng không có audit log → khó điều tra khi có khiếu nại
 - Report bị lạm dụng để "vote kick" người khác (report giả hàng loạt) nhưng hệ thống không rate-limit hay phát hiện pattern bất thường
 - Unmatch/block chỉ ẩn ở UI nhưng vẫn cho phép bên kia tìm lại qua tính năng khác (feed, party room công khai) → "block" không thực sự cắt hết điểm chạm giữa 2 user
+
+**Discovery — duyệt user chủ động lặp lại nhiều lần, dễ sai vì tưởng giống Matching**
+
+- **Snapshot hidden set 1 lần rồi tái dùng cho nhiều trang** — block/report xảy ra GIỮA lúc user
+  đang lướt qua nhiều trang kết quả phải có hiệu lực NGAY ở trang tiếp theo, không đợi tới lần
+  gọi API mới từ đầu; đúng tinh thần § 10.0.C (xác minh lại đúng thời điểm hành động, không chỉ
+  lúc bắt đầu) — khác Matching nơi filter chặn snapshot 1 lần lúc ghép là ĐÚNG vì ghép chỉ xảy ra
+  1 lần, còn Discovery là duyệt lặp lại.
+- **Nhầm dùng cooldown kiểu Matching (`SAFETY_REMATCH_COOLDOWN_DAYS`) cho report** — Discovery là
+  màn duyệt nhiều lần/ngày, ẩn sau report phải là **vĩnh viễn** (đọc thẳng bảng `reports`, không
+  qua cooldown), khác hẳn ngữ nghĩa ghép cặp 1 lần của Matching.
+- **Tự thêm field nhạy cảm (tuổi chính xác, tọa độ, region chi tiết) vào `PublicProfileDto` dùng
+  chung** — DTO đó phục vụ cả Soul Match reveal lẫn Friend list với bất biến "giữ ẩn danh"; field
+  riêng của 1 tính năng duyệt phải là DTO composition riêng (vd `ageBucket`), không sửa DTO gốc.
+- **Cho client tự gửi `excludeGuests`/tiêu chí ẩn danh sách loại trừ** — các quyết định "ai bị ẩn
+  khỏi kết quả" (banned, guest, block, report) phải luôn do server tự quyết từ trạng thái/config,
+  không nhận từ query param client (khác filter sở thích như gender/age/region vốn dĩ client được
+  quyền chọn).
+- **Tin `age` thô do client gửi** thay vì tính tuổi ở server từ `birthDate` lưu sẵn — filter tuổi
+  chỉ nhận `ageMin`/`ageMax` rồi server tự quy đổi sang khoảng `birthDate` để query, tránh client
+  tự khai tuổi khác thực tế qua tham số filter.
+- **Report bị lạm dụng để tự-ẩn khỏi Discovery của người khác** (biến thể của lỗi "vote kick" ở
+  Trust & Safety phía trên) — vì ẩn là vĩnh viễn và 2 chiều, 1 report giả cũng đủ khiến 2 bên
+  không bao giờ thấy nhau qua Discovery nữa; chấp nhận được ở mức độ Discovery (không chặn được
+  matching/chat, chỉ ảnh hưởng 1 tính năng duyệt), nhưng rate-limit/pattern-detect cho report vẫn
+  phải nằm ở Safety module, không phải việc của Discovery.
 
 **Movie Match — phòng xem chung, dễ nhầm với Party Room/Calling nhưng KHÔNG có tiền/SFU**
 

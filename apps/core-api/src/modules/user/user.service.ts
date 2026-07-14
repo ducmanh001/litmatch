@@ -1,12 +1,14 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
+import { buildCursorPage } from '@litmatch/common-dtos';
 import { DomainException } from '@litmatch/common-exceptions';
 import { EntityManager, Repository } from 'typeorm';
 
 import { UserErrors } from './user.errors';
 import { Gender, User, UserStatus } from './entities/user.entity';
 
+import type { CursorPage } from '@litmatch/common-dtos';
 import type { Role } from '@litmatch/common-dtos';
 import type { CoreApiEnv } from '../../config/env.validation';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
@@ -25,6 +27,28 @@ export interface UserPageFilter {
 export interface UserPage {
   items: User[];
   total: number;
+}
+
+/** Tiêu chí duyệt user chủ động (Discovery browse, docs/services/discovery-service.md § 2). */
+export interface UserBrowseFilter {
+  gender?: Gender;
+  /** Tuổi tối thiểu (tuổi thật >= ageMin) — server tự quy đổi sang khoảng birthDate. */
+  ageMin?: number;
+  /** Tuổi tối đa (tuổi thật <= ageMax). */
+  ageMax?: number;
+  /**
+   * Loại trừ khỏi kết quả — caller (Discovery) tự gộp self + hidden set từ Safety trước khi
+   * gọi; User module trung lập, không biết khái niệm block/report (docs/05 § 5.3 boundary).
+   */
+  excludeUserIds?: string[];
+  /** Loại guest khỏi kết quả — caller quyết theo config `DISCOVERY_GUEST_VISIBLE`. */
+  excludeGuests?: boolean;
+}
+
+/** Vị trí keyset đã giải mã — Discovery tự decode/validate cursor (giữ error taxonomy ở đúng module sở hữu). */
+export interface UserBrowseCursorPosition {
+  createdAt: string;
+  id: string;
 }
 
 @Injectable()
@@ -148,6 +172,70 @@ export class UserService {
     if (dto.region !== undefined) user.region = dto.region;
 
     return this.userRepo.save(user);
+  }
+
+  /**
+   * Duyệt user active theo tiêu chí (Discovery browse) — keyset cursor `(createdAt, id)` giảm
+   * dần, cùng pattern `economy.service.ts` cho bảng không có cột `seq`. Banned/guest luôn bị
+   * loại theo `filter`/status; caller quyết `excludeUserIds` (self + hidden set).
+   */
+  async browsePage(
+    filter: UserBrowseFilter,
+    limit: number,
+    after?: UserBrowseCursorPosition,
+  ): Promise<CursorPage<User>> {
+    const qb = this.userRepo
+      .createQueryBuilder('u')
+      .where('u.status = :status', { status: UserStatus.Active });
+
+    if (filter.gender) {
+      qb.andWhere('u.gender = :gender', { gender: filter.gender });
+    }
+    if (filter.ageMin !== undefined) {
+      qb.andWhere('u.birthDate IS NOT NULL AND u.birthDate <= :maxBirthDate', {
+        maxBirthDate: this.ageCutoffDate(filter.ageMin),
+      });
+    }
+    if (filter.ageMax !== undefined) {
+      qb.andWhere('u.birthDate IS NOT NULL AND u.birthDate > :minBirthDate', {
+        minBirthDate: this.ageCutoffDate(filter.ageMax + 1),
+      });
+    }
+    if (filter.excludeUserIds && filter.excludeUserIds.length > 0) {
+      qb.andWhere('u.id NOT IN (:...excludeIds)', {
+        excludeIds: filter.excludeUserIds,
+      });
+    }
+    if (filter.excludeGuests) {
+      qb.andWhere('u.isGuest = false');
+    }
+    if (after) {
+      qb.andWhere('(u.createdAt, u.id) < (:cursorCreatedAt, :cursorId)', {
+        cursorCreatedAt: after.createdAt,
+        cursorId: after.id,
+      });
+    }
+
+    const rows = await qb
+      .orderBy('u.createdAt', 'DESC')
+      .addOrderBy('u.id', 'DESC')
+      .take(limit + 1)
+      .getMany();
+    return buildCursorPage(rows, limit, (last) => ({
+      createdAt: last.createdAt.toISOString(),
+      id: last.id,
+    }));
+  }
+
+  /** Ngày cutoff cho "tuổi >= years" — birthDate <= cutoff (cùng công thức `assertBirthDateAllowed`). */
+  private ageCutoffDate(years: number): string {
+    const now = new Date();
+    const cutoff = new Date(
+      now.getFullYear() - years,
+      now.getMonth(),
+      now.getDate(),
+    );
+    return cutoff.toISOString().slice(0, 10);
   }
 
   /**

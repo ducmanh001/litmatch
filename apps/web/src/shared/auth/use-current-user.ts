@@ -5,6 +5,10 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
 import { useIsAuthenticated } from './use-session';
 
+import type { ApiSchema } from '@litmatch/api-client';
+
+export type MyProfileDto = ApiSchema<'MyProfileDto'>;
+
 /** "Mình là ai" — dùng để so `senderUserId` trong các luồng chat không ẩn danh (Friend chat). */
 export const currentUserKey = ['auth', 'me'] as const;
 

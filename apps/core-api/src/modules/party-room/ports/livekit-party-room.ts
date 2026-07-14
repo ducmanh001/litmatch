@@ -80,10 +80,13 @@ export class SdkPartyLivekitRoomPort extends PartyLivekitRoomPort {
     super();
     this.apiKey = config.getOrThrow('LIVEKIT_API_KEY', { infer: true });
     this.apiSecret = config.getOrThrow('LIVEKIT_API_SECRET', { infer: true });
-    // RoomServiceClient cần http(s) — derive từ ws URL client dùng (cùng cách calling)
+    // RoomServiceClient cần http(s) tới LiveKit thật — LIVEKIT_API_URL nếu có set (server và
+    // client trỏ 2 địa chỉ khác nhau, vd LIVEKIT_URL qua proxy chỉ dành cho client), không thì
+    // derive từ LIVEKIT_URL như trước (cùng cách calling)
+    const apiUrl = config.getOrThrow('LIVEKIT_API_URL', { infer: true });
     const wsUrl = config.getOrThrow('LIVEKIT_URL', { infer: true });
     this.roomService = new RoomServiceClient(
-      wsUrl.replace(/^ws/, 'http'),
+      apiUrl || wsUrl.replace(/^ws/, 'http'),
       this.apiKey,
       this.apiSecret,
     );

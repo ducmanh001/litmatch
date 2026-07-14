@@ -56,4 +56,21 @@ describe('MemberList', () => {
       screen.queryByRole('button', { name: 'Chuyển xuống khán giả' }),
     ).not.toBeInTheDocument();
   });
+
+  it('host thấy từng khán giả kèm nút mời lên nói', async () => {
+    renderMemberList(true);
+    expect(await screen.findByText('Nick-aud-1')).toBeVisible();
+    expect(screen.getByText('Nick-aud-2')).toBeVisible();
+    expect(screen.getAllByRole('button', { name: 'Mời lên nói' })).toHaveLength(
+      2,
+    );
+  });
+
+  it('non-host không thấy nút mời lên nói dù nhìn thấy khán giả', async () => {
+    renderMemberList(false);
+    await screen.findByText('2 khán giả');
+    expect(
+      screen.queryByRole('button', { name: 'Mời lên nói' }),
+    ).not.toBeInTheDocument();
+  });
 });

@@ -39,14 +39,29 @@
 
 - Tạo phòng: row phòng + membership host ATOMIC trong 1 transaction → tạo LiveKit room TƯỜNG MINH
   (`maxParticipants`, `emptyTimeout`) → mint token host. SFU fail → compensate đóng phòng (`error`) + 503.
-- **Host rời (REST hoặc webhook `participant_left`) → ĐÓNG PHÒNG** (`host_left`): quyết định GĐ3 —
+- **Host rời CHỦ ĐỘNG qua REST `leaveRoom` → ĐÓNG PHÒNG NGAY** (`host_left`): quyết định GĐ3 —
   chọn "đóng phòng" thay vì transfer host ([10 § Party Room](../10-code-review-checklist.md) cho phép
   1 trong 2); transfer host là mở rộng sau nếu nghiệp vụ cần, đổi thì sửa spec này trước.
+- **Host rớt kết nối NGOÀI Ý MUỐN qua webhook `participant_left` → CHỜ GRACE, KHÔNG đóng ngay**
+  (bổ sung sau khi test tay bắt được: reload trang/rớt wifi thoáng qua của host đá cả phòng ra
+  ngay, trải nghiệm kém cho app audio/social trên di động). `handleParticipantLeft` chỉ set
+  `party_rooms.host_disconnected_at = now()` dưới lock (idempotent — webhook lặp lại không dời
+  mốc), KHÔNG mark membership host rời — host vẫn active để `joinRoom` nhận ra là rejoin, không
+  tạo membership mới. Host tự kết nối lại (REST `join`) trong lúc chờ → `joinRoom` clear
+  `host_disconnected_at` về null, CÙNG lock row với grace-check nên không có race đóng nhầm phòng
+  vừa hồi phục. Hết `PARTY_HOST_DISCONNECT_GRACE_SECONDS` (mặc định 15s) mà vẫn không null →
+  `PartyRoomSweeperService` (interval riêng `PARTY_HOST_GRACE_CHECK_INTERVAL_MS`, mặc định 5s —
+  ngắn hơn nhiều sweeper chính 30s vì đây là backstop CHÍNH cho case "phòng còn member khác") gọi
+  `closeRoomById(..., guard)` với `guard` re-check `host_disconnected_at` NGAY TRÊN row đã lock —
+  đóng với lý do `host_left` như cũ. Publish `party.host.disconnected`/`party.host.reconnected`
+  (best-effort, chỉ gợi ý refetch — REST poll field `hostDisconnectedAt` vẫn là nguồn sự thật) cho
+  member khác hiện banner "Host đang mất kết nối".
 - Member thường rời qua REST: nhả membership + `removeParticipant` khỏi SFU (DB rời mà SFU còn nối
   là lệch state); rớt kết nối: webhook `participant_left` nhả membership (UPDATE có điều kiện
   `left_at IS NULL` — retry idempotent), vào lại = join lại.
 - Đóng phòng idempotent (`closeRoomById` — endpoint/webhook/sweeper cùng đi qua): chỉ lời gọi thực
-  hiện transition mới dọn SFU + publish realtime (retry không bắn đôi).
+  hiện transition mới dọn SFU + publish realtime (retry không bắn đôi). Tham số `guard` tuỳ chọn
+  đánh giá trên row đã lock TRONG CÙNG transaction — dùng cho grace-check host disconnect ở trên.
 
 ## 5. Webhook LiveKit
 
@@ -73,7 +88,9 @@ Webhook KHÔNG được là đường duy nhất đóng phòng. `PartyRoomSweepe
 `PARTY_MAX_SPEAKERS` (giới hạn CỨNG § 3.8.A, chỉ nới sau load test đúng workload + headroom),
 `PARTY_MAX_MEMBERS`,
 `PARTY_TOKEN_TTL_SECONDS`, `PARTY_EMPTY_ROOM_TIMEOUT_SECONDS`, `PARTY_SWEEPER_INTERVAL_MS`,
-`PARTY_STALE_ROOM_SECONDS`, `PARTY_TITLE_MAX_LENGTH`. LiveKit dùng chung `LIVEKIT_URL/API_KEY/API_SECRET`
+`PARTY_STALE_ROOM_SECONDS`, `PARTY_TITLE_MAX_LENGTH`,
+`PARTY_HOST_DISCONNECT_GRACE_SECONDS` (mặc định 15 — § 4), `PARTY_HOST_GRACE_CHECK_INTERVAL_MS`
+(mặc định 5000). LiveKit dùng chung `LIVEKIT_URL/API_KEY/API_SECRET`
 với calling (1 cụm LiveKit — đổi tên từ `CALLING_LIVEKIT_*` ở GĐ3).
 
 ## 8. Realtime

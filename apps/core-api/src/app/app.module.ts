@@ -20,6 +20,7 @@ import { AdminModule } from '../modules/admin';
 import { AuthModule } from '../modules/auth';
 import { AvatarModule } from '../modules/avatar';
 import { CallingModule } from '../modules/calling';
+import { DiscoveryModule } from '../modules/discovery';
 import { EconomyModule } from '../modules/economy';
 import { FeedModule } from '../modules/feed';
 import { FriendModule } from '../modules/friend';
@@ -92,6 +93,7 @@ import { ReadinessService } from './readiness.service';
     PalmMatchModule,
     MiniGameModule,
     AdminModule,
+    DiscoveryModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -22,6 +22,16 @@
 - **Tuổi tối thiểu 18** (config theo thị trường nếu luật địa phương khác), khai sinh nhật lúc đăng ký; tài khoản chưa xác minh bị giới hạn tính năng; report liên quan trẻ vị thành niên xử lý ưu tiên cao nhất (xem [10-code-review-checklist.md § Trust & Safety](./10-code-review-checklist.md)).
 - **VIP mua bằng diamond** (qua ledger như mọi giao dịch khác); đang active mà mua tiếp thì **gia hạn cộng dồn** (expiry = max(now, expiry hiện tại) + số ngày gói); hết hạn tự downgrade bằng cách **derive khi đọc**, không chờ cron. Chi tiết: [services/economy-service.md](./services/economy-service.md).
 - **Free match giới hạn số lần/ngày** (config, phân biệt guest / thường / VIP) — hết lượt thì trả diamond hoặc chờ reset ngày.
+- **Discovery (browse/nearby) loại trừ report vĩnh viễn, KHÁC cooldown của matching**: 1 cặp
+  user từng report nhau (theo bất kỳ chiều nào) không bao giờ thấy nhau lại qua Discovery —
+  `reports` là append-only, không có "unreport" nên không có cơ sở để hết hạn loại trừ này. Đây
+  là quyết định chặt hơn `SAFETY_REMATCH_COOLDOWN_DAYS` (matching) có chủ đích: Discovery là màn
+  duyệt chủ động lặp lại nhiều lần/ngày, không giống ghép cặp 1 lần. Chi tiết:
+  [services/discovery-service.md](./services/discovery-service.md).
+- **Card Discovery không được lộ tuổi chính xác**: chỉ trả `ageBucket` (khoảng rộng theo config,
+  không phải số tuổi/ngày sinh) và **không sửa `PublicProfileDto`** dùng chung ở Soul Match
+  reveal + Friend list (2 nơi đó có bất biến "giữ ẩn danh, không tuổi chính xác" từ trước) —
+  Discovery compose DTO riêng đè lên `PublicProfileDto`.
 
 > Đây là danh sách tối thiểu, không đầy đủ. Khi phát hiện thêm 1 domain rule quan trọng trong lúc build, bổ sung vào file này ngay (không để trôi mất trong lịch sử chat).
 

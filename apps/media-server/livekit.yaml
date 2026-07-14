@@ -9,6 +9,12 @@ rtc:
   port_range_start: 50000
   port_range_end: 50200
   use_external_ip: false
+  # Không set thì LiveKit tự lấy IP nội bộ của container (Docker bridge network) làm ICE
+  # candidate — thiết bị ngoài máy dev (điện thoại test qua LAN) không bao giờ route tới được,
+  # dù WebSocket signaling vẫn "connect" bình thường (audio câm, không phải lỗi kết nối rõ ràng).
+  # Cần test qua LAN: thêm `node_ip: <IP LAN của máy bạn>` ở đây CỤC BỘ, KHÔNG commit dòng đó —
+  # IP LAN khác nhau theo máy/mạng của từng người, hardcode vào file chung sẽ gãy dev của người
+  # khác (`git status` sẽ thấy file này bị sửa — nhớ không add/commit khi xong việc test LAN).
 redis:
   address: host.docker.internal:6379
 keys:
@@ -19,7 +25,10 @@ keys:
 webhook:
   api_key: devkey
   urls:
-    - http://host.docker.internal:3000/calling/webhooks/livekit
-    - http://host.docker.internal:3000/party/webhooks/livekit
+    # PHẢI khớp API_GLOBAL_PREFIX ('api/v1', core-api/src/app/openapi.ts) — thiếu prefix này
+    # khiến LiveKit POST 404 âm thầm, call không bao giờ chuyển active/startedAt (phát hiện qua
+    # UX audit 2026-07-14: voice call không lên đồng hồ đếm giờ vì webhook chưa từng tới nơi).
+    - http://host.docker.internal:3000/api/v1/calling/webhooks/livekit
+    - http://host.docker.internal:3000/api/v1/party/webhooks/livekit
 logging:
   level: info

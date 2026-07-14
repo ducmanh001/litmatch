@@ -2,17 +2,25 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { isApiError } from '@litmatch/api-client';
+import {
+  normalizeVnPhone,
+  VN_COUNTRY_CODE,
+  VN_LOCAL_PHONE_PATTERN,
+} from '@litmatch/common-dtos/pure';
 import { useMutation } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { apiClient, tokenStore } from '../api/client';
 
+/** Chỉ để giãn cách UX (giảm spam bấm) — rate-limit thật enforce ở server. */
+const RESEND_COOLDOWN_SECONDS = 30;
+
 const phoneSchema = z.object({
-  // Format E.164 — validate thật ở backend, client chỉ đỡ UX (docs/13 § 13.6)
-  phone: z.string().regex(/^\+?[0-9]{8,15}$/u, 'Số điện thoại không hợp lệ'),
+  // Input là số nội địa (0xxx hoặc bỏ số 0) — chuẩn hoá sang E.164 lúc submit (normalizeVnPhone).
+  phone: z.string().regex(VN_LOCAL_PHONE_PATTERN, 'Số điện thoại không hợp lệ'),
 });
 const codeSchema = z.object({
   code: z.string().regex(/^[0-9]{6}$/u, 'Mã OTP gồm 6 chữ số'),
@@ -36,13 +44,39 @@ export function LoginForm() {
 
   const phoneForm = useForm<PhoneForm>({ resolver: zodResolver(phoneSchema) });
   const codeForm = useForm<CodeForm>({ resolver: zodResolver(codeSchema) });
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const id = setTimeout(() => setResendCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [resendCooldown]);
+
+  const postOtpRequest = async (phone: string): Promise<void> => {
+    await apiClient.POST('/api/v1/auth/otp/request', { body: { phone } });
+  };
 
   const requestOtp = useMutation({
-    mutationFn: async (phone: string) => {
-      await apiClient.POST('/api/v1/auth/otp/request', { body: { phone } });
+    mutationFn: async (localPhone: string) => {
+      const phone = normalizeVnPhone(localPhone);
+      if (phone === null) {
+        // Đã qua zodResolver(phoneSchema) nên luôn khớp VN_LOCAL_PHONE_PATTERN.
+        throw new Error('unreachable: phone không khớp VN_LOCAL_PHONE_PATTERN');
+      }
+      await postOtpRequest(phone);
       return phone;
     },
-    onSuccess: (phone) => setPhase({ step: 'code', phone }),
+    onSuccess: (phone) => {
+      setPhase({ step: 'code', phone });
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
+    },
+  });
+
+  // Phone đã ở dạng E.164 (từ phase.phone) — gửi thẳng, KHÔNG qua normalizeVnPhone lần nữa
+  // (nó chỉ nhận input dạng nội địa, sẽ trả null cho input đã có tiền tố +84).
+  const resendOtp = useMutation({
+    mutationFn: postOtpRequest,
+    onSuccess: () => setResendCooldown(RESEND_COOLDOWN_SECONDS),
   });
 
   const verifyOtp = useMutation({
@@ -80,14 +114,23 @@ export function LoginForm() {
           <label htmlFor="phone" className="text-sm font-medium">
             Số điện thoại
           </label>
-          <input
-            id="phone"
-            type="tel"
-            autoComplete="tel"
-            placeholder="+84xxxxxxxxx"
-            className={inputClass}
-            {...phoneForm.register('phone')}
-          />
+          <div className="flex gap-2">
+            <span
+              aria-hidden
+              className="flex h-10 w-14 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-sm text-muted-foreground"
+            >
+              {VN_COUNTRY_CODE}
+            </span>
+            <input
+              id="phone"
+              type="tel"
+              autoComplete="tel"
+              autoFocus
+              placeholder="912345678 hoặc 0912345678"
+              className={inputClass}
+              {...phoneForm.register('phone')}
+            />
+          </div>
           {message !== undefined && (
             <p role="alert" className="text-sm text-destructive">
               {message}
@@ -124,6 +167,7 @@ export function LoginForm() {
           id="code"
           inputMode="numeric"
           autoComplete="one-time-code"
+          autoFocus
           maxLength={6}
           className={inputClass}
           {...codeForm.register('code')}
@@ -131,6 +175,11 @@ export function LoginForm() {
         {message !== undefined && (
           <p role="alert" className="text-sm text-destructive">
             {message}
+          </p>
+        )}
+        {errorOf(resendOtp.error) !== undefined && (
+          <p role="alert" className="text-sm text-destructive">
+            {errorOf(resendOtp.error)}
           </p>
         )}
       </div>
@@ -141,13 +190,27 @@ export function LoginForm() {
       >
         {verifyOtp.isPending ? 'Đang xác minh…' : 'Đăng nhập'}
       </button>
-      <button
-        type="button"
-        className="w-full text-sm text-muted-foreground hover:text-foreground"
-        onClick={() => setPhase({ step: 'phone' })}
-      >
-        Đổi số điện thoại
-      </button>
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+          disabled={resendCooldown > 0 || resendOtp.isPending}
+          onClick={() => resendOtp.mutate(phase.phone)}
+        >
+          {resendCooldown > 0
+            ? `Gửi lại mã (${resendCooldown}s)`
+            : resendOtp.isPending
+              ? 'Đang gửi…'
+              : 'Gửi lại mã'}
+        </button>
+        <button
+          type="button"
+          className="text-sm text-muted-foreground hover:text-foreground"
+          onClick={() => setPhase({ step: 'phone' })}
+        >
+          Đổi số điện thoại
+        </button>
+      </div>
     </form>
   );
 }

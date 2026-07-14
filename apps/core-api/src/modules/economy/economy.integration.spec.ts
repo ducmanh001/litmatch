@@ -173,6 +173,22 @@ d('Economy integration (Postgres thật)', () => {
     ).toBe(1);
   });
 
+  it('listIapProducts trả catalog active, sắp xếp theo diamonds tăng dần', async () => {
+    const products = await economy.listIapProducts();
+    expect(products.length).toBeGreaterThan(0);
+    expect(products.every((p) => p.diamonds !== undefined)).toBe(true);
+    const diamonds = products.map((p) => BigInt(p.diamonds));
+    const sorted = [...diamonds].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    expect(diamonds).toEqual(sorted);
+    expect(
+      products.some(
+        (p) =>
+          p.productId === 'com.litmatch.diamond.100' &&
+          p.provider === IapProvider.Google,
+      ),
+    ).toBe(true);
+  });
+
   it('10 request VIP song song CÙNG idempotency key → trừ tiền đúng 1 lần', async () => {
     await economy.creditFromIap(
       userA,

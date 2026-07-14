@@ -1,5 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { isApiError } from '@litmatch/api-client';
+import {
+  normalizeVnPhone,
+  VN_COUNTRY_CODE,
+  VN_LOCAL_PHONE_PATTERN,
+} from '@litmatch/common-dtos/pure';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -14,8 +19,8 @@ import { Input } from '../ui/input';
 import { useIsAuthenticated } from './use-session';
 
 const phoneSchema = z.object({
-  // Format E.164 — validate thật ở backend, client chỉ đỡ UX (docs/13 § 13.6)
-  phone: z.string().regex(/^\+?[0-9]{8,15}$/u, 'Số điện thoại không hợp lệ'),
+  // Input là số nội địa (0xxx hoặc bỏ số 0) — chuẩn hoá sang E.164 lúc submit (normalizeVnPhone).
+  phone: z.string().regex(VN_LOCAL_PHONE_PATTERN, 'Số điện thoại không hợp lệ'),
 });
 const codeSchema = z.object({
   code: z.string().regex(/^[0-9]{6}$/u, 'Mã OTP gồm 6 chữ số'),
@@ -38,7 +43,12 @@ export function LoginPage() {
   const codeForm = useForm<CodeForm>({ resolver: zodResolver(codeSchema) });
 
   const requestOtp = useMutation({
-    mutationFn: async (phone: string) => {
+    mutationFn: async (localPhone: string) => {
+      const phone = normalizeVnPhone(localPhone);
+      if (phone === null) {
+        // Đã qua zodResolver(phoneSchema) nên luôn khớp VN_LOCAL_PHONE_PATTERN.
+        throw new Error('unreachable: phone không khớp VN_LOCAL_PHONE_PATTERN');
+      }
       await apiClient.POST('/api/v1/auth/otp/request', { body: { phone } });
       return phone;
     },
@@ -96,13 +106,21 @@ export function LoginPage() {
                 mutationError(requestOtp.error)
               }
             >
-              <Input
-                id="phone"
-                type="tel"
-                autoComplete="tel"
-                placeholder="+84xxxxxxxxx"
-                {...phoneForm.register('phone')}
-              />
+              <div className="flex gap-2">
+                <span
+                  aria-hidden
+                  className="flex h-9 w-14 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-sm text-muted-foreground"
+                >
+                  {VN_COUNTRY_CODE}
+                </span>
+                <Input
+                  id="phone"
+                  type="tel"
+                  autoComplete="tel"
+                  placeholder="912345678 hoặc 0912345678"
+                  {...phoneForm.register('phone')}
+                />
+              </div>
             </Field>
             <Button
               className="w-full"

@@ -311,6 +311,35 @@
         "tags": ["economy"]
       }
     },
+    "/api/v1/economy/iap/products": {
+      "get": {
+        "operationId": "EconomyController_listIapProducts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/IapProductDto" }
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Catalog gói diamond đang bán (active)",
+        "tags": ["economy"]
+      }
+    },
     "/api/v1/economy/iap/verify": {
       "post": {
         "operationId": "EconomyController_verifyIap",
@@ -2843,6 +2872,70 @@
         "summary": "Hoàn tiền thủ công 1 giao dịch — bút toán đảo, audit log, không sửa/xoá giao dịch gốc",
         "tags": ["admin"]
       }
+    },
+    "/api/v1/discovery/browse": {
+      "get": {
+        "operationId": "DiscoveryController_browse",
+        "parameters": [
+          {
+            "name": "gender",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["unknown", "male", "female", "other"]
+            }
+          },
+          {
+            "name": "ageMin",
+            "required": false,
+            "in": "query",
+            "schema": { "minimum": 18, "maximum": 100, "type": "number" }
+          },
+          {
+            "name": "ageMax",
+            "required": false,
+            "in": "query",
+            "schema": { "minimum": 18, "maximum": 100, "type": "number" }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DiscoveryCardsPageDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Duyệt user theo tiêu chí gender/tuổi — loại block/report 2 chiều, chỉ xem profile (chưa có CTA khác). Filter khu vực thuộc về Nearby (W5), chưa có ở đây.",
+        "tags": ["discovery"]
+      }
     }
   },
   "info": {
@@ -3013,6 +3106,22 @@
         },
         "required": ["balance", "earnings", "vipTier", "vipExpiresAt"]
       },
+      "IapProductDto": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string",
+            "example": "com.litmatch.diamond.100"
+          },
+          "provider": { "type": "string", "enum": ["apple", "google"] },
+          "diamonds": {
+            "type": "string",
+            "example": "100",
+            "description": "Số diamond nhận được (bigint dạng chuỗi)"
+          }
+        },
+        "required": ["productId", "provider", "diamonds"]
+      },
       "VerifyIapDto": {
         "type": "object",
         "properties": {
@@ -3023,6 +3132,7 @@
           },
           "payload": {
             "type": "object",
+            "additionalProperties": true,
             "description": "Payload theo provider: apple {receiptData}, google {purchaseToken}; dev verifier nhận {devTransactionId}"
           }
         },
@@ -3384,7 +3494,12 @@
             "enum": ["host_left", "finished", "swept", "error"],
             "nullable": true
           },
-          "createdAt": { "format": "date-time", "type": "string" }
+          "createdAt": { "format": "date-time", "type": "string" },
+          "hostDisconnectedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
         },
         "required": [
           "id",
@@ -3393,7 +3508,8 @@
           "status",
           "speakerLimit",
           "closeReason",
-          "createdAt"
+          "createdAt",
+          "hostDisconnectedAt"
         ]
       },
       "PartyRoomMemberDto": {
@@ -3509,8 +3625,8 @@
         "properties": {
           "id": { "type": "string" },
           "authorUserId": { "type": "string" },
-          "content": { "type": "object", "nullable": true },
-          "imageUrl": { "type": "object", "nullable": true },
+          "content": { "type": "string", "nullable": true },
+          "imageUrl": { "type": "string", "nullable": true },
           "likeCount": { "type": "number" },
           "commentCount": { "type": "number" },
           "createdAt": { "format": "date-time", "type": "string" }
@@ -3532,7 +3648,7 @@
             "type": "array",
             "items": { "$ref": "#/components/schemas/PostDto" }
           },
-          "nextCursor": { "type": "object", "nullable": true }
+          "nextCursor": { "type": "string", "nullable": true }
         },
         "required": ["items", "nextCursor"]
       },
@@ -3559,7 +3675,7 @@
             "type": "array",
             "items": { "$ref": "#/components/schemas/CommentDto" }
           },
-          "nextCursor": { "type": "object", "nullable": true }
+          "nextCursor": { "type": "string", "nullable": true }
         },
         "required": ["items", "nextCursor"]
       },
@@ -3923,6 +4039,25 @@
           "reversalTransactionId": { "type": "string" }
         },
         "required": ["transactionId", "reversalTransactionId"]
+      },
+      "DiscoveryCardDto": {
+        "type": "object",
+        "properties": {
+          "profile": { "$ref": "#/components/schemas/PublicProfileDto" },
+          "ageBucket": { "type": "string", "nullable": true }
+        },
+        "required": ["profile", "ageBucket"]
+      },
+      "DiscoveryCardsPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/DiscoveryCardDto" }
+          },
+          "nextCursor": { "type": "string", "nullable": true }
+        },
+        "required": ["items", "nextCursor"]
       }
     }
   }

@@ -6,4 +6,5 @@
  */
 export * from './lib/api-response';
 export * from './lib/auth-token';
+export * from './lib/phone-vn';
 export * from './lib/realtime-events';

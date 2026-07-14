@@ -193,6 +193,33 @@ export class SafetyService {
   }
 
   /**
+   * Tập userId bị ẩn khỏi Discovery (docs/plans/2026-07-14-plan-6-tinh-nang-social-discovery.md
+   * § 6) — hợp `getBlockedUserIds` (block active 2 chiều) với report 2 chiều. Report ẩn
+   * **vĩnh viễn** (không theo `SAFETY_REPORT_COOLDOWN_DAYS` như matching) vì `reports` là
+   * append-only, không có khái niệm "unreport" — bất kỳ report nào từng tồn tại giữa 1 cặp là
+   * đủ để không cho họ thấy nhau qua Discovery nữa.
+   */
+  async getHiddenUserIds(userId: string): Promise<string[]> {
+    const [blockedIds, reportedRows] = await Promise.all([
+      this.getBlockedUserIds(userId),
+      this.reportRepo.query(
+        `
+        SELECT DISTINCT other_id FROM (
+          SELECT target_user_id AS other_id FROM reports WHERE reporter_user_id = $1
+          UNION
+          SELECT reporter_user_id AS other_id FROM reports WHERE target_user_id = $1
+        ) pairs
+        `,
+        [userId],
+      ),
+    ]);
+    const reportedIds = (reportedRows as Array<{ other_id: string }>).map(
+      (r) => r.other_id,
+    );
+    return Array.from(new Set([...blockedIds, ...reportedIds]));
+  }
+
+  /**
    * Implementation thật của `MatchInteractionPolicy.canPair` (docs/services/safety-service.md
    * § 3.1) — verify lại ĐÚNG lúc matcher ghép, không chỉ lúc enqueue (docs/10 § 10.0.C).
    */

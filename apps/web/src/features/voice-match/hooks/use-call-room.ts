@@ -21,27 +21,41 @@ export function useCallRoom(matchSessionId: string) {
   const [room, setRoom] = useState<Room | null>(null);
   const [callId, setCallId] = useState<string | null>(null);
   const [roomDisconnected, setRoomDisconnected] = useState(false);
+  // `joinCall.error` chỉ bắt lỗi REST join — kết nối LiveKit/publish mic chạy SAU khi mutation
+  // đã resolve (trong onSuccess), nên lỗi ở đó (vd mic bị từ chối quyền) phải tự bắt và giữ ở
+  // đây, không thì rơi ra ngoài React Query thành unhandled rejection: `room` không bao giờ
+  // được set (đúng ý — call thiếu mic thì vô dụng) nhưng UI cũng không biết vì sao mà báo.
+  const [mediaError, setMediaError] = useState<unknown>(null);
   const roomRef = useRef<Room | null>(null);
 
   const { mutate: joinCallMutate } = joinCall;
   const connect = useCallback(() => {
     setRoomDisconnected(false);
+    setMediaError(null);
     joinCallMutate(undefined, {
-      onSuccess: async (joined) => {
+      onSuccess: (joined) => {
         if (joined === undefined) return;
-        if (roomRef.current !== null) {
-          await disconnectMediaRoom(roomRef.current);
-        }
-        const connected = await connectMediaRoom(
-          joined.token,
-          joined.livekitUrl,
-        );
-        // connectMediaRoom chỉ join room — publish mic là bước riêng, thiếu thì call câm.
-        await connected.localParticipant.setMicrophoneEnabled(true);
-        connected.on(RoomEvent.Disconnected, () => setRoomDisconnected(true));
-        roomRef.current = connected;
-        setCallId(joined.call.id);
-        setRoom(connected);
+        void (async () => {
+          try {
+            if (roomRef.current !== null) {
+              await disconnectMediaRoom(roomRef.current);
+            }
+            const connected = await connectMediaRoom(
+              joined.token,
+              joined.livekitUrl,
+            );
+            // connectMediaRoom chỉ join room — publish mic là bước riêng, thiếu thì call câm.
+            await connected.localParticipant.setMicrophoneEnabled(true);
+            connected.on(RoomEvent.Disconnected, () =>
+              setRoomDisconnected(true),
+            );
+            roomRef.current = connected;
+            setCallId(joined.call.id);
+            setRoom(connected);
+          } catch (err) {
+            setMediaError(err);
+          }
+        })();
       },
     });
   }, [joinCallMutate]);
@@ -59,6 +73,6 @@ export function useCallRoom(matchSessionId: string) {
     callId,
     roomDisconnected,
     isConnecting: joinCall.isPending,
-    error: joinCall.error,
+    error: joinCall.error ?? mediaError,
   };
 }

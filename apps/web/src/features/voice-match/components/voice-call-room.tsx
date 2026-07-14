@@ -26,6 +26,13 @@ const END_REASON_LABEL: Record<string, string> = {
   pending_timeout: 'Không ai vào phòng kịp',
 };
 
+/** `m:ss`, không giờ — free-call limit hiện đang tính bằng phút (docs/06), chưa cần giờ. */
+function formatCallDuration(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
 export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
   const queryClient = useQueryClient();
   const { connect, room, callId, roomDisconnected, isConnecting, error } =
@@ -34,6 +41,21 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
   const endCall = useEndCall(callId ?? '');
   const [isMuted, setIsMuted] = useState(false);
   const audioContainerRef = useRef<HTMLDivElement>(null);
+  const startedAt = call.data?.startedAt ?? null;
+  const [now, setNow] = useState(() => Date.now());
+
+  // Đồng hồ hiển thị thuần UX — chỉ server (billing tick) mới là nguồn sự thật cho thời lượng
+  // tính phí (docs/10 § "Billing tick..."); client không tự trừ tiền theo đồng hồ này.
+  useEffect(() => {
+    if (startedAt === null) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [startedAt]);
+
+  const elapsedSeconds =
+    startedAt !== null
+      ? Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1000))
+      : null;
 
   useRealtimeEvent<CallEndedEventData>(RealtimeEvents.CallEnded, (data) => {
     if (callId !== null && data.callId === callId) {
@@ -116,6 +138,14 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
     <div className="space-y-3">
       {/* Audio đối phương — không cần hiển thị, chỉ cần phát */}
       <div ref={audioContainerRef} className="hidden" />
+      {elapsedSeconds !== null && (
+        <p
+          className="text-sm tabular-nums text-muted-foreground"
+          aria-live="off"
+        >
+          {formatCallDuration(elapsedSeconds)}
+        </p>
+      )}
       {roomDisconnected && (
         <div className="space-y-2">
           <p role="alert" className="text-sm text-destructive">

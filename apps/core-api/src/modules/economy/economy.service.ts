@@ -71,6 +71,21 @@ export class EconomyService {
     };
   }
 
+  /** Catalog gói diamond đang bán (active) — client chọn gói rồi gửi receipt qua /iap/verify. */
+  async listIapProducts(): Promise<
+    Array<{ productId: string; provider: IapProvider; diamonds: string }>
+  > {
+    const products = await this.productRepo.find({
+      where: { active: true },
+      order: { diamonds: 'ASC' },
+    });
+    return products.map((p) => ({
+      productId: p.productId,
+      provider: p.provider,
+      diamonds: p.diamonds,
+    }));
+  }
+
   /**
    * Nạp diamond từ IAP. Idempotency thật = provider transaction id (server tự sinh) —
    * client gửi lại receipt bao nhiêu lần cũng chỉ credit đúng 1 lần (docs/10 § Economy).

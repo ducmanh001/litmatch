@@ -13,10 +13,11 @@ import { FriendChat1752600000000 } from '../../database/migrations/1752600000000
 import { PartyRoomGift1752700000000 } from '../../database/migrations/1752700000000-party-room-gift';
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
 import { PartyRoomLivekitUrl1753500000000 } from '../../database/migrations/1753500000000-party-room-livekit-url';
+import { PartyRoomHostDisconnectGrace1753900000000 } from '../../database/migrations/1753900000000-party-room-host-disconnect-grace';
 
 import { PartyRoomService } from './party-room.service';
 import { PartyRoomSweeperService } from './jobs/party-room-sweeper.service';
-import { partyRoomName } from './party-room.constants';
+import { PARTY_ROOM_NAME_PREFIX, partyRoomName } from './party-room.constants';
 import {
   PartyRoom,
   PartyRoomCloseReason,
@@ -63,6 +64,8 @@ const CONFIG: Record<string, unknown> = {
   PARTY_SWEEPER_INTERVAL_MS: 30_000,
   PARTY_STALE_ROOM_SECONDS: 60,
   PARTY_TITLE_MAX_LENGTH: 100,
+  PARTY_HOST_DISCONNECT_GRACE_SECONDS: 15,
+  PARTY_HOST_GRACE_CHECK_INTERVAL_MS: 5000,
 };
 const configStub = {
   getOrThrow: (key: string) => {
@@ -195,6 +198,7 @@ d('Party Room integration (Postgres thật)', () => {
         PartyRoomGift1752700000000,
         Safety1752800000000,
         PartyRoomLivekitUrl1753500000000,
+        PartyRoomHostDisconnectGrace1753900000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -442,6 +446,18 @@ d('Party Room integration (Postgres thật)', () => {
     await expect(party.joinRoom(auth(late.id), room.id)).rejects.toMatchObject({
       code: 'PARTY_ROOM_CLOSED',
     });
+
+    // webhook room_finished đến SAU (retry/out-of-order từ SFU) — idempotent, không dọn SFU 2 lần
+    const roomName = partyRoomName(room.id);
+    const deletesBefore = sfu.deleted.filter((r) => r === roomName).length;
+    await party.handleWebhookEvent({
+      event: 'room_finished',
+      roomName,
+      participantIdentity: null,
+    });
+    expect(sfu.deleted.filter((r) => r === roomName).length).toBe(
+      deletesBefore,
+    );
   });
 
   it('member thường rời qua REST → membership nhả + kick khỏi SFU, phòng vẫn mở', async () => {
@@ -468,7 +484,7 @@ d('Party Room integration (Postgres thật)', () => {
     expect(await activeMembers(room.id)).toHaveLength(2);
   });
 
-  it('webhook: participant_left member → nhả (retry idempotent); host left → đóng; room lạ → bỏ qua', async () => {
+  it('webhook: participant_left member → nhả (retry idempotent); room lạ (prefix khác) → bỏ qua', async () => {
     const host = await createUser('w-host');
     const member = await createUser('w-member');
     const { room } = await party.createRoom(auth(host.id), 'Phòng webhook');
@@ -495,29 +511,133 @@ d('Party Room integration (Postgres thật)', () => {
       roomName: `call-${room.id}`,
       participantIdentity: host.id,
     });
+    const fresh = await ds
+      .getRepository(PartyRoom)
+      .findOneByOrFail({ id: room.id });
+    expect(fresh.status).toBe(PartyRoomStatus.Active);
+  });
 
-    // host rớt kết nối → đóng phòng
+  it('webhook: host rớt NGOÀI Ý MUỐN → set hostDisconnectedAt (KHÔNG đóng ngay), webhook lặp lại không dời mốc', async () => {
+    const host = await createUser('g-host');
+    const member = await createUser('g-member');
+    const { room } = await party.createRoom(auth(host.id), 'Phòng grace');
+    await party.joinRoom(auth(member.id), room.id);
+    const roomName = partyRoomName(room.id);
+
     await party.handleWebhookEvent({
       event: 'participant_left',
       roomName,
       participantIdentity: host.id,
     });
-    const fresh = await ds
+    const afterFirst = await ds
       .getRepository(PartyRoom)
       .findOneByOrFail({ id: room.id });
-    expect(fresh.status).toBe(PartyRoomStatus.Closed);
-    expect(fresh.closeReason).toBe(PartyRoomCloseReason.HostLeft);
+    expect(afterFirst.status).toBe(PartyRoomStatus.Active); // KHÔNG đóng ngay như trước
+    expect(afterFirst.hostDisconnectedAt).not.toBeNull();
+    // Host vẫn là membership active (chưa leftAt) — join lại là rejoin, không tạo row mới
+    expect(await activeMembers(room.id)).toHaveLength(2);
 
-    // room_finished đến SAU (retry/out-of-order) — idempotent, không dọn SFU 2 lần
-    const deletesBefore = sfu.deleted.filter((r) => r === roomName).length;
+    // Webhook lặp lại (LiveKit retry) — KHÔNG dời mốc, tránh treo vô thời hạn nếu cứ lặp
+    await new Promise((r) => setTimeout(r, 10));
     await party.handleWebhookEvent({
-      event: 'room_finished',
+      event: 'participant_left',
       roomName,
-      participantIdentity: null,
+      participantIdentity: host.id,
     });
-    expect(sfu.deleted.filter((r) => r === roomName).length).toBe(
-      deletesBefore,
+    const afterRetry = await ds
+      .getRepository(PartyRoom)
+      .findOneByOrFail({ id: room.id });
+    expect(afterRetry.hostDisconnectedAt?.getTime()).toBe(
+      afterFirst.hostDisconnectedAt?.getTime(),
     );
+  });
+
+  it('host tự kết nối lại (REST join) trong lúc grace → clear hostDisconnectedAt, grace-check không đóng dù đã hết hạn theo đồng hồ', async () => {
+    const host = await createUser('r-host');
+    const { room } = await party.createRoom(auth(host.id), 'Phòng reconnect');
+    const roomName = partyRoomName(room.id);
+
+    await party.handleWebhookEvent({
+      event: 'participant_left',
+      roomName,
+      participantIdentity: host.id,
+    });
+    expect(
+      (await ds.getRepository(PartyRoom).findOneByOrFail({ id: room.id }))
+        .hostDisconnectedAt,
+    ).not.toBeNull();
+
+    // Host rejoin — huỷ lịch đóng
+    await party.joinRoom(auth(host.id), room.id);
+    const afterRejoin = await ds
+      .getRepository(PartyRoom)
+      .findOneByOrFail({ id: room.id });
+    expect(afterRejoin.hostDisconnectedAt).toBeNull();
+    expect(afterRejoin.status).toBe(PartyRoomStatus.Active);
+
+    // Giả lập "đã hết hạn từ lâu" bằng đồng hồ — grace-check vẫn KHÔNG đóng vì cờ đã null
+    await ds.query(
+      `UPDATE party_rooms SET host_disconnected_at = now() - interval '1 hour' WHERE id = $1 AND host_disconnected_at IS NOT NULL`,
+      [room.id],
+    );
+    await sweeper.runHostGraceCheckOnce();
+    const stillActive = await ds
+      .getRepository(PartyRoom)
+      .findOneByOrFail({ id: room.id });
+    expect(stillActive.status).toBe(PartyRoomStatus.Active);
+  });
+
+  it('grace-check: hết PARTY_HOST_DISCONNECT_GRACE_SECONDS mà host không quay lại → đóng host_left; còn trong hạn → giữ nguyên', async () => {
+    const hostExpired = await createUser('e-host-expired');
+    const hostFresh = await createUser('e-host-fresh');
+    const expired = await party.createRoom(auth(hostExpired.id), 'Hết hạn');
+    const fresh = await party.createRoom(auth(hostFresh.id), 'Còn hạn');
+
+    await party.handleWebhookEvent({
+      event: 'participant_left',
+      roomName: partyRoomName(expired.room.id),
+      participantIdentity: hostExpired.id,
+    });
+    await party.handleWebhookEvent({
+      event: 'participant_left',
+      roomName: partyRoomName(fresh.room.id),
+      participantIdentity: hostFresh.id,
+    });
+    // Chỉ "expired" giả lập đã quá PARTY_HOST_DISCONNECT_GRACE_SECONDS (15s ở CONFIG test)
+    await ds.query(
+      `UPDATE party_rooms SET host_disconnected_at = now() - interval '1 minute' WHERE id = $1`,
+      [expired.room.id],
+    );
+
+    await sweeper.runHostGraceCheckOnce();
+
+    const freshExpired = await ds
+      .getRepository(PartyRoom)
+      .findOneByOrFail({ id: expired.room.id });
+    expect(freshExpired.status).toBe(PartyRoomStatus.Closed);
+    expect(freshExpired.closeReason).toBe(PartyRoomCloseReason.HostLeft);
+    expect(await activeMembers(expired.room.id)).toHaveLength(0);
+    expect(sfu.deleted).toContain(partyRoomName(expired.room.id));
+
+    const freshStillWaiting = await ds
+      .getRepository(PartyRoom)
+      .findOneByOrFail({ id: fresh.room.id });
+    expect(freshStillWaiting.status).toBe(PartyRoomStatus.Active);
+    expect(freshStillWaiting.hostDisconnectedAt).not.toBeNull();
+  });
+
+  it('webhook: roomName có prefix party- nhưng phần sau không phải UUID hợp lệ → bỏ qua êm, không ném lỗi DB', async () => {
+    // roomId là PK kiểu uuid ở party_rooms — trước fix này, query thẳng bằng chuỗi không phải
+    // UUID (room LiveKit lạ/dữ liệu hỏng) ném lỗi "invalid input syntax for type uuid" thay vì
+    // no-op như case "room lạ" ở test phía trên (khác nhánh: đó là roomName SAI PREFIX, đây là
+    // ĐÚNG PREFIX nhưng phần id không hợp lệ).
+    await expect(
+      party.handleWebhookEvent({
+        event: 'participant_left',
+        roomName: `${PARTY_ROOM_NAME_PREFIX}not-a-real-uuid`,
+        participantIdentity: 'someone',
+      }),
+    ).resolves.toBeUndefined();
   });
 
   it('sweeper: phòng DB còn member nhưng SFU đã đóng (mọi webhook rớt) → sweep; phòng khoẻ → giữ', async () => {

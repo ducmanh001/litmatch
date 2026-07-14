@@ -58,6 +58,31 @@ describe('useCallRoom', () => {
     expect(disconnectSpy).toHaveBeenCalledWith(room);
   });
 
+  it('mic bị từ chối quyền → error được set, room vẫn null (call thiếu mic thì vô dụng)', async () => {
+    const room = fakeRoom();
+    const deniedError = new Error('Permission denied');
+    room.localParticipant.setMicrophoneEnabled = vi
+      .fn()
+      .mockRejectedValue(deniedError);
+    vi.spyOn(livekit, 'connectMediaRoom').mockResolvedValue(room as never);
+    vi.spyOn(livekit, 'disconnectMediaRoom').mockResolvedValue(undefined);
+    vi.spyOn(apiClient, 'POST').mockResolvedValue({
+      data: {
+        data: { call: { id: 'call-1' }, token: 'tok', livekitUrl: 'ws://x' },
+      },
+    } as never);
+
+    const { result, unmount } = renderHook(() => useCallRoom('session-1'), {
+      wrapper,
+    });
+
+    act(() => result.current.connect());
+    await waitFor(() => expect(result.current.error).toBe(deniedError));
+    expect(result.current.room).toBeNull();
+
+    unmount();
+  });
+
   it('connect() gọi lại được nhiều lần (re-join)', async () => {
     const connectSpy = vi
       .spyOn(livekit, 'connectMediaRoom')

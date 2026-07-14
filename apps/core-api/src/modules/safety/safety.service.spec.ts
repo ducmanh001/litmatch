@@ -58,12 +58,14 @@ describe('SafetyService', () => {
   let reportRepo: {
     exists: jest.Mock;
     createQueryBuilder: jest.Mock;
+    query: jest.Mock;
   };
   let blockRepo: {
     findOne: jest.Mock;
     save: jest.Mock;
     create: jest.Mock;
     exists: jest.Mock;
+    query: jest.Mock;
   };
   let userService: { getByIdOrThrow: jest.Mock; adjustTrustScore: jest.Mock };
   let manager: {
@@ -80,12 +82,14 @@ describe('SafetyService', () => {
     reportRepo = {
       exists: jest.fn(async () => false),
       createQueryBuilder: jest.fn(() => pageQueryBuilderStub([], 0)),
+      query: jest.fn(async () => []),
     };
     blockRepo = {
       findOne: jest.fn(async () => null),
       save: jest.fn(async (b) => b),
       create: jest.fn((input) => Object.assign(new Block(), input)),
       exists: jest.fn(async () => false),
+      query: jest.fn(async () => []),
     };
     userService = {
       getByIdOrThrow: jest.fn(async () => ({ id: 'target' })),
@@ -307,6 +311,27 @@ describe('SafetyService', () => {
       await service.findReportsPage({}, 20, 0);
 
       expect(qb.andWhere).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getHiddenUserIds — Discovery (docs/plans/2026-07-14-plan-6-tinh-nang-social-discovery.md § 6)', () => {
+    it('hợp block active 2 chiều với report 2 chiều, không trùng lặp', async () => {
+      blockRepo.query.mockResolvedValue([{ other_id: 'blocked-1' }]);
+      reportRepo.query.mockResolvedValue([
+        { other_id: 'reported-1' },
+        { other_id: 'blocked-1' }, // trùng với block — phải dedupe
+      ]);
+
+      const hidden = await service.getHiddenUserIds('me');
+
+      expect(hidden.sort()).toEqual(['blocked-1', 'reported-1']);
+    });
+
+    it('không có block/report → trả mảng rỗng', async () => {
+      blockRepo.query.mockResolvedValue([]);
+      reportRepo.query.mockResolvedValue([]);
+
+      expect(await service.getHiddenUserIds('me')).toEqual([]);
     });
   });
 });

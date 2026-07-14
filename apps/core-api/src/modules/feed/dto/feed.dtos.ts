@@ -21,8 +21,8 @@ export class CreatePostDto {
 export class PostDto {
   @ApiProperty() id!: string;
   @ApiProperty() authorUserId!: string;
-  @ApiProperty({ nullable: true }) content!: string | null;
-  @ApiProperty({ nullable: true }) imageUrl!: string | null;
+  @ApiProperty({ nullable: true, type: String }) content!: string | null;
+  @ApiProperty({ nullable: true, type: String }) imageUrl!: string | null;
   @ApiProperty() likeCount!: number;
   @ApiProperty() commentCount!: number;
   @ApiProperty() createdAt!: Date;
@@ -42,7 +42,7 @@ export class PostDto {
 
 export class PostsPageDto {
   @ApiProperty({ type: [PostDto] }) items!: PostDto[];
-  @ApiProperty({ nullable: true }) nextCursor!: string | null;
+  @ApiProperty({ nullable: true, type: String }) nextCursor!: string | null;
 
   static from(page: CursorPage<Post>): PostsPageDto {
     const dto = new PostsPageDto();
@@ -79,7 +79,7 @@ export class CommentDto {
 
 export class CommentsPageDto {
   @ApiProperty({ type: [CommentDto] }) items!: CommentDto[];
-  @ApiProperty({ nullable: true }) nextCursor!: string | null;
+  @ApiProperty({ nullable: true, type: String }) nextCursor!: string | null;
 
   static from(page: CursorPage<Comment>): CommentsPageDto {
     const dto = new CommentsPageDto();
