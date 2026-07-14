@@ -101,6 +101,8 @@ export interface CoreApiEnv {
   MOVIE_MATCH_URL_MAX_LENGTH: number;
   MOVIE_MATCH_ALLOWED_VIDEO_HOSTS: string;
   PALM_MATCH_TARGET_NAME_MAX_LENGTH: number;
+  DISCOVERY_GUEST_VISIBLE: boolean;
+  DISCOVERY_AGE_BUCKETS: string;
   THROTTLE_TTL_SECONDS: number;
   THROTTLE_LIMIT: number;
 }
@@ -318,6 +320,13 @@ export const coreApiEnvSchema = Joi.object({
 
   // Palm Match — Giai đoạn 5 (docs/services/palm-match-service.md § 5)
   PALM_MATCH_TARGET_NAME_MAX_LENGTH: Joi.number().integer().min(1).default(50),
+
+  // Discovery — browse-only W1 (docs/services/discovery-service.md)
+  // Guest chưa gắn phone/social có xuất hiện trong browse không — chặn farm guest làm loãng pool
+  DISCOVERY_GUEST_VISIBLE: Joi.boolean().default(false),
+  // Mốc tuổi tăng dần, phân tách dấu phẩy — bucket rộng, không lộ tuổi chính xác (vd 18,25,31,41
+  // → 18-24, 25-30, 31-40, 41+); parse mảng ở service, không parse ở Joi cho đơn giản
+  DISCOVERY_AGE_BUCKETS: Joi.string().default('18,25,31,41'),
 
   THROTTLE_TTL_SECONDS: Joi.number().integer().min(1).default(60),
   THROTTLE_LIMIT: Joi.number().integer().min(1).default(100),

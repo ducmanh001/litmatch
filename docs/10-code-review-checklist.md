@@ -215,6 +215,32 @@
 - Report bị lạm dụng để "vote kick" người khác (report giả hàng loạt) nhưng hệ thống không rate-limit hay phát hiện pattern bất thường
 - Unmatch/block chỉ ẩn ở UI nhưng vẫn cho phép bên kia tìm lại qua tính năng khác (feed, party room công khai) → "block" không thực sự cắt hết điểm chạm giữa 2 user
 
+**Discovery — duyệt user chủ động lặp lại nhiều lần, dễ sai vì tưởng giống Matching**
+
+- **Snapshot hidden set 1 lần rồi tái dùng cho nhiều trang** — block/report xảy ra GIỮA lúc user
+  đang lướt qua nhiều trang kết quả phải có hiệu lực NGAY ở trang tiếp theo, không đợi tới lần
+  gọi API mới từ đầu; đúng tinh thần § 10.0.C (xác minh lại đúng thời điểm hành động, không chỉ
+  lúc bắt đầu) — khác Matching nơi filter chặn snapshot 1 lần lúc ghép là ĐÚNG vì ghép chỉ xảy ra
+  1 lần, còn Discovery là duyệt lặp lại.
+- **Nhầm dùng cooldown kiểu Matching (`SAFETY_REMATCH_COOLDOWN_DAYS`) cho report** — Discovery là
+  màn duyệt nhiều lần/ngày, ẩn sau report phải là **vĩnh viễn** (đọc thẳng bảng `reports`, không
+  qua cooldown), khác hẳn ngữ nghĩa ghép cặp 1 lần của Matching.
+- **Tự thêm field nhạy cảm (tuổi chính xác, tọa độ, region chi tiết) vào `PublicProfileDto` dùng
+  chung** — DTO đó phục vụ cả Soul Match reveal lẫn Friend list với bất biến "giữ ẩn danh"; field
+  riêng của 1 tính năng duyệt phải là DTO composition riêng (vd `ageBucket`), không sửa DTO gốc.
+- **Cho client tự gửi `excludeGuests`/tiêu chí ẩn danh sách loại trừ** — các quyết định "ai bị ẩn
+  khỏi kết quả" (banned, guest, block, report) phải luôn do server tự quyết từ trạng thái/config,
+  không nhận từ query param client (khác filter sở thích như gender/age/region vốn dĩ client được
+  quyền chọn).
+- **Tin `age` thô do client gửi** thay vì tính tuổi ở server từ `birthDate` lưu sẵn — filter tuổi
+  chỉ nhận `ageMin`/`ageMax` rồi server tự quy đổi sang khoảng `birthDate` để query, tránh client
+  tự khai tuổi khác thực tế qua tham số filter.
+- **Report bị lạm dụng để tự-ẩn khỏi Discovery của người khác** (biến thể của lỗi "vote kick" ở
+  Trust & Safety phía trên) — vì ẩn là vĩnh viễn và 2 chiều, 1 report giả cũng đủ khiến 2 bên
+  không bao giờ thấy nhau qua Discovery nữa; chấp nhận được ở mức độ Discovery (không chặn được
+  matching/chat, chỉ ảnh hưởng 1 tính năng duyệt), nhưng rate-limit/pattern-detect cho report vẫn
+  phải nằm ở Safety module, không phải việc của Discovery.
+
 **Movie Match — phòng xem chung, dễ nhầm với Party Room/Calling nhưng KHÔNG có tiền/SFU**
 
 - **Tự chế lại quan hệ "được xem chung với ai"** thay vì tái dùng `Friendship` đã có — tạo bảng
