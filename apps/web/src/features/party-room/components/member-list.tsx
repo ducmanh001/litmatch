@@ -6,6 +6,9 @@ import { useChangeRole, useUserProfiles } from '../api';
 
 import type { PartyRoomMemberDto } from '../api';
 
+/** Chặn fan-out profile query không giới hạn — audience không có cap ở backend như speaker. */
+const MAX_AUDIENCE_LISTED = 20;
+
 export function MemberList({
   roomId,
   members,
@@ -17,11 +20,15 @@ export function MemberList({
 }) {
   const host = members.find((m) => m.role === 'host');
   const speakers = members.filter((m) => m.role === 'speaker');
-  const audienceCount = members.filter((m) => m.role === 'audience').length;
+  const audience = members.filter((m) => m.role === 'audience');
+  // Chỉ host mới cần thấy từng khán giả (để mời lên nói) — non-host chỉ thấy số lượng.
+  const listedAudience = isHost ? audience.slice(0, MAX_AUDIENCE_LISTED) : [];
 
-  const profileIds = [host?.userId, ...speakers.map((s) => s.userId)].filter(
-    (id): id is string => id !== undefined,
-  );
+  const profileIds = [
+    host?.userId,
+    ...speakers.map((s) => s.userId),
+    ...listedAudience.map((a) => a.userId),
+  ].filter((id): id is string => id !== undefined);
   const profiles = useUserProfiles(profileIds);
   const nicknameById = new Map(
     profileIds.map((id, index) => [id, profiles[index]?.data?.nickname]),
@@ -76,7 +83,45 @@ export function MemberList({
         </div>
       )}
 
-      <p className="text-sm text-muted-foreground">{audienceCount} khán giả</p>
+      {isHost && audience.length > 0 ? (
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">
+            Khán giả ({audience.length})
+          </p>
+          <ul className="space-y-1">
+            {listedAudience.map((member) => (
+              <li
+                key={member.userId}
+                className="flex items-center justify-between text-sm"
+              >
+                <span>{nicknameById.get(member.userId) ?? '…'}</span>
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground underline disabled:opacity-50"
+                  disabled={changeRole.isPending}
+                  onClick={() =>
+                    changeRole.mutate({
+                      userId: member.userId,
+                      role: 'speaker',
+                    })
+                  }
+                >
+                  Mời lên nói
+                </button>
+              </li>
+            ))}
+          </ul>
+          {audience.length > listedAudience.length && (
+            <p className="text-xs text-muted-foreground">
+              +{audience.length - listedAudience.length} khán giả khác
+            </p>
+          )}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          {audience.length} khán giả
+        </p>
+      )}
 
       {message !== undefined && (
         <p role="alert" className="text-sm text-destructive">

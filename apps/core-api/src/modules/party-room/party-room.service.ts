@@ -13,6 +13,7 @@ import {
   decodeCursor,
 } from '@litmatch/common-dtos';
 import { DomainException } from '@litmatch/common-exceptions';
+import { isUUID } from 'class-validator';
 import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
 
 import {
@@ -506,6 +507,10 @@ export class PartyRoomService {
   async handleWebhookEvent(event: PartyWebhookEvent): Promise<void> {
     if (!event.roomName?.startsWith(PARTY_ROOM_NAME_PREFIX)) return;
     const roomId = event.roomName.slice(PARTY_ROOM_NAME_PREFIX.length);
+    // roomId là PK kiểu uuid — query thẳng bằng chuỗi không phải UUID hợp lệ (room LiveKit lạ,
+    // dữ liệu hỏng, hoặc test) sẽ ném lỗi DB (invalid input syntax) thay vì no-op êm như nhánh
+    // !room ngay dưới; chặn ở đây để hành vi nhất quán cho mọi roomName không khớp record thật.
+    if (!isUUID(roomId)) return;
     const room = await this.roomRepo.findOneBy({ id: roomId });
     if (!room) return;
 

@@ -16,7 +16,7 @@ import { PartyRoomLivekitUrl1753500000000 } from '../../database/migrations/1753
 
 import { PartyRoomService } from './party-room.service';
 import { PartyRoomSweeperService } from './jobs/party-room-sweeper.service';
-import { partyRoomName } from './party-room.constants';
+import { PARTY_ROOM_NAME_PREFIX, partyRoomName } from './party-room.constants';
 import {
   PartyRoom,
   PartyRoomCloseReason,
@@ -518,6 +518,20 @@ d('Party Room integration (Postgres thật)', () => {
     expect(sfu.deleted.filter((r) => r === roomName).length).toBe(
       deletesBefore,
     );
+  });
+
+  it('webhook: roomName có prefix party- nhưng phần sau không phải UUID hợp lệ → bỏ qua êm, không ném lỗi DB', async () => {
+    // roomId là PK kiểu uuid ở party_rooms — trước fix này, query thẳng bằng chuỗi không phải
+    // UUID (room LiveKit lạ/dữ liệu hỏng) ném lỗi "invalid input syntax for type uuid" thay vì
+    // no-op như case "room lạ" ở test phía trên (khác nhánh: đó là roomName SAI PREFIX, đây là
+    // ĐÚNG PREFIX nhưng phần id không hợp lệ).
+    await expect(
+      party.handleWebhookEvent({
+        event: 'participant_left',
+        roomName: `${PARTY_ROOM_NAME_PREFIX}not-a-real-uuid`,
+        participantIdentity: 'someone',
+      }),
+    ).resolves.toBeUndefined();
   });
 
   it('sweeper: phòng DB còn member nhưng SFU đã đóng (mọi webhook rớt) → sweep; phòng khoẻ → giữ', async () => {

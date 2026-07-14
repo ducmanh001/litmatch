@@ -1,5 +1,6 @@
+import { ApiError } from '@litmatch/api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 
 import { PartyStage } from './party-stage';
@@ -166,5 +167,69 @@ describe('PartyStage', () => {
     expect(
       screen.getByRole('link', { name: 'Về danh sách phòng' }),
     ).toHaveAttribute('href', '/party');
+  });
+
+  it('connect() lỗi (vd rate limit) — không tự retry vô hạn, hiện nút Kết nối lại', async () => {
+    // Gắn error vào state của chính mock ngay khi connect() được gọi — mô phỏng đúng thứ tự
+    // thật: REST join xong (fail) TRƯỚC KHI bất kỳ re-render nào khác xảy ra, để không phụ
+    // thuộc vào việc canh thời điểm gọi rerender() so với các effect/query bất đồng bộ khác.
+    let error: Error | null = null;
+    const connect = vi.fn(() => {
+      error = new ApiError(429, {
+        code: 'PARTY_JOIN_RATE_LIMITED',
+        message: 'Vui lòng thử lại sau.',
+        traceId: 't-1',
+      });
+    });
+    mockedUsePartyRoomMedia.mockImplementation(() => ({
+      connect,
+      disconnect: vi.fn(),
+      room: null,
+      roomDisconnected: false,
+      isConnecting: false,
+      get error() {
+        return error;
+      },
+    }));
+    mockGet(
+      detailFixture({
+        members: [
+          { userId: 'me-1', role: 'host', joinedAt: new Date().toISOString() },
+        ],
+      }),
+      'me-1',
+    );
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <PartyStage roomId="room-1" />
+      </QueryClientProvider>,
+    );
+
+    // Effect tự gọi connect() lần đầu vì đã là member và chưa từng thử — connect() (mock)
+    // set error ngay lập tức, mô phỏng REST 429 trả về tức thì.
+    await waitFor(() => expect(connect).toHaveBeenCalledTimes(1));
+
+    // Ép re-render (như 1 realtime event/query refetch bất kỳ) — nếu effect không gate theo
+    // error, đây chính là chỗ nó gọi lại connect() và lặp vô hạn (bug thật đã bắt được: 1636
+    // request join trong ~6s, không backoff, không dừng).
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <PartyStage roomId="room-1" />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText('Vui lòng thử lại sau.')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Kết nối lại' }),
+    ).toBeInTheDocument();
+    // connect() KHÔNG được tự động gọi lại sau khi đã lỗi — chỉ còn cách bấm nút thủ công.
+    expect(connect).toHaveBeenCalledTimes(1);
   });
 });

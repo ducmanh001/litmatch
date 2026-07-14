@@ -1,6 +1,6 @@
 import { ApiError } from '@litmatch/api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 
 import { VoiceCallRoom } from './voice-call-room';
@@ -112,6 +112,54 @@ describe('VoiceCallRoom', () => {
     expect(
       screen.getByRole('button', { name: 'Kết thúc' }),
     ).toBeInTheDocument();
+  });
+
+  it('connected — đồng hồ đếm thời lượng chạy theo giây', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const startedAt = new Date();
+    mockedUseCallRoom.mockReturnValue({
+      connect: vi.fn(),
+      room: {
+        on: vi.fn(),
+        off: vi.fn(),
+        localParticipant: { setMicrophoneEnabled: vi.fn() },
+      },
+      callId: 'call-1',
+      roomDisconnected: false,
+      isConnecting: false,
+      error: null,
+    } as never);
+    vi.spyOn(apiClient, 'GET').mockResolvedValue({
+      data: {
+        data: {
+          id: 'call-1',
+          matchSessionId: 'session-1',
+          status: 'active',
+          startedAt: startedAt.toISOString(),
+          endedAt: null,
+          endReason: null,
+          durationSeconds: null,
+          billedMinutes: 0,
+        },
+      },
+    } as never);
+
+    renderRoom();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(await screen.findByText('0:00')).toBeVisible();
+
+    for (let i = 0; i < 5; i += 1) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+    }
+
+    expect(await screen.findByText('0:05')).toBeVisible();
+
+    vi.useRealTimers();
   });
 
   it('ended — hiển thị trạng thái kết thúc + thời lượng', async () => {

@@ -19,7 +19,10 @@ keys:
 webhook:
   api_key: devkey
   urls:
-    - http://host.docker.internal:3000/calling/webhooks/livekit
-    - http://host.docker.internal:3000/party/webhooks/livekit
+    # PHẢI khớp API_GLOBAL_PREFIX ('api/v1', core-api/src/app/openapi.ts) — thiếu prefix này
+    # khiến LiveKit POST 404 âm thầm, call không bao giờ chuyển active/startedAt (phát hiện qua
+    # UX audit 2026-07-14: voice call không lên đồng hồ đếm giờ vì webhook chưa từng tới nơi).
+    - http://host.docker.internal:3000/api/v1/calling/webhooks/livekit
+    - http://host.docker.internal:3000/api/v1/party/webhooks/livekit
 logging:
   level: info

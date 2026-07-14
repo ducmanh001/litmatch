@@ -5,7 +5,7 @@ import { RealtimeEvents } from '@litmatch/common-dtos/pure';
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { useCurrentUser } from '../../../shared/auth/use-current-user';
 import { useRealtimeEvent } from '../../../shared/realtime/use-realtime-event';
@@ -45,6 +45,11 @@ export function PartyStage({ roomId }: { roomId: string }) {
   const canPublish = canPublishRole(myMembership?.role);
   const media = usePartyRoomMedia(roomId, canPublish);
   const leaveRoom = useLeaveRoom(roomId);
+  const mediaErrorMessage = isApiError(media.error)
+    ? media.error.message
+    : media.error !== null
+      ? 'Có lỗi xảy ra, thử lại.'
+      : undefined;
 
   const invalidateDetail = (): void => {
     void queryClient.invalidateQueries({
@@ -83,10 +88,21 @@ export function PartyStage({ roomId }: { roomId: string }) {
 
   // Refresh-safe: REST đã xác nhận mình là member (vd reload trang) thì tự kết nối lại
   // media — nhưng KHÔNG tự join khi chưa từng là member (opt-in, tránh bật mic bất ngờ).
-  const { connect, room: mediaRoom, isConnecting } = media;
+  // Chỉ tự thử ĐÚNG 1 LẦN (autoConnectAttempted) cho vòng đời component — không dựa vào
+  // isConnecting/mediaError để quyết định retry, vì cả hai đều có khoảng hở bất đồng bộ so
+  // với thời điểm LiveKit room.connect() thật sự xong: join REST xong (thành công hay lỗi)
+  // luôn nhanh hơn round-trip LiveKit, nên effect có thể thấy "chưa kết nối, không lỗi,
+  // không pending" và gọi lại connect() nhiều lần trước khi biết kết quả thật — nếu request
+  // đó bắt đầu bị rate-limit thì lặp vô hạn không backoff (bug thật đã bắt được: 1636 request
+  // join trong ~6 giây). Mọi lần thử lại SAU lần đầu là thao tác thủ công qua nút "Kết nối lại".
+  const autoConnectAttempted = useRef(false);
+  const { connect, room: mediaRoom } = media;
   useEffect(() => {
-    if (isMember && mediaRoom === null && !isConnecting) connect();
-  }, [isMember, mediaRoom, isConnecting, connect]);
+    if (isMember && mediaRoom === null && !autoConnectAttempted.current) {
+      autoConnectAttempted.current = true;
+      connect();
+    }
+  }, [isMember, mediaRoom, connect]);
 
   if (detail.isPending || me.isPending) {
     return <p className="text-sm text-muted-foreground">Đang tải…</p>;
@@ -123,20 +139,15 @@ export function PartyStage({ roomId }: { roomId: string }) {
   }
 
   if (!isMember || myMembership === undefined) {
-    const message = isApiError(media.error)
-      ? media.error.message
-      : media.error !== null
-        ? 'Có lỗi xảy ra, thử lại.'
-        : undefined;
     return (
       <div className="space-y-3">
         <h1 className="text-xl font-semibold">{room.title}</h1>
         <p className="text-sm text-muted-foreground">
           Tối đa {room.speakerLimit} người nói
         </p>
-        {message !== undefined && (
+        {mediaErrorMessage !== undefined && (
           <p role="alert" className="text-sm text-destructive">
-            {message}
+            {mediaErrorMessage}
           </p>
         )}
         <button
@@ -155,10 +166,13 @@ export function PartyStage({ roomId }: { roomId: string }) {
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">{room.title}</h1>
       {media.room !== null && <PartyAudio room={media.room} />}
-      {media.roomDisconnected && (
+      {(media.roomDisconnected ||
+        (media.room === null && mediaErrorMessage !== undefined)) && (
         <div className="space-y-2">
           <p role="alert" className="text-sm text-destructive">
-            Mất kết nối phòng thoại.
+            {media.roomDisconnected
+              ? 'Mất kết nối phòng thoại.'
+              : mediaErrorMessage}
           </p>
           <button
             type="button"
