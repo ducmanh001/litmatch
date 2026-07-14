@@ -38,6 +38,10 @@
 
 ### Nạp diamond qua IAP
 
+`GET /api/v1/economy/iap/products` — catalog gói diamond đang bán (`active=true`), sắp xếp theo
+diamonds tăng dần; read-only, không trả gói inactive. Client (web) chọn gói từ đây rồi gọi
+`verify` — không tự đoán `productId`.
+
 `POST /api/v1/economy/iap/verify` {provider, payload, productId}
 
 1. `IapVerifier` (theo provider) verify receipt/purchase token **ở server** → trả `providerTransactionId`.

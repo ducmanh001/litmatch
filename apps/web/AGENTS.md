@@ -19,11 +19,17 @@ Env: copy `.env.example` → `.env.local` (đã có sẵn cho local). Đọc env
 
 ## Route map hiện có
 
-| Route    | Nhóm       | Ghi chú                                           |
-| -------- | ---------- | ------------------------------------------------- |
-| `/`      | `(public)` | Landing SSR/SEO — header + footer marketing       |
-| `/login` | —          | OTP 2 bước, redirect `/home` sau login            |
-| `/home`  | `(app)`    | Sau `AuthGate`; layout connect realtime khi mount |
+| Route                                                                    | Nhóm       | Ghi chú                                               |
+| ------------------------------------------------------------------------ | ---------- | ----------------------------------------------------- |
+| `/`                                                                      | `(public)` | Landing SSR/SEO — header + footer marketing           |
+| `/login`                                                                 | —          | OTP 2 bước, redirect `/home` sau login                |
+| `/home`                                                                  | `(app)`    | Sau `AuthGate`; layout connect realtime khi mount     |
+| `/feed`, `/feed/[postId]`                                                | `(app)`    | Bảng tin: đăng bài, like, comment (module Feed)       |
+| `/matching`, `/matching/soul/[sessionId]`, `/matching/voice/[sessionId]` | `(app)`    | Ghép đôi Soul/Voice Match                             |
+| `/friends`, `/chat/[friendUserId]`                                       | `(app)`    | Danh sách bạn bè + chat 1-1                           |
+| `/party`, `/party/[roomId]`                                              | `(app)`    | Party Room                                            |
+| `/wallet`                                                                | `(app)`    | Số dư diamond + nạp kim cương (dev IAP verifier flow) |
+| `/profile`                                                               | `(app)`    | Xem/sửa hồ sơ (`GET/PATCH /users/me`)                 |
 
 `(public)` = SSR/SEO; `(app)` = client-heavy sau login. Route handler bị cấm
 (docs/12 § 12.5) — thư mục `app/api/` không được tồn tại.
