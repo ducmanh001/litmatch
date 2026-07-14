@@ -74,6 +74,7 @@ export interface CoreApiEnv {
   FRIEND_MESSAGE_MAX_LENGTH: number;
   LIVEKIT_URL: string;
   LIVEKIT_REGION_URLS: string;
+  LIVEKIT_API_URL: string;
   LIVEKIT_API_KEY: string;
   LIVEKIT_API_SECRET: string;
   CALLING_FREE_CALL_SECONDS: number;
@@ -247,6 +248,15 @@ export const coreApiEnvSchema = Joi.object({
       parseLivekitRegionUrls(value); // sai format → throw, Joi báo lỗi với message của Error
       return value;
     }, 'JSON map region → LiveKit URL'),
+  // Endpoint server-to-server (RoomServiceClient: createRoom/deleteRoom/updateParticipant...)
+  // — KHÁC LIVEKIT_URL (endpoint client/browser dùng để join media). '' (default) = derive từ
+  // LIVEKIT_URL như trước (đúng khi client và server cùng trỏ 1 địa chỉ LiveKit thật). Phải tách
+  // riêng khi LIVEKIT_URL trỏ qua 1 proxy/CDN chỉ dành cho client (vd TLS tunnel LAN cho mobile
+  // dev) — proxy đó không nhất thiết forward đúng path Twirp RPC hay có cert server tin được.
+  LIVEKIT_API_URL: Joi.string()
+    .uri({ scheme: ['http', 'https'] })
+    .allow('')
+    .default(''),
   LIVEKIT_API_KEY: Joi.string().default('devkey'),
   LIVEKIT_API_SECRET: Joi.string()
     .min(16)

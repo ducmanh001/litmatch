@@ -9,6 +9,12 @@ rtc:
   port_range_start: 50000
   port_range_end: 50200
   use_external_ip: false
+  # Không set thì LiveKit tự lấy IP nội bộ của container (Docker bridge network) làm ICE
+  # candidate — thiết bị ngoài máy dev (điện thoại test qua LAN) không bao giờ route tới được,
+  # dù WebSocket signaling vẫn "connect" bình thường (audio câm, không phải lỗi kết nối rõ ràng).
+  # Cần test qua LAN: thêm `node_ip: <IP LAN của máy bạn>` ở đây CỤC BỘ, KHÔNG commit dòng đó —
+  # IP LAN khác nhau theo máy/mạng của từng người, hardcode vào file chung sẽ gãy dev của người
+  # khác (`git status` sẽ thấy file này bị sửa — nhớ không add/commit khi xong việc test LAN).
 redis:
   address: host.docker.internal:6379
 keys:

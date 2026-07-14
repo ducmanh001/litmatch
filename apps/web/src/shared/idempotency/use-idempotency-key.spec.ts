@@ -20,4 +20,18 @@ describe('useIdempotencyKey', () => {
 
     expect(result.current.key).not.toBe(firstKey);
   });
+
+  it('crypto.randomUUID không tồn tại (insecure context — truy cập qua IP LAN thuần HTTP) → vẫn sinh được UUID hợp lệ qua getRandomValues', () => {
+    const original = crypto.randomUUID;
+    // @ts-expect-error giả lập trình duyệt insecure context — randomUUID undefined
+    delete crypto.randomUUID;
+    try {
+      const { result } = renderHook(() => useIdempotencyKey());
+      expect(result.current.key).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+      );
+    } finally {
+      crypto.randomUUID = original;
+    }
+  });
 });
