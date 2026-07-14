@@ -127,3 +127,12 @@ export function LogoutIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function DiscoveryIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx={11} cy={11} r={7} />
+      <path d="M21 21l-4.35-4.35" />
+    </svg>
+  );
+}

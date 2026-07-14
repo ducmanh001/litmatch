@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useCurrentUser } from '../../../shared/auth/use-current-user';
 import {
   DiamondIcon,
+  DiscoveryIcon,
   MatchIcon,
   MicIcon,
   PartyIcon,
@@ -13,17 +14,72 @@ import {
 import { useRoomList } from '../../../features/party-room/api';
 import { useWallet } from '../../../features/wallet/api';
 
+import type { SVGProps } from 'react';
+
+function MovieIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      width={24}
+      height={24}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <rect x={2} y={5} width={20} height={14} rx={2} />
+      <path d="M2 9h20M7 5v4M17 5v4" />
+    </svg>
+  );
+}
+
+function PalmIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      width={24}
+      height={24}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M12 2l2.5 6H21l-5 4.5L18 20l-6-4-6 4 2-7.5L3 8h6.5z" />
+    </svg>
+  );
+}
+
 const MODES = [
   {
     title: 'Soul Match',
     description: 'Chat ẩn danh 2-3 phút',
     Icon: MatchIcon,
+    href: '/matching',
     highlight: true,
   },
   {
     title: 'Voice Match',
     description: 'Nghe giọng ~7 phút',
     Icon: MicIcon,
+    href: '/matching',
+    highlight: false,
+  },
+  {
+    title: 'Movie Match',
+    description: 'Xem chung với bạn bè',
+    Icon: MovieIcon,
+    href: '/movie-match',
+    highlight: false,
+  },
+  {
+    title: 'Palm Match',
+    description: 'Bói vui theo chủ đề',
+    Icon: PalmIcon,
+    href: '/palm-match',
     highlight: false,
   },
 ] as const;
@@ -105,10 +161,10 @@ export default function HomePage() {
           GHÉP ĐÔI NGAY
         </h2>
         <div className="grid grid-cols-2 gap-3">
-          {MODES.map(({ title, description, Icon, highlight }) => (
+          {MODES.map(({ title, description, Icon, href, highlight }) => (
             <Link
               key={title}
-              href="/matching"
+              href={href}
               className={
                 highlight
                   ? 'rounded-2xl bg-gradient-to-br from-irisl to-irisl p-4 text-white shadow-lg shadow-iris/25'
@@ -143,18 +199,37 @@ export default function HomePage() {
         <TrendingRooms />
       </div>
 
-      <Link
-        href="/party"
-        className="mx-5 flex items-center gap-4 rounded-2xl border border-black/5 bg-white p-4 dark:border-white/5 dark:bg-surf"
-      >
-        <PartyIcon width={24} height={24} className="shrink-0 text-irisl" />
-        <div>
-          <p className="text-sm font-bold">Tạo phòng của riêng bạn</p>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Mời bạn bè và người lạ cùng trò chuyện trong phòng voice.
-          </p>
-        </div>
-      </Link>
+      <div className="mx-5 mb-3 space-y-3">
+        <Link
+          href="/discovery"
+          className="flex items-center gap-4 rounded-2xl border border-black/5 bg-white p-4 dark:border-white/5 dark:bg-surf"
+        >
+          <DiscoveryIcon
+            width={24}
+            height={24}
+            className="shrink-0 text-irisl"
+          />
+          <div>
+            <p className="text-sm font-bold">Khám phá</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Duyệt hồ sơ quanh bạn theo tuổi, giới tính hoặc vị trí gần.
+            </p>
+          </div>
+        </Link>
+
+        <Link
+          href="/party"
+          className="flex items-center gap-4 rounded-2xl border border-black/5 bg-white p-4 dark:border-white/5 dark:bg-surf"
+        >
+          <PartyIcon width={24} height={24} className="shrink-0 text-irisl" />
+          <div>
+            <p className="text-sm font-bold">Tạo phòng của riêng bạn</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Mời bạn bè và người lạ cùng trò chuyện trong phòng voice.
+            </p>
+          </div>
+        </Link>
+      </div>
     </div>
   );
 }

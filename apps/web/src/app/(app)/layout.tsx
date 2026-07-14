@@ -11,6 +11,7 @@ import {
   disconnectRealtime,
 } from '../../shared/realtime/socket';
 import {
+  DiscoveryIcon,
   FeedIcon,
   FriendsIcon,
   HomeIcon,
@@ -26,11 +27,21 @@ import { ThemeSwitcher } from '../../shared/ui/theme-switcher';
 import type { ReactNode } from 'react';
 import type { ComponentType, SVGProps } from 'react';
 
-/** Nav sau login khai 1 chỗ (docs/12 § 12.8 bước 3). */
+/**
+ * Nav sau login khai 1 chỗ (docs/12 § 12.8 bước 3). `sidebarOnly` dành cho mục mới hơn
+ * (Khám phá) — bottom nav di động đã đủ 7 mục, thêm nữa sẽ quá chật trên màn hình hẹp; mục
+ * sidebarOnly vẫn vào được từ trang chủ trên di động.
+ */
 const NAV_ITEMS = [
   { href: '/home', label: 'Trang chủ', Icon: HomeIcon },
   { href: '/feed', label: 'Bảng tin', Icon: FeedIcon },
   { href: '/matching', label: 'Ghép đôi', Icon: MatchIcon },
+  {
+    href: '/discovery',
+    label: 'Khám phá',
+    Icon: DiscoveryIcon,
+    sidebarOnly: true,
+  },
   { href: '/friends', label: 'Bạn bè', Icon: FriendsIcon },
   { href: '/party', label: 'Phòng nhóm', Icon: PartyIcon },
   { href: '/wallet', label: 'Ví', Icon: WalletIcon },
@@ -39,6 +50,7 @@ const NAV_ITEMS = [
   href: string;
   label: string;
   Icon: ComponentType<SVGProps<SVGSVGElement>>;
+  sidebarOnly?: boolean;
 }>;
 
 function AppChrome({ children }: { children: ReactNode }) {
@@ -140,7 +152,7 @@ function AppChrome({ children }: { children: ReactNode }) {
           className="fixed inset-x-0 bottom-0 z-40 mx-auto flex h-16 max-w-[430px] items-center justify-around border-t border-black/5 bg-white/90 px-2 backdrop-blur md:hidden dark:border-white/5 dark:bg-surf/90"
           aria-label="Điều hướng chính (di động)"
         >
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS.filter((item) => item.sidebarOnly !== true).map((item) => (
             <Link
               key={item.href}
               href={item.href}
