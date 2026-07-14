@@ -20,6 +20,8 @@ const NAV_ITEMS = [
   { href: '/matching', label: 'Ghép đôi' },
   { href: '/friends', label: 'Bạn bè' },
   { href: '/party', label: 'Phòng nhóm' },
+  { href: '/wallet', label: 'Ví' },
+  { href: '/profile', label: 'Hồ sơ' },
 ] as const;
 
 function AppChrome({ children }: { children: ReactNode }) {
