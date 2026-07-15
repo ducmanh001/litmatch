@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { confirmAction } from '../../../shared/lib/confirm-store';
 import { showToast } from '../../../shared/lib/toast-store';
 import { ProfileIcon } from '../../../shared/ui/icons';
+import { ThemeSwitcher } from '../../../shared/ui/theme-switcher';
 import { useReportVideo, useVideoFeed } from '../api';
 import { VideoCommentsSheet } from './video-comments-sheet';
 import { VideoLikeButton } from './video-like-button';
@@ -21,19 +22,29 @@ const ACTIVE_SORT: VideoFeedSort = 'ranked';
 
 function VideoFeedTabs() {
   return (
-    <div className="absolute inset-x-0 top-3 z-30 flex items-center justify-center gap-6 text-sm font-bold">
-      <button
-        type="button"
-        disabled
-        aria-label="Đang theo dõi (sắp có)"
-        className="text-white/40"
-      >
-        Đang theo dõi
-      </button>
-      <button type="button" aria-current="true" className="relative text-white">
-        Dành cho bạn
-        <span className="absolute -bottom-1.5 left-1/2 h-0.5 w-8 -translate-x-1/2 rounded-full bg-white" />
-      </button>
+    <div className="absolute inset-x-0 top-3 z-30 flex items-center justify-between px-4">
+      {/* Theme switcher đè mờ trên video, đúng video.html — không dùng hàng ThemeSwitcher dùng
+          chung của (app)/layout.tsx (route /video render full-bleed, không có hàng đó). */}
+      <ThemeSwitcher className="border-none bg-black/40 backdrop-blur" />
+      <div className="flex items-center gap-6 text-sm font-bold">
+        <button
+          type="button"
+          disabled
+          aria-label="Đang theo dõi (sắp có)"
+          className="text-white/40"
+        >
+          Đang theo dõi
+        </button>
+        <button
+          type="button"
+          aria-current="true"
+          className="relative text-white"
+        >
+          Dành cho bạn
+          <span className="absolute -bottom-1.5 left-1/2 h-0.5 w-8 -translate-x-1/2 rounded-full bg-white" />
+        </button>
+      </div>
+      <div className="w-[76px]" aria-hidden />
     </div>
   );
 }
@@ -204,11 +215,14 @@ export function VideoReelFeed() {
   }, [fetchNextPage]);
 
   return (
-    <div className="md:flex md:items-start md:justify-center">
+    <div className="md:flex md:items-center md:justify-center md:py-6">
       {/* Wrapper KHÔNG overflow-hidden — cho phép cột hành động "thoát" ra khỏi khung video bo
-          góc trên desktop mà vẫn dùng chung 1 instance với vị trí overlay trên mobile. */}
+          góc trên desktop mà vẫn dùng chung 1 instance với vị trí overlay trên mobile.
+          Desktop: aspect-[9/16] giữ đúng tỉ lệ dọc như TikTok/Reels dù cửa sổ cao thấp khác
+          nhau — trước đó chỉ ép width cố định (max-w-md) trong lúc height chạy theo cả viewport,
+          làm video bị kéo dài "như cái sào" trên màn hình cao. */}
       <div className="relative md:flex md:items-stretch">
-        <div className="relative h-[100dvh] w-full max-w-[430px] overflow-hidden bg-black md:h-[calc(100vh-3rem)] md:max-w-md md:rounded-[2rem] md:border md:border-white/10 md:shadow-2xl md:shadow-black/40">
+        <div className="relative h-[100dvh] w-full overflow-hidden bg-black md:aspect-[9/16] md:h-[calc(100vh-3rem)] md:max-h-[820px] md:w-auto md:rounded-[2rem] md:border md:border-white/10 md:shadow-2xl md:shadow-black/40">
           <VideoFeedTabs />
 
           <div className="no-scrollbar h-full w-full snap-y snap-mandatory overflow-y-scroll">

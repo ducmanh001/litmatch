@@ -1,4 +1,5 @@
 import { PostList } from '../../../features/feed/components/post-list';
+import { FeedSidebar } from './feed-sidebar';
 
 import type { Metadata } from 'next';
 
@@ -26,8 +27,13 @@ export default function FeedPage() {
           </svg>
         </button>
       </div>
-      <div className="px-5">
+      {/* lg+: 2 cột kiểu Twitter/Facebook (feed + gợi ý) — 1 cột hẹp trôi giữa khoảng trắng
+          1200px của khung app trông trống trải, không giống nền tảng thật nào. */}
+      <div className="px-5 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-6">
         <PostList />
+        <div className="hidden lg:block">
+          <FeedSidebar />
+        </div>
       </div>
     </section>
   );

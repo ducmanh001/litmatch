@@ -52,6 +52,14 @@ const NAV_ITEMS = [
 const IMMERSIVE_SESSION_PATTERN =
   /^\/(movie-match|matching\/soul|matching\/voice)\/[^/]+$/;
 
+/**
+ * Video (reel) — vẫn có sidebar/bottom nav như trang thường nhưng KHÔNG có hàng ThemeSwitcher
+ * riêng + padding `main` phía trên (đúng video.html: khung video chiếm trọn chiều cao ngay từ
+ * đỉnh, ThemeSwitcher overlay mờ trên chính video — do VideoReelFeed tự vẽ, không dùng hàng
+ * dùng chung). Thiếu điều kiện này trước đó tạo khoảng đen phía trên video trên mobile.
+ */
+const FULL_BLEED_CONTENT_PATTERN = /^\/video$/;
+
 function ImmersiveSessionChrome({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-paper md:bg-slate-100 dark:bg-ink md:dark:bg-black">
@@ -82,6 +90,8 @@ function AppChrome({ children }: { children: ReactNode }) {
   if (IMMERSIVE_SESSION_PATTERN.test(pathname)) {
     return <ImmersiveSessionChrome>{children}</ImmersiveSessionChrome>;
   }
+
+  const fullBleed = FULL_BLEED_CONTENT_PATTERN.test(pathname);
 
   return (
     <div className="md:flex md:bg-slate-100 md:dark:bg-black">
@@ -114,14 +124,18 @@ function AppChrome({ children }: { children: ReactNode }) {
       </nav>
 
       <div
-        className="relative mx-auto min-h-screen w-full max-w-[430px] pb-24 md:max-w-2xl md:flex-1 md:pb-10 lg:max-w-[1200px]"
+        className={`relative mx-auto min-h-screen w-full max-w-[430px] md:max-w-2xl md:flex-1 lg:max-w-[1200px] ${
+          fullBleed ? '' : 'pb-24 md:pb-10'
+        }`}
         style={{ contain: 'layout' }}
       >
-        <div className="flex justify-end px-5 pt-3">
-          <ThemeSwitcher />
-        </div>
+        {!fullBleed && (
+          <div className="flex justify-end px-5 pt-3">
+            <ThemeSwitcher />
+          </div>
+        )}
 
-        <main className="py-4">{children}</main>
+        <main className={fullBleed ? '' : 'py-4'}>{children}</main>
 
         <nav
           className="fixed inset-x-0 bottom-0 z-40 mx-auto flex h-16 max-w-[430px] items-center justify-around border-t border-black/5 bg-white/90 px-2 backdrop-blur md:hidden dark:border-white/5 dark:bg-surf/90"

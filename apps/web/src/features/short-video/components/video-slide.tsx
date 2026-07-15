@@ -154,7 +154,9 @@ export function VideoSlide({
         </button>
       )}
 
-      <div className="relative z-20 w-[78%] px-4 pb-6">
+      {/* pb-24 chừa chỗ cho bottom nav di động (h-16, đè lên video full-bleed) — desktop
+          không có bottom nav nên chỉ cần pb-6 như mockup. */}
+      <div className="relative z-20 w-[78%] px-4 pb-24 md:pb-6">
         <p className="font-mono text-xs text-white/70">
           {new Date(video.createdAt).toLocaleDateString('vi-VN')} ·{' '}
           {video.viewCount} lượt xem
