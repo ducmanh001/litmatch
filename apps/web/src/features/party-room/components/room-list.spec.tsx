@@ -26,13 +26,13 @@ function renderList() {
 describe('RoomList', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('empty — gợi ý tạo phòng mới', async () => {
+  it('empty — hiển thị phòng demo (fallback) thay vì để trống', async () => {
     vi.spyOn(apiClient, 'GET').mockResolvedValue({
       data: { data: [], meta: {} },
     } as never);
     renderList();
 
-    expect(await screen.findByText(/Chưa có phòng nào đang mở/)).toBeVisible();
+    expect(await screen.findAllByText(/Tâm sự đêm khuya/)).not.toHaveLength(0);
   });
 
   it('error — hiển thị message', async () => {
@@ -75,12 +75,12 @@ describe('RoomList', () => {
 
     renderList();
 
-    expect(await screen.findByText('Phòng vui vẻ')).toBeVisible();
-    expect(await screen.findByText(/Host A/)).toBeVisible();
+    // Phòng duy nhất vừa nằm ở "Nổi bật lúc này" vừa ở danh sách chính — 2 lần xuất hiện đúng.
+    expect(await screen.findAllByText('Phòng vui vẻ')).toHaveLength(2);
+    expect(await screen.findAllByText(/Host A/)).not.toHaveLength(0);
     expect(screen.getByText(/Tối đa 8 người nói/)).toBeVisible();
-    expect(screen.getByRole('link', { name: /Phòng vui vẻ/ })).toHaveAttribute(
-      'href',
-      '/party/room-1',
-    );
+    expect(
+      screen.getByRole('link', { name: /Phòng vui vẻ.*Host: Host A/s }),
+    ).toHaveAttribute('href', '/party/room-1');
   });
 });

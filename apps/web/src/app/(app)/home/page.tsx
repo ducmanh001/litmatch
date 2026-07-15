@@ -6,6 +6,7 @@ import { useCurrentUser } from '../../../shared/auth/use-current-user';
 import { DiamondIcon, MatchIcon, MicIcon } from '../../../shared/ui/icons';
 import { PlaceholderAvatar } from '../../../shared/ui/placeholder-avatar';
 import { useRoomList } from '../../../features/party-room/api';
+import { decorativeListenerCount } from '../../../features/party-room/decorative-listener-count';
 import { useWallet } from '../../../features/wallet/api';
 
 import type { SVGProps } from 'react';
@@ -105,6 +106,29 @@ const MODES = [
   },
 ] as const;
 
+/** Demo fallback khi chưa có phòng thật đang mở (dev chưa seed / đã bị sweeper đóng) — đúng
+ * layouts/web/home.html, không link phòng ảo (tránh 404, tránh đánh lừa "đang live"). */
+const FALLBACK_TRENDING_ROOMS = [
+  { title: 'Tâm sự đêm khuya 🌙', listeners: 24 },
+  { title: 'Hát cho nhau nghe 🎤', listeners: 41 },
+  { title: 'Làm quen Sài Gòn', listeners: 18 },
+];
+
+function RoomAvatarStack({ roomId }: { roomId: string }) {
+  return (
+    <div className="mb-3 flex -space-x-2">
+      {[roomId, `${roomId}-2`, `${roomId}-3`].map((seed) => (
+        <PlaceholderAvatar
+          key={seed}
+          seed={seed}
+          size={32}
+          className="border-2 border-white dark:border-surf"
+        />
+      ))}
+    </div>
+  );
+}
+
 function TrendingRooms() {
   const { data, isPending, isError } = useRoomList();
   const rooms =
@@ -126,9 +150,21 @@ function TrendingRooms() {
   }
   if (rooms.length === 0) {
     return (
-      <p className="px-5 text-sm text-slate-500 dark:text-slate-400">
-        Chưa có phòng nào đang hoạt động.
-      </p>
+      <div className="no-scrollbar flex gap-3 overflow-x-auto px-5 pb-2">
+        {FALLBACK_TRENDING_ROOMS.map((room) => (
+          <div
+            key={room.title}
+            className="w-40 shrink-0 rounded-2xl border border-black/5 bg-white p-3 opacity-90 dark:border-white/5 dark:bg-surf"
+          >
+            <RoomAvatarStack roomId={room.title} />
+            <p className="text-sm font-bold leading-tight">{room.title}</p>
+            <p className="mt-1 flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              {room.listeners} đang nghe
+            </p>
+          </div>
+        ))}
+      </div>
     );
   }
   return (
@@ -139,10 +175,11 @@ function TrendingRooms() {
           href={`/party/${room.id}`}
           className="w-40 shrink-0 rounded-2xl border border-black/5 bg-white p-3 dark:border-white/5 dark:bg-surf"
         >
+          <RoomAvatarStack roomId={room.id} />
           <p className="text-sm font-bold leading-tight">{room.title}</p>
           <p className="mt-1 flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            Tối đa {room.speakerLimit} người nói
+            {decorativeListenerCount(room.id)} đang nghe
           </p>
         </Link>
       ))}

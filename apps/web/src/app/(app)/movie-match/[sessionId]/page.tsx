@@ -13,7 +13,7 @@ export default async function MovieMatchSessionPage({
 }) {
   const { sessionId } = await params;
   return (
-    <section className="mx-auto flex min-h-screen max-w-md flex-col">
+    <section className="flex flex-1 flex-col">
       <div className="flex shrink-0 items-center justify-between px-5 pb-4 pt-6">
         <Link
           href="/movie-match"

@@ -13,7 +13,7 @@ export default async function VoiceMatchPage({
 }) {
   const { sessionId } = await params;
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-1 flex-col">
       <div className="mb-2 flex shrink-0 items-center justify-between px-5">
         <Link
           href="/home"

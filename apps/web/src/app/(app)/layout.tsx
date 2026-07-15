@@ -44,6 +44,29 @@ const NAV_ITEMS = [
   Icon: ComponentType<SVGProps<SVGSVGElement>>;
 }>;
 
+/**
+ * Phiên trải nghiệm toàn màn hình (Movie/Soul/Voice Match khi đã vào 1 session cụ thể) — đúng
+ * layouts/web/{movie,soul,voice}-match.html: KHÔNG có sidebar/bottom nav, chỉ có khung thẻ bo
+ * góc + đổ bóng ở desktop (`data-lm-frame`), không phải layout app thường.
+ */
+const IMMERSIVE_SESSION_PATTERN =
+  /^\/(movie-match|matching\/soul|matching\/voice)\/[^/]+$/;
+
+function ImmersiveSessionChrome({ children }: { children: ReactNode }) {
+  return (
+    <div className="min-h-screen bg-paper md:bg-slate-100 dark:bg-ink md:dark:bg-black">
+      <div className="relative mx-auto flex min-h-screen max-w-[430px] flex-col md:my-6 md:min-h-0 md:h-[calc(100vh-3rem)] md:max-w-lg md:overflow-hidden md:rounded-[2rem] md:border md:border-black/10 md:shadow-2xl md:shadow-black/10 dark:md:border-white/10">
+        <div className="flex justify-end px-5 pt-3">
+          <ThemeSwitcher />
+        </div>
+        {children}
+        <ToastStack />
+        <ConfirmSheet />
+      </div>
+    </div>
+  );
+}
+
 function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
@@ -55,6 +78,10 @@ function AppChrome({ children }: { children: ReactNode }) {
 
   const isActive = (href: string): boolean =>
     pathname === href || pathname.startsWith(`${href}/`);
+
+  if (IMMERSIVE_SESSION_PATTERN.test(pathname)) {
+    return <ImmersiveSessionChrome>{children}</ImmersiveSessionChrome>;
+  }
 
   return (
     <div className="md:flex md:bg-slate-100 md:dark:bg-black">

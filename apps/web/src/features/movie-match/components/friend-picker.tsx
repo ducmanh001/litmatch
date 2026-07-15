@@ -63,10 +63,26 @@ export function FriendPicker({
   });
 
   if (friendsPending) {
+    // Đúng hiệu ứng "đang tìm" ở layouts/web/movie-match.html (#searchState) — Movie Match
+    // thật là chọn bạn cụ thể (không có hàng đợi ghép người lạ), nên dùng lại đúng hiệu ứng
+    // cho trạng thái tải danh sách bạn bè thay vì bịa 1 luồng "tìm người lạ" không có thật.
     return (
-      <p className="text-sm text-slate-500 dark:text-slate-400">
-        Đang tải danh sách bạn bè…
-      </p>
+      <div className="flex flex-1 flex-col items-center justify-center px-8 py-10 text-center">
+        <div className="relative mb-8 flex h-40 w-40 items-center justify-center">
+          <span className="pulsering absolute h-40 w-40 rounded-full border border-iris/40" />
+          <span className="pulsering2 absolute h-40 w-40 rounded-full border border-iris/40" />
+          <div className="relative z-10 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-irisl to-aqual text-4xl">
+            🎬
+          </div>
+        </div>
+        <h2 className="font-display mb-2 text-2xl font-semibold italic">
+          Đang tìm bạn xem cùng…
+        </h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Ghép bạn với người cùng gu phim để xem chung một clip ngắn và trò
+          chuyện trực tiếp.
+        </p>
+      </div>
     );
   }
 

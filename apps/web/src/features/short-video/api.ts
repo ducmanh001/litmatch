@@ -1,6 +1,7 @@
 import {
   useInfiniteQuery,
   useMutation,
+  useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
 
@@ -127,6 +128,20 @@ export function useReportVideo(videoId: string) {
         params: { path: { id: videoId } },
         body: dto,
       });
+    },
+  });
+}
+
+/** Nickname thật của tác giả (đúng "Âm thanh gốc · {tác giả}" ở layouts/web/video.html) —
+ * `VideoDto` chỉ có `authorUserId`, tra thêm qua `GET /users/{id}` như party-room đã làm. */
+export function useAuthorProfile(userId: string) {
+  return useQuery({
+    queryKey: ['short-video', 'author', userId],
+    queryFn: async () => {
+      const res = await apiClient.GET('/api/v1/users/{id}', {
+        params: { path: { id: userId } },
+      });
+      return res.data?.data;
     },
   });
 }

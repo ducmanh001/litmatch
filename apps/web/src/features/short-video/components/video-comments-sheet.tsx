@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { isApiError } from '@litmatch/api-client';
 import { useForm } from 'react-hook-form';
 
+import { cn } from '../../../shared/lib/cn';
 import { useCreateVideoComment, useVideoComments } from '../api';
 import { createVideoCommentSchema } from '../create-video-comment-schema';
 
@@ -128,29 +129,40 @@ function VideoCommentComposer({ videoId }: { videoId: string }) {
   );
 }
 
+/**
+ * Mobile: bottom-sheet overlay thật (trượt lên trên video). Desktop: panel tĩnh mở rộng ngay
+ * cạnh video (không che), đúng layouts/web/video.html — 2 hành vi khác hẳn nhau theo breakpoint
+ * nên dùng class CSS thuần `.video-comments-sheet` (global.css) thay vì chỉ Tailwind variant.
+ * Luôn render (không return null khi đóng) để có transition mở/đóng mượt như mockup.
+ */
 export function VideoCommentsSheet({
   videoId,
   commentCount,
   open,
   onClose,
 }: {
-  videoId: string;
+  videoId: string | null;
   commentCount: number;
   open: boolean;
   onClose: () => void;
 }) {
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center">
-      <button
-        type="button"
-        aria-label="Đóng bình luận"
-        onClick={onClose}
-        className="absolute inset-0 bg-black/50"
-      />
-      <div className="relative flex max-h-[68vh] w-full max-w-[430px] flex-col rounded-t-3xl bg-white shadow-2xl shadow-black/30 dark:bg-surf">
-        <div className="flex shrink-0 items-center justify-center pb-1 pt-3">
+    <>
+      {open && (
+        <button
+          type="button"
+          aria-label="Đóng bình luận"
+          onClick={onClose}
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+        />
+      )}
+      <div
+        className={cn(
+          'video-comments-sheet flex flex-col bg-white shadow-2xl shadow-black/30 dark:bg-surf',
+          open && 'open',
+        )}
+      >
+        <div className="flex shrink-0 items-center justify-center pb-1 pt-3 md:hidden">
           <div className="h-1 w-10 rounded-full bg-slate-300 dark:bg-white/20" />
         </div>
         <div className="flex shrink-0 items-center justify-between border-b border-black/5 px-5 py-3 dark:border-white/10">
@@ -176,13 +188,17 @@ export function VideoCommentsSheet({
             </svg>
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 py-3 text-slate-900 dark:text-white">
-          <VideoCommentList videoId={videoId} open={open} />
-        </div>
-        <div className="shrink-0 border-t border-black/5 px-4 py-3 dark:border-white/10">
-          <VideoCommentComposer videoId={videoId} />
-        </div>
+        {videoId !== null && (
+          <>
+            <div className="flex-1 overflow-y-auto px-5 py-3 text-slate-900 dark:text-white">
+              <VideoCommentList videoId={videoId} open={open} />
+            </div>
+            <div className="shrink-0 border-t border-black/5 px-4 py-3 dark:border-white/10">
+              <VideoCommentComposer videoId={videoId} />
+            </div>
+          </>
+        )}
       </div>
-    </div>
+    </>
   );
 }

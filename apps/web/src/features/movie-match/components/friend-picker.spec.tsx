@@ -39,7 +39,7 @@ describe('FriendPicker', () => {
 
   it('đang tải bạn bè — hiện trạng thái loading', () => {
     renderPicker({ friendsPending: true });
-    expect(screen.getByText(/Đang tải danh sách bạn bè/)).toBeVisible();
+    expect(screen.getByText(/Đang tìm bạn xem cùng/)).toBeVisible();
   });
 
   it('lỗi tải bạn bè — hiện alert', () => {

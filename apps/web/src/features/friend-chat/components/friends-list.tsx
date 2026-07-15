@@ -70,6 +70,10 @@ export function FriendsList() {
     (friend): friend is FriendDto & { lastMessageAt: string } =>
       friend.lastMessageAt !== null,
   );
+  const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  const recentConversationCount = conversations.filter(
+    (friend) => new Date(friend.lastMessageAt).getTime() >= oneDayAgo,
+  ).length;
 
   return (
     <div>
@@ -90,6 +94,7 @@ export function FriendsList() {
                     userId={friend.profile.id}
                     nickname={friend.profile.nickname}
                     size={64}
+                    className="border-2 border-paper bg-surf2 dark:border-ink"
                   />
                 </div>
                 <p className="mt-1.5 truncate text-[11px] font-semibold">
@@ -102,9 +107,19 @@ export function FriendsList() {
       )}
       {conversations.length > 0 && (
         <div>
-          <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-            Hội thoại
-          </p>
+          <div className="mb-3 flex items-center gap-2">
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+              Hội thoại
+            </p>
+            {/* FriendDto không có field unreadCount thật (docs/13 §13.1) — đếm hội thoại có tin
+                nhắn trong 24h gần nhất làm số liệu tạm thay cho "chưa đọc", dùng dữ liệu thật
+                (lastMessageAt) thay vì bịa hẳn 1 con số, đến khi có unreadCount thật. */}
+            {recentConversationCount > 0 && (
+              <span className="rounded-full bg-iris/10 px-2 py-0.5 text-[10px] font-bold text-irisl">
+                {recentConversationCount} chưa đọc
+              </span>
+            )}
+          </div>
           <ul className="space-y-1">
             {conversations.map((friend) => (
               <li key={friend.conversationId}>
