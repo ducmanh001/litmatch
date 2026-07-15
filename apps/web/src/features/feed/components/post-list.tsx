@@ -3,6 +3,7 @@
 import { isApiError } from '@litmatch/api-client';
 
 import { useFeed } from '../api';
+import { FeedBanners } from './feed-banners';
 import { PostCard } from './post-card';
 import { PostComposer } from './post-composer';
 
@@ -15,6 +16,7 @@ export function PostList() {
   return (
     <div className="space-y-4">
       <PostComposer />
+      <FeedBanners />
 
       {feed.isPending && (
         <p className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
