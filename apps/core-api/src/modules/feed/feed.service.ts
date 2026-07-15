@@ -1,6 +1,10 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { buildCursorPage, decodeCursor } from '@litmatch/common-dtos';
+import {
+  buildCursorPage,
+  decodeCursor,
+  isValidSeqCursor,
+} from '@litmatch/common-dtos';
 import { DomainException } from '@litmatch/common-exceptions';
 import { DataSource, Repository } from 'typeorm';
 
@@ -103,11 +107,7 @@ export class FeedService {
 
     if (query.cursor) {
       const payload = decodeCursor<{ seq?: unknown }>(query.cursor);
-      if (
-        !payload ||
-        typeof payload.seq !== 'string' ||
-        !/^\d+$/.test(payload.seq)
-      ) {
+      if (!isValidSeqCursor(payload)) {
         throw new DomainException(
           FeedErrors.CURSOR_INVALID,
           'Cursor không hợp lệ',
@@ -159,11 +159,7 @@ export class FeedService {
 
     if (query.cursor) {
       const payload = decodeCursor<{ seq?: unknown }>(query.cursor);
-      if (
-        !payload ||
-        typeof payload.seq !== 'string' ||
-        !/^\d+$/.test(payload.seq)
-      ) {
+      if (!isValidSeqCursor(payload)) {
         throw new DomainException(
           FeedErrors.CURSOR_INVALID,
           'Cursor không hợp lệ',
@@ -280,11 +276,7 @@ export class FeedService {
     let afterSeq = '0';
     if (query.cursor) {
       const payload = decodeCursor<{ seq?: unknown }>(query.cursor);
-      if (
-        !payload ||
-        typeof payload.seq !== 'string' ||
-        !/^\d+$/.test(payload.seq)
-      ) {
+      if (!isValidSeqCursor(payload)) {
         throw new DomainException(
           FeedErrors.CURSOR_INVALID,
           'Cursor không hợp lệ',

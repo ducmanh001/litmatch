@@ -8,6 +8,7 @@ import {
   CursorPageQueryDto,
   decodeCursor,
   encodeCursor,
+  isValidSeqCursor,
 } from './cursor-pagination';
 
 describe('CursorPageQueryDto', () => {
@@ -64,5 +65,26 @@ describe('cursor helpers', () => {
     const page = buildCursorPage([], 2, () => ({ id: 'x' }));
     expect(page.items).toHaveLength(0);
     expect(page.meta.nextCursor).toBeNull();
+  });
+});
+
+describe('isValidSeqCursor', () => {
+  it('payload null → false', () => {
+    expect(isValidSeqCursor(null)).toBe(false);
+  });
+
+  it('seq thiếu hoặc không phải string → false', () => {
+    expect(isValidSeqCursor({})).toBe(false);
+    expect(isValidSeqCursor({ seq: 123 })).toBe(false);
+  });
+
+  it('seq không phải chuỗi số → false', () => {
+    expect(isValidSeqCursor({ seq: 'abc' })).toBe(false);
+    expect(isValidSeqCursor({ seq: '12.3' })).toBe(false);
+  });
+
+  it('seq là chuỗi số → true', () => {
+    expect(isValidSeqCursor({ seq: '0' })).toBe(true);
+    expect(isValidSeqCursor({ seq: '42' })).toBe(true);
   });
 });

@@ -1,6 +1,10 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { buildCursorPage, decodeCursor } from '@litmatch/common-dtos';
+import {
+  buildCursorPage,
+  decodeCursor,
+  isValidSeqCursor,
+} from '@litmatch/common-dtos';
 import { DomainException } from '@litmatch/common-exceptions';
 import { EntityManager, Repository } from 'typeorm';
 
@@ -71,11 +75,7 @@ export class NotificationService {
 
     if (query.cursor) {
       const payload = decodeCursor<{ seq?: unknown }>(query.cursor);
-      if (
-        !payload ||
-        typeof payload.seq !== 'string' ||
-        !/^\d+$/.test(payload.seq)
-      ) {
+      if (!isValidSeqCursor(payload)) {
         throw new DomainException(
           NotificationErrors.CURSOR_INVALID,
           'Cursor không hợp lệ',

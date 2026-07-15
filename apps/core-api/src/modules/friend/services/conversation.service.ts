@@ -1,6 +1,10 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { buildCursorPage, decodeCursor } from '@litmatch/common-dtos';
+import {
+  buildCursorPage,
+  decodeCursor,
+  isValidSeqCursor,
+} from '@litmatch/common-dtos';
 import { DomainException } from '@litmatch/common-exceptions';
 import { Repository } from 'typeorm';
 
@@ -99,11 +103,7 @@ export class ConversationService {
     let afterSeq = '0';
     if (cursor) {
       const payload = decodeCursor<{ seq?: unknown }>(cursor);
-      if (
-        !payload ||
-        typeof payload.seq !== 'string' ||
-        !/^\d+$/.test(payload.seq)
-      ) {
+      if (!isValidSeqCursor(payload)) {
         throw new DomainException(
           FriendErrors.CURSOR_INVALID,
           'Cursor không hợp lệ',
