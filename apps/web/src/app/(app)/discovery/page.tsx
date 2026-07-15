@@ -15,6 +15,25 @@ import type {
   Gender,
   NearbyCardDto,
 } from '../../../features/discovery/api';
+import type { SVGProps } from 'react';
+
+function SlidersIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      width={16}
+      height={16}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M4 6h16M7 12h10M10 18h4" />
+    </svg>
+  );
+}
 
 /** /discovery — đúng layouts/web/discovery.html, dữ liệu thật qua module `discovery` (W1+W4). */
 export default function DiscoveryPage() {
@@ -65,6 +84,13 @@ export default function DiscoveryPage() {
             Duyệt hồ sơ quanh bạn — mới
           </p>
         </div>
+        <button
+          type="button"
+          aria-label="Bộ lọc"
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 dark:bg-surf2"
+        >
+          <SlidersIcon />
+        </button>
       </div>
 
       <DiscoveryFilters
@@ -94,7 +120,7 @@ export default function DiscoveryPage() {
             </p>
           )}
           {items.length > 0 && (
-            <div className="grid grid-cols-2 gap-3 px-5 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 px-5 md:grid-cols-3 lg:grid-cols-4">
               {items.map((card) => (
                 <DiscoveryCard
                   key={card.profile.id}

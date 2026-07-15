@@ -25,9 +25,9 @@ import type {
 /** Pill "Huỷ tìm kiếm" của soul-match.html — viền, không nền, chỉ tô mờ khi hover. */
 const OUTLINE_PILL =
   'border-black/10 bg-transparent hover:bg-black/5 dark:border-white/10 dark:bg-transparent dark:hover:bg-white/5';
-/** Card trắng/surf viền mảnh dùng chung cho mọi trạng thái hàng đợi (không có mockup riêng). */
-const STATE_CARD =
-  'rounded-2xl border border-black/5 bg-white dark:border-white/5 dark:bg-surf';
+/** Màn hình toàn phần căn giữa (soul-match.html `#searchState`) — không còn bọc card viền. */
+const FULLSCREEN_STATE =
+  'flex flex-1 flex-col items-center justify-center gap-6 px-8 text-center';
 
 export function QueueStatusPanel() {
   const router = useRouter();
@@ -85,7 +85,7 @@ export function QueueStatusPanel() {
 
   if (ticketQuery.isPending) {
     return (
-      <p className="text-center text-sm text-slate-500 dark:text-slate-400">
+      <p className="flex-1 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
         Đang tải trạng thái…
       </p>
     );
@@ -96,7 +96,7 @@ export function QueueStatusPanel() {
       ? ticketQuery.error.message
       : 'Có lỗi xảy ra, thử lại.';
     return (
-      <div className={`${STATE_CARD} space-y-3 p-5`}>
+      <div className={FULLSCREEN_STATE}>
         <p role="alert" className="text-sm text-destructive">
           {message}
         </p>
@@ -117,9 +117,7 @@ export function QueueStatusPanel() {
   switch (ticket.status) {
     case 'queued':
       return (
-        <div
-          className={`${STATE_CARD} flex flex-col items-center gap-6 px-8 py-10 text-center`}
-        >
+        <div className={FULLSCREEN_STATE}>
           <div className="relative flex h-40 w-40 items-center justify-center">
             <span className="pulsering absolute h-40 w-40 rounded-full border border-iris/40" />
             <span className="pulsering2 absolute h-40 w-40 rounded-full border border-iris/40" />
@@ -127,11 +125,15 @@ export function QueueStatusPanel() {
               🔮
             </div>
           </div>
-          <div className="space-y-1">
-            <p className="font-display text-lg italic">
+          <div className="space-y-2">
+            <p className="font-display text-2xl font-semibold italic">
               Đang tìm người ghép đôi…
             </p>
-            <p className="font-mono text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Ghép ẩn danh theo bộ lọc tuổi &amp; giới tính của bạn — thường mất
+              10–30 giây.
+            </p>
+            <p className="font-mono text-xs text-slate-400 dark:text-slate-500">
               (vào hàng đợi lúc{' '}
               {new Date(ticket.enqueuedAt).toLocaleTimeString('vi-VN')})
             </p>
@@ -146,17 +148,17 @@ export function QueueStatusPanel() {
               disabled={cancelTicket.isPending}
               onClick={() => cancelTicket.mutate()}
             >
-              {cancelTicket.isPending ? 'Đang huỷ…' : 'Huỷ'}
+              {cancelTicket.isPending ? 'Đang huỷ…' : 'Huỷ tìm kiếm'}
             </Button>
           </div>
         </div>
       );
     case 'matched':
       return (
-        <div
-          className={`${STATE_CARD} flex flex-col items-center gap-4 px-6 py-8 text-center`}
-        >
-          <p className="font-display text-lg italic">Đã tìm thấy đối phương</p>
+        <div className={FULLSCREEN_STATE}>
+          <p className="font-display text-2xl font-semibold italic">
+            Đã tìm thấy đối phương
+          </p>
           <p className="text-sm text-slate-500 dark:text-slate-400">
             Xác nhận sớm để bắt đầu, nếu không ticket sẽ hết hạn.
           </p>
@@ -172,16 +174,14 @@ export function QueueStatusPanel() {
       );
     case 'confirmed':
       return (
-        <p className="text-center text-sm text-slate-500 dark:text-slate-400">
+        <p className="flex-1 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
           Đã xác nhận — đang chuyển vào phòng…
         </p>
       );
     case 'expired':
     case 'cancelled':
       return (
-        <div
-          className={`${STATE_CARD} flex flex-col items-center gap-4 px-6 py-8 text-center`}
-        >
+        <div className={FULLSCREEN_STATE}>
           <p className="text-sm text-slate-500 dark:text-slate-400">
             {ticket.status === 'expired'
               ? 'Ticket đã hết hạn.'

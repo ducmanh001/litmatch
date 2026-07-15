@@ -33,7 +33,7 @@ export function DiscoveryFilters({
             CHIP_BASE,
             gender === option.value
               ? 'border-transparent bg-gradient-to-br from-irisl to-irisl text-white'
-              : 'border-transparent bg-white dark:bg-surf',
+              : 'border-black/5 bg-white dark:border-white/5 dark:bg-surf',
           )}
         >
           {option.label}
@@ -50,6 +50,14 @@ export function DiscoveryFilters({
         )}
       >
         📍 Gần tôi
+      </button>
+      {/* Chưa có field "online"/"active" trong DiscoveryCardDto/NearbyCardDto — chip chỉ để đúng
+       * bố cục mockup, chưa nối filter thật. */}
+      <button
+        type="button"
+        className="shrink-0 rounded-full border border-black/5 bg-white px-4 py-2 text-xs font-bold whitespace-nowrap dark:border-white/5 dark:bg-surf"
+      >
+        🟢 Đang hoạt động
       </button>
     </div>
   );

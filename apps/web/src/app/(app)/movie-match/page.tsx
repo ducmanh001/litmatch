@@ -1,6 +1,7 @@
 'use client';
 
 import { RealtimeEvents } from '@litmatch/common-dtos/pure';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 import { useCurrentUser } from '../../../shared/auth/use-current-user';
@@ -36,19 +37,43 @@ export default function MovieMatchPage() {
     })) ?? [];
 
   return (
-    <section className="space-y-5 px-5 py-2">
-      <h1 className="font-display pb-2 pt-2 text-2xl font-semibold italic">
-        Movie Match
-      </h1>
-      <p className="text-sm text-slate-500 dark:text-slate-400">
-        Xem chung 1 video YouTube với bạn bè, kèm chat trực tiếp.
-      </p>
-      <FriendPicker
-        friends={friendOptions}
-        friendsPending={friends.isPending}
-        friendsError={friends.isError}
-        onCreated={(session) => router.replace(`/movie-match/${session.id}`)}
-      />
+    <section className="flex min-h-[70vh] flex-col">
+      <div className="flex items-center justify-between px-5 pb-4 pt-6">
+        <Link
+          href="/home"
+          aria-label="Quay lại"
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 dark:bg-surf2"
+        >
+          <svg
+            width={16}
+            height={16}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2.5}
+            aria-hidden
+          >
+            <path
+              d="M15 18l-6-6 6-6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </Link>
+        <p className="text-sm font-bold">Movie Match</p>
+        <div className="h-9 w-9" />
+      </div>
+      <div className="space-y-5 px-5 py-2">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Xem chung 1 video YouTube với bạn bè, kèm chat trực tiếp.
+        </p>
+        <FriendPicker
+          friends={friendOptions}
+          friendsPending={friends.isPending}
+          friendsError={friends.isError}
+          onCreated={(session) => router.replace(`/movie-match/${session.id}`)}
+        />
+      </div>
     </section>
   );
 }

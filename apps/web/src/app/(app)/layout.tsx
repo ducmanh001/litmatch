@@ -1,15 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 
-import { apiClient, tokenStore } from '../../shared/api/client';
 import { AuthGate } from '../../shared/auth/auth-gate';
+import { useLogout } from '../../shared/auth/use-logout';
 import {
   connectRealtime,
   disconnectRealtime,
 } from '../../shared/realtime/socket';
+import { ConfirmSheet } from '../../shared/ui/confirm-sheet';
 import {
   DiscoveryIcon,
   FeedIcon,
@@ -20,20 +21,23 @@ import {
   MatchIcon,
   PartyIcon,
   ProfileIcon,
+  VideoIcon,
   WalletIcon,
 } from '../../shared/ui/icons';
 import { ThemeSwitcher } from '../../shared/ui/theme-switcher';
+import { ToastStack } from '../../shared/ui/toast-stack';
 
 import type { ReactNode } from 'react';
 import type { ComponentType, SVGProps } from 'react';
 
 /**
  * Nav sau login khai 1 chỗ (docs/12 § 12.8 bước 3). `sidebarOnly` dành cho mục mới hơn
- * (Khám phá) — bottom nav di động đã đủ 7 mục, thêm nữa sẽ quá chật trên màn hình hẹp; mục
- * sidebarOnly vẫn vào được từ trang chủ trên di động.
+ * (Khám phá, Video) — bottom nav di động đã đủ 7 mục, thêm nữa sẽ quá chật trên màn hình hẹp;
+ * mục sidebarOnly vẫn vào được từ trang chủ trên di động.
  */
 const NAV_ITEMS = [
   { href: '/home', label: 'Trang chủ', Icon: HomeIcon },
+  { href: '/video', label: 'Video', Icon: VideoIcon, sidebarOnly: true },
   { href: '/feed', label: 'Bảng tin', Icon: FeedIcon },
   { href: '/matching', label: 'Ghép đôi', Icon: MatchIcon },
   {
@@ -54,7 +58,6 @@ const NAV_ITEMS = [
 }>;
 
 function AppChrome({ children }: { children: ReactNode }) {
-  const router = useRouter();
   const pathname = usePathname();
 
   // Vùng (app) là vùng realtime: connect khi vào, disconnect khi rời hẳn (logout)
@@ -63,22 +66,7 @@ function AppChrome({ children }: { children: ReactNode }) {
     return disconnectRealtime;
   }, []);
 
-  const logout = (): void => {
-    const csrfToken = tokenStore.getCsrfToken();
-    disconnectRealtime();
-    tokenStore.setSession(null);
-    router.replace('/login');
-    if (csrfToken !== null) {
-      // Local logout thắng mọi response refresh cũ; revoke server (xoá cookie refresh_token
-      // httpOnly qua CsrfGuard, ADR 0007) chạy best-effort sau đó.
-      void apiClient
-        .POST('/api/v1/auth/logout', {
-          credentials: 'include',
-          headers: { 'x-csrf-token': csrfToken },
-        })
-        .catch(() => undefined);
-    }
-  };
+  const logout = useLogout();
 
   const isActive = (href: string): boolean =>
     pathname === href || pathname.startsWith(`${href}/`);
@@ -121,7 +109,10 @@ function AppChrome({ children }: { children: ReactNode }) {
         </button>
       </nav>
 
-      <div className="relative mx-auto min-h-screen w-full max-w-[430px] pb-24 md:max-w-2xl md:flex-1 md:pb-10 lg:max-w-3xl">
+      <div
+        className="relative mx-auto min-h-screen w-full max-w-[430px] pb-24 md:max-w-2xl md:flex-1 md:pb-10 lg:max-w-[1200px]"
+        style={{ contain: 'layout' }}
+      >
         <div className="flex items-center justify-between px-5 pt-3 md:hidden">
           <Link
             href="/home"
@@ -166,6 +157,9 @@ function AppChrome({ children }: { children: ReactNode }) {
             </Link>
           ))}
         </nav>
+
+        <ToastStack />
+        <ConfirmSheet />
       </div>
     </div>
   );

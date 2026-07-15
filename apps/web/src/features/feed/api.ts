@@ -22,7 +22,10 @@ export const feedKeys = {
   detail: (postId: string) => ['feed', 'detail', postId] as const,
   comments: (postId: string) => ['feed', 'comments', postId] as const,
   reaction: (postId: string) => ['feed', 'reaction', postId] as const,
+  userTimeline: (userId: string) => ['feed', 'user-timeline', userId] as const,
 };
+
+const USER_TIMELINE_PAGE_LIMIT = 6;
 
 export function useFeed() {
   return useInfiniteQuery({
@@ -35,6 +38,26 @@ export function useFeed() {
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage?.nextCursor ?? undefined,
+  });
+}
+
+/** Timeline 1 tác giả (vd "bài viết của bạn" ở trang Hồ sơ) — audience tự khớp theo quan hệ. */
+export function useUserTimeline(
+  userId: string,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: feedKeys.userTimeline(userId),
+    queryFn: async () => {
+      const res = await apiClient.GET('/api/v1/feed/users/{userId}/posts', {
+        params: {
+          path: { userId },
+          query: { limit: USER_TIMELINE_PAGE_LIMIT },
+        },
+      });
+      return res.data?.data;
+    },
+    enabled: options?.enabled ?? true,
   });
 }
 

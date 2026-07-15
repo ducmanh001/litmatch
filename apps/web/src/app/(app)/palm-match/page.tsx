@@ -8,8 +8,8 @@ export const metadata: Metadata = { title: 'Palm Match' };
 
 export default function PalmMatchPage() {
   return (
-    <div>
-      <div className="flex items-center justify-between px-5 pb-4 pt-6">
+    <div className="flex min-h-[70vh] flex-col">
+      <div className="flex shrink-0 items-center justify-between px-5 pb-4 pt-6">
         <Link
           href="/home"
           className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 dark:bg-surf2"

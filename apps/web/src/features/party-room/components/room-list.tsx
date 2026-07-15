@@ -2,14 +2,32 @@
 
 import { isApiError } from '@litmatch/api-client';
 import Link from 'next/link';
+import { useState } from 'react';
 
 import { FriendAvatar } from '../../friend-chat/components/friend-avatar';
 import { useRoomList, useUserProfiles } from '../api';
 import { CreateRoomForm } from './create-room-form';
 
+function PlusIcon() {
+  return (
+    <svg
+      width={16}
+      height={16}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.5}
+      aria-hidden
+    >
+      <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function RoomList() {
   const rooms = useRoomList();
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = rooms;
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   const items = rooms.data?.pages.flatMap((page) => page?.data ?? []) ?? [];
   const hostIds = [...new Set(items.map((room) => room.hostUserId))];
@@ -20,11 +38,7 @@ export function RoomList() {
   );
 
   return (
-    <div className="space-y-5">
-      <div className="px-5">
-        <CreateRoomForm />
-      </div>
-
+    <div className="relative space-y-5 pb-20">
       {rooms.isPending && (
         <p className="px-5 text-sm text-slate-500 dark:text-slate-400">
           Đang tải danh sách phòng…
@@ -105,6 +119,28 @@ export function RoomList() {
           >
             {isFetchingNextPage ? 'Đang tải…' : 'Xem thêm'}
           </button>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => setIsCreateOpen(true)}
+        className="fixed bottom-24 right-6 z-30 flex items-center gap-2 rounded-full bg-gradient-to-br from-irisl to-irisl px-5 py-3.5 font-bold text-white shadow-xl shadow-iris/30 md:bottom-8"
+      >
+        <PlusIcon /> Tạo phòng
+      </button>
+
+      {isCreateOpen && (
+        <div className="fixed inset-0 z-40 flex items-end justify-center">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setIsCreateOpen(false)}
+          />
+          <div className="relative w-full max-w-[430px] rounded-t-3xl bg-white p-6 pb-8 dark:bg-surf">
+            <div className="mx-auto mb-5 h-1.5 w-10 rounded-full bg-slate-200 dark:bg-white/10" />
+            <p className="mb-4 text-lg font-bold">Tạo phòng mới</p>
+            <CreateRoomForm />
+          </div>
         </div>
       )}
     </div>

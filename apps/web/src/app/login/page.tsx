@@ -1,8 +1,10 @@
 import Link from 'next/link';
 
 import { LoginForm } from '../../shared/auth/login-form';
+import { ConfirmSheet } from '../../shared/ui/confirm-sheet';
 import { LogoMark } from '../../shared/ui/icons';
 import { ThemeSwitcher } from '../../shared/ui/theme-switcher';
+import { ToastStack } from '../../shared/ui/toast-stack';
 
 import type { Metadata } from 'next';
 
@@ -41,6 +43,8 @@ export default function LoginPage() {
           </p>
         </div>
       </main>
+      <ToastStack />
+      <ConfirmSheet />
     </div>
   );
 }

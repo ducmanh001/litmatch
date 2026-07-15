@@ -1,6 +1,8 @@
 import Link from 'next/link';
 
 import { SoulChatPhaseView } from '../../../../../features/soul-match/components/soul-chat-phase-view';
+import { SoulCountdownBadge } from '../../../../../features/soul-match/components/soul-countdown-badge';
+import { ChevronLeftIcon } from '../../../../../shared/ui/icons';
 
 import type { Metadata } from 'next';
 
@@ -19,24 +21,10 @@ export default async function SoulMatchPage({
           href="/matching"
           className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 dark:bg-surf2"
         >
-          <svg
-            width={16}
-            height={16}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2.5}
-            aria-hidden
-          >
-            <path
-              d="M15 18l-6-6 6-6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <ChevronLeftIcon />
         </Link>
         <p className="text-sm font-bold">Soul Match</p>
-        <div className="h-9 w-9" />
+        <SoulCountdownBadge sessionId={sessionId} />
       </div>
       <SoulChatPhaseView sessionId={sessionId} />
     </section>

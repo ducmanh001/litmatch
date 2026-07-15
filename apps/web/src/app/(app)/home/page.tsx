@@ -5,10 +5,8 @@ import Link from 'next/link';
 import { useCurrentUser } from '../../../shared/auth/use-current-user';
 import {
   DiamondIcon,
-  DiscoveryIcon,
   MatchIcon,
   MicIcon,
-  PartyIcon,
   ProfileIcon,
 } from '../../../shared/ui/icons';
 import { useRoomList } from '../../../features/party-room/api';
@@ -53,34 +51,61 @@ function PalmIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+function BellIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      width={16}
+      height={16}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 01-3.46 0" />
+    </svg>
+  );
+}
+
 const MODES = [
   {
     title: 'Soul Match',
     description: 'Chat ẩn danh 2-3 phút',
     Icon: MatchIcon,
     href: '/matching',
-    highlight: true,
+    cardClassName:
+      'bg-gradient-to-br from-irisl to-irisl text-white shadow-lg shadow-iris/25',
+    iconClassName: '',
   },
   {
     title: 'Voice Match',
     description: 'Nghe giọng ~7 phút',
     Icon: MicIcon,
     href: '/matching',
-    highlight: false,
+    cardClassName:
+      'border border-black/5 bg-white dark:border-white/5 dark:bg-surf',
+    iconClassName: 'text-irisl',
   },
   {
     title: 'Movie Match',
-    description: 'Xem chung với bạn bè',
+    description: 'Xem chung, chat cùng lúc',
     Icon: MovieIcon,
     href: '/movie-match',
-    highlight: false,
+    cardClassName:
+      'border border-black/5 bg-white dark:border-white/5 dark:bg-surf',
+    iconClassName: 'text-aqua dark:text-aqual',
   },
   {
     title: 'Palm Match',
-    description: 'Bói vui theo chủ đề',
+    description: 'Bói vui tình yêu',
     Icon: PalmIcon,
     href: '/palm-match',
-    highlight: false,
+    cardClassName:
+      'bg-gradient-to-br from-aqual to-irisl text-white shadow-lg shadow-iris/25',
+    iconClassName: '',
   },
 ] as const;
 
@@ -148,87 +173,73 @@ export default function HomePage() {
             <p className="text-sm font-bold">{user?.nickname ?? '…'}</p>
           </div>
         </div>
-        <Link
-          href="/wallet"
-          className="flex items-center gap-1 rounded-full bg-diamond/15 px-3 py-2 text-xs font-extrabold text-sky-600 dark:text-diamond"
-        >
-          <DiamondIcon /> {wallet?.balance ?? 0}
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/wallet"
+            className="flex items-center gap-1 rounded-full bg-diamond/15 px-3 py-2 text-xs font-extrabold text-sky-600 dark:text-diamond"
+          >
+            <DiamondIcon /> {wallet?.balance ?? 0}
+          </Link>
+          <button
+            type="button"
+            aria-label="Thông báo"
+            className="relative flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 dark:bg-surf2"
+          >
+            <BellIcon />
+            <span className="absolute right-2 top-1.5 h-1.5 w-1.5 rounded-full bg-rose-500" />
+          </button>
+        </div>
       </div>
 
       <div className="mb-6 px-5">
         <h2 className="mb-3 text-sm font-extrabold tracking-wide text-slate-500 dark:text-slate-400">
           GHÉP ĐÔI NGAY
         </h2>
-        <div className="grid grid-cols-2 gap-3">
-          {MODES.map(({ title, description, Icon, href, highlight }) => (
-            <Link
-              key={title}
-              href={href}
-              className={
-                highlight
-                  ? 'rounded-2xl bg-gradient-to-br from-irisl to-irisl p-4 text-white shadow-lg shadow-iris/25'
-                  : 'rounded-2xl border border-black/5 bg-white p-4 dark:border-white/5 dark:bg-surf'
-              }
-            >
-              <Icon
-                width={24}
-                height={24}
-                className={`mb-6 ${highlight ? '' : 'text-irisl'}`}
-              />
-              <p className="font-bold">{title}</p>
-              <p
-                className={`mt-0.5 text-xs ${highlight ? 'text-white/80' : 'text-slate-500 dark:text-slate-400'}`}
-              >
-                {description}
-              </p>
-            </Link>
-          ))}
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {MODES.map(
+            ({
+              title,
+              description,
+              Icon,
+              href,
+              cardClassName,
+              iconClassName,
+            }) => {
+              const isGradient = cardClassName.includes('gradient');
+              return (
+                <Link
+                  key={title}
+                  href={href}
+                  className={`rounded-2xl p-4 ${cardClassName}`}
+                >
+                  <Icon
+                    width={24}
+                    height={24}
+                    className={`mb-6 ${iconClassName}`}
+                  />
+                  <p className="font-bold">{title}</p>
+                  <p
+                    className={`mt-0.5 text-xs ${isGradient ? 'text-white/80' : 'text-slate-500 dark:text-slate-400'}`}
+                  >
+                    {description}
+                  </p>
+                </Link>
+              );
+            },
+          )}
         </div>
       </div>
 
       <div className="mb-4">
         <div className="mb-3 flex items-center justify-between px-5">
           <h2 className="text-sm font-extrabold tracking-wide text-slate-500 dark:text-slate-400">
-            PHÒNG ĐANG HOẠT ĐỘNG 🔥
+            PHÒNG ĐANG HOT 🔥
           </h2>
           <Link href="/party" className="text-xs font-bold text-irisl">
             Xem tất cả →
           </Link>
         </div>
         <TrendingRooms />
-      </div>
-
-      <div className="mx-5 mb-3 space-y-3">
-        <Link
-          href="/discovery"
-          className="flex items-center gap-4 rounded-2xl border border-black/5 bg-white p-4 dark:border-white/5 dark:bg-surf"
-        >
-          <DiscoveryIcon
-            width={24}
-            height={24}
-            className="shrink-0 text-irisl"
-          />
-          <div>
-            <p className="text-sm font-bold">Khám phá</p>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Duyệt hồ sơ quanh bạn theo tuổi, giới tính hoặc vị trí gần.
-            </p>
-          </div>
-        </Link>
-
-        <Link
-          href="/party"
-          className="flex items-center gap-4 rounded-2xl border border-black/5 bg-white p-4 dark:border-white/5 dark:bg-surf"
-        >
-          <PartyIcon width={24} height={24} className="shrink-0 text-irisl" />
-          <div>
-            <p className="text-sm font-bold">Tạo phòng của riêng bạn</p>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Mời bạn bè và người lạ cùng trò chuyện trong phòng voice.
-            </p>
-          </div>
-        </Link>
       </div>
     </div>
   );

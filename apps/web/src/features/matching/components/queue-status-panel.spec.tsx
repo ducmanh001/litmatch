@@ -82,7 +82,9 @@ describe('QueueStatusPanel', () => {
     await joinQueueAndReachTicket(ticketFixture({ status: 'queued' }));
 
     expect(await screen.findByText(/Đang tìm người ghép đôi/)).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Huỷ' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Huỷ tìm kiếm' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Ưu tiên/ })).toBeInTheDocument();
   });
 

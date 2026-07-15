@@ -5,7 +5,13 @@ import { isApiError } from '@litmatch/api-client';
 import { DiamondIcon } from '../../../shared/ui/icons';
 import { useWallet } from '../api';
 
-export function WalletBalance() {
+export function WalletBalance({
+  onTopUp,
+  onUpgradeVip,
+}: {
+  onTopUp?: () => void;
+  onUpgradeVip?: () => void;
+} = {}) {
   const wallet = useWallet();
 
   if (wallet.isPending) {
@@ -53,6 +59,22 @@ export function WalletBalance() {
             : ''}
         </p>
       )}
+      <div className="relative mt-5 flex gap-2">
+        <button
+          type="button"
+          onClick={onTopUp}
+          className="flex-1 rounded-full bg-white py-2.5 text-sm font-bold text-ink"
+        >
+          Nạp Diamond
+        </button>
+        <button
+          type="button"
+          onClick={onUpgradeVip}
+          className="flex-1 rounded-full bg-white/20 py-2.5 text-sm font-bold backdrop-blur"
+        >
+          Nâng cấp VIP
+        </button>
+      </div>
     </div>
   );
 }

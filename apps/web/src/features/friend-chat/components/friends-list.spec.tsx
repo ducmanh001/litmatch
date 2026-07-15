@@ -68,4 +68,28 @@ describe('FriendsList', () => {
       '/chat/u2',
     );
   });
+
+  it('bạn chưa từng nhắn tin — xếp vào "Match mới", không lặp ở "Hội thoại"', async () => {
+    const friends: FriendDto[] = [
+      {
+        profile: {
+          id: 'u3',
+          nickname: 'Bạn Mới',
+          gender: 'unknown',
+          avatarId: 'a2',
+        },
+        conversationId: 'conv-2',
+        friendSince: new Date().toISOString(),
+        lastMessageAt: null,
+      },
+    ];
+    vi.spyOn(apiClient, 'GET').mockResolvedValue({
+      data: { data: friends },
+    } as never);
+    renderList();
+
+    expect(await screen.findByText('Match mới')).toBeVisible();
+    expect(await screen.findByText('Bạn Mới')).toBeVisible();
+    expect(screen.queryByText('Hội thoại')).not.toBeInTheDocument();
+  });
 });

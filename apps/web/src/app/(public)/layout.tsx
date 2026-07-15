@@ -1,7 +1,9 @@
 import Link from 'next/link';
 
-import { ThemeSwitcher } from '../../shared/ui/theme-switcher';
+import { ConfirmSheet } from '../../shared/ui/confirm-sheet';
 import { LogoMark } from '../../shared/ui/icons';
+import { ThemeSwitcher } from '../../shared/ui/theme-switcher';
+import { ToastStack } from '../../shared/ui/toast-stack';
 
 import type { ReactNode } from 'react';
 
@@ -158,6 +160,8 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
       </footer>
+      <ToastStack />
+      <ConfirmSheet />
     </div>
   );
 }

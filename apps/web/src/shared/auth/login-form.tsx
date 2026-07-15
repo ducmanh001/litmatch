@@ -9,14 +9,19 @@ import {
 } from '@litmatch/common-dtos/pure';
 import { useMutation } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { apiClient, tokenStore } from '../api/client';
 
+import type { ClipboardEvent, KeyboardEvent } from 'react';
+
 /** Chỉ để giãn cách UX (giảm spam bấm) — rate-limit thật enforce ở server. */
 const RESEND_COOLDOWN_SECONDS = 30;
+const OTP_LENGTH = 6;
+/** Khoá localStorage lưu deviceId ổn định cho tài khoản khách (docs/06 § Auth guest). */
+const GUEST_DEVICE_ID_STORAGE_KEY = 'litmatch.guestDeviceId';
 
 const phoneSchema = z.object({
   // Input là số nội địa (0xxx hoặc bỏ số 0) — chuẩn hoá sang E.164 lúc submit (normalizeVnPhone).
@@ -28,6 +33,14 @@ const codeSchema = z.object({
 
 type PhoneForm = z.infer<typeof phoneSchema>;
 type CodeForm = z.infer<typeof codeSchema>;
+
+function getOrCreateGuestDeviceId(): string {
+  const existing = window.localStorage.getItem(GUEST_DEVICE_ID_STORAGE_KEY);
+  if (existing !== null && existing !== '') return existing;
+  const created = crypto.randomUUID();
+  window.localStorage.setItem(GUEST_DEVICE_ID_STORAGE_KEY, created);
+  return created;
+}
 
 const inputClass =
   'h-12 w-full rounded-xl bg-slate-100 px-4 text-sm placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-iris dark:bg-surf2';
@@ -47,6 +60,53 @@ export function LoginForm() {
   const phoneForm = useForm<PhoneForm>({ resolver: zodResolver(phoneSchema) });
   const codeForm = useForm<CodeForm>({ resolver: zodResolver(codeSchema) });
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [otpDigits, setOtpDigits] = useState<string[]>(() =>
+    Array(OTP_LENGTH).fill(''),
+  );
+  const otpInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+
+  useEffect(() => {
+    if (phase.step !== 'code') return;
+    setOtpDigits(Array(OTP_LENGTH).fill(''));
+    codeForm.setValue('code', '', { shouldValidate: false });
+    otpInputRefs.current[0]?.focus();
+  }, [phase]);
+
+  const setOtpDigit = (index: number, rawValue: string) => {
+    const digit = rawValue.replace(/[^0-9]/gu, '').slice(-1);
+    setOtpDigits((prev) => {
+      const next = [...prev];
+      next[index] = digit;
+      codeForm.setValue('code', next.join(''), { shouldValidate: false });
+      return next;
+    });
+    if (digit !== '' && index < OTP_LENGTH - 1) {
+      otpInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (
+    index: number,
+    event: KeyboardEvent<HTMLInputElement>,
+  ) => {
+    if (event.key === 'Backspace' && otpDigits[index] === '' && index > 0) {
+      otpInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (event: ClipboardEvent<HTMLInputElement>) => {
+    const pasted = event.clipboardData
+      .getData('text')
+      .replace(/[^0-9]/gu, '')
+      .slice(0, OTP_LENGTH);
+    if (pasted.length === 0) return;
+    event.preventDefault();
+    const next = Array(OTP_LENGTH).fill('');
+    for (let i = 0; i < pasted.length; i += 1) next[i] = pasted[i];
+    setOtpDigits(next);
+    codeForm.setValue('code', next.join(''), { shouldValidate: false });
+    otpInputRefs.current[Math.min(pasted.length, OTP_LENGTH - 1)]?.focus();
+  };
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -95,12 +155,48 @@ export function LoginForm() {
     },
   });
 
+  const guestLogin = useMutation({
+    mutationFn: async () => {
+      const deviceId = getOrCreateGuestDeviceId();
+      const res = await apiClient.POST('/api/v1/auth/guest', {
+        body: { deviceId },
+      });
+      return res.data?.data;
+    },
+    onSuccess: (tokens) => {
+      if (tokens === undefined) return;
+      tokenStore.setSession(tokens);
+      router.replace('/home');
+    },
+  });
+
   const errorOf = (error: unknown): string | undefined =>
     error === null
       ? undefined
       : isApiError(error)
         ? error.message
         : 'Có lỗi xảy ra, thử lại.';
+
+  const guestCta = (
+    <>
+      <div className="my-5 flex items-center gap-3">
+        <div className="h-px flex-1 bg-black/10 dark:bg-white/10" />
+      </div>
+      <button
+        type="button"
+        disabled={guestLogin.isPending}
+        onClick={() => guestLogin.mutate()}
+        className="block w-full text-center text-sm font-bold text-irisl disabled:opacity-50"
+      >
+        {guestLogin.isPending ? 'Đang vào…' : 'Dùng thử với tài khoản khách →'}
+      </button>
+      {errorOf(guestLogin.error) !== undefined && (
+        <p role="alert" className="mt-3 text-center text-sm text-destructive">
+          {errorOf(guestLogin.error)}
+        </p>
+      )}
+    </>
+  );
 
   if (phase.step === 'phone') {
     const message =
@@ -196,6 +292,7 @@ export function LoginForm() {
             </svg>
           </button>
         </div>
+        {guestCta}
       </form>
     );
   }
@@ -216,16 +313,26 @@ export function LoginForm() {
           {phase.phone}
         </span>
       </p>
-      <input
-        id="code"
-        inputMode="numeric"
-        autoComplete="one-time-code"
-        autoFocus
-        maxLength={6}
-        aria-label={`Mã OTP đã gửi tới ${phase.phone}`}
-        className={`${inputClass} mb-5 h-13 text-center text-lg font-bold tracking-[0.5em]`}
-        {...codeForm.register('code')}
-      />
+      <input type="hidden" {...codeForm.register('code')} />
+      <div className="mb-5 flex justify-between gap-2">
+        {otpDigits.map((digit, index) => (
+          <input
+            key={index}
+            ref={(el) => {
+              otpInputRefs.current[index] = el;
+            }}
+            inputMode="numeric"
+            autoComplete={index === 0 ? 'one-time-code' : 'off'}
+            maxLength={1}
+            aria-label={`Chữ số ${index + 1} trên 6 của mã OTP đã gửi tới ${phase.phone}`}
+            className="h-13 w-11 rounded-xl bg-slate-100 text-center text-lg font-bold outline-none focus:ring-2 focus:ring-iris dark:bg-surf2"
+            value={digit}
+            onChange={(e) => setOtpDigit(index, e.target.value)}
+            onKeyDown={(e) => handleOtpKeyDown(index, e)}
+            onPaste={handleOtpPaste}
+          />
+        ))}
+      </div>
       {message !== undefined && (
         <p role="alert" className="-mt-3 mb-4 text-sm text-destructive">
           {message}
@@ -264,6 +371,7 @@ export function LoginForm() {
           ← Đổi số điện thoại
         </button>
       </div>
+      {guestCta}
     </form>
   );
 }

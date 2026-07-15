@@ -3,34 +3,60 @@
 import Link from 'next/link';
 import { useState } from 'react';
 
+import { showToast } from '../../../shared/lib/toast-store';
+
 const VISIBILITY_SETTINGS = [
   {
     key: 'showOnlineStatus',
     label: 'Hiện trạng thái hoạt động',
     description: 'Người khác thấy chấm xanh khi bạn online',
     defaultOn: true,
+    onMessage: 'Đã bật hiện trạng thái hoạt động',
+    offMessage: 'Đã tắt hiện trạng thái hoạt động',
+    warnOnEnable: false,
   },
   {
     key: 'showDistance',
     label: 'Hiện khoảng cách',
     description: 'Hiện số km ước lượng ở Khám phá',
     defaultOn: true,
+    onMessage: 'Đã bật hiện khoảng cách',
+    offMessage: 'Đã tắt hiện khoảng cách',
+    warnOnEnable: false,
   },
   {
     key: 'searchableByPhone',
     label: 'Cho phép tìm qua số điện thoại',
     description: 'Người có số của bạn có thể tìm thấy hồ sơ',
     defaultOn: false,
+    onMessage: 'Đã bật tìm qua số điện thoại',
+    offMessage: 'Đã tắt tìm qua số điện thoại',
+    warnOnEnable: false,
   },
   {
     key: 'hideProfile',
     label: 'Ẩn hồ sơ tạm thời',
     description: 'Tạm ngưng xuất hiện ở Khám phá & Feed',
     defaultOn: false,
+    onMessage: 'Đã ẩn hồ sơ tạm thời',
+    offMessage: 'Đã hiện lại hồ sơ',
+    warnOnEnable: true,
   },
 ] as const;
 
-function Toggle({ defaultOn, label }: { defaultOn: boolean; label: string }) {
+function Toggle({
+  defaultOn,
+  label,
+  onMessage,
+  offMessage,
+  warnOnEnable,
+}: {
+  defaultOn: boolean;
+  label: string;
+  onMessage: string;
+  offMessage: string;
+  warnOnEnable?: boolean;
+}) {
   const [on, setOn] = useState(defaultOn);
   return (
     <button
@@ -38,7 +64,14 @@ function Toggle({ defaultOn, label }: { defaultOn: boolean; label: string }) {
       role="switch"
       aria-checked={on}
       aria-label={label}
-      onClick={() => setOn((v) => !v)}
+      onClick={() => {
+        const next = !on;
+        setOn(next);
+        showToast(
+          next ? onMessage : offMessage,
+          next && warnOnEnable ? 'warn' : 'default',
+        );
+      }}
       className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
         on ? 'bg-irisl' : 'bg-black/15 dark:bg-white/15'
       }`}
@@ -77,7 +110,13 @@ export default function PrivacyPage() {
                     {setting.description}
                   </p>
                 </div>
-                <Toggle defaultOn={setting.defaultOn} label={setting.label} />
+                <Toggle
+                  defaultOn={setting.defaultOn}
+                  label={setting.label}
+                  onMessage={setting.onMessage}
+                  offMessage={setting.offMessage}
+                  warnOnEnable={setting.warnOnEnable}
+                />
               </div>
             ))}
           </div>

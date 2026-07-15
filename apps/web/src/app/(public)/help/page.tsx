@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const FAQ = [
   {
@@ -14,27 +14,38 @@ const FAQ = [
       'Diamond dùng để tặng quà trong Party Room, ưu tiên ghép nhanh ở Soul/Voice Match, và đổi một số đặc quyền khác. Nạp thêm ở mục Ví.',
   },
   {
+    question: 'VIP có những đặc quyền gì?',
+    answer:
+      'VIP giúp ưu tiên ghép nhanh, xem được ai đã thích bạn, gọi Voice Match không giới hạn thời gian, và có huy hiệu riêng trên hồ sơ.',
+  },
+  {
     question: 'Làm sao báo cáo người dùng không phù hợp?',
     answer:
       'Vào Hồ sơ → Quyền riêng tư, chặn & báo cáo → Báo cáo một người dùng. Đội ngũ Litmatch sẽ xem xét trong thời gian sớm nhất.',
+  },
+  {
+    question: 'Đổi được ảnh đại diện bao nhiêu lần?',
+    answer:
+      'Không giới hạn số lần. Vào Hồ sơ → Chỉnh sửa Avatar & hồ sơ để cập nhật bất cứ lúc nào.',
   },
 ] as const;
 
 function FaqItem({
   question,
   answer,
-  defaultOpen,
+  open,
+  onToggle,
 }: {
   question: string;
   answer: string;
-  defaultOpen: boolean;
+  open: boolean;
+  onToggle: () => void;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
   return (
     <div>
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={onToggle}
         aria-expanded={open}
         className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left"
       >
@@ -54,11 +65,17 @@ function FaqItem({
           <path d="M9 18l6-6-6-6" />
         </svg>
       </button>
-      {open && (
-        <p className="px-4 pb-4 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
-          {answer}
-        </p>
-      )}
+      <div
+        className={`grid overflow-hidden transition-[grid-template-rows] duration-300 ease-out ${
+          open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+        }`}
+      >
+        <div className="overflow-hidden">
+          <p className="px-4 pb-4 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
+            {answer}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -67,6 +84,25 @@ function FaqItem({
 export default function HelpPage() {
   const [feedback, setFeedback] = useState('');
   const [sent, setSent] = useState(false);
+  const [search, setSearch] = useState('');
+  const [openQuestion, setOpenQuestion] = useState<string | null>(
+    FAQ[0].question,
+  );
+
+  useEffect(() => {
+    if (!sent) return;
+    const timeout = setTimeout(() => setSent(false), 2000);
+    return () => clearTimeout(timeout);
+  }, [sent]);
+
+  const query = search.trim().toLowerCase();
+  const filteredFaq = query
+    ? FAQ.filter(
+        (item) =>
+          item.question.toLowerCase().includes(query) ||
+          item.answer.toLowerCase().includes(query),
+      )
+    : FAQ;
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-xl px-5 py-10">
@@ -75,14 +111,40 @@ export default function HelpPage() {
       </h1>
 
       <div className="mb-6">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Tìm câu hỏi thường gặp..."
+          className="w-full rounded-full border border-black/5 bg-white px-4 py-3 text-sm outline-none focus:border-irisl dark:border-white/10 dark:bg-surf"
+        />
+      </div>
+
+      <div className="mb-6">
         <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">
           Câu hỏi thường gặp
         </p>
-        <div className="divide-y divide-black/5 overflow-hidden rounded-2xl border border-black/5 bg-white dark:divide-white/10 dark:border-white/10 dark:bg-surf">
-          {FAQ.map((item, index) => (
-            <FaqItem key={item.question} {...item} defaultOpen={index === 0} />
-          ))}
-        </div>
+        {filteredFaq.length > 0 ? (
+          <div className="divide-y divide-black/5 overflow-hidden rounded-2xl border border-black/5 bg-white dark:divide-white/10 dark:border-white/10 dark:bg-surf">
+            {filteredFaq.map((item) => (
+              <FaqItem
+                key={item.question}
+                question={item.question}
+                answer={item.answer}
+                open={openQuestion === item.question}
+                onToggle={() =>
+                  setOpenQuestion((current) =>
+                    current === item.question ? null : item.question,
+                  )
+                }
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-2xl border border-black/5 bg-white px-4 py-6 text-center text-sm text-slate-400 dark:border-white/10 dark:bg-surf dark:text-slate-500">
+            Không tìm thấy câu hỏi phù hợp.
+          </p>
+        )}
       </div>
 
       <div>

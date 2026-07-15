@@ -8,6 +8,10 @@ import { apiClient, tokenStore } from '../../../shared/api/client';
 
 import type { MyProfileDto } from '../../../shared/auth/use-current-user';
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: vi.fn() }),
+}));
+
 function renderView() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -38,7 +42,7 @@ describe('ProfileView', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Lỗi server');
   });
 
-  it('data — render form với giá trị hiện tại', async () => {
+  it('data — hiển thị nickname và menu cài đặt', async () => {
     const profile: MyProfileDto = {
       id: 'u1',
       nickname: 'Mưa Đêm',
@@ -53,8 +57,13 @@ describe('ProfileView', () => {
     } as never);
     renderView();
 
-    expect(await screen.findByLabelText('Biệt danh')).toHaveValue('Mưa Đêm');
-    expect(screen.getByLabelText('Ngày sinh')).toHaveValue('2000-01-31');
+    expect(await screen.findByText('Mưa Đêm')).toBeVisible();
+    expect(
+      screen.getByRole('link', { name: /Chỉnh sửa Avatar & hồ sơ/ }),
+    ).toHaveAttribute('href', '/profile/edit');
+    expect(
+      screen.getByRole('button', { name: 'Đăng xuất' }),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/Tài khoản khách/)).not.toBeInTheDocument();
   });
 

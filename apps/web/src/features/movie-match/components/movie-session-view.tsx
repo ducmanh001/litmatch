@@ -3,6 +3,7 @@
 import { isApiError } from '@litmatch/api-client';
 import { RealtimeEvents } from '@litmatch/common-dtos/pure';
 import { useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 import { useRealtimeEvent } from '../../../shared/realtime/use-realtime-event';
@@ -101,10 +102,31 @@ export function MovieSessionView({ sessionId }: { sessionId: string }) {
 
   if (s.status !== 'active') {
     return (
-      <div className="flex flex-col items-center gap-3 px-8 py-10 text-center">
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Phiên xem chung đã kết thúc.
+      <div className="flex flex-1 flex-col items-center justify-center px-8 py-10 text-center">
+        <div className="mb-5 text-5xl" aria-hidden>
+          👋
+        </div>
+        <h2 className="font-display mb-2 text-2xl font-semibold italic">
+          Phiên xem chung đã kết thúc
+        </h2>
+        <p className="mb-8 text-sm text-slate-500 dark:text-slate-400">
+          Bạn có thể bắt đầu xem chung video khác với bạn bè, hoặc quay lại
+          trang chủ.
         </p>
+        <div className="flex w-full flex-col gap-3">
+          <Link
+            href="/movie-match"
+            className="w-full rounded-full bg-gradient-to-br from-irisl to-aqual py-3 text-center text-sm font-bold text-white shadow-lg shadow-iris/30"
+          >
+            Xem phim khác
+          </Link>
+          <Link
+            href="/home"
+            className="w-full rounded-full border border-black/10 py-3 text-center text-sm font-bold dark:border-white/10"
+          >
+            Về trang chủ
+          </Link>
+        </div>
       </div>
     );
   }

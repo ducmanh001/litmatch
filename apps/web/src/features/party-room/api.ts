@@ -13,6 +13,7 @@ import type { ApiSchema } from '@litmatch/api-client';
 export type PartyRoomDto = ApiSchema<'PartyRoomDto'>;
 export type PartyRoomMemberDto = ApiSchema<'PartyRoomMemberDto'>;
 export type PartyRole = PartyRoomMemberDto['role'];
+export type GiftDto = ApiSchema<'GiftDto'>;
 
 const ROOM_LIST_PAGE_LIMIT = 20;
 
@@ -118,6 +119,40 @@ export function useChangeRole(roomId: string) {
       void queryClient.invalidateQueries({
         queryKey: partyRoomKeys.detail(roomId),
       });
+    },
+  });
+}
+
+/** Catalog quà công khai — dùng chung cho mọi phòng, không phụ thuộc roomId. */
+export function useGiftCatalog() {
+  return useQuery({
+    queryKey: ['gifts', 'catalog'] as const,
+    queryFn: async () => {
+      const res = await apiClient.GET('/api/v1/gifts');
+      return res.data?.data ?? [];
+    },
+  });
+}
+
+/** Tặng quà trong phòng — trừ DIA người tặng, cần Idempotency-Key theo intent (docs/05 § 5.10). */
+export function useSendGift(roomId: string) {
+  return useMutation({
+    mutationFn: async (input: {
+      giftId: string;
+      receiverUserId: string;
+      idempotencyKey: string;
+    }) => {
+      const res = await apiClient.POST('/api/v1/party/rooms/{roomId}/gifts', {
+        params: {
+          path: { roomId },
+          header: { 'Idempotency-Key': input.idempotencyKey },
+        },
+        body: {
+          giftId: input.giftId,
+          receiverUserId: input.receiverUserId,
+        },
+      });
+      return res.data?.data;
     },
   });
 }

@@ -215,3 +215,57 @@ body {
   background: linear-gradient(180deg, var(--color-irisl), var(--color-aqual));
   animation: wavebar 1s ease-in-out infinite;
 }
+
+/* Lật bài tay → cung hoàng đạo trong Palm Match demo — layouts/web/palm-match.html
+   (.flip-card/.flip-inner). */
+.flip-card {
+  perspective: 1000px;
+}
+.flip-inner {
+  position: relative;
+  transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1);
+  transform-style: preserve-3d;
+}
+.flip-card[data-flipped='true'] .flip-inner {
+  transform: rotateY(180deg);
+}
+.flip-front,
+.flip-back {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  border-radius: 1.25rem;
+}
+.flip-back {
+  transform: rotateY(180deg);
+}
+
+/* Thẻ độ hợp duyên bật vào — layouts/web/palm-match.html (.pop-in). */
+@keyframes popin {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.pop-in {
+  animation: popin 0.35s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+/* Toast trượt vào từ dưới — đúng lmToast() ở layouts/web/*.html. */
+@keyframes lm-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-lm-toast {
+  animation: lm-toast-in 0.2s ease both;
+}

@@ -9,7 +9,7 @@ import type { SoulVerdict } from '../api';
 
 const VERDICT_LABEL: Record<SoulVerdict, string> = {
   like: 'Thích',
-  boring: 'Nhạt nhẽo',
+  boring: 'Nhàm chán',
   rude: 'Thô lỗ',
 };
 
@@ -40,9 +40,12 @@ export function SoulRatingButtons({
 
   return (
     <div className="space-y-3 px-5 py-4">
-      <p className="text-sm font-bold text-slate-500 dark:text-slate-400">
-        Đánh giá đối phương
-      </p>
+      <div>
+        <p className="text-sm font-bold">Bạn thấy người này thế nào?</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Nếu cả hai cùng chọn &quot;Thích&quot;, hồ sơ thật sẽ được mở khoá.
+        </p>
+      </div>
       <div className="grid w-full grid-cols-3 gap-3">
         {VERDICT_ORDER.map((verdict) => (
           <button

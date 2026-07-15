@@ -3,6 +3,7 @@
 import { isApiError } from '@litmatch/api-client';
 
 import { useIdempotencyKey } from '../../../shared/idempotency/use-idempotency-key';
+import { showToast } from '../../../shared/lib/toast-store';
 import { DiamondIcon } from '../../../shared/ui/icons';
 import { useIapProducts, useVerifyIap } from '../api';
 
@@ -70,7 +71,14 @@ export function TopupPackages() {
                     productId: product.productId,
                     devTransactionId: key,
                   },
-                  { onSuccess: () => resetKey() },
+                  {
+                    onSuccess: () => {
+                      resetKey();
+                      // layouts/web/wallet.html: lmToast('Nạp thành công +N 💎 ...') sau khi
+                      // nạp thật thành công — dùng diamonds thật của gói vừa mua, không bịa số.
+                      showToast(`Nạp thành công +${product.diamonds} 💎`);
+                    },
+                  },
                 )
               }
               className="w-full rounded-2xl border border-black/5 bg-white p-4 text-left transition hover:border-diamond/50 disabled:opacity-50 dark:border-white/10 dark:bg-surf"

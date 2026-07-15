@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 
 import { useCreateComment } from '../api';
 import { createCommentSchema } from '../create-comment-schema';
+import { showToast } from '../../../shared/lib/toast-store';
 
 import type { CreateCommentForm } from '../create-comment-schema';
 
@@ -29,6 +30,7 @@ export function CommentComposer({ postId }: { postId: string }) {
       onSuccess: (commented) => {
         if (commented === undefined) return;
         form.reset();
+        showToast('Đã đăng bình luận');
       },
     });
   });

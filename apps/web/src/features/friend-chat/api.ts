@@ -103,3 +103,19 @@ export function useSendFriendMessage(conversationId: string) {
     },
   });
 }
+
+/**
+ * Chặn 1 user thật qua Safety module (POST /safety/blocks/:targetUserId, idempotent) — đúng
+ * flow "Chặn Linh?" ở chat.html. Không có mutation "unblock"/"report" nào khác dùng field
+ * này lúc viết; nếu 1 feature thứ 2 cần (vd trang riêng tư danh sách đã chặn), tách ra
+ * shared/api một khi có 2 nơi dùng thật.
+ */
+export function useBlockUser() {
+  return useMutation({
+    mutationFn: async (targetUserId: string) => {
+      await apiClient.POST('/api/v1/safety/blocks/{targetUserId}', {
+        params: { path: { targetUserId } },
+      });
+    },
+  });
+}

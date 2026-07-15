@@ -4,18 +4,24 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { isApiError } from '@litmatch/api-client';
 import { useForm } from 'react-hook-form';
 
+import { cn } from '../../../shared/lib/cn';
+import { showToast } from '../../../shared/lib/toast-store';
 import { useUpdateProfile } from '../api';
 import { updateProfileSchema } from '../update-profile-schema';
 
 import type { MyProfileDto } from '../../../shared/auth/use-current-user';
 import type { UpdateProfileForm } from '../update-profile-schema';
 
+/** `<form id>` cho phép nút "Lưu" ở header trang /profile/edit submit form này qua thuộc tính
+ * HTML `form=` dù nằm ngoài cây DOM của `<form>` — không cần lift state/mutation lên page. */
+export const PROFILE_FORM_ID = 'edit-profile-form';
+
 const GENDER_OPTIONS: Array<{ value: MyProfileDto['gender']; label: string }> =
   [
-    { value: 'unknown', label: 'Không muốn nói' },
-    { value: 'male', label: 'Nam' },
     { value: 'female', label: 'Nữ' },
+    { value: 'male', label: 'Nam' },
     { value: 'other', label: 'Khác' },
+    { value: 'unknown', label: 'Không muốn nói' },
   ];
 
 export function ProfileForm({ profile }: { profile: MyProfileDto }) {
@@ -41,12 +47,18 @@ export function ProfileForm({ profile }: { profile: MyProfileDto }) {
         : undefined);
 
   const onSubmit = form.handleSubmit((values) => {
-    updateProfile.mutate({
-      nickname: values.nickname,
-      gender: values.gender,
-      birthDate: values.birthDate === '' ? undefined : values.birthDate,
-      region: values.region === '' ? undefined : values.region,
-    });
+    updateProfile.mutate(
+      {
+        nickname: values.nickname,
+        gender: values.gender,
+        birthDate: values.birthDate === '' ? undefined : values.birthDate,
+        region: values.region === '' ? undefined : values.region,
+      },
+      {
+        // layouts/web/edit-profile.html: lmToast('Đã lưu thay đổi hồ sơ') sau khi lưu thành công.
+        onSuccess: () => showToast('Đã lưu thay đổi hồ sơ'),
+      },
+    );
   });
 
   const labelClass =
@@ -54,11 +66,18 @@ export function ProfileForm({ profile }: { profile: MyProfileDto }) {
   const inputClass =
     'h-12 w-full rounded-xl bg-slate-100 px-4 text-sm outline-none focus:ring-2 focus:ring-iris dark:bg-surf2';
 
+  const selectedGender = form.watch('gender');
+
   return (
-    <form className="space-y-5" onSubmit={onSubmit} noValidate>
+    <form
+      id={PROFILE_FORM_ID}
+      className="space-y-5"
+      onSubmit={onSubmit}
+      noValidate
+    >
       <div>
         <label htmlFor="nickname" className={labelClass}>
-          Biệt danh
+          Tên hiển thị
         </label>
         <input
           id="nickname"
@@ -66,19 +85,6 @@ export function ProfileForm({ profile }: { profile: MyProfileDto }) {
           className={inputClass}
           {...form.register('nickname')}
         />
-      </div>
-
-      <div>
-        <label htmlFor="gender" className={labelClass}>
-          Giới tính
-        </label>
-        <select id="gender" className={inputClass} {...form.register('gender')}>
-          {GENDER_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
       </div>
 
       <div>
@@ -91,6 +97,37 @@ export function ProfileForm({ profile }: { profile: MyProfileDto }) {
           className={inputClass}
           {...form.register('birthDate')}
         />
+      </div>
+
+      <div>
+        <span className={labelClass}>Giới tính</span>
+        <div
+          className="grid grid-cols-2 gap-2"
+          role="group"
+          aria-label="Giới tính"
+        >
+          {GENDER_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={selectedGender === option.value}
+              onClick={() =>
+                form.setValue('gender', option.value, {
+                  shouldValidate: true,
+                  shouldDirty: true,
+                })
+              }
+              className={cn(
+                'rounded-full border py-2.5 text-sm font-semibold',
+                selectedGender === option.value
+                  ? 'border-transparent bg-irisl text-white'
+                  : 'border-black/10 bg-transparent dark:border-white/10',
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div>

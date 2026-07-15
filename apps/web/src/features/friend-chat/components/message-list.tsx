@@ -48,18 +48,45 @@ export function MessageList({ conversationId }: { conversationId: string }) {
 
   return (
     <ul className="space-y-3">
-      {items.map((message) => (
-        <li
-          key={message.id}
-          className={
-            message.senderUserId === me?.id
-              ? 'ml-auto max-w-[75%] rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-sm text-primary-foreground'
-              : 'mr-auto max-w-[75%] rounded-2xl rounded-bl-md border border-black/5 bg-white px-4 py-2.5 text-sm dark:border-white/5 dark:bg-surf'
-          }
-        >
-          {message.content}
-        </li>
-      ))}
+      {items.map((message) => {
+        const isMine = message.senderUserId === me?.id;
+        return (
+          <li
+            key={message.id}
+            className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}
+          >
+            <div
+              className={
+                isMine
+                  ? 'max-w-[75%] rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-sm text-primary-foreground'
+                  : 'max-w-[75%] rounded-2xl rounded-bl-md border border-black/5 bg-white px-4 py-2.5 text-sm dark:border-white/5 dark:bg-surf'
+              }
+            >
+              {message.attachment != null && (
+                <div className="mb-2 flex h-32 w-full items-center justify-center rounded-xl bg-gradient-to-br from-white/25 to-white/5">
+                  <svg
+                    width={24}
+                    height={24}
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    opacity={0.8}
+                    aria-hidden
+                  >
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                </div>
+              )}
+              {message.content}
+            </div>
+            <span className="mt-1 px-1 text-[11px] text-slate-400 dark:text-slate-500">
+              {new Date(message.sentAt).toLocaleTimeString('vi-VN', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </span>
+          </li>
+        );
+      })}
     </ul>
   );
 }

@@ -7,6 +7,8 @@ import { RoomEvent, Track } from 'livekit-client';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
+import { confirmAction } from '../../../shared/lib/confirm-store';
+import { showToast } from '../../../shared/lib/toast-store';
 import { MicIcon } from '../../../shared/ui/icons';
 import { useRealtimeEvent } from '../../../shared/realtime/use-realtime-event';
 import { useCall, useEndCall, voiceMatchKeys } from '../api';
@@ -121,6 +123,20 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
     const next = !isMuted;
     void room.localParticipant.setMicrophoneEnabled(!next);
     setIsMuted(next);
+    showToast(next ? 'Đã tắt mic' : 'Đã bật mic');
+  };
+
+  const handleEndCall = (): void => {
+    void (async () => {
+      const confirmed = await confirmAction({
+        title: 'Kết thúc cuộc gọi?',
+        message:
+          'Cuộc gọi sẽ kết thúc ngay và bạn không thể tiếp tục trò chuyện với người này.',
+        actionLabel: 'Kết thúc cuộc gọi',
+        tone: 'danger',
+      });
+      if (confirmed) endCall.mutate();
+    })();
   };
 
   if (room === null) {
@@ -157,15 +173,31 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
 
   if (call.data?.status === 'ended') {
     const c = call.data;
+    const reasonLabel =
+      c.endReason !== null
+        ? (END_REASON_LABEL[c.endReason] ?? c.endReason)
+        : 'Cuộc gọi đã kết thúc';
     return (
-      <div className="flex flex-col items-center gap-2 px-8 py-16 text-center">
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          {c.endReason !== null
-            ? (END_REASON_LABEL[c.endReason] ?? c.endReason)
-            : 'Cuộc gọi đã kết thúc'}
-          {c.durationSeconds !== null && ` — ${c.durationSeconds}s`}
+      <div className="flex flex-col items-center px-8 pb-10 pt-6 text-center">
+        <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 dark:bg-surf2">
+          <EndCallIcon
+            width={26}
+            height={26}
+            className="text-slate-400 dark:text-slate-300"
+          />
+        </div>
+        <h2 className="font-display mb-2 text-2xl font-semibold italic">
+          {reasonLabel}
+        </h2>
+        <p className="mb-8 text-sm text-slate-500 dark:text-slate-400">
+          {c.durationSeconds !== null
+            ? `Đã trò chuyện ${c.durationSeconds}s`
+            : 'Không sao — thử một cuộc gọi khác nhé.'}
         </p>
-        <Link href="/home" className="text-sm font-bold text-irisl underline">
+        <Link
+          href="/home"
+          className="w-full rounded-full border border-black/10 py-3 text-center font-bold dark:border-white/10"
+        >
           Về trang chủ
         </Link>
       </div>
@@ -242,7 +274,7 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
           type="button"
           className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-500 shadow-lg shadow-rose-500/30 disabled:opacity-50"
           disabled={endCall.isPending}
-          onClick={() => endCall.mutate()}
+          onClick={handleEndCall}
         >
           <EndCallIcon width={22} height={22} className="text-white" />
           <span className="sr-only">

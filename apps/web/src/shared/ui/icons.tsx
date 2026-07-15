@@ -136,3 +136,30 @@ export function DiscoveryIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function VideoIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props} fill="none">
+      <rect x={3} y={4} width={18} height={16} rx={3} />
+      <path d="M10 9.5l5 2.5-5 2.5z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+/** Nút "quay lại" ở top bar full-screen (soul-match.html) — dùng chung cho matching + soul-chat. */
+export function ChevronLeftIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      width={16}
+      height={16}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.5}
+      aria-hidden
+      {...props}
+    >
+      <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}

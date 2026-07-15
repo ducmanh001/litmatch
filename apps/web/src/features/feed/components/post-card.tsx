@@ -1,7 +1,7 @@
 import Link from 'next/link';
 
 import { LikeButton } from './like-button';
-import { ProfileIcon } from '../../../shared/ui/icons';
+import { PostAuthorAvatar } from './post-author-avatar';
 
 import type { PostDto } from '../api';
 import type { SVGProps } from 'react';
@@ -29,12 +29,12 @@ export function PostCard({ post }: { post: PostDto }) {
   return (
     <article className="rounded-2xl border border-black/5 bg-white p-4 dark:border-white/5 dark:bg-surf">
       <div className="mb-3 flex items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surf2 text-white">
-          <ProfileIcon width={18} height={18} />
+        <PostAuthorAvatar seed={post.authorUserId} />
+        <div className="flex-1">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            {new Date(post.createdAt).toLocaleString('vi-VN')}
+          </p>
         </div>
-        <p className="text-[11px] text-slate-500 dark:text-slate-400">
-          {new Date(post.createdAt).toLocaleString('vi-VN')}
-        </p>
       </div>
       {post.content !== null && (
         <p className="mb-3 whitespace-pre-wrap text-sm leading-relaxed">
@@ -55,7 +55,7 @@ export function PostCard({ post }: { post: PostDto }) {
         <LikeButton postId={post.id} fallbackLikeCount={post.likeCount} />
         <Link
           href={`/feed/${post.id}`}
-          className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400"
+          className="flex items-center gap-1.5 text-slate-500 transition hover:text-irisl dark:text-slate-400"
         >
           <CommentIcon />
           <span className="text-xs font-semibold">

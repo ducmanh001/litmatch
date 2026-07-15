@@ -1,75 +1,132 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
 import { PalmReadingView } from './palm-reading-view';
-import { apiClient } from '../../../shared/api/client';
 
 function renderView() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <PalmReadingView />
-    </QueryClientProvider>,
-  );
+  return render(<PalmReadingView />);
 }
 
 describe('PalmReadingView', () => {
-  afterEach(() => vi.restoreAllMocks());
+  beforeEach(() => vi.useFakeTimers({ shouldAdvanceTime: true }));
+  afterEach(() => vi.useRealTimers());
 
-  it('chưa chọn category — hiện 4 lựa chọn, chưa gọi API', () => {
-    const get = vi.spyOn(apiClient, 'GET');
+  it('bắt đầu ở trạng thái đang tìm — chưa hiện lá bài', () => {
     renderView();
 
     expect(
-      screen.getByRole('button', { name: /Tình yêu/ }),
+      screen.getByText('Đang tìm người để bói cùng...'),
     ).toBeInTheDocument();
-    expect(get).not.toHaveBeenCalled();
-  });
-
-  it('chọn category — gọi đúng API kèm category, hiện nội dung thật', async () => {
-    const get = vi.spyOn(apiClient, 'GET').mockResolvedValue({
-      data: {
-        data: {
-          category: 'love',
-          content: 'Hôm nay là ngày tốt để làm quen ai đó mới.',
-          forDate: '2026-07-14',
-        },
-      },
-    } as never);
-
-    renderView();
-    const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: /Tình yêu/ }));
-
-    expect(get).toHaveBeenCalledWith(
-      '/api/v1/palm-match/reading',
-      expect.objectContaining({
-        params: { query: { category: 'love', targetName: undefined } },
-      }),
+    expect(screen.getByRole('link', { name: 'Huỷ tìm kiếm' })).toHaveAttribute(
+      'href',
+      '/home',
     );
-    expect(await screen.findByText(/Hôm nay là ngày tốt/)).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: /Lật bài/ }),
+    ).not.toBeInTheDocument();
   });
 
-  it('bấm "Xem chủ đề khác" — quay lại màn chọn category', async () => {
-    vi.spyOn(apiClient, 'GET').mockResolvedValue({
-      data: {
-        data: { category: 'love', content: 'Nội dung.', forDate: '2026-07-14' },
-      },
-    } as never);
-
+  it('sau vài giây tự chuyển sang màn lật bài với đúng 2 lá', async () => {
     renderView();
-    const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: /Tình yêu/ }));
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(
+      screen.getByRole('button', { name: 'Lật bài của bạn' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Lật bài của người ấy' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Xem duyên số' })).toBeDisabled();
+  });
+
+  it('lật đủ 2 lá mới bật được nút xem duyên số, rồi hiện % hợp duyên', async () => {
+    const user = userEvent.setup({
+      advanceTimers: (ms) => vi.advanceTimersByTime(ms),
+    });
+    renderView();
+    await vi.advanceTimersByTimeAsync(3000);
+
+    const cardMe = screen.getByRole('button', { name: 'Lật bài của bạn' });
+    const cardThem = screen.getByRole('button', {
+      name: 'Lật bài của người ấy',
+    });
+    const continueBtn = screen.getByRole('button', { name: 'Xem duyên số' });
+
+    await user.click(cardMe);
+    expect(continueBtn).toBeDisabled();
+
+    await user.click(cardThem);
+    expect(continueBtn).toBeEnabled();
+    expect(screen.getByText('Cả hai đã lộ bài rồi!')).toBeInTheDocument();
+
+    await user.click(continueBtn);
+
+    expect(screen.getByText('Độ hợp duyên')).toBeInTheDocument();
+    expect(screen.getByText(/^\d+%$/)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Để lần khác/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Thích/ })).toBeInTheDocument();
+  });
+
+  async function goToFortuneState(
+    user: ReturnType<typeof userEvent.setup>,
+  ): Promise<void> {
+    await vi.advanceTimersByTimeAsync(3000);
+    await user.click(screen.getByRole('button', { name: 'Lật bài của bạn' }));
     await user.click(
-      await screen.findByRole('button', { name: 'Xem chủ đề khác' }),
+      screen.getByRole('button', { name: 'Lật bài của người ấy' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Xem duyên số' }));
+  }
+
+  it('bấm "Thích" — hiện màn kết quả đã gửi lượt thích, có nút bói lại và về trang chủ', async () => {
+    const user = userEvent.setup({
+      advanceTimers: (ms) => vi.advanceTimersByTime(ms),
+    });
+    renderView();
+    await goToFortuneState(user);
+
+    await user.click(screen.getByRole('button', { name: /Thích/ }));
+
+    expect(screen.getByText('Đã gửi lượt thích!')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Bói với người khác' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Về trang chủ' })).toHaveAttribute(
+      'href',
+      '/home',
+    );
+  });
+
+  it('bấm "Để lần khác" — hiện màn đã bỏ qua', async () => {
+    const user = userEvent.setup({
+      advanceTimers: (ms) => vi.advanceTimersByTime(ms),
+    });
+    renderView();
+    await goToFortuneState(user);
+
+    await user.click(screen.getByRole('button', { name: /Để lần khác/ }));
+
+    expect(screen.getByText('Đã bỏ qua')).toBeInTheDocument();
+  });
+
+  it('bấm "Bói với người khác" ở màn kết quả — quay lại trạng thái đang tìm', async () => {
+    const user = userEvent.setup({
+      advanceTimers: (ms) => vi.advanceTimersByTime(ms),
+    });
+    renderView();
+    await goToFortuneState(user);
+    await user.click(screen.getByRole('button', { name: /Thích/ }));
+
+    await user.click(
+      screen.getByRole('button', { name: 'Bói với người khác' }),
     );
 
     expect(
-      screen.getByRole('button', { name: /Sự nghiệp/ }),
+      screen.getByText('Đang tìm người để bói cùng...'),
     ).toBeInTheDocument();
   });
 });
