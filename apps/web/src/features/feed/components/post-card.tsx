@@ -1,5 +1,6 @@
 import Link from 'next/link';
 
+import { formatRelativeTime } from '../../../shared/lib/format-relative-time';
 import { LikeButton } from './like-button';
 import { PostAuthorAvatar } from './post-author-avatar';
 
@@ -32,7 +33,7 @@ export function PostCard({ post }: { post: PostDto }) {
         <PostAuthorAvatar seed={post.authorUserId} />
         <div className="flex-1">
           <p className="text-[11px] text-slate-500 dark:text-slate-400">
-            {new Date(post.createdAt).toLocaleString('vi-VN')}
+            {formatRelativeTime(post.createdAt)}
           </p>
         </div>
       </div>

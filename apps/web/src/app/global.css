@@ -7,8 +7,9 @@
 /*
  * Design tokens của web (docs/13 § 13.9) — 1 nơi duy nhất khai màu/radius có ngữ nghĩa.
  * Đổi theme = đổi biến ở :root/.dark, không sửa className rải rác.
- * Bảng màu + font lấy đúng từ layouts/web/*.html (bản dựng UI tham khảo) — 2 theme: tối (mặc
- * định) và sáng, chuyển bằng class `dark` trên <html> (bỏ theme "cam" phụ trong mockup).
+ * Bảng màu + font lấy đúng từ layouts/web/*.html (bản dựng UI tham khảo). 3 mood màu (hồng mặc
+ * định/cam/trắng, ThemeSwitcher) đổi bằng `[data-theme]` trên <html> — độc lập với sáng/tối
+ * (class `dark`, chuyển bằng cùng ThemeSwitcher, xem khối --ink/--surf/--iris/--aqua bên dưới).
  */
 :root {
   --background: #fbf3ef; /* paper */
@@ -29,6 +30,30 @@
   --destructive-foreground: #fff1f2;
   --ring: #e8577c;
   --radius: 1rem;
+
+  /* Mood-color RGB triplet, đúng layouts/web/*.html — [data-theme='orange'] override bên dưới.
+     Dùng rgb(var(--x) / <alpha-value>) ở @theme inline để giữ được modifier độ trong suốt
+     (bg-iris/10...) qua Tailwind. */
+  --ink: 27 20 32;
+  --surf: 36 27 41;
+  --surf2: 74 46 69;
+  --paper-rgb: 251 243 239;
+  --iris: 232 87 124;
+  --irisl: 232 87 124;
+  --aqua: 242 166 90;
+  --aqual: 242 166 90;
+  --diamond-rgb: 79 195 217;
+}
+
+[data-theme='orange'] {
+  --ink: 16 11 9;
+  --surf: 29 22 19;
+  --surf2: 42 33 29;
+  --paper-rgb: 248 244 242;
+  --iris: 232 67 31;
+  --irisl: 255 90 54;
+  --aqua: 224 136 21;
+  --aqual: 245 164 40;
 }
 
 .dark {
@@ -62,16 +87,19 @@
   --radius-md: var(--radius);
 
   /* Tên màu y hệt layouts/web/*.html — cho phép copy class thẳng từ mockup (bg-surf,
-     text-irisl, bg-iris/10, from-irisl, ...) mà không cần dịch qua tên token ngữ nghĩa. */
-  --color-ink: #1b1420;
-  --color-surf: #241b29;
-  --color-surf2: #4a2e45;
-  --color-paper: #fbf3ef;
-  --color-iris: #e8577c;
-  --color-irisl: #e8577c;
-  --color-aqua: #f2a65a;
-  --color-aqual: #f2a65a;
-  --color-diamond: #4fc3d9;
+     text-irisl, bg-iris/10, from-irisl, ...) mà không cần dịch qua tên token ngữ nghĩa.
+     rgb(var(--x)) đọc từ :root/[data-theme='orange'] phía trên; Tailwind v4 tự color-mix() cho
+     modifier độ trong suốt (bg-iris/10) trên bất kỳ giá trị màu nào, không cần <alpha-value>
+     như cấu hình v3 ở mockup — đổi mood màu chỉ cần đổi biến RGB, không sửa lại bảng này. */
+  --color-ink: rgb(var(--ink));
+  --color-surf: rgb(var(--surf));
+  --color-surf2: rgb(var(--surf2));
+  --color-paper: rgb(var(--paper-rgb));
+  --color-iris: rgb(var(--iris));
+  --color-irisl: rgb(var(--irisl));
+  --color-aqua: rgb(var(--aqua));
+  --color-aqual: rgb(var(--aqual));
+  --color-diamond: rgb(var(--diamond-rgb));
 
   --font-display: var(--font-fraunces);
   --font-body: var(--font-be-vietnam-pro);

@@ -13,13 +13,19 @@ test('đăng nhập OTP, session sống sót qua reload, vào hàng đợi ghép
 }) => {
   await page.goto('/login');
 
-  const phone = '+8490' + String(Date.now()).slice(-7);
+  // #phone chỉ nhận phần nội địa (không có tiền tố +84 — badge quốc gia là span riêng, đúng
+  // layouts/web/login.html) — normalizeVnPhone() mới ghép +84 vào trước khi gửi lên server.
+  const phone = '90' + String(Date.now()).slice(-7);
   await page.locator('#phone').fill(phone);
   await page.getByRole('button', { name: 'Gửi mã OTP' }).click();
 
-  await page.locator('#code').waitFor();
+  // Ô nhập OTP là 6 input rời (mỗi ô 1 chữ số, đúng mockup) — không còn input ẩn #code.
+  const otpDigitInputs = page.locator('input[inputmode="numeric"]');
+  await otpDigitInputs.first().waitFor();
   const code = await waitForLatestOtpCode();
-  await page.locator('#code').fill(code);
+  for (const [index, digit] of [...code].entries()) {
+    await otpDigitInputs.nth(index).fill(digit);
+  }
   await page.getByRole('button', { name: 'Đăng nhập' }).click();
 
   await expect(page).toHaveURL(/\/home$/);

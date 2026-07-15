@@ -4,6 +4,7 @@ import { isApiError } from '@litmatch/api-client';
 import Link from 'next/link';
 
 import { useCurrentUser } from '../../../shared/auth/use-current-user';
+import { PlaceholderAvatar } from '../../../shared/ui/placeholder-avatar';
 import { ProfileForm, PROFILE_FORM_ID } from './profile-form';
 
 import type { SVGProps } from 'react';
@@ -92,12 +93,12 @@ export function EditProfileView() {
         <>
           <div className="mb-6 flex flex-col items-center">
             <div className="relative h-24 w-24">
-              <div
-                aria-hidden
-                className="flex h-24 w-24 items-center justify-center rounded-full border-4 border-paper bg-gradient-to-br from-irisl to-aqual text-3xl font-bold text-white dark:border-ink"
-              >
-                {profile.data.nickname.charAt(0).toUpperCase()}
-              </div>
+              <PlaceholderAvatar
+                seed={profile.data.id}
+                alt={profile.data.nickname}
+                size={96}
+                className="border-4 border-paper dark:border-ink"
+              />
               <button
                 type="button"
                 disabled

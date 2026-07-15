@@ -85,12 +85,7 @@ export function PostComposer() {
       noValidate
     >
       <div className="flex items-center gap-3">
-        <PostAuthorAvatar
-          seed={currentUser?.id ?? 'me'}
-          label={currentUser?.nickname}
-          size={9}
-          tone="bg-irisl"
-        />
+        <PostAuthorAvatar seed={currentUser?.id ?? 'me'} size={9} />
         <textarea
           aria-label="Nội dung bài viết"
           placeholder="Bạn đang nghĩ gì?"

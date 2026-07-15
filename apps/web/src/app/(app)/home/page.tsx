@@ -3,12 +3,8 @@
 import Link from 'next/link';
 
 import { useCurrentUser } from '../../../shared/auth/use-current-user';
-import {
-  DiamondIcon,
-  MatchIcon,
-  MicIcon,
-  ProfileIcon,
-} from '../../../shared/ui/icons';
+import { DiamondIcon, MatchIcon, MicIcon } from '../../../shared/ui/icons';
+import { PlaceholderAvatar } from '../../../shared/ui/placeholder-avatar';
 import { useRoomList } from '../../../features/party-room/api';
 import { useWallet } from '../../../features/wallet/api';
 
@@ -163,9 +159,11 @@ export default function HomePage() {
     <div>
       <div className="mb-6 flex items-center justify-between px-5">
         <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-iris/30 bg-slate-100 dark:bg-surf2">
-            <ProfileIcon width={22} height={22} className="text-slate-400" />
-          </span>
+          <PlaceholderAvatar
+            seed={user?.id ?? 'me'}
+            size={44}
+            className="border-2 border-iris/30"
+          />
           <div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Chào buổi tối 👋
