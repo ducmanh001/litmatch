@@ -24,6 +24,30 @@ const GENDER_OPTIONS: Array<{ value: MyProfileDto['gender']; label: string }> =
     { value: 'unknown', label: 'Không muốn nói' },
   ];
 
+/** Bộ tag gợi ý đúng edit-profile.html — tag user tự có từ trước vẫn hiện thêm bên dưới. */
+const INTEREST_SUGGESTIONS = [
+  'Du lịch',
+  'Cà phê',
+  'Indie',
+  'Đọc sách',
+  'Nấu ăn',
+  'Gym',
+  'Phim ảnh',
+  'Chụp ảnh',
+  'Thú cưng',
+] as const;
+
+const MAX_INTERESTS = 5;
+
+const SEEKING_OPTIONS: Array<{
+  value: NonNullable<MyProfileDto['seekingGender']>;
+  label: string;
+}> = [
+  { value: 'female', label: 'Nữ' },
+  { value: 'male', label: 'Nam' },
+  { value: 'any', label: 'Cả hai' },
+];
+
 export function ProfileForm({ profile }: { profile: MyProfileDto }) {
   const form = useForm<UpdateProfileForm>({
     resolver: zodResolver(updateProfileSchema),
@@ -32,6 +56,11 @@ export function ProfileForm({ profile }: { profile: MyProfileDto }) {
       gender: profile.gender,
       birthDate: profile.birthDate ?? '',
       region: profile.region ?? '',
+      interests: profile.interests ?? [],
+      seekingGender: profile.seekingGender ?? 'any',
+      // Mặc định 22–30 đúng edit-profile.html khi user chưa từng khai
+      seekingAgeMin: profile.seekingAgeMin ?? 22,
+      seekingAgeMax: profile.seekingAgeMax ?? 30,
     },
   });
   const updateProfile = useUpdateProfile();
@@ -40,6 +69,7 @@ export function ProfileForm({ profile }: { profile: MyProfileDto }) {
     form.formState.errors.nickname?.message ??
     form.formState.errors.birthDate?.message ??
     form.formState.errors.region?.message ??
+    form.formState.errors.interests?.message ??
     (isApiError(updateProfile.error)
       ? updateProfile.error.message
       : updateProfile.error != null
@@ -53,6 +83,10 @@ export function ProfileForm({ profile }: { profile: MyProfileDto }) {
         gender: values.gender,
         birthDate: values.birthDate === '' ? undefined : values.birthDate,
         region: values.region === '' ? undefined : values.region,
+        interests: values.interests,
+        seekingGender: values.seekingGender,
+        seekingAgeMin: values.seekingAgeMin,
+        seekingAgeMax: values.seekingAgeMax,
       },
       {
         // layouts/web/edit-profile.html: lmToast('Đã lưu thay đổi hồ sơ') sau khi lưu thành công.
@@ -67,6 +101,32 @@ export function ProfileForm({ profile }: { profile: MyProfileDto }) {
     'h-12 w-full rounded-xl bg-slate-100 px-4 text-sm outline-none focus:ring-2 focus:ring-iris dark:bg-surf2';
 
   const selectedGender = form.watch('gender');
+  const selectedInterests = form.watch('interests');
+  const seekingGender = form.watch('seekingGender');
+  const seekingAgeMin = form.watch('seekingAgeMin');
+  const seekingAgeMax = form.watch('seekingAgeMax');
+
+  // Tag đã lưu từ trước nhưng không thuộc bộ gợi ý vẫn phải hiện để bỏ chọn được
+  const interestChoices = [
+    ...INTEREST_SUGGESTIONS,
+    ...selectedInterests.filter(
+      (tag) => !(INTEREST_SUGGESTIONS as readonly string[]).includes(tag),
+    ),
+  ];
+
+  const toggleInterest = (tag: string) => {
+    const current = form.getValues('interests');
+    const next = current.includes(tag)
+      ? current.filter((item) => item !== tag)
+      : current.length < MAX_INTERESTS
+        ? [...current, tag]
+        : current;
+    if (next === current && !current.includes(tag)) {
+      showToast(`Chỉ chọn tối đa ${MAX_INTERESTS} sở thích`, 'warn');
+      return;
+    }
+    form.setValue('interests', next, { shouldDirty: true });
+  };
 
   return (
     <form
@@ -141,6 +201,111 @@ export function ProfileForm({ profile }: { profile: MyProfileDto }) {
           className={`${inputClass} uppercase`}
           {...form.register('region')}
         />
+      </div>
+
+      <div>
+        <span className={labelClass}>
+          Sở thích{' '}
+          <span className="font-normal normal-case">
+            (chọn tối đa {MAX_INTERESTS})
+          </span>
+        </span>
+        <div
+          className="flex flex-wrap gap-2"
+          role="group"
+          aria-label="Sở thích"
+        >
+          {interestChoices.map((tag) => {
+            const active = selectedInterests.includes(tag);
+            return (
+              <button
+                key={tag}
+                type="button"
+                aria-pressed={active}
+                onClick={() => toggleInterest(tag)}
+                className={cn(
+                  'rounded-full border px-3.5 py-2 text-xs font-semibold',
+                  active
+                    ? 'border-transparent bg-irisl text-white'
+                    : 'border-black/10 dark:border-white/10',
+                )}
+              >
+                {tag}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <span className={labelClass}>Đang tìm kiếm</span>
+        <div className="space-y-4 rounded-2xl border border-black/5 bg-white p-4 dark:border-white/10 dark:bg-surf">
+          <div>
+            <p className="mb-2 text-sm font-semibold">Giới tính quan tâm</p>
+            <div
+              className="flex gap-2"
+              role="group"
+              aria-label="Giới tính quan tâm"
+            >
+              {SEEKING_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={seekingGender === option.value}
+                  onClick={() =>
+                    form.setValue('seekingGender', option.value, {
+                      shouldDirty: true,
+                    })
+                  }
+                  className={cn(
+                    'flex-1 rounded-full border py-2 text-xs font-semibold',
+                    seekingGender === option.value
+                      ? 'border-transparent bg-irisl text-white'
+                      : 'border-black/10 dark:border-white/10',
+                  )}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 text-sm font-semibold">
+              Độ tuổi:{' '}
+              <span className="font-normal text-slate-500 dark:text-slate-400">
+                {seekingAgeMin} – {seekingAgeMax}
+              </span>
+            </p>
+            <input
+              type="range"
+              min={18}
+              max={45}
+              aria-label="Tuổi tối thiểu"
+              value={seekingAgeMin}
+              onChange={(event) => {
+                const value = Number(event.target.value);
+                form.setValue('seekingAgeMin', Math.min(value, seekingAgeMax), {
+                  shouldDirty: true,
+                });
+              }}
+              className="w-full accent-irisl"
+            />
+            <input
+              type="range"
+              min={18}
+              max={45}
+              aria-label="Tuổi tối đa"
+              value={seekingAgeMax}
+              onChange={(event) => {
+                const value = Number(event.target.value);
+                form.setValue('seekingAgeMax', Math.max(value, seekingAgeMin), {
+                  shouldDirty: true,
+                });
+              }}
+              className="-mt-1 w-full accent-irisl"
+            />
+          </div>
+        </div>
       </div>
 
       <button

@@ -2,9 +2,11 @@
 
 import { isApiError } from '@litmatch/api-client';
 import Link from 'next/link';
+import { useState } from 'react';
 
 import { useCurrentUser } from '../../../shared/auth/use-current-user';
 import { PlaceholderAvatar } from '../../../shared/ui/placeholder-avatar';
+import { AvatarBuilder } from '../../avatar/components/avatar-builder';
 import { ProfileForm, PROFILE_FORM_ID } from './profile-form';
 
 import type { SVGProps } from 'react';
@@ -47,11 +49,11 @@ function PencilIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-/** /profile/edit — đúng layouts/web/litmatch-full/edit-profile.html. Đổi ảnh đại diện chưa có
- * endpoint upload thật (`MyProfileDto.avatarId` chỉ phục vụ hệ avatar layer/equip riêng, không
- * phải upload ảnh) — affordance để "sắp có", không bịa luồng upload. */
+/** /profile/edit — đúng layouts/web/edit-profile.html. "Đổi ảnh đại diện" mở builder avatar
+ * multi-layer (module avatar backend: catalog/claim/buy/equip) — không phải upload ảnh file. */
 export function EditProfileView() {
   const profile = useCurrentUser();
+  const [builderOpen, setBuilderOpen] = useState(false);
 
   return (
     <div>
@@ -101,21 +103,29 @@ export function EditProfileView() {
               />
               <button
                 type="button"
-                disabled
-                aria-label="Đổi ảnh đại diện (sắp có)"
-                className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full border-2 border-paper bg-irisl text-white opacity-50 dark:border-ink"
+                aria-label="Đổi ảnh đại diện"
+                aria-expanded={builderOpen}
+                onClick={() => setBuilderOpen((open) => !open)}
+                className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full border-2 border-paper bg-irisl text-white dark:border-ink"
               >
                 <PencilIcon />
               </button>
             </div>
             <button
               type="button"
-              disabled
-              className="mt-3 text-sm font-bold text-irisl opacity-50"
+              aria-expanded={builderOpen}
+              onClick={() => setBuilderOpen((open) => !open)}
+              className="mt-3 text-sm font-bold text-irisl"
             >
-              Đổi ảnh đại diện (sắp có)
+              Đổi ảnh đại diện
             </button>
           </div>
+
+          {builderOpen && (
+            <div className="mb-6 px-5">
+              <AvatarBuilder />
+            </div>
+          )}
 
           <div className="px-5 pb-10">
             <ProfileForm profile={profile.data} />

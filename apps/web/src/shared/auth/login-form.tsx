@@ -14,6 +14,9 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { apiClient, tokenStore } from '../api/client';
+import { env } from '../env';
+import { showToast } from '../lib/toast-store';
+import { getAppleIdToken, getGoogleIdToken } from './social-sdk';
 
 import type { ClipboardEvent, KeyboardEvent } from 'react';
 
@@ -47,7 +50,7 @@ const inputClass =
 const buttonClass =
   'h-12 w-full rounded-xl bg-gradient-to-br from-irisl to-irisl font-bold text-white shadow-lg shadow-iris/30 disabled:opacity-50 disabled:shadow-none';
 const socialButtonClass =
-  'flex items-center justify-center rounded-xl bg-slate-100 py-3 opacity-50 dark:bg-surf2';
+  'flex items-center justify-center rounded-xl bg-slate-100 py-3 transition hover:bg-slate-200 disabled:opacity-50 dark:bg-surf2 dark:hover:bg-surf2/70';
 
 export function LoginForm() {
   const router = useRouter();
@@ -170,6 +173,48 @@ export function LoginForm() {
     },
   });
 
+  // ID token lấy từ SDK chính chủ, server verify lại toàn bộ (POST /auth/social).
+  const socialLogin = useMutation({
+    mutationFn: async (provider: 'google' | 'apple') => {
+      const clientId =
+        provider === 'google'
+          ? env.NEXT_PUBLIC_AUTH_GOOGLE_CLIENT_ID
+          : env.NEXT_PUBLIC_AUTH_APPLE_CLIENT_ID;
+      if (clientId === undefined) {
+        throw new Error(
+          `Đăng nhập ${provider === 'google' ? 'Google' : 'Apple'} chưa được cấu hình trên môi trường này.`,
+        );
+      }
+      const idToken =
+        provider === 'google'
+          ? await getGoogleIdToken(clientId)
+          : await getAppleIdToken(clientId);
+      const res = await apiClient.POST('/api/v1/auth/social', {
+        body: { provider, idToken },
+      });
+      return res.data?.data;
+    },
+    onSuccess: (tokens) => {
+      if (tokens === undefined) return;
+      tokenStore.setSession(tokens);
+      router.replace('/home');
+    },
+    onError: (error) =>
+      showToast(
+        isApiError(error)
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : 'Có lỗi xảy ra, thử lại.',
+        'warn',
+      ),
+  });
+
+  // Backend chủ đích chưa hỗ trợ Facebook (access token, không phải OIDC — social-verifier.ts);
+  // nút vẫn theo mockup nhưng trạng thái "chưa hỗ trợ" phải nói rõ, không im lặng.
+  const onFacebookClick = () =>
+    showToast('Đăng nhập Facebook chưa được hỗ trợ.', 'warn');
+
   const errorOf = (error: unknown): string | undefined =>
     error === null
       ? undefined
@@ -251,8 +296,9 @@ export function LoginForm() {
         <div className="grid grid-cols-3 gap-3">
           <button
             type="button"
-            disabled
-            aria-label="Đăng nhập với Google (sắp có)"
+            disabled={socialLogin.isPending}
+            onClick={() => socialLogin.mutate('google')}
+            aria-label="Đăng nhập với Google"
             className={socialButtonClass}
           >
             <svg width={18} height={18} viewBox="0 0 24 24" aria-hidden>
@@ -264,8 +310,9 @@ export function LoginForm() {
           </button>
           <button
             type="button"
-            disabled
-            aria-label="Đăng nhập với Apple (sắp có)"
+            disabled={socialLogin.isPending}
+            onClick={() => socialLogin.mutate('apple')}
+            aria-label="Đăng nhập với Apple"
             className={socialButtonClass}
           >
             <svg
@@ -280,8 +327,8 @@ export function LoginForm() {
           </button>
           <button
             type="button"
-            disabled
-            aria-label="Đăng nhập với Facebook (sắp có)"
+            onClick={onFacebookClick}
+            aria-label="Đăng nhập với Facebook (chưa hỗ trợ)"
             className={socialButtonClass}
           >
             <svg width={18} height={18} viewBox="0 0 24 24" aria-hidden>

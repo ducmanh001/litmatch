@@ -9,7 +9,7 @@ const base = {
   viewBox: '0 0 24 24',
   fill: 'none',
   stroke: 'currentColor',
-  strokeWidth: 2,
+  strokeWidth: 1.8,
   strokeLinecap: 'round' as const,
   strokeLinejoin: 'round' as const,
 };
@@ -33,7 +33,8 @@ export function LogoMark(props: SVGProps<SVGSVGElement>) {
 export function HomeIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
-      <path d="M12 3l9 8h-3v9h-5v-6H11v6H6v-9H3z" />
+      <path d="M3 11.5 12 4l9 7.5" />
+      <path d="M5.5 10v9a1 1 0 0 0 1 1H9a1 1 0 0 0 1-1v-4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v4a1 1 0 0 0 1 1h2.5a1 1 0 0 0 1-1v-9" />
     </svg>
   );
 }
@@ -41,8 +42,9 @@ export function HomeIcon(props: IconProps) {
 export function FeedIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
-      <rect x={3} y={3} width={18} height={18} rx={4} />
-      <path d="M8 13l3 3 5-6" />
+      <rect x={3.5} y={4.3} width={6} height={6} rx={1.4} />
+      <rect x={3.5} y={13.7} width={6} height={6} rx={1.4} />
+      <path d="M12.7 6.3h7.8M12.7 9.7h7.8M12.7 15.7h7.8M12.7 19.1h7.8" />
     </svg>
   );
 }
@@ -50,7 +52,7 @@ export function FeedIcon(props: IconProps) {
 export function MatchIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
-      <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" />
+      <path d="M4 5.8A2.8 2.8 0 0 1 6.8 3h10.4A2.8 2.8 0 0 1 20 5.8v7.4a2.8 2.8 0 0 1-2.8 2.8H10l-4.6 3.6v-3.6H6.8A2.8 2.8 0 0 1 4 13.2V5.8Z" />
     </svg>
   );
 }
@@ -58,9 +60,8 @@ export function MatchIcon(props: IconProps) {
 export function FriendsIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
-      <circle cx={9} cy={8} r={4} />
-      <path d="M2 21c0-4 3.5-6 7-6s7 2 7 6" />
-      <path d="M15 9h5M17.5 6.5v5" />
+      <rect x={3} y={5.5} width={18} height={13} rx={2.4} />
+      <path d="m4 7.2 8 5.8 8-5.8" />
     </svg>
   );
 }
@@ -68,9 +69,10 @@ export function FriendsIcon(props: IconProps) {
 export function PartyIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
-      <circle cx={9} cy={7} r={3} />
-      <circle cx={17} cy={8} r={2.5} />
-      <path d="M2 21v-1a6 6 0 016-6h1a6 6 0 016 6v1M16 14a5 5 0 015 5v2" />
+      <circle cx={9} cy={8} r={3} />
+      <path d="M3.4 20c0-3.3 2.5-5.4 5.6-5.4S14.6 16.7 14.6 20" />
+      <circle cx={17.2} cy={9} r={2.3} />
+      <path d="M15.9 14.3c2.3.35 4 2.2 4 5.2" />
     </svg>
   );
 }
@@ -97,8 +99,8 @@ export function WalletIcon(props: IconProps) {
 export function ProfileIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
-      <circle cx={12} cy={8} r={4} />
-      <path d="M4 21c0-4 4-6 8-6s8 2 8 6" />
+      <circle cx={12} cy={8.2} r={3.6} />
+      <path d="M4.5 20c0-4 3.4-6.6 7.5-6.6s7.5 2.6 7.5 6.6" />
     </svg>
   );
 }
@@ -131,22 +133,42 @@ export function LogoutIcon(props: IconProps) {
 export function DiscoveryIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
-      <circle cx={11} cy={11} r={7} />
-      <path d="M21 21l-4.35-4.35" />
+      <path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21Z" />
+      <circle cx={12} cy={9.5} r={2.4} />
+    </svg>
+  );
+}
+
+/** Icon "tìm kiếm" thuần (kính lúp) — dùng khi nội dung thực sự là hành động tìm/lọc, khác
+ * DiscoveryIcon (ghim vị trí, dùng cho khái niệm Quanh đây/Khám phá). */
+export function SearchIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx={10.6} cy={10.6} r={6.4} />
+      <path d="m20 20-4.7-4.7" />
     </svg>
   );
 }
 
 export function VideoIcon(props: IconProps) {
   return (
-    <svg {...base} {...props} fill="none">
-      <rect x={3} y={4} width={18} height={16} rx={3} />
-      <path d="M10 9.5l5 2.5-5 2.5z" fill="currentColor" stroke="none" />
+    <svg {...base} {...props}>
+      <rect x={3} y={6} width={13} height={12} rx={2.6} />
+      <path d="m21 8.5-5 3 5 3v-6Z" />
     </svg>
   );
 }
 
 /** Nút "quay lại" ở top bar full-screen (soul-match.html) — dùng chung cho matching + soul-chat. */
+export function BellIcon(props: IconProps) {
+  return (
+    <svg {...base} aria-hidden {...props}>
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  );
+}
+
 export function ChevronLeftIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg
@@ -160,6 +182,51 @@ export function ChevronLeftIcon(props: SVGProps<SVGSVGElement>) {
       {...props}
     >
       <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function ChevronDownIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      width={12}
+      height={12}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.5}
+      aria-hidden
+      {...props}
+    >
+      <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** Toggle sáng/tối nhị phân ở header (docs/13 § 13.9) — độc lập với 3-mood ThemeSwitcher. */
+export function MoonIcon(props: IconProps) {
+  return (
+    <svg {...base} aria-hidden {...props}>
+      <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z" />
+    </svg>
+  );
+}
+
+export function SunIcon(props: IconProps) {
+  return (
+    <svg {...base} aria-hidden {...props}>
+      <circle cx={12} cy={12} r={4.2} />
+      <path d="M12 2.5v2.4M12 19.1v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7" />
+    </svg>
+  );
+}
+
+/** Nút chọn ngôn ngữ ở header — hiện tại chỉ UI placeholder (chưa có i18n thật). */
+export function GlobeIcon(props: IconProps) {
+  return (
+    <svg {...base} aria-hidden {...props}>
+      <circle cx={12} cy={12} r={8.5} />
+      <path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.3 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.3-3.6-8.5S9.6 5.8 12 3.5Z" />
     </svg>
   );
 }

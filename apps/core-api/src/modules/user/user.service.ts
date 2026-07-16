@@ -1,9 +1,9 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { buildCursorPage } from '@litmatch/common-dtos';
+import { buildCursorPage, Roles } from '@litmatch/common-dtos';
 import { DomainException } from '@litmatch/common-exceptions';
-import { EntityManager, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 
 import { UserErrors } from './user.errors';
 import { Gender, User, UserStatus } from './entities/user.entity';
@@ -27,6 +27,12 @@ export interface UserPageFilter {
 export interface UserPage {
   items: User[];
   total: number;
+}
+
+export interface AdminUserStats {
+  activeUsers: number;
+  newUsersToday: number;
+  newUsersPreviousDay: number;
 }
 
 /** Tiêu chí duyệt user chủ động (Discovery browse, docs/services/discovery-service.md § 2). */
@@ -88,6 +94,95 @@ export class UserService {
       );
     }
     return user;
+  }
+
+  /**
+   * Batch read cho các DTO composition ở module khác (Friend/Matching/Discovery). Giữ query user
+   * ở đúng module sở hữu thay vì để caller import repository/entity nội bộ và tránh N+1.
+   */
+  async findByIds(ids: readonly string[]): Promise<User[]> {
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length === 0) return [];
+    return this.userRepo.find({ where: { id: In(uniqueIds) } });
+  }
+
+  /** Recipient composition cho admin broadcast; banned không bao giờ nhận thông báo mới. */
+  async listActiveUserIds(): Promise<string[]> {
+    const users = await this.userRepo.find({
+      select: { id: true },
+      where: { status: UserStatus.Active },
+    });
+    return users.map((user) => user.id);
+  }
+
+  async listStaff(): Promise<User[]> {
+    return this.userRepo.find({
+      where: { role: In([Roles.Moderator, Roles.Admin]) },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  async getAdminStats(now = new Date()): Promise<AdminUserStats> {
+    const today = new Date(now);
+    today.setUTCHours(0, 0, 0, 0);
+    const previousDay = new Date(today.getTime() - 86_400_000);
+    const [activeUsers, newUsersToday, newUsersPreviousDay] = await Promise.all(
+      [
+        this.userRepo.countBy({ status: UserStatus.Active }),
+        this.userRepo
+          .createQueryBuilder('u')
+          .where('u.createdAt >= :today', { today })
+          .getCount(),
+        this.userRepo
+          .createQueryBuilder('u')
+          .where('u.createdAt >= :previousDay AND u.createdAt < :today', {
+            previousDay,
+            today,
+          })
+          .getCount(),
+      ],
+    );
+    return { activeUsers, newUsersToday, newUsersPreviousDay };
+  }
+
+  /**
+   * Khoá toàn bộ admin hiện tại + target trong cùng transaction để hai request demote song song
+   * không cùng thấy "vẫn còn admin khác" rồi hạ cả hai.
+   */
+  async lockRoleAssignmentContext(
+    manager: EntityManager,
+    targetUserId: string,
+  ): Promise<{ target: User; adminCount: number }> {
+    const users = await manager
+      .getRepository(User)
+      .createQueryBuilder('u')
+      .where('u.role = :admin OR u.id = :targetUserId', {
+        admin: Roles.Admin,
+        targetUserId,
+      })
+      .setLock('pessimistic_write')
+      .getMany();
+    const target = users.find((user) => user.id === targetUserId);
+    if (!target) {
+      throw new DomainException(
+        UserErrors.PROFILE_NOT_FOUND,
+        'Không tìm thấy user',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    return {
+      target,
+      adminCount: users.filter((user) => user.role === Roles.Admin).length,
+    };
+  }
+
+  async setRoleWithManager(
+    manager: EntityManager,
+    user: User,
+    role: Role,
+  ): Promise<User> {
+    user.role = role;
+    return manager.getRepository(User).save(user);
   }
 
   /** Admin Users List (docs/12 § 12.7) — offset OK vì list nhỏ, không phải lịch sử vô hạn (docs/05 § 5.4). */
@@ -170,6 +265,28 @@ export class UserService {
     if (dto.nickname !== undefined) user.nickname = dto.nickname;
     if (dto.gender !== undefined) user.gender = dto.gender;
     if (dto.region !== undefined) user.region = dto.region;
+    // Mảng rỗng = xoá hết tag (khác undefined = không đổi); trim từng tag, bỏ tag trống
+    if (dto.interests !== undefined) {
+      const cleaned = dto.interests
+        .map((tag) => tag.trim())
+        .filter((tag) => tag.length > 0);
+      user.interests = cleaned.length > 0 ? cleaned : null;
+    }
+    if (dto.seekingGender !== undefined) user.seekingGender = dto.seekingGender;
+    if (dto.seekingAgeMin !== undefined) user.seekingAgeMin = dto.seekingAgeMin;
+    if (dto.seekingAgeMax !== undefined) user.seekingAgeMax = dto.seekingAgeMax;
+    // Khoảng tuổi phải hợp lệ SAU khi gộp giá trị mới + cũ (gửi lẻ từng đầu vẫn bị bắt)
+    if (
+      user.seekingAgeMin !== null &&
+      user.seekingAgeMax !== null &&
+      user.seekingAgeMin > user.seekingAgeMax
+    ) {
+      throw new DomainException(
+        UserErrors.SEEKING_AGE_RANGE_INVALID,
+        'Tuổi tối thiểu không được lớn hơn tuổi tối đa',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
 
     return this.userRepo.save(user);
   }

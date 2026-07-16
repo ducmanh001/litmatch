@@ -5,6 +5,7 @@ import { vi } from 'vitest';
 
 import { LoginForm } from './login-form';
 import { apiClient } from '../api/client';
+import { ToastStack } from '../ui/toast-stack';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn() }),
@@ -17,6 +18,7 @@ function renderForm() {
   return render(
     <QueryClientProvider client={queryClient}>
       <LoginForm />
+      <ToastStack />
     </QueryClientProvider>,
   );
 }
@@ -81,5 +83,33 @@ describe('LoginForm', () => {
     });
 
     vi.useRealTimers();
+  });
+
+  it('social login chưa cấu hình client id → toast lỗi rõ ràng, KHÔNG gọi API', async () => {
+    const post = vi.spyOn(apiClient, 'POST');
+    renderForm();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Đăng nhập với Google' }),
+    );
+    expect(
+      await screen.findByText(
+        'Đăng nhập Google chưa được cấu hình trên môi trường này.',
+      ),
+    ).toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('Facebook → thông báo "chưa hỗ trợ" tường minh (backend chủ đích chưa nhận Facebook)', async () => {
+    renderForm();
+
+    await userEvent.click(
+      screen.getByRole('button', {
+        name: 'Đăng nhập với Facebook (chưa hỗ trợ)',
+      }),
+    );
+    expect(
+      await screen.findByText('Đăng nhập Facebook chưa được hỗ trợ.'),
+    ).toBeInTheDocument();
   });
 });

@@ -17,6 +17,13 @@ export enum UserStatus {
   Banned = 'banned',
 }
 
+/** "Đang tìm kiếm — giới tính quan tâm" (edit-profile.html) — khác Gender: có lựa chọn `any`. */
+export enum SeekingGender {
+  Male = 'male',
+  Female = 'female',
+  Any = 'any',
+}
+
 @Entity({ name: 'users' })
 export class User extends BaseAppEntity {
   @Column({ length: 50 })
@@ -33,6 +40,20 @@ export class User extends BaseAppEntity {
 
   @Column({ length: 64 })
   avatarId!: string;
+
+  /** Sở thích hiển thị công khai (edit-profile.html, tối đa PROFILE_MAX_INTERESTS) — NULL = chưa khai. */
+  @Column({ type: 'jsonb', nullable: true })
+  interests!: string[] | null;
+
+  /** Bộ "Đang tìm kiếm" — preference hồ sơ, KHÔNG phải tiêu chí ticket Matching (per-ticket riêng). */
+  @Column({ type: 'varchar', length: 8, nullable: true })
+  seekingGender!: SeekingGender | null;
+
+  @Column({ type: 'int', nullable: true })
+  seekingAgeMin!: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  seekingAgeMax!: number | null;
 
   /** Điểm tin cậy nội bộ cho matching priority (docs/06) — không expose ra API. */
   @Column({ type: 'int', default: 100 })

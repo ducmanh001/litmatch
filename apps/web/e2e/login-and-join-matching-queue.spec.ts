@@ -36,7 +36,7 @@ test('đăng nhập OTP, session sống sót qua reload, vào hàng đợi ghép
   await page.goto('/matching');
   await expect(page.getByRole('heading', { name: 'Ghép đôi' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Tìm ghép đôi' }).click();
+  await page.getByRole('button', { name: 'Bắt đầu ghép đôi Tâm hồn' }).click();
 
   await expect(page.getByText('Đang tìm người ghép đôi')).toBeVisible();
 
