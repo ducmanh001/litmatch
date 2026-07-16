@@ -103,6 +103,10 @@ export interface CoreApiEnv {
   NOTIFICATION_PUSH_PROVIDER: 'dev' | 'fcm';
   MOVIE_MATCH_URL_MAX_LENGTH: number;
   MOVIE_MATCH_ALLOWED_VIDEO_HOSTS: string;
+  MOVIE_MATCH_ANON_VIDEO_URLS: string;
+  MOVIE_MATCH_ANON_DURATION_SECONDS: number;
+  MOVIE_MATCH_QUEUE_MAX_WAIT_SECONDS: number;
+  MOVIE_MATCH_MESSAGE_MAX_LENGTH: number;
   PALM_MATCH_TARGET_NAME_MAX_LENGTH: number;
   PALM_MATCH_QUEUE_MAX_WAIT_SECONDS: number;
   PALM_MATCH_SESSION_DURATION_SECONDS: number;
@@ -356,6 +360,20 @@ export const coreApiEnvSchema = Joi.object({
   MOVIE_MATCH_URL_MAX_LENGTH: Joi.number().integer().min(1).default(2048),
   // Danh sách phân tách dấu phẩy — parse mảng ở service (không parse ở Joi cho đơn giản)
   MOVIE_MATCH_ALLOWED_VIDEO_HOSTS: Joi.string().default('youtube.com,youtu.be'),
+  // Flow ghép ẩn danh (movie-match.html): server chọn video từ danh sách này (phân tách dấu phẩy)
+  MOVIE_MATCH_ANON_VIDEO_URLS: Joi.string().default(
+    'https://www.youtube.com/watch?v=aqz-KE-bpKQ,https://www.youtube.com/watch?v=eRsGyueVLvQ',
+  ),
+  // 18:00 đúng timer badge mockup
+  MOVIE_MATCH_ANON_DURATION_SECONDS: Joi.number()
+    .integer()
+    .min(60)
+    .default(1080),
+  MOVIE_MATCH_QUEUE_MAX_WAIT_SECONDS: Joi.number()
+    .integer()
+    .min(10)
+    .default(120),
+  MOVIE_MATCH_MESSAGE_MAX_LENGTH: Joi.number().integer().min(1).default(500),
 
   // Palm Match — Giai đoạn 5 (docs/services/palm-match-service.md § 5)
   PALM_MATCH_TARGET_NAME_MAX_LENGTH: Joi.number().integer().min(1).default(50),
