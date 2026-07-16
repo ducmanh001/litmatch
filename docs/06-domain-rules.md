@@ -3,6 +3,10 @@
 # 6. Domain Rules quan trọng (ghi rõ, đừng tự đoán)
 
 - 1 user chỉ ở trong **1 queue matching tại 1 thời điểm** (dù là Soul hay Voice).
+- **Matching phải phục hồi được sau reload bằng state server**: active ticket của chính user chỉ
+  gồm `queued|matched`, tra bằng `userId` từ auth và trả nullable; client không được giữ ticketId
+  local như nguồn sự thật. Giá speed-up hiển thị phải lấy từ `TicketDto.speedupPriceDiamond`,
+  cùng config server dùng để debit, không hard-code ở web/mobile.
 - Không match lại người vừa report/block trong X ngày gần nhất.
 - Free call có giới hạn thời gian (config được, mặc định giống Litmatch là ~7 phút cho voice, 2-3 phút cho Soul) — hết giờ free thì tự kết thúc hoặc chuyển sang tính phí nếu có cấu hình đó.
 - Diamond bị trừ theo **chu kỳ nhỏ** nếu tính phí theo phút, có logic hoàn tiền nếu lỗi hệ thống (không do user).
@@ -67,7 +71,9 @@
   (block có thể phát sinh sau khi mời) — chuyển invite sang `declined` và COMMIT trước khi throw
   lỗi (throw trong cùng transaction sẽ rollback luôn phần ghi `declined`, đã bắt qua test thật).
   Rate limit chống spam mời ĐỐI XỨNG cho mọi user, không hard-code phân biệt giới tính trong
-  logic. Chi tiết: [services/matching-service.md § 9](./services/matching-service.md#invite).
+  logic. Inbox re-check hidden-set ở mỗi lần đọc và DTO chỉ compose `PublicProfileDto` tối thiểu
+  của inviter để invitee có đủ thông tin đồng ý; không lộ ngày sinh/region/trust/status. Chi tiết:
+  [services/matching-service.md § 9](./services/matching-service.md#invite).
 - **Voice Match KHÔNG tạo Friendship** — chỉ Soul Match có cơ chế like/reveal 2 chiều dẫn tới
   Friendship; mời Voice Match (kể cả qua CTA invite) chỉ vào cuộc gọi tính phí theo phút, không
   có đường nào khác tạo Friendship từ Voice. Chi tiết:

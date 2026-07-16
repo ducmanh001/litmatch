@@ -226,6 +226,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/economy/vip/plans': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Catalog gói VIP đang bán (active) */
+    get: operations['EconomyController_listVipPlans'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/economy/iap/verify': {
     parameters: {
       query?: never;
@@ -288,6 +305,23 @@ export interface paths {
     put?: never;
     /** Vào hàng đợi matching — 409 nếu đã có ticket đang chờ/đang ghép */
     post: operations['MatchingController_joinQueue'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/matching/tickets/current': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Ticket active (queued/matched) của chính mình — phục hồi queue sau reload */
+    get: operations['MatchingController_getCurrentTicket'];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -588,6 +622,40 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/conversations/{id}/read': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Đánh dấu đã đọc tới hiện tại — idempotent, chỉ 2 thành viên */
+    post: operations['FriendController_markRead'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/conversations/{id}/mute': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Bật/tắt thông báo hội thoại — chỉ tắt kênh notification, message vẫn nhận */
+    post: operations['FriendController_setMuted'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/soul-match/sessions/{id}': {
     parameters: {
       query?: never;
@@ -823,6 +891,178 @@ export interface paths {
     /** Tặng quà trong phòng — trừ DIA người tặng + cộng PTS người nhận atomic; client chỉ bắn hiệu ứng sau khi nhận 200 */
     post: operations['GiftController_sendGift'];
     delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/videos/{videoId}/gifts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Tặng quà cho tác giả video — người nhận suy từ video; cùng chốt tiền/idempotency với quà trong phòng */
+    post: operations['GiftController_sendVideoGift'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/videos/upload-intent': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Xin URL upload presigned — body video KHÔNG gửi qua endpoint này, upload thẳng lên storage */
+    post: operations['ShortVideoController_createUploadIntent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/videos/{id}/finalize': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Báo đã upload xong — chuyển sang processing rồi transcode */
+    post: operations['ShortVideoController_finalizeUpload'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/videos': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Danh sách video published — sort=recent (default) | ranked; feed=following chỉ video của bạn bè */
+    get: operations['ShortVideoController_list'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/videos/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Chi tiết 1 video — tác giả xem được mọi status, người khác chỉ published */
+    get: operations['ShortVideoController_getVideo'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/videos/{id}/report': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Report video — vượt ngưỡng distinct reporter thì tự động ẩn (không đụng trust score cá nhân) */
+    post: operations['ShortVideoController_reportVideo'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/videos/{id}/views': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Ghi nhận watch-time — self-view không đếm */
+    post: operations['ShortVideoController_recordView'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/videos/{id}/reactions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Thả tim video */
+    post: operations['ShortVideoController_like'];
+    /** Bỏ tim video */
+    delete: operations['ShortVideoController_unlike'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/videos/{id}/comments': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Danh sách bình luận video */
+    get: operations['ShortVideoController_listComments'];
+    put?: never;
+    /** Bình luận video */
+    post: operations['ShortVideoController_createComment'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/videos/{id}/comments/{commentId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Xoá bình luận — tác giả comment hoặc tác giả video */
+    delete: operations['ShortVideoController_deleteComment'];
     options?: never;
     head?: never;
     patch?: never;
@@ -1207,6 +1447,127 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/movie-match/anon/queue': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Enqueue idempotent và thử ghép Movie Match ẩn danh */
+    post: operations['MovieMatchController_joinAnonQueue'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/movie-match/anon/current': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** State phục hồi/poll của queue/phiên ẩn danh */
+    get: operations['MovieMatchController_getAnonCurrent'];
+    put?: never;
+    post?: never;
+    /** Huỷ queue/phiên ẩn danh hoặc dismiss kết quả terminal */
+    delete: operations['MovieMatchController_dismissAnonCurrent'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/movie-match/anon/sessions/{id}/state': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Playback update phiên ẩn danh — chỉ khi đang xem */
+    patch: operations['MovieMatchController_updateAnonState'];
+    trace?: never;
+  };
+  '/api/v1/movie-match/anon/sessions/{id}/finish': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** "Kết thúc" phần xem chung — mở phase rating cho cả hai, idempotent */
+    post: operations['MovieMatchController_endAnonWatch'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/movie-match/anon/sessions/{id}/rating': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Chốt like/boring/rude một lần; mutual-like mở Friendship */
+    post: operations['MovieMatchController_rateAnon'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/movie-match/anon/sessions/{id}/messages': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List chat phiên ẩn danh (cursor theo seq) */
+    get: operations['MovieMatchController_listAnonMessages'];
+    put?: never;
+    /** Chat ẩn danh trong phiên — sender là vai trò tương đối */
+    post: operations['MovieMatchController_sendAnonMessage'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/movie-match/anon/sessions/{id}/reactions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Reaction emoji nổi trên video — realtime-only, không persist */
+    post: operations['MovieMatchController_sendAnonReaction'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/palm-match/reading': {
     parameters: {
       query?: never;
@@ -1218,6 +1579,75 @@ export interface paths {
     get: operations['PalmMatchController_getReading'];
     put?: never;
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/palm-match/queue': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Enqueue idempotent và thử ghép Palm Match ẩn danh */
+    post: operations['PalmMatchController_joinQueue'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/palm-match/current': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** State phục hồi/poll của queue hoặc session hiện tại */
+    get: operations['PalmMatchController_getCurrent'];
+    put?: never;
+    post?: never;
+    /** Huỷ queue/session active hoặc dismiss kết quả terminal */
+    delete: operations['PalmMatchController_dismissCurrent'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/palm-match/sessions/{id}/flip': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Lật lá của chính caller — idempotent */
+    post: operations['PalmMatchController_flip'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/palm-match/sessions/{id}/rating': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Chốt like/skip một lần; mutual-like mở Friendship */
+    post: operations['PalmMatchController_rate'];
     delete?: never;
     options?: never;
     head?: never;
@@ -1284,6 +1714,23 @@ export interface paths {
     };
     /** State hiện tại — poll fallback cho realtime; không lộ move đối phương trước khi resolved */
     get: operations['MiniGameController_getSession'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/dashboard': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Dashboard aggregate + audit activity từ dữ liệu thật */
+    get: operations['AdminController_getDashboard'];
     put?: never;
     post?: never;
     delete?: never;
@@ -1428,6 +1875,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/admin/videos/published': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Video đang published để moderator kiểm tra/gỡ — cursor pagination */
+    get: operations['AdminController_listPublishedVideos'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/admin/videos/{id}/approve': {
     parameters: {
       query?: never;
@@ -1477,6 +1941,74 @@ export interface paths {
     options?: never;
     head?: never;
     patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/rooms/{id}/close': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Kết thúc Party Room đang live — idempotent + audit log */
+    post: operations['AdminController_closeRoom'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/rooms': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Danh sách Party Room active + số member thực tế */
+    get: operations['AdminController_listRooms'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/support/tickets': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Danh sách yêu cầu hỗ trợ để moderator xử lý */
+    get: operations['AdminController_listSupportTickets'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/support/tickets/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Cập nhật trạng thái/phản hồi support — atomic audit log */
+    patch: operations['AdminController_updateSupportTicket'];
     trace?: never;
   };
   '/api/v1/admin/gifts': {
@@ -1565,49 +2097,15 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/api/v1/videos/upload-intent': {
+  '/api/v1/admin/config/economy-catalog': {
     parameters: {
       query?: never;
       header?: never;
       path?: never;
       cookie?: never;
     };
-    get?: never;
-    put?: never;
-    /** Xin URL upload presigned — body video KHÔNG gửi qua endpoint này, upload thẳng lên storage */
-    post: operations['ShortVideoController_createUploadIntent'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/videos/{id}/finalize': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Báo đã upload xong — chuyển sang processing rồi transcode */
-    post: operations['ShortVideoController_finalizeUpload'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/videos': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** Danh sách video published — sort=recent (default) | ranked */
-    get: operations['ShortVideoController_list'];
+    /** Catalog IAP/VIP gồm cả item inactive — chỉ admin */
+    get: operations['AdminController_getEconomyCatalog'];
     put?: never;
     post?: never;
     delete?: never;
@@ -1616,94 +2114,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/api/v1/videos/{id}': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** Chi tiết 1 video — tác giả xem được mọi status, người khác chỉ published */
-    get: operations['ShortVideoController_getVideo'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/videos/{id}/report': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Report video — vượt ngưỡng distinct reporter thì tự động ẩn (không đụng trust score cá nhân) */
-    post: operations['ShortVideoController_reportVideo'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/videos/{id}/views': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Ghi nhận watch-time — self-view không đếm */
-    post: operations['ShortVideoController_recordView'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/videos/{id}/reactions': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Thả tim video */
-    post: operations['ShortVideoController_like'];
-    /** Bỏ tim video */
-    delete: operations['ShortVideoController_unlike'];
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/videos/{id}/comments': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** Danh sách bình luận video */
-    get: operations['ShortVideoController_listComments'];
-    put?: never;
-    /** Bình luận video */
-    post: operations['ShortVideoController_createComment'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/videos/{id}/comments/{commentId}': {
+  '/api/v1/admin/config/iap-products/{productId}': {
     parameters: {
       query?: never;
       header?: never;
@@ -1713,8 +2124,144 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
-    /** Xoá bình luận — tác giả comment hoặc tác giả video */
-    delete: operations['ShortVideoController_deleteComment'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Bật/tắt IAP product — chỉ admin, có audit */
+    patch: operations['AdminController_setIapProductActive'];
+    trace?: never;
+  };
+  '/api/v1/admin/config/vip-plans/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Bật/tắt VIP plan — chỉ admin, có audit */
+    patch: operations['AdminController_setVipPlanActive'];
+    trace?: never;
+  };
+  '/api/v1/admin/notifications/broadcast': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Gửi thông báo in-app + push best-effort theo audience — chỉ admin */
+    post: operations['AdminController_broadcastNotification'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/permissions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Ma trận quyền role moderator/admin đang enforce thật */
+    get: operations['AdminController_getPermissionMatrix'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/permissions/{role}/{permission}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Bật/tắt quyền của role — có audit */
+    patch: operations['AdminController_setRolePermission'];
+    trace?: never;
+  };
+  '/api/v1/admin/staff': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Danh sách user có role moderator/admin */
+    get: operations['AdminController_listStaff'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/staff/{id}/role': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Đổi/thu hồi role staff — có audit và chặn last-admin */
+    patch: operations['AdminController_setStaffRole'];
+    trace?: never;
+  };
+  '/api/v1/support/tickets': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Gửi phản hồi/yêu cầu hỗ trợ — idempotent */
+    post: operations['SupportController_create'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/support/tickets/me': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Theo dõi các yêu cầu hỗ trợ của chính mình */
+    get: operations['SupportController_listMine'];
+    put?: never;
+    post?: never;
+    delete?: never;
     options?: never;
     head?: never;
     patch?: never;
@@ -1870,6 +2417,11 @@ export interface components {
       region: string | null;
       avatarId: string;
       isGuest: boolean;
+      interests: string[] | null;
+      /** @enum {string|null} */
+      seekingGender?: 'male' | 'female' | 'any' | null;
+      seekingAgeMin: number | null;
+      seekingAgeMax: number | null;
     };
     UpdateProfileDto: {
       /** @example Mưa Đêm */
@@ -1886,6 +2438,18 @@ export interface components {
        * @example VN
        */
       region?: string;
+      /**
+       * @description Sở thích công khai — tối đa 5 tag; gửi mảng rỗng để xoá hết
+       * @example [
+       *       "Du lịch",
+       *       "Cà phê"
+       *     ]
+       */
+      interests?: string[];
+      /** @enum {string} */
+      seekingGender?: 'male' | 'female' | 'any';
+      seekingAgeMin?: number;
+      seekingAgeMax?: number;
     };
     PublicProfileDto: {
       id: string;
@@ -1893,6 +2457,7 @@ export interface components {
       /** @enum {string} */
       gender: 'unknown' | 'male' | 'female' | 'other';
       avatarId: string;
+      interests: string[] | null;
     };
     GuestLoginDto: {
       /**
@@ -1962,6 +2527,19 @@ export interface components {
        */
       diamonds: string;
     };
+    VipPlanDto: {
+      /** @example vip-30d */
+      id: string;
+      /** @enum {string} */
+      tier: 'vip' | 'svip';
+      /** @example 30 */
+      days: number;
+      /**
+       * @description Giá gói bằng diamond (bigint dạng chuỗi)
+       * @example 500
+       */
+      priceDiamond: string;
+    };
     VerifyIapDto: {
       /** @enum {string} */
       provider: 'apple' | 'google';
@@ -1975,6 +2553,14 @@ export interface components {
     PurchaseVipDto: {
       /** @example vip-30d */
       planId: string;
+    };
+    VipPurchaseResultDto: {
+      transactionId: string;
+      /** @enum {string} */
+      tier: 'vip' | 'svip';
+      /** Format: date-time */
+      vipExpiresAt: string;
+      replayed: boolean;
     };
     JoinQueueDto: {
       /**
@@ -1995,6 +2581,8 @@ export interface components {
       matchType: 'soul' | 'voice';
       /** @enum {string} */
       status: 'queued' | 'matched' | 'confirmed' | 'expired' | 'cancelled';
+      /** @description Giá 1 lần speed-up do server cấu hình; client phải hiển thị giá này, không hard-code. */
+      speedupPriceDiamond: number;
       /** @description Shard region server derive từ profile */
       region: string;
       /** @description Dải tuổi server derive từ birthDate; -1 = chưa khai sinh nhật */
@@ -2006,6 +2594,9 @@ export interface components {
       enqueuedAt: string;
       /** Format: date-time */
       createdAt: string;
+    };
+    ActiveTicketResponseDto: {
+      ticket: components['schemas']['TicketDto'] | null;
     };
     SpeedupResultDto: {
       /** @description Transaction id của giao dịch trừ diamond (ledger) */
@@ -2036,6 +2627,8 @@ export interface components {
       sessionId: string | null;
       /** Format: date-time */
       createdAt: string;
+      /** @description Profile công khai tối thiểu của người mời để người nhận quyết định có chủ đích. */
+      inviterProfile: components['schemas']['PublicProfileDto'];
     };
     MatchInvitesPageDto: {
       items: components['schemas']['MatchInviteDto'][];
@@ -2078,7 +2671,8 @@ export interface components {
         | 'post_commented'
         | 'streak_milestone'
         | 'streak_at_risk'
-        | 'match_invite_received';
+        | 'match_invite_received'
+        | 'admin_broadcast';
       payload: Record<string, never>;
       readAt: Record<string, never> | null;
       /** Format: date-time */
@@ -2098,6 +2692,9 @@ export interface components {
       friendSince: string;
       /** Format: date-time */
       lastMessageAt: string | null;
+      unreadCount: number;
+      lastMessagePreview: string | null;
+      muted: boolean;
     };
     ConversationDto: {
       id: string;
@@ -2128,8 +2725,18 @@ export interface components {
       longest: number;
       isActive: boolean;
     };
+    ConversationMemberStateDto: {
+      /** Format: date-time */
+      lastReadAt: string | null;
+      muted: boolean;
+    };
+    MuteConversationDto: {
+      /** @description true = tắt thông báo, false = bật lại */
+      muted: boolean;
+    };
     SendFriendMessageDto: {
-      content: string;
+      content?: string;
+      imageUrl?: string;
     };
     SoulSessionViewDto: {
       sessionId: string;
@@ -2195,6 +2802,11 @@ export interface components {
     };
     CreatePartyRoomDto: {
       title: string;
+      /**
+       * @default talk
+       * @enum {string}
+       */
+      category: 'talk' | 'sing' | 'friend' | 'study' | 'other';
     };
     PartyRoomDto: {
       id: string;
@@ -2203,8 +2815,13 @@ export interface components {
       /** @enum {string} */
       status: 'active' | 'closed';
       speakerLimit: number;
+      /** @enum {string} */
+      category: 'talk' | 'sing' | 'friend' | 'study' | 'other';
+      /** @description Số member active; có trong list/detail */
+      memberCount?: number;
       /** @enum {string|null} */
-      closeReason: 'host_left' | 'finished' | 'swept' | 'error' | null;
+      closeReason:
+        'host_left' | 'finished' | 'swept' | 'error' | 'admin_closed' | null;
       /** Format: date-time */
       createdAt: string;
       /** Format: date-time */
@@ -2251,7 +2868,8 @@ export interface components {
       id: string;
       giftId: string;
       giftCode: string;
-      roomId: string;
+      roomId?: string | null;
+      videoId?: string | null;
       senderUserId: string;
       receiverUserId: string;
       priceDiamond: number;
@@ -2260,6 +2878,70 @@ export interface components {
       /** Format: date-time */
       createdAt: string;
       replayed: boolean;
+    };
+    SendVideoGiftDto: {
+      giftId: string;
+    };
+    CreateUploadIntentDto: {
+      caption?: string;
+    };
+    UploadIntentDto: {
+      videoId: string;
+      uploadUrl: string;
+    };
+    VideoDto: {
+      id: string;
+      authorUserId: string;
+      /** @enum {string} */
+      status:
+        | 'uploading'
+        | 'processing'
+        | 'pending_review'
+        | 'published'
+        | 'removed'
+        | 'rejected'
+        | 'failed';
+      playbackUrl: string | null;
+      thumbnailUrl: string | null;
+      caption: string | null;
+      durationSeconds: number | null;
+      viewCount: number;
+      likeCount: number;
+      commentCount: number;
+      /** Format: date-time */
+      createdAt: string;
+    };
+    VideosPageDto: {
+      items: components['schemas']['VideoDto'][];
+      nextCursor: string | null;
+    };
+    ReportVideoDto: {
+      /** @enum {string} */
+      reason:
+        'harassment' | 'spam' | 'underage' | 'inappropriate_content' | 'other';
+      description?: string;
+    };
+    RecordViewDto: {
+      watchTimeMs: number;
+    };
+    ReactionStatusDto: {
+      liked: boolean;
+      likeCount: number;
+    };
+    CreateVideoCommentDto: {
+      content: string;
+    };
+    VideoCommentDto: {
+      id: string;
+      videoId: string;
+      authorUserId: string;
+      content: string;
+      /** Format: date-time */
+      createdAt: string;
+    };
+    VideoCommentsPageDto: {
+      items: components['schemas']['VideoCommentDto'][];
+      nextCursor: string | null;
     };
     CreatePostDto: {
       content?: string;
@@ -2301,10 +2983,6 @@ export interface components {
       items: components['schemas']['CommentDto'][];
       nextCursor: string | null;
     };
-    ReactionStatusDto: {
-      liked: boolean;
-      likeCount: number;
-    };
     CreateStoryDto: {
       mediaUrl: string;
       caption?: string;
@@ -2342,6 +3020,9 @@ export interface components {
       zIndex: number;
       priceDiamond: number;
     };
+    AvatarBuyResultDto: {
+      replayed: boolean;
+    };
     EquipAvatarItemDto: {
       /** @enum {string} */
       slot: 'base' | 'hair' | 'face' | 'outfit' | 'accessory';
@@ -2375,12 +3056,86 @@ export interface components {
       positionSeconds: number;
       isPlaying: boolean;
     };
+    MovieAnonStateDto: {
+      /** @enum {string} */
+      state: 'idle' | 'queued' | 'watching' | 'rating' | 'completed';
+      queuedAt?: string;
+      sessionId?: string;
+      videoUrl?: string;
+      positionSeconds?: number;
+      isPlaying?: boolean;
+      positionUpdatedAt?: string;
+      expiresAt?: string;
+      /** @enum {string} */
+      myRating?: 'like' | 'boring' | 'rude';
+      opponentRated?: boolean;
+      /** @enum {string} */
+      outcome?: 'matched' | 'not_matched' | 'cancelled' | 'expired';
+      /** @description CHỈ có khi outcome=matched — trước đó 2 bên ẩn danh */
+      partnerUserId?: string;
+    };
+    RateMovieMatchDto: {
+      /** @enum {string} */
+      rating: 'like' | 'boring' | 'rude';
+    };
+    SendMovieMessageDto: {
+      content: string;
+    };
+    MovieMessageDto: {
+      id: string;
+      /** @enum {string} */
+      sender: 'me' | 'partner';
+      content: string;
+      /** Format: date-time */
+      sentAt: string;
+    };
+    MovieMessagesPageDto: {
+      items: components['schemas']['MovieMessageDto'][];
+      meta: {
+        nextCursor?: string | null;
+      };
+    };
+    ReactMovieDto: {
+      /** @enum {string} */
+      emoji: '😂' | '😍' | '😱' | '👏';
+    };
     PalmMatchReadingDto: {
       /** @enum {string} */
       category: 'love' | 'career' | 'health' | 'general';
       content: string;
       /** @description Ngày server (UTC, YYYY-MM-DD) dùng làm seed */
       forDate: string;
+    };
+    PalmZodiacSignDto: {
+      key: string;
+      symbol: string;
+      name: string;
+    };
+    PalmMatchStateDto: {
+      /** @enum {string} */
+      state: 'idle' | 'queued' | 'active' | 'completed';
+      /** Format: uuid */
+      sessionId?: string;
+      /** Format: date-time */
+      queuedAt?: string;
+      /** Format: date-time */
+      expiresAt?: string;
+      myFlipped?: boolean;
+      opponentFlipped?: boolean;
+      mySign?: components['schemas']['PalmZodiacSignDto'];
+      opponentSign?: components['schemas']['PalmZodiacSignDto'];
+      compatibilityPercent?: number;
+      fortune?: string;
+      /** @enum {string} */
+      myRating?: 'like' | 'skip';
+      /** @enum {string} */
+      outcome?: 'matched' | 'not_matched' | 'expired' | 'cancelled';
+      /** @description Chỉ xuất hiện sau mutual-like */
+      partnerUserId?: string;
+    };
+    RatePalmMatchDto: {
+      /** @enum {string} */
+      rating: 'like' | 'skip';
     };
     CreateMiniGameSessionDto: {
       /** @description userId của bạn muốn chơi cùng — phải đã là bạn */
@@ -2407,6 +3162,37 @@ export interface components {
     SubmitMiniGameMoveDto: {
       /** @enum {string} */
       move: 'rock' | 'paper' | 'scissors';
+    };
+    AdminDailyDiamondDto: {
+      /** @example 2026-07-15 */
+      date: string;
+      /** @example 1200 */
+      amount: string;
+    };
+    AdminUserTierDistributionDto: {
+      free: number;
+      vip: number;
+      svip: number;
+    };
+    AdminActivityDto: {
+      id: string;
+      actorUserId: string;
+      actorNickname: string;
+      action: string;
+      targetType: string;
+      targetId: string;
+      /** Format: date-time */
+      createdAt: string;
+    };
+    AdminDashboardDto: {
+      newUsersToday: number;
+      newUsersPreviousDay: number;
+      activeUsers: number;
+      activeRoomCount: number;
+      totalDiamondSpentSevenDays: string;
+      dailyDiamondSpent: components['schemas']['AdminDailyDiamondDto'][];
+      userTiers: components['schemas']['AdminUserTierDistributionDto'];
+      recentActivities: components['schemas']['AdminActivityDto'][];
     };
     Object: Record<string, never>;
     AdminUserDto: {
@@ -2468,6 +3254,73 @@ export interface components {
       items: components['schemas']['AdminVideoDto'][];
       nextCursor: string | null;
     };
+    AdminCloseRoomResultDto: {
+      /** @description false khi phòng đã đóng trước đó (idempotent) */
+      closed: boolean;
+    };
+    AdminRoomDto: {
+      id: string;
+      hostUserId: string;
+      title: string;
+      /** @enum {string} */
+      status: 'active' | 'closed';
+      speakerLimit: number;
+      /** @enum {string} */
+      category: 'talk' | 'sing' | 'friend' | 'study' | 'other';
+      memberCount: number;
+      /** @enum {string|null} */
+      closeReason:
+        'host_left' | 'finished' | 'swept' | 'error' | 'admin_closed' | null;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      hostDisconnectedAt: string | null;
+    };
+    AdminRoomsPageDto: {
+      data: components['schemas']['AdminRoomDto'][];
+      meta: {
+        nextCursor?: string | null;
+      };
+    };
+    SupportTicketDto: {
+      id: string;
+      userId: string;
+      /** @enum {string} */
+      category: 'feedback' | 'bug' | 'idea';
+      message: string;
+      /** @enum {string} */
+      status: 'open' | 'in_progress' | 'resolved' | 'closed';
+      staffResponse?: string | null;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    AdminSupportTicketsPageDto: {
+      items: components['schemas']['SupportTicketDto'][];
+      meta: {
+        nextCursor?: string | null;
+      };
+    };
+    AdminUpdateSupportTicketDto: {
+      /** @enum {string} */
+      status: 'open' | 'in_progress' | 'resolved' | 'closed';
+      staffResponse?: string;
+    };
+    AdminSupportTicketDto: {
+      id: string;
+      userId: string;
+      /** @enum {string} */
+      category: 'feedback' | 'bug' | 'idea';
+      message: string;
+      /** @enum {string} */
+      status: 'open' | 'in_progress' | 'resolved' | 'closed';
+      staffResponse?: string | null;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
     AdminGiftDto: {
       id: string;
       code: string;
@@ -2522,62 +3375,80 @@ export interface components {
       transactionId: string;
       reversalTransactionId: string;
     };
-    CreateUploadIntentDto: {
-      caption?: string;
-    };
-    UploadIntentDto: {
-      videoId: string;
-      uploadUrl: string;
-    };
-    VideoDto: {
-      id: string;
-      authorUserId: string;
+    AdminIapProductDto: {
+      productId: string;
       /** @enum {string} */
-      status:
-        | 'uploading'
-        | 'processing'
-        | 'pending_review'
-        | 'published'
-        | 'removed'
-        | 'rejected'
-        | 'failed';
-      playbackUrl: string | null;
-      thumbnailUrl: string | null;
-      caption: string | null;
-      durationSeconds: number | null;
-      viewCount: number;
-      likeCount: number;
-      commentCount: number;
-      /** Format: date-time */
-      createdAt: string;
+      provider: 'apple' | 'google';
+      diamonds: string;
+      active: boolean;
     };
-    VideosPageDto: {
-      items: components['schemas']['VideoDto'][];
-      nextCursor: string | null;
-    };
-    ReportVideoDto: {
-      /** @enum {string} */
-      reason:
-        'harassment' | 'spam' | 'underage' | 'inappropriate_content' | 'other';
-      description?: string;
-    };
-    RecordViewDto: {
-      watchTimeMs: number;
-    };
-    CreateVideoCommentDto: {
-      content: string;
-    };
-    VideoCommentDto: {
+    AdminVipPlanDto: {
       id: string;
-      videoId: string;
-      authorUserId: string;
-      content: string;
-      /** Format: date-time */
-      createdAt: string;
+      /** @enum {string} */
+      tier: 'vip' | 'svip';
+      days: number;
+      priceDiamond: string;
+      active: boolean;
     };
-    VideoCommentsPageDto: {
-      items: components['schemas']['VideoCommentDto'][];
-      nextCursor: string | null;
+    AdminEconomyCatalogDto: {
+      iapProducts: components['schemas']['AdminIapProductDto'][];
+      vipPlans: components['schemas']['AdminVipPlanDto'][];
+    };
+    SetCatalogActiveDto: {
+      active: boolean;
+    };
+    BroadcastNotificationDto: {
+      title: string;
+      body: string;
+      /** @enum {string} */
+      audience: 'all' | 'vip' | 'free';
+    };
+    BroadcastNotificationResultDto: {
+      broadcastId: string;
+      recipientCount: number;
+    };
+    AdminRolePermissionDto: {
+      /** @enum {string} */
+      permission:
+        | 'view_users'
+        | 'ban_users'
+        | 'resolve_reports'
+        | 'refund_transaction'
+        | 'manage_gifts'
+        | 'manage_config'
+        | 'manage_rooms'
+        | 'manage_permissions'
+        | 'manage_support';
+      label: string;
+      moderator: boolean;
+      admin: boolean;
+    };
+    AdminPermissionMatrixDto: {
+      permissions: components['schemas']['AdminRolePermissionDto'][];
+    };
+    SetRolePermissionDto: {
+      enabled: boolean;
+    };
+    AdminStaffDto: {
+      id: string;
+      nickname: string;
+      /** @enum {string} */
+      role: 'moderator' | 'admin';
+    };
+    SetStaffRoleDto: {
+      /** @enum {string} */
+      role: 'user' | 'moderator' | 'admin';
+    };
+    CreateSupportTicketDto: {
+      /** @enum {string} */
+      category: 'feedback' | 'bug' | 'idea';
+      message: string;
+    };
+    SupportTicketsPageDto: {
+      items: components['schemas']['SupportTicketDto'][];
+      meta: {
+        nextCursor?: string | null;
+      };
     };
     DiscoveryCardDto: {
       profile: components['schemas']['PublicProfileDto'];
@@ -2961,6 +3832,30 @@ export interface operations {
       };
     };
   };
+  EconomyController_listVipPlans: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['VipPlanDto'][];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
   EconomyController_verifyIap: {
     parameters: {
       query?: never;
@@ -3002,7 +3897,14 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': {
+            data: components['schemas']['VipPurchaseResultDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
       };
     };
   };
@@ -3051,6 +3953,30 @@ export interface operations {
         content: {
           'application/json': {
             data: components['schemas']['TicketDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  MatchingController_getCurrentTicket: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['ActiveTicketResponseDto'];
             meta?: {
               [key: string]: unknown;
             };
@@ -3631,6 +4557,62 @@ export interface operations {
       };
     };
   };
+  FriendController_markRead: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['ConversationMemberStateDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  FriendController_setMuted: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MuteConversationDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['ConversationMemberStateDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
   SoulMatchController_getSession: {
     parameters: {
       query?: never;
@@ -3858,6 +4840,9 @@ export interface operations {
   PartyRoomController_list: {
     parameters: {
       query?: {
+        /** @description Tìm theo tên phòng */
+        q?: string;
+        category?: 'talk' | 'sing' | 'friend' | 'study' | 'other';
         /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
         limit?: number;
         /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
@@ -4063,6 +5048,332 @@ export interface operations {
             };
           };
         };
+      };
+    };
+  };
+  GiftController_sendVideoGift: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10) */
+        'Idempotency-Key': string;
+      };
+      path: {
+        videoId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SendVideoGiftDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['GiftEventDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  ShortVideoController_createUploadIntent: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10) */
+        'Idempotency-Key': string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateUploadIntentDto'];
+      };
+    };
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['UploadIntentDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  ShortVideoController_finalizeUpload: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['VideoDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  ShortVideoController_list: {
+    parameters: {
+      query?: {
+        sort?: 'recent' | 'ranked';
+        feed?: 'for_you' | 'following';
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['VideosPageDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  ShortVideoController_getVideo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['VideoDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  ShortVideoController_reportVideo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ReportVideoDto'];
+      };
+    };
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ShortVideoController_recordView: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RecordViewDto'];
+      };
+    };
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  ShortVideoController_like: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['ReactionStatusDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  ShortVideoController_unlike: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['ReactionStatusDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  ShortVideoController_listComments: {
+    parameters: {
+      query?: {
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['VideoCommentsPageDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  ShortVideoController_createComment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateVideoCommentDto'];
+      };
+    };
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['VideoCommentDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  ShortVideoController_deleteComment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+        commentId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
     };
   };
@@ -4585,7 +5896,14 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': {
+            data: components['schemas']['AvatarBuyResultDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
       };
     };
   };
@@ -4777,6 +6095,251 @@ export interface operations {
       };
     };
   };
+  MovieMatchController_joinAnonQueue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['MovieAnonStateDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  MovieMatchController_getAnonCurrent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['MovieAnonStateDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  MovieMatchController_dismissAnonCurrent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['MovieAnonStateDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  MovieMatchController_updateAnonState: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateMovieStateDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['MovieAnonStateDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  MovieMatchController_endAnonWatch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['MovieAnonStateDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  MovieMatchController_rateAnon: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RateMovieMatchDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['MovieAnonStateDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  MovieMatchController_listAnonMessages: {
+    parameters: {
+      query?: {
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['MovieMessagesPageDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  MovieMatchController_sendAnonMessage: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10) */
+        'Idempotency-Key': string;
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SendMovieMessageDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['MovieMessageDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  MovieMatchController_sendAnonReaction: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ReactMovieDto'];
+      };
+    };
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
   PalmMatchController_getReading: {
     parameters: {
       query: {
@@ -4796,6 +6359,134 @@ export interface operations {
         content: {
           'application/json': {
             data: components['schemas']['PalmMatchReadingDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  PalmMatchController_joinQueue: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['PalmMatchStateDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  PalmMatchController_getCurrent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['PalmMatchStateDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  PalmMatchController_dismissCurrent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['PalmMatchStateDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  PalmMatchController_flip: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['PalmMatchStateDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  PalmMatchController_rate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RatePalmMatchDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['PalmMatchStateDto'];
             meta?: {
               [key: string]: unknown;
             };
@@ -4906,6 +6597,30 @@ export interface operations {
         content: {
           'application/json': {
             data: components['schemas']['MiniGameSessionDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_getDashboard: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminDashboardDto'];
             meta?: {
               [key: string]: unknown;
             };
@@ -5131,6 +6846,35 @@ export interface operations {
       };
     };
   };
+  AdminController_listPublishedVideos: {
+    parameters: {
+      query?: {
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminVideosPageDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
   AdminController_approveVideo: {
     parameters: {
       query?: never;
@@ -5201,6 +6945,116 @@ export interface operations {
         content: {
           'application/json': {
             data: components['schemas']['AdminVideoDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_closeRoom: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminCloseRoomResultDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_listRooms: {
+    parameters: {
+      query?: {
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminRoomsPageDto'];
+        };
+      };
+    };
+  };
+  AdminController_listSupportTickets: {
+    parameters: {
+      query?: {
+        status?: 'open' | 'in_progress' | 'resolved' | 'closed';
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminSupportTicketsPageDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_updateSupportTicket: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AdminUpdateSupportTicketDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminSupportTicketDto'];
             meta?: {
               [key: string]: unknown;
             };
@@ -5378,7 +7232,221 @@ export interface operations {
       };
     };
   };
-  ShortVideoController_createUploadIntent: {
+  AdminController_getEconomyCatalog: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminEconomyCatalogDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_setIapProductActive: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        productId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SetCatalogActiveDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminIapProductDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_setVipPlanActive: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SetCatalogActiveDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminVipPlanDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_broadcastNotification: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['BroadcastNotificationDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['BroadcastNotificationResultDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_getPermissionMatrix: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminPermissionMatrixDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_setRolePermission: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        role: string;
+        permission: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SetRolePermissionDto'];
+      };
+    };
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  AdminController_listStaff: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminStaffDto'][];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_setStaffRole: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SetStaffRoleDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AdminStaffDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  SupportController_create: {
     parameters: {
       query?: never;
       header: {
@@ -5390,7 +7458,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        'application/json': components['schemas']['CreateUploadIntentDto'];
+        'application/json': components['schemas']['CreateSupportTicketDto'];
       };
     };
     responses: {
@@ -5400,7 +7468,7 @@ export interface operations {
         };
         content: {
           'application/json': {
-            data: components['schemas']['UploadIntentDto'];
+            data: components['schemas']['SupportTicketDto'];
             meta?: {
               [key: string]: unknown;
             };
@@ -5409,36 +7477,9 @@ export interface operations {
       };
     };
   };
-  ShortVideoController_finalizeUpload: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            data: components['schemas']['VideoDto'];
-            meta?: {
-              [key: string]: unknown;
-            };
-          };
-        };
-      };
-    };
-  };
-  ShortVideoController_list: {
+  SupportController_listMine: {
     parameters: {
       query?: {
-        sort?: 'recent' | 'ranked';
         /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
         limit?: number;
         /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
@@ -5456,217 +7497,12 @@ export interface operations {
         };
         content: {
           'application/json': {
-            data: components['schemas']['VideosPageDto'];
+            data: components['schemas']['SupportTicketsPageDto'];
             meta?: {
               [key: string]: unknown;
             };
           };
         };
-      };
-    };
-  };
-  ShortVideoController_getVideo: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            data: components['schemas']['VideoDto'];
-            meta?: {
-              [key: string]: unknown;
-            };
-          };
-        };
-      };
-    };
-  };
-  ShortVideoController_reportVideo: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': components['schemas']['ReportVideoDto'];
-      };
-    };
-    responses: {
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  ShortVideoController_recordView: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': components['schemas']['RecordViewDto'];
-      };
-    };
-    responses: {
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  ShortVideoController_like: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            data: components['schemas']['ReactionStatusDto'];
-            meta?: {
-              [key: string]: unknown;
-            };
-          };
-        };
-      };
-    };
-  };
-  ShortVideoController_unlike: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            data: components['schemas']['ReactionStatusDto'];
-            meta?: {
-              [key: string]: unknown;
-            };
-          };
-        };
-      };
-    };
-  };
-  ShortVideoController_listComments: {
-    parameters: {
-      query?: {
-        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
-        limit?: number;
-        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
-        cursor?: string;
-      };
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            data: components['schemas']['VideoCommentsPageDto'];
-            meta?: {
-              [key: string]: unknown;
-            };
-          };
-        };
-      };
-    };
-  };
-  ShortVideoController_createComment: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': components['schemas']['CreateVideoCommentDto'];
-      };
-    };
-    responses: {
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            data: components['schemas']['VideoCommentDto'];
-            meta?: {
-              [key: string]: unknown;
-            };
-          };
-        };
-      };
-    };
-  };
-  ShortVideoController_deleteComment: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-        commentId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
       };
     };
   };

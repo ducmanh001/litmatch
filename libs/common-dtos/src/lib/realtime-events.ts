@@ -71,6 +71,11 @@ export const RealtimeEvents = {
   MovieStateChanged: 'movie.state.changed',
   /** Movie Match: phiên xem chung kết thúc (chủ động rời — chưa có nhánh hết hạn tự động). */
   MovieSessionEnded: 'movie.session.ended',
+  /**
+   * Movie Match ẩn danh: reaction emoji nổi trên video — hiệu ứng ephemeral, KHÔNG persist,
+   * KHÔNG kèm userId (2 bên chưa lộ danh tính). Client miss event chỉ mất hiệu ứng.
+   */
+  MovieReactionSent: 'movie.reaction.sent',
   /** Mini Game: ván oẳn tù tì mới được tạo (docs/services/mini-game-service.md § 5). */
   MiniGameSessionStarted: 'minigame.session.started',
   /**
@@ -204,6 +209,11 @@ export interface MovieSessionEndedEventData {
   sessionId: string;
   /** left | replaced (movie-match-service.md § 3, § 5). */
   reason: string;
+}
+
+export interface MovieReactionSentEventData {
+  sessionId: string;
+  emoji: string;
 }
 
 export interface MiniGameSessionStartedEventData {

@@ -135,6 +135,13 @@
 - **Ticket (yêu cầu ghép) không có state machine rõ ràng** (`queued → matched → confirmed → expired/cancelled`) → dễ xảy ra trạng thái mơ hồ khi 2 sự kiện đến gần như đồng thời (vd user vừa cancel vừa được match)
 - Ở quy mô lớn: 1 queue Redis duy nhất không shard theo region/tiêu chí → matcher trở thành hotspot, hoặc match ra 2 người cách nhau nửa vòng trái đất (latency cao khi call)
 - Speed-up (trả diamond để ưu tiên) trừ tiền xong nhưng không có gì đảm bảo user thực sự được ưu tiên (không có priority score/queue riêng thực thi) → mất tiền mà không có tác dụng, hoặc ngược lại: có thể trả tiền speed-up nhiều lần liên tiếp để luôn đứng đầu, chèn ép user thường bất công (cần giới hạn số lần/khung giờ)
+- **Client hard-code giá speed-up** — config server đổi nhưng UI vẫn báo giá cũ, user xác nhận một
+  giá rồi ledger trừ giá khác. Mọi `TicketDto` phải trả `speedupPriceDiamond` từ đúng config debit;
+  nested ticket của response speed-up cũng không được bỏ field này.
+- **Reload làm mất ticket đang active** — client chỉ nhớ ticketId trong state local rồi quay về
+  màn join mới, dễ gặp 409 "already queued" mà không có đường phục hồi. Phải có authenticated
+  read-path theo chính `userId` từ auth, chỉ lấy `queued|matched`; partial unique index bảo đảm tối
+  đa một row và response nullable thay vì dùng 404 như một nhánh điều khiển bình thường.
 
 **Soul Match / chat ẩn danh — giao điểm Matching + ẩn danh, dễ leak danh tính và sai race rating**
 
@@ -348,6 +355,10 @@
 - **Nhầm invite là friend-request** — không tự thêm bảng/flow "kết bạn" song song; invite chỉ là
   lối vào có chủ đích cho `MatchTicket`/`MatchSession` đã có, Friendship vẫn chỉ tạo qua đúng 1
   con đường hiện có (double-like sau Soul Match).
+- **Bắt invitee accept “mù” hoặc chữa bằng DTO lộ dữ liệu riêng tư** — incoming invite phải có
+  `PublicProfileDto` tối thiểu của inviter để informed consent, không thêm ngày sinh/tuổi chính
+  xác/region/trust/status. Inbox phải re-check hidden-set ở thời điểm đọc; accept vẫn re-check
+  `canPair` riêng, không coi việc đã render profile là chốt an toàn.
 
 **Mood status — append-only đơn giản nhưng dễ sai vì tưởng cần state machine**
 
