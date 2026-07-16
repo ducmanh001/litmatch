@@ -467,6 +467,13 @@ export const coreApiEnvSchema = Joi.object({
     .min(60_000)
     .default(1_800_000),
 
+  // Discovery — browse-only W1 (docs/services/discovery-service.md)
+  // Guest chưa gắn phone/social có xuất hiện trong browse không — chặn farm guest làm loãng pool
+  DISCOVERY_GUEST_VISIBLE: Joi.boolean().default(false),
+  // Mốc tuổi tăng dần, phân tách dấu phẩy — bucket rộng, không lộ tuổi chính xác (vd 18,25,31,41
+  // → 18-24, 25-30, 31-40, 41+); parse mảng ở service, không parse ở Joi cho đơn giản
+  DISCOVERY_AGE_BUCKETS: Joi.string().default('18,25,31,41'),
+
   THROTTLE_TTL_SECONDS: Joi.number().integer().min(1).default(60),
   THROTTLE_LIMIT: Joi.number().integer().min(1).default(100),
 });

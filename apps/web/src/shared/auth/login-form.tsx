@@ -26,6 +26,9 @@ const OTP_LENGTH = 6;
 /** Khoá localStorage lưu deviceId ổn định cho tài khoản khách (docs/06 § Auth guest). */
 const GUEST_DEVICE_ID_STORAGE_KEY = 'litmatch.guestDeviceId';
 
+/** Chỉ để giãn cách UX (giảm spam bấm) — rate-limit thật enforce ở server. */
+const RESEND_COOLDOWN_SECONDS = 30;
+
 const phoneSchema = z.object({
   // Input là số nội địa (0xxx hoặc bỏ số 0) — chuẩn hoá sang E.164 lúc submit (normalizeVnPhone).
   phone: z.string().regex(VN_LOCAL_PHONE_PATTERN, 'Số điện thoại không hợp lệ'),
