@@ -26,13 +26,14 @@ function renderList() {
 describe('RoomList', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('empty — hiển thị phòng demo (fallback) thay vì để trống', async () => {
+  it('empty — hiện empty state, không dựng phòng giả', async () => {
     vi.spyOn(apiClient, 'GET').mockResolvedValue({
       data: { data: [], meta: {} },
     } as never);
     renderList();
 
-    expect(await screen.findAllByText(/Tâm sự đêm khuya/)).not.toHaveLength(0);
+    expect(await screen.findByText('Không có phòng nào phù hợp')).toBeVisible();
+    expect(screen.queryByText(/Tâm sự đêm khuya/)).not.toBeInTheDocument();
   });
 
   it('error — hiển thị message', async () => {
@@ -51,8 +52,11 @@ describe('RoomList', () => {
       title: 'Phòng vui vẻ',
       status: 'active',
       speakerLimit: 8,
+      category: 'talk',
+      memberCount: 3,
       closeReason: null,
       createdAt: new Date().toISOString(),
+      hostDisconnectedAt: null,
     };
     vi.spyOn(apiClient, 'GET').mockImplementation(async (path: string) => {
       if (path === '/api/v1/party/rooms') {
@@ -78,9 +82,30 @@ describe('RoomList', () => {
     // Phòng duy nhất vừa nằm ở "Nổi bật lúc này" vừa ở danh sách chính — 2 lần xuất hiện đúng.
     expect(await screen.findAllByText('Phòng vui vẻ')).toHaveLength(2);
     expect(await screen.findAllByText(/Host A/)).not.toHaveLength(0);
-    expect(screen.getByText(/Tối đa 8 người nói/)).toBeVisible();
+    expect(screen.getAllByText(/3 người/).length).toBeGreaterThan(0);
     expect(
-      screen.getByRole('link', { name: /Phòng vui vẻ.*Host: Host A/s }),
+      screen.getByRole('link', { name: /Host A Phòng vui vẻ.*3 người/s }),
     ).toHaveAttribute('href', '/party/room-1');
+  });
+
+  it('lọc chủ đề gửi category thật lên API', async () => {
+    const get = vi.spyOn(apiClient, 'GET').mockResolvedValue({
+      data: { data: [], meta: {} },
+    } as never);
+    renderList();
+
+    await screen.findByText('Không có phòng nào phù hợp');
+    screen.getByRole('button', { name: '🎤 Ca hát' }).click();
+
+    await vi.waitFor(() =>
+      expect(get).toHaveBeenCalledWith(
+        '/api/v1/party/rooms',
+        expect.objectContaining({
+          params: {
+            query: expect.objectContaining({ category: 'sing' }),
+          },
+        }),
+      ),
+    );
   });
 });

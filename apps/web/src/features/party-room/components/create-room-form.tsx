@@ -14,7 +14,7 @@ export function CreateRoomForm() {
   const router = useRouter();
   const form = useForm<CreateRoomFormValues>({
     resolver: zodResolver(createRoomSchema),
-    defaultValues: { title: '' },
+    defaultValues: { title: '', category: 'talk' },
   });
   const createRoom = useCreateRoom();
 
@@ -26,8 +26,8 @@ export function CreateRoomForm() {
         ? 'Có lỗi xảy ra, thử lại.'
         : undefined);
 
-  const onSubmit = form.handleSubmit(({ title }) => {
-    createRoom.mutate(title, {
+  const onSubmit = form.handleSubmit((values) => {
+    createRoom.mutate(values, {
       onSuccess: (joined) => {
         if (joined === undefined) return;
         router.push(`/party/${joined.room.id}`);
@@ -37,7 +37,7 @@ export function CreateRoomForm() {
 
   return (
     <form className="space-y-1.5" onSubmit={onSubmit} noValidate>
-      <div className="flex gap-2">
+      <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
         <input
           type="text"
           aria-label="Tên phòng"
@@ -45,9 +45,20 @@ export function CreateRoomForm() {
           className="h-11 flex-1 rounded-full border border-black/5 bg-white px-4 text-sm outline-none focus:ring-2 focus:ring-iris dark:border-white/5 dark:bg-surf"
           {...form.register('title')}
         />
+        <select
+          aria-label="Chủ đề phòng"
+          className="h-11 rounded-full border border-black/5 bg-white px-4 text-sm outline-none focus:ring-2 focus:ring-iris dark:border-white/5 dark:bg-surf"
+          {...form.register('category')}
+        >
+          <option value="talk">💬 Tâm sự</option>
+          <option value="sing">🎤 Ca hát</option>
+          <option value="friend">👋 Kết bạn</option>
+          <option value="study">📚 Học tập</option>
+          <option value="other">✨ Khác</option>
+        </select>
         <button
           type="submit"
-          className="h-11 shrink-0 rounded-full bg-gradient-to-br from-irisl to-irisl px-5 text-sm font-bold text-white shadow-lg shadow-iris/30 disabled:opacity-50"
+          className="h-11 shrink-0 rounded-full bg-gradient-to-br from-irisl to-irisl px-5 text-sm font-bold text-white shadow-lg shadow-iris/30 disabled:opacity-50 sm:col-span-2"
           disabled={createRoom.isPending}
         >
           {createRoom.isPending ? 'Đang tạo…' : 'Tạo phòng'}

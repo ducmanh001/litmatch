@@ -2,6 +2,7 @@ import { DataSource } from 'typeorm';
 
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
 import { InitAuthUser1751900000000 } from '../../database/migrations/1751900000000-init-auth-user';
+import { UserProfilePreferences1755800000000 } from '../../database/migrations/1755800000000-user-profile-preferences';
 import { UserRole1753600000000 } from '../../database/migrations/1753600000000-user-role';
 import { EconomyLedger1752000000000 } from '../../database/migrations/1752000000000-economy-ledger';
 import { EconomyRefund1752100000000 } from '../../database/migrations/1752100000000-economy-refund';
@@ -15,6 +16,7 @@ import { Safety1752800000000 } from '../../database/migrations/1752800000000-saf
 import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
 import { PartyRoomLivekitUrl1753500000000 } from '../../database/migrations/1753500000000-party-room-livekit-url';
 import { PartyRoomHostDisconnectGrace1753900000000 } from '../../database/migrations/1753900000000-party-room-host-disconnect-grace';
+import { PartyRoomCategory1755200000000 } from '../../database/migrations/1755200000000-party-room-category';
 
 import { PartyRoomService } from './party-room.service';
 import { PartyRoomSweeperService } from './jobs/party-room-sweeper.service';
@@ -188,6 +190,7 @@ d('Party Room integration (Postgres thật)', () => {
       entities: [User, PartyRoom, PartyRoomMember],
       migrations: [
         InitAuthUser1751900000000,
+        UserProfilePreferences1755800000000,
         UserRole1753600000000,
         EconomyLedger1752000000000,
         EconomyRefund1752100000000,
@@ -201,6 +204,7 @@ d('Party Room integration (Postgres thật)', () => {
         ReportTargetVideo1754900000000,
         PartyRoomLivekitUrl1753500000000,
         PartyRoomHostDisconnectGrace1753900000000,
+        PartyRoomCategory1755200000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,

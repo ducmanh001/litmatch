@@ -34,6 +34,7 @@ import {
 import { PartyRoomErrors } from './party-room.errors';
 import {
   PartyRoom,
+  PartyRoomCategory,
   PartyRoomCloseReason,
   PartyRoomStatus,
 } from './entities/party-room.entity';
@@ -72,6 +73,16 @@ export interface ClosePartyRoomResult {
   memberIds: string[];
 }
 
+export interface PartyRoomSummary {
+  room: PartyRoom;
+  memberCount: number;
+}
+
+export type PartyRoomTransitionHook = (
+  manager: EntityManager,
+  room: PartyRoom,
+) => Promise<void>;
+
 /**
  * Nghiệp vụ phòng party multi-user (docs/services/party-room-service.md).
  * Mọi thay đổi state phòng (join/leave/đổi role/close) đều serialize qua lock FOR UPDATE
@@ -103,6 +114,7 @@ export class PartyRoomService {
   async createRoom(
     user: AuthenticatedUser,
     title: string,
+    category: PartyRoomCategory = PartyRoomCategory.Talk,
   ): Promise<JoinPartyRoomResult> {
     const cleanTitle = title.trim();
     const maxLen = this.config.getOrThrow('PARTY_TITLE_MAX_LENGTH', {
@@ -129,6 +141,7 @@ export class PartyRoomService {
             manager.create(PartyRoom, {
               hostUserId: user.userId,
               title: cleanTitle,
+              category,
               status: PartyRoomStatus.Active,
               // snapshot config lúc tạo — đổi config không retro phòng đang sống (§ 3.8.A)
               speakerLimit: this.config.getOrThrow('PARTY_MAX_SPEAKERS', {
@@ -496,6 +509,7 @@ export class PartyRoomService {
   async listRooms(
     limit: number,
     cursor?: string,
+    filter?: { q?: string; category?: PartyRoomCategory },
   ): Promise<{ data: PartyRoom[]; meta: CursorPageMeta }> {
     const qb = this.roomRepo
       .createQueryBuilder('r')
@@ -503,6 +517,14 @@ export class PartyRoomService {
       .orderBy('r.created_at', 'DESC')
       .addOrderBy('r.id', 'DESC')
       .limit(limit + 1);
+
+    const query = filter?.q?.trim();
+    if (query) {
+      qb.andWhere('r.title ILIKE :query', { query: `%${query}%` });
+    }
+    if (filter?.category !== undefined) {
+      qb.andWhere('r.category = :category', { category: filter.category });
+    }
 
     if (cursor) {
       const pos = decodeCursor<{ createdAt: string; id: string }>(cursor);
@@ -525,6 +547,41 @@ export class PartyRoomService {
       id: last.id,
     }));
     return { data: page.items, meta: page.meta };
+  }
+
+  async countActiveRooms(): Promise<number> {
+    return this.roomRepo.countBy({ status: PartyRoomStatus.Active });
+  }
+
+  /** Read model vận hành: list room + member active bằng 2 query, tránh N+1. */
+  async listRoomsWithMemberCounts(
+    limit: number,
+    cursor?: string,
+    filter?: { q?: string; category?: PartyRoomCategory },
+  ): Promise<{ data: PartyRoomSummary[]; meta: CursorPageMeta }> {
+    const page = await this.listRooms(limit, cursor, filter);
+    if (page.data.length === 0) return { data: [], meta: page.meta };
+
+    const counts = await this.memberRepo
+      .createQueryBuilder('member')
+      .select('member.roomId', 'roomId')
+      .addSelect('COUNT(*)', 'memberCount')
+      .where('member.roomId IN (:...roomIds)', {
+        roomIds: page.data.map((room) => room.id),
+      })
+      .andWhere('member.leftAt IS NULL')
+      .groupBy('member.roomId')
+      .getRawMany<{ roomId: string; memberCount: string }>();
+    const countByRoom = new Map(
+      counts.map((item) => [item.roomId, Number(item.memberCount)]),
+    );
+    return {
+      data: page.data.map((room) => ({
+        room,
+        memberCount: countByRoom.get(room.id) ?? 0,
+      })),
+      meta: page.meta,
+    };
   }
 
   /**
@@ -569,6 +626,7 @@ export class PartyRoomService {
     roomId: string,
     reason: PartyRoomCloseReason,
     guard?: (room: PartyRoom) => boolean,
+    onTransition?: PartyRoomTransitionHook,
   ): Promise<ClosePartyRoomResult> {
     const result = await this.dataSource.transaction(async (manager) => {
       const room = await manager.findOne(PartyRoom, {
@@ -590,6 +648,7 @@ export class PartyRoomService {
       room.closeReason = reason;
       room.closedAt = now;
       await manager.save(room);
+      await onTransition?.(manager, room);
       if (activeMembers.length > 0) {
         await manager.update(
           PartyRoomMember,

@@ -28,12 +28,26 @@ export const partyRoomKeys = {
   profile: (userId: string) => ['party-room', 'profile', userId] as const,
 };
 
-export function useRoomList() {
+export function useRoomList(filters?: {
+  q?: string;
+  category?: PartyRoomDto['category'];
+}) {
   return useInfiniteQuery({
-    queryKey: partyRoomKeys.list,
+    queryKey: [
+      ...partyRoomKeys.list,
+      filters?.q ?? '',
+      filters?.category ?? 'all',
+    ],
     queryFn: async ({ pageParam }) => {
       const res = await apiClient.GET('/api/v1/party/rooms', {
-        params: { query: { limit: ROOM_LIST_PAGE_LIMIT, cursor: pageParam } },
+        params: {
+          query: {
+            limit: ROOM_LIST_PAGE_LIMIT,
+            cursor: pageParam,
+            q: filters?.q || undefined,
+            category: filters?.category,
+          },
+        },
       });
       return res.data;
     },
@@ -45,9 +59,12 @@ export function useRoomList() {
 export function useCreateRoom() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (title: string) => {
+    mutationFn: async (input: {
+      title: string;
+      category: PartyRoomDto['category'];
+    }) => {
       const res = await apiClient.POST('/api/v1/party/rooms', {
-        body: { title },
+        body: input,
       });
       return res.data?.data;
     },

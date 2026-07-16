@@ -10,5 +10,9 @@ export default async function PartyRoomPage({
   params: Promise<{ roomId: string }>;
 }) {
   const { roomId } = await params;
-  return <PartyStage roomId={roomId} />;
+  return (
+    <div className="mx-auto w-full max-w-xl min-w-0">
+      <PartyStage roomId={roomId} />
+    </div>
+  );
 }
