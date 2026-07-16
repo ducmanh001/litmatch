@@ -60,6 +60,9 @@ export function usePartnerProfile(friendUserId: string) {
       });
       return res.data?.data;
     },
+    // Caller (vd watch-together-view) truyền '' khi session chưa load xong —
+    // chặn GET /users/ với id rỗng (404 vô nghĩa trên console).
+    enabled: friendUserId !== '',
   });
 }
 
@@ -86,19 +89,63 @@ export function useConversationMessages(conversationId: string) {
 export function useSendFriendMessage(conversationId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { content: string; idempotencyKey: string }) => {
+    mutationFn: async (input: {
+      content?: string;
+      imageUrl?: string;
+      idempotencyKey: string;
+    }) => {
       const res = await apiClient.POST('/api/v1/conversations/{id}/messages', {
         params: {
           path: { id: conversationId },
           header: { 'Idempotency-Key': input.idempotencyKey },
         },
-        body: { content: input.content },
+        body: { content: input.content, imageUrl: input.imageUrl },
       });
       return res.data?.data;
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: friendChatKeys.messages(conversationId),
+      });
+    },
+  });
+}
+
+/**
+ * Đánh dấu đã đọc tới hiện tại — gọi khi mở thread và khi có message mới lúc đang xem.
+ * Server idempotent nên gọi lặp an toàn; xong thì badge ở danh sách bạn phải cập nhật.
+ */
+export function useMarkConversationRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      const res = await apiClient.POST('/api/v1/conversations/{id}/read', {
+        params: { path: { id: conversationId } },
+      });
+      return res.data?.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: friendChatKeys.friends,
+      });
+    },
+  });
+}
+
+/** Bật/tắt thông báo hội thoại (persist server) — đúng menu "Tắt thông báo" chat.html. */
+export function useMuteConversation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { conversationId: string; muted: boolean }) => {
+      const res = await apiClient.POST('/api/v1/conversations/{id}/mute', {
+        params: { path: { id: input.conversationId } },
+        body: { muted: input.muted },
+      });
+      return res.data?.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: friendChatKeys.friends,
       });
     },
   });
@@ -116,6 +163,21 @@ export function useBlockUser() {
       await apiClient.POST('/api/v1/safety/blocks/{targetUserId}', {
         params: { path: { targetUserId } },
       });
+    },
+  });
+}
+
+export function useReportUser() {
+  return useMutation({
+    mutationFn: async (input: {
+      targetUserId: string;
+      reason:
+        'harassment' | 'spam' | 'underage' | 'inappropriate_content' | 'other';
+    }) => {
+      const response = await apiClient.POST('/api/v1/safety/reports', {
+        body: input,
+      });
+      return response.data?.data;
     },
   });
 }

@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { FriendController } from './friend.controller';
 import { FriendService } from './friend.service';
 import { Conversation } from './entities/conversation.entity';
+import { ConversationMemberState } from './entities/conversation-member-state.entity';
 import { ConversationStreak } from './entities/conversation-streak.entity';
 import { Friendship } from './entities/friendship.entity';
 import { Message } from './entities/message.entity';
@@ -31,6 +32,7 @@ import type Redis from 'ioredis';
     TypeOrmModule.forFeature([
       Friendship,
       Conversation,
+      ConversationMemberState,
       Message,
       ConversationStreak,
     ]),

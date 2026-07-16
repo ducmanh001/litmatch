@@ -1,21 +1,36 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, Length } from 'class-validator';
+import {
+  IsBoolean,
+  IsOptional,
+  IsString,
+  IsUrl,
+  Length,
+  MaxLength,
+} from 'class-validator';
 
 import { ApiCursorPageMeta } from '../../../common/decorators/cursor-page-query.decorator';
 import { MESSAGE_CONTENT_HARD_CAP } from '../friend.constants';
 import { PublicProfileDto } from '../../user';
 
 import type { CursorPageMeta } from '@litmatch/common-dtos';
-import type { FriendListEntry } from '../friend.service';
+import type { FriendListEntry, MemberStateView } from '../friend.service';
 import type { Message } from '../entities/message.entity';
 import type { DisplayStreak } from '../services/streak.service';
 
 export class SendFriendMessageDto {
-  @ApiProperty({ maxLength: MESSAGE_CONTENT_HARD_CAP })
+  @ApiPropertyOptional({ maxLength: MESSAGE_CONTENT_HARD_CAP })
+  @IsOptional()
   @IsString()
   // Sanity cap transport — giới hạn nghiệp vụ thật là config FRIEND_MESSAGE_MAX_LENGTH (service check)
   @Length(1, MESSAGE_CONTENT_HARD_CAP)
-  content!: string;
+  content?: string;
+
+  /** Ảnh đính kèm theo URL (cùng pattern CreatePostDto.imageUrl) — phải có content HOẶC ảnh. */
+  @ApiPropertyOptional({ maxLength: 2048 })
+  @IsOptional()
+  @IsUrl({ require_protocol: true })
+  @MaxLength(2048)
+  imageUrl?: string;
 }
 
 export class MessageAttachmentDto {
@@ -88,6 +103,10 @@ export class FriendDto {
   @ApiProperty() conversationId!: string;
   @ApiProperty() friendSince!: Date;
   @ApiProperty({ nullable: true, type: Date }) lastMessageAt!: Date | null;
+  @ApiProperty() unreadCount!: number;
+  @ApiProperty({ nullable: true, type: String })
+  lastMessagePreview!: string | null;
+  @ApiProperty() muted!: boolean;
 
   static from(entry: FriendListEntry, profile: PublicProfileDto): FriendDto {
     const dto = new FriendDto();
@@ -95,6 +114,27 @@ export class FriendDto {
     dto.conversationId = entry.conversationId;
     dto.friendSince = entry.friendSince;
     dto.lastMessageAt = entry.lastMessageAt;
+    dto.unreadCount = entry.unreadCount;
+    dto.lastMessagePreview = entry.lastMessagePreview;
+    dto.muted = entry.muted;
+    return dto;
+  }
+}
+
+export class MuteConversationDto {
+  @ApiProperty({ description: 'true = tắt thông báo, false = bật lại' })
+  @IsBoolean()
+  muted!: boolean;
+}
+
+export class ConversationMemberStateDto {
+  @ApiProperty({ nullable: true, type: Date }) lastReadAt!: Date | null;
+  @ApiProperty() muted!: boolean;
+
+  static from(view: MemberStateView): ConversationMemberStateDto {
+    const dto = new ConversationMemberStateDto();
+    dto.lastReadAt = view.lastReadAt;
+    dto.muted = view.muted;
     return dto;
   }
 }

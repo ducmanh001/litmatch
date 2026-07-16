@@ -38,6 +38,7 @@ function makeConversation(overrides: Partial<Conversation> = {}): Conversation {
 
 describe('FriendService (unit — mock repo/conversationService/redis)', () => {
   let friendshipRepo: { exists: jest.Mock; createQueryBuilder: jest.Mock };
+  let memberStateRepo: { findOne: jest.Mock; createQueryBuilder: jest.Mock };
   let conversationService: {
     findByPair: jest.Mock;
     findById: jest.Mock;
@@ -53,6 +54,11 @@ describe('FriendService (unit — mock repo/conversationService/redis)', () => {
   beforeEach(() => {
     friendshipRepo = {
       exists: jest.fn(async () => true),
+      createQueryBuilder: jest.fn(),
+    };
+    // Mặc định: chưa có member state (chưa đọc/mute gì) — test mute override findOne.
+    memberStateRepo = {
+      findOne: jest.fn(async () => null),
       createQueryBuilder: jest.fn(),
     };
     safetyService = { isBlocked: jest.fn(async () => false) };
@@ -86,6 +92,7 @@ describe('FriendService (unit — mock repo/conversationService/redis)', () => {
     redis = { publish: jest.fn(async () => 1) };
     service = new FriendService(
       friendshipRepo as unknown as Repository<Friendship>,
+      memberStateRepo as never,
       conversationService as unknown as ConversationService,
       streakService as unknown as StreakService,
       safetyService as never,
@@ -314,6 +321,27 @@ describe('FriendService (unit — mock repo/conversationService/redis)', () => {
       streakService.recordActivity.mockRejectedValue(new Error('boom'));
       const message = await service.sendMessage(USER_A, 'conv-1', 'hi', 'k1');
       expect(message.id).toBe('msg-1');
+    });
+
+    it('người nhận đã mute → KHÔNG tạo notification, message vẫn gửi + realtime đủ 2 bên', async () => {
+      memberStateRepo.findOne.mockResolvedValue({
+        conversationId: 'conv-1',
+        userId: USER_B,
+        lastReadAt: null,
+        mutedAt: new Date(),
+      });
+      const message = await service.sendMessage(USER_A, 'conv-1', 'hi', 'k1');
+      expect(message.id).toBe('msg-1');
+      expect(redis.publish).toHaveBeenCalledTimes(2);
+      expect(notificationService.create).not.toHaveBeenCalled();
+    });
+
+    it('người nhận không mute → vẫn tạo notification như cũ', async () => {
+      const message = await service.sendMessage(USER_A, 'conv-1', 'hi', 'k1');
+      expect(message.id).toBe('msg-1');
+      expect(notificationService.create).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: USER_B }),
+      );
     });
   });
 });

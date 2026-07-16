@@ -10,5 +10,9 @@ export default async function ChatPage({
   params: Promise<{ friendUserId: string }>;
 }) {
   const { friendUserId } = await params;
-  return <ConversationThread friendUserId={friendUserId} />;
+  return (
+    <div className="mx-auto w-full max-w-xl min-w-0">
+      <ConversationThread friendUserId={friendUserId} />
+    </div>
+  );
 }

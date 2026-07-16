@@ -7,5 +7,7 @@ export const FriendErrors = {
   /** Cùng Idempotency-Key nhưng nội dung/conversation khác (docs/05 § 5.10). */
   MESSAGE_IDEMPOTENCY_CONFLICT: 'FRIEND_MESSAGE_IDEMPOTENCY_CONFLICT',
   MESSAGE_TOO_LONG: 'FRIEND_MESSAGE_TOO_LONG',
+  /** Message không có cả text lẫn ảnh — không có gì để gửi. */
+  MESSAGE_EMPTY: 'FRIEND_MESSAGE_EMPTY',
   CURSOR_INVALID: 'FRIEND_CURSOR_INVALID',
 } as const;

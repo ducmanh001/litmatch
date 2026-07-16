@@ -21,9 +21,11 @@ import { CursorPageQueryDto } from '@litmatch/common-dtos';
 import { FriendService } from './friend.service';
 import {
   ConversationDto,
+  ConversationMemberStateDto,
   FriendDto,
   MessageDto,
   MessagesPageDto,
+  MuteConversationDto,
   SendFriendMessageDto,
   StreakDto,
 } from './dto/friend.dtos';
@@ -120,6 +122,43 @@ export class FriendController {
     return streak ? StreakDto.from(streak) : StreakDto.empty();
   }
 
+  @Post('conversations/:id/read')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Đánh dấu đã đọc tới hiện tại — idempotent, chỉ 2 thành viên',
+  })
+  @ApiOkResponse({ type: ConversationMemberStateDto })
+  async markRead(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<ConversationMemberStateDto> {
+    const state = await this.friendService.markConversationRead(
+      user.userId,
+      id,
+    );
+    return ConversationMemberStateDto.from(state);
+  }
+
+  @Post('conversations/:id/mute')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Bật/tắt thông báo hội thoại — chỉ tắt kênh notification, message vẫn nhận',
+  })
+  @ApiOkResponse({ type: ConversationMemberStateDto })
+  async setMuted(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: MuteConversationDto,
+  ): Promise<ConversationMemberStateDto> {
+    const state = await this.friendService.setConversationMuted(
+      user.userId,
+      id,
+      dto.muted,
+    );
+    return ConversationMemberStateDto.from(state);
+  }
+
   @Post('conversations/:id/messages')
   @HttpCode(HttpStatus.CREATED)
   @ApiIdempotencyKeyHeader()
@@ -134,8 +173,13 @@ export class FriendController {
     const message = await this.friendService.sendMessage(
       user.userId,
       id,
-      dto.content,
+      dto.content ?? '',
       idempotencyKey,
+      // Kind whitelist tại boundary: HTTP chỉ set được ảnh-theo-URL; các kind nội bộ khác
+      // (vd story_reply) vẫn chỉ đi qua DI giữa module.
+      dto.imageUrl !== undefined
+        ? { kind: 'image', payload: { url: dto.imageUrl } }
+        : null,
     );
     return MessageDto.from(message);
   }

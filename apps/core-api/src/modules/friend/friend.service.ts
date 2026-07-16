@@ -9,6 +9,7 @@ import { canonicalPair } from '../../common/entities/canonical-pair';
 import { publishRealtimeEvent } from '../../common/realtime/publish-realtime';
 import { FriendErrors } from './friend.errors';
 import { Conversation } from './entities/conversation.entity';
+import { ConversationMemberState } from './entities/conversation-member-state.entity';
 import { Friendship, FriendshipSource } from './entities/friendship.entity';
 import { Message } from './entities/message.entity';
 import { FRIEND_REDIS } from './redis/friend-redis.provider';
@@ -38,6 +39,18 @@ export interface FriendListEntry {
   conversationId: string;
   friendSince: Date;
   lastMessageAt: Date | null;
+  /** Số message của ĐỐI PHƯƠNG sau mốc lastReadAt của caller — 0 nếu đã đọc hết. */
+  unreadCount: number;
+  /** Nội dung message mới nhất (bất kể chiều) — null khi chưa chat lần nào. */
+  lastMessagePreview: string | null;
+  /** Caller đang tắt thông báo hội thoại này. */
+  muted: boolean;
+}
+
+/** Trạng thái cá nhân caller trong 1 conversation — trả về từ mark-read/mute. */
+export interface MemberStateView {
+  lastReadAt: Date | null;
+  muted: boolean;
 }
 
 /**
@@ -52,6 +65,8 @@ export class FriendService {
   constructor(
     @InjectRepository(Friendship)
     private readonly friendshipRepo: Repository<Friendship>,
+    @InjectRepository(ConversationMemberState)
+    private readonly memberStateRepo: Repository<ConversationMemberState>,
     private readonly conversationService: ConversationService,
     private readonly streakService: StreakService,
     private readonly safetyService: SafetyService,
@@ -131,13 +146,36 @@ export class FriendService {
         'c',
         'c.user_low_id = f.user_low_id AND c.user_high_id = f.user_high_id',
       )
+      // Trạng thái đọc/mute là CÁ NHÂN caller — lazy row, vắng = chưa đọc gì và không mute.
+      .leftJoin(
+        'conversation_member_states',
+        's',
+        's.conversation_id = c.id AND s.user_id = :userId',
+        { userId },
+      )
       .select([
         'f.user_low_id AS user_low_id',
         'f.user_high_id AS user_high_id',
         'f.created_at AS friend_since',
         'c.id AS conversation_id',
         'c.last_message_at AS last_message_at',
+        's.muted_at IS NOT NULL AS muted',
       ])
+      // Unread đếm theo message ĐỐI PHƯƠNG sau mốc đã đọc; preview là message mới nhất 2 chiều.
+      // Subquery per-row chạy trên index (conversation_id, seq) — list bạn bè cỡ trăm, chấp nhận.
+      .addSelect(
+        `(SELECT count(*) FROM messages m
+           WHERE m.conversation_id = c.id
+             AND m.sender_user_id <> :userId
+             AND m.created_at > COALESCE(s.last_read_at, 'epoch'::timestamptz))`,
+        'unread_count',
+      )
+      .addSelect(
+        `(SELECT m.content FROM messages m
+           WHERE m.conversation_id = c.id
+           ORDER BY m.seq DESC LIMIT 1)`,
+        'last_message_preview',
+      )
       .where('f.user_low_id = :userId OR f.user_high_id = :userId', { userId })
       .orderBy('c.last_message_at', 'DESC', 'NULLS LAST')
       .addOrderBy('f.created_at', 'DESC')
@@ -147,6 +185,9 @@ export class FriendService {
         friend_since: Date;
         conversation_id: string;
         last_message_at: Date | null;
+        muted: boolean;
+        unread_count: string;
+        last_message_preview: string | null;
       }>();
 
     return rows.map((r) => ({
@@ -154,7 +195,63 @@ export class FriendService {
       conversationId: r.conversation_id,
       friendSince: r.friend_since,
       lastMessageAt: r.last_message_at,
+      unreadCount: Number(r.unread_count),
+      lastMessagePreview: r.last_message_preview,
+      muted: r.muted,
     }));
+  }
+
+  /**
+   * Đánh dấu đã đọc tới thời điểm hiện tại — idempotent (gọi lại chỉ đẩy mốc tiến lên).
+   * Upsert atomic bằng ON CONFLICT — hai tab cùng gọi không tạo dòng đôi.
+   */
+  async markConversationRead(
+    userId: string,
+    conversationId: string,
+  ): Promise<MemberStateView> {
+    await this.getConversationForMember(userId, conversationId);
+    await this.memberStateRepo
+      .createQueryBuilder()
+      .insert()
+      .into(ConversationMemberState)
+      .values({ conversationId, userId, lastReadAt: () => 'now()' })
+      .orUpdate(['last_read_at'], ['conversation_id', 'user_id'])
+      .execute();
+    return this.getMemberState(userId, conversationId);
+  }
+
+  /** Bật/tắt thông báo hội thoại — idempotent theo trạng thái đích. */
+  async setConversationMuted(
+    userId: string,
+    conversationId: string,
+    muted: boolean,
+  ): Promise<MemberStateView> {
+    await this.getConversationForMember(userId, conversationId);
+    await this.memberStateRepo
+      .createQueryBuilder()
+      .insert()
+      .into(ConversationMemberState)
+      .values({
+        conversationId,
+        userId,
+        mutedAt: muted ? () => 'now()' : null,
+      })
+      .orUpdate(['muted_at'], ['conversation_id', 'user_id'])
+      .execute();
+    return this.getMemberState(userId, conversationId);
+  }
+
+  private async getMemberState(
+    userId: string,
+    conversationId: string,
+  ): Promise<MemberStateView> {
+    const state = await this.memberStateRepo.findOne({
+      where: { conversationId, userId },
+    });
+    return {
+      lastReadAt: state?.lastReadAt ?? null,
+      muted: state?.mutedAt != null,
+    };
   }
 
   /**
@@ -211,8 +308,8 @@ export class FriendService {
    * Gửi message — guard membership + block (2 chiều) + validate độ dài + publish realtime sau
    * persist. Block trả CÙNG mã lỗi/status với "không phải thành viên" (docs/services/
    * safety-service.md § 6) — không tiết lộ ai block ai qua mã lỗi khác nhau, tránh oracle.
-   * `attachment` chỉ dùng cho lời gọi nội bộ qua DI (vd Feed reply-to-story) — xem
-   * `ConversationService.sendMessage`.
+   * `attachment`: HTTP chỉ set được `kind='image'` (whitelist ở controller); các kind nội bộ
+   * khác (vd Feed reply-to-story) vẫn chỉ đi qua DI — xem `ConversationService.sendMessage`.
    */
   async sendMessage(
     userId: string,
@@ -248,6 +345,14 @@ export class FriendService {
         `Message dài quá ${maxLength} ký tự`,
         HttpStatus.UNPROCESSABLE_ENTITY,
         { maxLength },
+      );
+    }
+    // Text rỗng chỉ hợp lệ khi là message ảnh — không có gì để gửi thì chặn.
+    if (content.trim().length === 0 && attachment === null) {
+      throw new DomainException(
+        FriendErrors.MESSAGE_EMPTY,
+        'Nhập nội dung hoặc đính kèm ảnh',
+        HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
 
@@ -309,7 +414,13 @@ export class FriendService {
     // ĐÚNG (khác Soul Match, docs/services/notification-service.md § 3). Tự transaction riêng
     // vì message đã persist xong (không dùng chung transaction — friend-service.md), best-effort:
     // lỗi ở đây KHÔNG được làm fail luồng gửi tin nhắn đã thành công.
+    // Người nhận đã mute hội thoại → bỏ qua cả in-app lẫn push; message + realtime + unread
+    // vẫn hoạt động bình thường (mute chỉ tắt kênh thông báo).
     try {
+      const partnerState = await this.memberStateRepo.findOne({
+        where: { conversationId, userId: partnerId },
+      });
+      if (partnerState?.mutedAt != null) return message;
       const notification = await this.notificationService.create({
         userId: partnerId,
         type: NotificationType.FriendMessage,

@@ -48,7 +48,11 @@ export class Message {
   @Column({ type: 'varchar', length: 255 })
   idempotencyKey!: string;
 
-  /** NULL cho message thường — client KHÔNG tự set qua HTTP, chỉ module khác gọi DI mới set được. */
+  /**
+   * NULL cho message thường. HTTP chỉ set được `kind='image'` (whitelist ở FriendController —
+   * client gửi `imageUrl`, controller đóng gói); các kind khác (vd `story_reply`) vẫn chỉ
+   * module khác set qua DI.
+   */
   @Column({ type: 'jsonb', nullable: true })
   attachment!: MessageAttachment | null;
 

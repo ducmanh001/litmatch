@@ -2,10 +2,12 @@ import { Column, Entity, Index } from 'typeorm';
 
 import { BaseAppEntity } from '../../../common/entities/base.entity';
 
-/** Nguồn tạo quan hệ bạn — cả 2 "Thích" sau Soul/Voice Match (docs/02). */
+/** Nguồn tạo quan hệ bạn — cả 2 "Thích" sau Soul/Voice/Palm/Movie Match (docs/02). */
 export enum FriendshipSource {
   SoulMatch = 'soul_match',
   VoiceMatch = 'voice_match',
+  PalmMatch = 'palm_match',
+  MovieMatch = 'movie_match',
 }
 
 /**

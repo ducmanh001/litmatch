@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import { addDaysUtc, todayUtc } from '../../common/date/utc-date';
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
 import { InitAuthUser1751900000000 } from '../../database/migrations/1751900000000-init-auth-user';
+import { UserProfilePreferences1755800000000 } from '../../database/migrations/1755800000000-user-profile-preferences';
 import { UserRole1753600000000 } from '../../database/migrations/1753600000000-user-role';
 import { MatchingCore1752200000000 } from '../../database/migrations/1752200000000-matching-core';
 import { MatchingGenderPreference1752300000000 } from '../../database/migrations/1752300000000-matching-gender-preference';
@@ -12,10 +13,12 @@ import { Safety1752800000000 } from '../../database/migrations/1752800000000-saf
 import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
 import { ConversationStreak1754200000000 } from '../../database/migrations/1754200000000-conversation-streak';
 import { MessageAttachment1754400000000 } from '../../database/migrations/1754400000000-message-attachment';
+import { ConversationMemberState1755600000000 } from '../../database/migrations/1755600000000-conversation-member-state';
 
 import { FriendService } from './friend.service';
 import { FriendErrors } from './friend.errors';
 import { Conversation } from './entities/conversation.entity';
+import { ConversationMemberState } from './entities/conversation-member-state.entity';
 import { ConversationStreak } from './entities/conversation-streak.entity';
 import { Friendship, FriendshipSource } from './entities/friendship.entity';
 import { Message } from './entities/message.entity';
@@ -74,6 +77,7 @@ d('Friend integration (Postgres thật)', () => {
   let friend: FriendService;
   let safety: SafetyService;
   let streakService: StreakService;
+  const notificationCreateSpy = jest.fn(async () => ({ id: 'notif-stub' }));
 
   async function createUser(nickname: string): Promise<User> {
     const repo = ds.getRepository(User);
@@ -141,6 +145,7 @@ d('Friend integration (Postgres thật)', () => {
         SoulMatchRating,
         Friendship,
         Conversation,
+        ConversationMemberState,
         Message,
         ConversationStreak,
         Report,
@@ -148,6 +153,7 @@ d('Friend integration (Postgres thật)', () => {
       ],
       migrations: [
         InitAuthUser1751900000000,
+        UserProfilePreferences1755800000000,
         UserRole1753600000000,
         MatchingCore1752200000000,
         MatchingGenderPreference1752300000000,
@@ -157,6 +163,7 @@ d('Friend integration (Postgres thật)', () => {
         ReportTargetVideo1754900000000,
         ConversationStreak1754200000000,
         MessageAttachment1754400000000,
+        ConversationMemberState1755600000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -188,12 +195,13 @@ d('Friend integration (Postgres thật)', () => {
     );
     friend = new FriendService(
       ds.getRepository(Friendship),
+      ds.getRepository(ConversationMemberState),
       conversationService,
       streakService,
       safety,
-      // Notification không phải trọng tâm suite này (test riêng ở notification.service.spec.ts) — stub no-op
+      // Spy đếm được — suite mute cần khẳng định notification BỊ BỎ QUA khi người nhận mute
       {
-        create: async () => ({ id: 'notif-stub' }),
+        create: notificationCreateSpy,
         sendPush: async () => undefined,
       } as never,
       configStub,
@@ -317,6 +325,30 @@ d('Friend integration (Postgres thật)', () => {
     expect(page2.meta.nextCursor).toBeNull();
   });
 
+  it('message ảnh (attachment image) persist + đọc lại được; message trống hoàn toàn → 422 MESSAGE_EMPTY', async () => {
+    const [a, b] = await Promise.all([
+      createUser('img-a'),
+      createUser('img-b'),
+    ]);
+    await ensureFriendship(a, b);
+    const conv = await friend.getConversationWithFriend(a.id, b.id);
+
+    const sent = await friend.sendMessage(a.id, conv.id, '', 'img-1', {
+      kind: 'image',
+      payload: { url: 'https://example.com/anh.png' },
+    });
+    expect(sent.attachment).toEqual({
+      kind: 'image',
+      payload: { url: 'https://example.com/anh.png' },
+    });
+    const page = await friend.listMessages(b.id, conv.id, 10);
+    expect(page.items[0]?.attachment?.kind).toBe('image');
+
+    await expect(
+      friend.sendMessage(a.id, conv.id, '   ', 'img-2'),
+    ).rejects.toMatchObject({ code: FriendErrors.MESSAGE_EMPTY });
+  });
+
   it('message quá FRIEND_MESSAGE_MAX_LENGTH → 422 MESSAGE_TOO_LONG', async () => {
     const [a, b] = await Promise.all([
       createUser('long-a'),
@@ -391,6 +423,81 @@ d('Friend integration (Postgres thật)', () => {
     expect(
       list.find((e) => e.partnerId === oldFriend.id)?.lastMessageAt,
     ).toBeNull();
+  });
+
+  describe('unread + mark-read + mute (conversation_member_states)', () => {
+    it('unread đếm message ĐỐI PHƯƠNG sau mốc đã đọc; preview là message mới nhất; mark-read idempotent', async () => {
+      const [a, b] = await Promise.all([
+        createUser('ur-a'),
+        createUser('ur-b'),
+      ]);
+      await ensureFriendship(a, b);
+      const conv = await friend.getConversationWithFriend(a.id, b.id);
+
+      await friend.sendMessage(a.id, conv.id, 'xin chao', 'ur-1');
+      await friend.sendMessage(a.id, conv.id, 'ban khoe khong', 'ur-2');
+
+      // Người nhận thấy 2 chưa đọc + preview mới nhất; NGƯỜI GỬI không tự thấy unread của mình
+      const listB = await friend.listFriends(b.id);
+      expect(listB[0]?.unreadCount).toBe(2);
+      expect(listB[0]?.lastMessagePreview).toBe('ban khoe khong');
+      expect(listB[0]?.muted).toBe(false);
+      const listA = await friend.listFriends(a.id);
+      expect(listA[0]?.unreadCount).toBe(0);
+
+      // Mark-read đẩy mốc tiến lên — gọi lại lần 2 không lỗi (idempotent)
+      await friend.markConversationRead(b.id, conv.id);
+      await friend.markConversationRead(b.id, conv.id);
+      expect((await friend.listFriends(b.id))[0]?.unreadCount).toBe(0);
+
+      // Message mới sau mốc đã đọc → unread đếm lại từ mốc
+      await friend.sendMessage(a.id, conv.id, 'con do khong', 'ur-3');
+      expect((await friend.listFriends(b.id))[0]?.unreadCount).toBe(1);
+    });
+
+    it('mute: notification friend_message BỊ BỎ QUA khi người nhận mute, bật lại thì có; message vẫn gửi bình thường', async () => {
+      const [a, b] = await Promise.all([
+        createUser('mu-a'),
+        createUser('mu-b'),
+      ]);
+      await ensureFriendship(a, b);
+      const conv = await friend.getConversationWithFriend(a.id, b.id);
+
+      const muted = await friend.setConversationMuted(b.id, conv.id, true);
+      expect(muted.muted).toBe(true);
+      expect((await friend.listFriends(b.id))[0]?.muted).toBe(true);
+
+      notificationCreateSpy.mockClear();
+      await friend.sendMessage(a.id, conv.id, 'goi khong bao', 'mu-1');
+      expect(notificationCreateSpy).not.toHaveBeenCalled();
+      // Mute chỉ tắt kênh thông báo — message vẫn tới và unread vẫn đếm
+      expect((await friend.listFriends(b.id))[0]?.unreadCount).toBe(1);
+
+      const unmuted = await friend.setConversationMuted(b.id, conv.id, false);
+      expect(unmuted.muted).toBe(false);
+      notificationCreateSpy.mockClear();
+      await friend.sendMessage(a.id, conv.id, 'goi co bao', 'mu-2');
+      expect(notificationCreateSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('IDOR: người ngoài conversation gọi mark-read/mute → CÙNG 404 CONVERSATION_NOT_FOUND', async () => {
+      const [a, b, outsider] = await Promise.all([
+        createUser('id-a'),
+        createUser('id-b'),
+        createUser('id-out'),
+      ]);
+      await ensureFriendship(a, b);
+      const conv = await friend.getConversationWithFriend(a.id, b.id);
+
+      for (const call of [
+        () => friend.markConversationRead(outsider.id, conv.id),
+        () => friend.setConversationMuted(outsider.id, conv.id, true),
+      ]) {
+        await expect(call()).rejects.toMatchObject({
+          code: FriendErrors.CONVERSATION_NOT_FOUND,
+        });
+      }
+    });
   });
 
   describe('streak (docs/services/streak-service.md)', () => {

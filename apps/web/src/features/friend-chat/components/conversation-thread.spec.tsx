@@ -52,6 +52,9 @@ function mockPartnerAndConversation(onGet: (path: string) => unknown): void {
     if (path === '/api/v1/conversations/{id}/messages') {
       return { data: { data: { items: [], meta: {} } } } as never;
     }
+    if (path === '/api/v1/friends') {
+      return { data: { data: [] } } as never;
+    }
     return onGet(path);
   });
 }
@@ -139,11 +142,13 @@ describe('ConversationThread', () => {
     expect(routerPush).toHaveBeenCalledWith('/friends');
   });
 
-  it('menu "..." → tắt thông báo → toast, không gọi network nào (client state thuần)', async () => {
+  it('menu "..." → tắt thông báo → POST mute persist server + toast', async () => {
     mockPartnerAndConversation((path) => {
       throw new Error(`unexpected GET ${path}`);
     });
-    const postSpy = vi.spyOn(apiClient, 'POST');
+    const postSpy = vi.spyOn(apiClient, 'POST').mockResolvedValue({
+      data: { data: { lastReadAt: null, muted: true } },
+    } as never);
 
     const user = userEvent.setup();
     renderThread();
@@ -156,6 +161,26 @@ describe('ConversationThread', () => {
     );
 
     expect(await screen.findByText('Đã tắt thông báo từ Bạn B')).toBeVisible();
-    expect(postSpy).not.toHaveBeenCalled();
+    expect(postSpy).toHaveBeenCalledWith('/api/v1/conversations/{id}/mute', {
+      params: { path: { id: 'conv-1' } },
+      body: { muted: true },
+    });
+  });
+
+  it('mở thread → POST mark-read để badge chưa đọc về 0', async () => {
+    mockPartnerAndConversation((path) => {
+      throw new Error(`unexpected GET ${path}`);
+    });
+    const postSpy = vi.spyOn(apiClient, 'POST').mockResolvedValue({
+      data: { data: { lastReadAt: new Date().toISOString(), muted: false } },
+    } as never);
+
+    renderThread();
+
+    await waitFor(() =>
+      expect(postSpy).toHaveBeenCalledWith('/api/v1/conversations/{id}/read', {
+        params: { path: { id: 'conv-1' } },
+      }),
+    );
   });
 });

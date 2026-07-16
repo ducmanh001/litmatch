@@ -5,7 +5,7 @@ import { RealtimeEvents } from '@litmatch/common-dtos/pure';
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect } from 'react';
 
 import { confirmAction, confirmStore } from '../../../shared/lib/confirm-store';
 import { showToast } from '../../../shared/lib/toast-store';
@@ -15,8 +15,13 @@ import {
   friendChatKeys,
   useBlockUser,
   useConversationWithFriend,
+  useFriends,
+  useMarkConversationRead,
+  useMuteConversation,
   usePartnerProfile,
+  useReportUser,
 } from '../api';
+import { useCreateInvite } from '../../matching/invite-api';
 import { FriendAvatar } from './friend-avatar';
 import { MessageComposer } from './message-composer';
 import { MessageList } from './message-list';
@@ -30,17 +35,27 @@ const MENU_CLOSE_DELAY_MS = 320;
 export function ConversationThread({ friendUserId }: { friendUserId: string }) {
   const queryClient = useQueryClient();
   const router = useRouter();
-  const [muted, setMuted] = useState(false);
   const blockUser = useBlockUser();
+  const reportUser = useReportUser();
+  const createInvite = useCreateInvite();
+  const friends = useFriends();
+  const { mutate: markReadMutate } = useMarkConversationRead();
+  const muteConversation = useMuteConversation();
   // Route theo friendUserId (không phải conversationId) — conversation rỗng tin nhắn thì
   // không có cách nào suy ra partner từ lịch sử chat; resolve cả 2 độc lập từ URL param.
   const partner = usePartnerProfile(friendUserId);
   const conversation = useConversationWithFriend(friendUserId);
+  const conversationId = conversation.data?.id;
+
+  // Đang mở thread = đã đọc: đánh dấu khi vào và mỗi khi có message mới lúc đang xem —
+  // server idempotent nên gọi lặp an toàn; badge ở /friends nhờ đó tự về 0.
+  useEffect(() => {
+    if (conversationId !== undefined) markReadMutate(conversationId);
+  }, [conversationId, markReadMutate]);
 
   useRealtimeEvent<FriendMessageEventData>(
     RealtimeEvents.FriendMessage,
     (data) => {
-      const conversationId = conversation.data?.id;
       if (
         conversationId !== undefined &&
         data.conversationId === conversationId
@@ -48,13 +63,14 @@ export function ConversationThread({ friendUserId }: { friendUserId: string }) {
         void queryClient.invalidateQueries({
           queryKey: friendChatKeys.messages(conversationId),
         });
+        markReadMutate(conversationId);
       }
     },
   );
 
   if (partner.isPending || conversation.isPending) {
     return (
-      <p className="px-5 text-sm text-slate-500 dark:text-slate-400">
+      <p className="px-5 text-sm text-slate-500 dark:text-white/70">
         Đang tải…
       </p>
     );
@@ -80,10 +96,15 @@ export function ConversationThread({ friendUserId }: { friendUserId: string }) {
   // chiếu trong các closure onClick định nghĩa bên dưới — access qua `partner.data` trực tiếp
   // trong closure sẽ bị widen lại thành `... | undefined`.
   const partnerData = partner.data;
+  const conversationData = conversation.data;
 
-  // Đúng lmConfirm('Linh', 'Tuỳ chọn cuộc trò chuyện', ...) ở chat.html — 4 mục: xem hồ sơ
-  // (chưa có route xem hồ sơ người khác → để "sắp có"), tắt/bật thông báo (client state thuần —
-  // không có API mute conversation), chặn (Safety module thật), báo cáo.
+  // Trạng thái mute persist ở server (conversation_member_states) — đọc từ cache /friends.
+  const muted =
+    friends.data?.find((f) => f.conversationId === conversationData.id)
+      ?.muted ?? false;
+
+  // Đúng lmConfirm('Linh', 'Tuỳ chọn cuộc trò chuyện', ...) ở chat.html — mọi mục đều có
+  // hành vi thật: public profile, preference mute, block và report qua Safety.
   const openOptionsMenu = () => {
     void confirmAction({
       title: partnerData.nickname,
@@ -91,12 +112,15 @@ export function ConversationThread({ friendUserId }: { friendUserId: string }) {
       actionLabel: 'Đóng',
       content: (
         <div className="mb-5 space-y-2">
-          <p
-            aria-label="Xem hồ sơ (sắp có)"
-            className="flex w-full cursor-not-allowed items-center gap-3 rounded-xl bg-slate-100 px-4 py-3 text-left text-sm font-semibold opacity-50 dark:bg-surf2"
+          <button
+            type="button"
+            onClick={() =>
+              closeMenuThen(() => router.push(`/users/${partnerData.id}`))
+            }
+            className="flex w-full items-center gap-3 rounded-xl bg-slate-100 px-4 py-3 text-left text-sm font-semibold dark:bg-surf2"
           >
             👤 Xem hồ sơ
-          </p>
+          </button>
           <button
             type="button"
             onClick={handleToggleMute}
@@ -130,16 +154,25 @@ export function ConversationThread({ friendUserId }: { friendUserId: string }) {
     setTimeout(next, MENU_CLOSE_DELAY_MS);
   };
 
-  // Mute là state UI thuần phía client — không có API "mute conversation" ở BE (docs/13 §13.1:
-  // không bịa network call cho state không tồn tại), chỉ tắt tiếng thông báo local.
+  // Mute persist ở server — notification friend_message bị bỏ qua ở BE khi đang mute.
   const handleToggleMute = () => {
     closeMenuThen(() => {
       const next = !muted;
-      setMuted(next);
-      showToast(
-        next
-          ? `Đã tắt thông báo từ ${partnerData.nickname}`
-          : 'Đã bật lại thông báo',
+      muteConversation.mutate(
+        { conversationId: conversationData.id, muted: next },
+        {
+          onSuccess: () =>
+            showToast(
+              next
+                ? `Đã tắt thông báo từ ${partnerData.nickname}`
+                : 'Đã bật lại thông báo',
+            ),
+          onError: (error) =>
+            showToast(
+              isApiError(error) ? error.message : 'Có lỗi xảy ra, thử lại.',
+              'warn',
+            ),
+        },
       );
     });
   };
@@ -168,10 +201,64 @@ export function ConversationThread({ friendUserId }: { friendUserId: string }) {
     });
   };
 
-  // Mockup cũng không có picker lý do report thật — chỉ điều hướng sang trang an toàn
-  // (privacy.html). Trang /privacy thật cũng theo đúng quyết định đó (bỏ report-reason giả).
   const handleReport = () => {
-    closeMenuThen(() => router.push('/privacy'));
+    closeMenuThen(() => {
+      void confirmAction({
+        title: `Báo cáo ${partnerData.nickname}`,
+        message: 'Chọn lý do phù hợp nhất',
+        actionLabel: 'Đóng',
+        content: (
+          <div className="mb-5 grid gap-2">
+            {REPORT_REASONS.map((reason) => (
+              <button
+                key={reason.value}
+                type="button"
+                disabled={reportUser.isPending}
+                onClick={() => {
+                  void reportUser
+                    .mutateAsync({
+                      targetUserId: partnerData.id,
+                      reason: reason.value,
+                    })
+                    .then(() => {
+                      confirmStore.resolve(false);
+                      showToast(
+                        'Đã gửi báo cáo. Cảm ơn bạn đã giúp cộng đồng an toàn hơn.',
+                      );
+                    })
+                    .catch((error: unknown) =>
+                      showToast(
+                        isApiError(error)
+                          ? error.message
+                          : 'Không thể gửi báo cáo.',
+                        'warn',
+                      ),
+                    );
+                }}
+                className="rounded-xl bg-rose-500/10 px-4 py-3 text-left text-sm font-semibold text-rose-500 disabled:opacity-50"
+              >
+                {reason.label}
+              </button>
+            ))}
+          </div>
+        ),
+      });
+    });
+  };
+
+  const handleVoiceInvite = () => {
+    createInvite.mutate(
+      { inviteeUserId: partnerData.id, matchType: 'voice' },
+      {
+        onSuccess: () =>
+          showToast(`Đã mời ${partnerData.nickname} tham gia Voice Match`),
+        onError: (error) =>
+          showToast(
+            isApiError(error) ? error.message : 'Không thể gửi lời mời.',
+            'warn',
+          ),
+      },
+    );
   };
 
   return (
@@ -207,9 +294,10 @@ export function ConversationThread({ friendUserId }: { friendUserId: string }) {
         </h1>
         <button
           type="button"
-          disabled
-          aria-label="Voice Match (sắp có)"
-          className="bg-iris/10 text-irisl flex h-9 w-9 shrink-0 items-center justify-center rounded-full opacity-50"
+          disabled={createInvite.isPending}
+          onClick={handleVoiceInvite}
+          aria-label="Mời Voice Match"
+          className="bg-iris/10 text-irisl flex h-9 w-9 shrink-0 items-center justify-center rounded-full disabled:opacity-50"
         >
           <MicIcon width={16} height={16} />
         </button>
@@ -243,3 +331,11 @@ export function ConversationThread({ friendUserId }: { friendUserId: string }) {
     </div>
   );
 }
+
+const REPORT_REASONS = [
+  { value: 'harassment', label: 'Quấy rối hoặc bắt nạt' },
+  { value: 'spam', label: 'Spam hoặc lừa đảo' },
+  { value: 'underage', label: 'Nghi ngờ vị thành niên' },
+  { value: 'inappropriate_content', label: 'Nội dung không phù hợp' },
+  { value: 'other', label: 'Lý do khác' },
+] as const;

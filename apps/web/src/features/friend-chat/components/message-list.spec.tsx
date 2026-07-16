@@ -73,5 +73,7 @@ describe('MessageList', () => {
     const partner = await screen.findByText('Của bạn');
     expect(mine.className).toContain('bg-primary');
     expect(partner.className).not.toContain('bg-primary');
+    expect(mine.className).toContain('[overflow-wrap:anywhere]');
+    expect(partner.className).toContain('[overflow-wrap:anywhere]');
   });
 });
