@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
 import { InitAuthUser1751900000000 } from '../../database/migrations/1751900000000-init-auth-user';
+import { UserProfilePreferences1755800000000 } from '../../database/migrations/1755800000000-user-profile-preferences';
 import { UserRole1753600000000 } from '../../database/migrations/1753600000000-user-role';
 import { EconomyLedger1752000000000 } from '../../database/migrations/1752000000000-economy-ledger';
 import { EconomyRefund1752100000000 } from '../../database/migrations/1752100000000-economy-refund';
@@ -17,6 +18,8 @@ import { ReportTargetVideo1754900000000 } from '../../database/migrations/175490
 import { Notification1753000000000 } from '../../database/migrations/1753000000000-notification';
 import { PartyRoomLivekitUrl1753500000000 } from '../../database/migrations/1753500000000-party-room-livekit-url';
 import { PartyRoomHostDisconnectGrace1753900000000 } from '../../database/migrations/1753900000000-party-room-host-disconnect-grace';
+import { PartyRoomCategory1755200000000 } from '../../database/migrations/1755200000000-party-room-category';
+import { GiftEventVideo1755700000000 } from '../../database/migrations/1755700000000-gift-event-video';
 
 import { GiftService } from './gift.service';
 import { Gift } from './entities/gift.entity';
@@ -116,6 +119,9 @@ d('Gift integration (Postgres thật)', () => {
     role: 'user',
   });
 
+  /** videoId → authorUserId — seed cho stub getVideoOrThrow (video gift suite). */
+  const videoAuthors = new Map<string, string>();
+
   let seedCounter = 0;
 
   async function createUser(nickname: string, isGuest = false): Promise<User> {
@@ -207,6 +213,7 @@ d('Gift integration (Postgres thật)', () => {
       ],
       migrations: [
         InitAuthUser1751900000000,
+        UserProfilePreferences1755800000000,
         UserRole1753600000000,
         EconomyLedger1752000000000,
         EconomyRefund1752100000000,
@@ -221,6 +228,8 @@ d('Gift integration (Postgres thật)', () => {
         Notification1753000000000,
         PartyRoomLivekitUrl1753500000000,
         PartyRoomHostDisconnectGrace1753900000000,
+        PartyRoomCategory1755200000000,
+        GiftEventVideo1755700000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -271,6 +280,17 @@ d('Gift integration (Postgres thật)', () => {
       ds.getRepository(GiftEvent),
       economy,
       party,
+      // Stub visibility guard của short-video (guard thật test ở short-video.service.spec) —
+      // luồng TIỀN của video gift bên dưới vẫn chạy Postgres thật.
+      {
+        getVideoOrThrow: async (_user: AuthenticatedUser, videoId: string) => {
+          const authorUserId = videoAuthors.get(videoId);
+          if (authorUserId === undefined) {
+            throw new Error(`video ${videoId} chưa seed trong videoAuthors`);
+          }
+          return { id: videoId, authorUserId };
+        },
+      } as never,
       userService,
       notification,
       configStub,
@@ -542,5 +562,108 @@ d('Gift integration (Postgres thật)', () => {
     expect(catalog.length).toBeGreaterThanOrEqual(6);
     expect(catalog[0].code).toBe('rose');
     expect(catalog.every((g) => g.active)).toBe(true);
+  });
+
+  describe('video gift — tặng quà cho tác giả video (video.html "Tặng")', () => {
+    it('happy path: người nhận suy từ video; GiftEvent context videoId (roomId NULL); tiền/PTS đúng như quà phòng', async () => {
+      const [sender, author] = await Promise.all([
+        createUser('vg-sender'),
+        createUser('vg-author'),
+      ]);
+      await fund(sender.id);
+      const videoId = '7b39bb51-0000-4000-8000-000000000001';
+      videoAuthors.set(videoId, author.id);
+      const teddy = await giftByCode('teddy'); // 99 DIA
+
+      const { giftEvent, replayed } = await gift.sendVideoGift(
+        auth(sender.id),
+        videoId,
+        teddy.id,
+        'vg-key-1',
+      );
+
+      expect(replayed).toBe(false);
+      expect(giftEvent.videoId).toBe(videoId);
+      expect(giftEvent.roomId).toBeNull();
+      expect(giftEvent.receiverUserId).toBe(author.id);
+      expect(await walletOf(sender.id)).toEqual({
+        balance: 1200 - 99,
+        earnings: 0,
+      });
+      expect(await walletOf(author.id)).toEqual({ balance: 0, earnings: 39 });
+
+      // double-entry cân theo từng currency — cùng bất biến với quà trong phòng
+      const sums: Array<{ currency: string; debit: string; credit: string }> =
+        await ds.query(
+          `SELECT currency,
+                  SUM(CASE WHEN direction = 'debit' THEN amount ELSE 0 END) AS debit,
+                  SUM(CASE WHEN direction = 'credit' THEN amount ELSE 0 END) AS credit
+             FROM ledger_entries WHERE transaction_id = $1 GROUP BY currency`,
+          [giftEvent.transactionId],
+        );
+      expect(sums).toHaveLength(2);
+      for (const row of sums) expect(row.debit).toBe(row.credit);
+
+      // notification gift_received mang videoId (không roomId) — ghi cùng transaction tiền
+      const notifications = await ds
+        .getRepository(Notification)
+        .findBy({ userId: author.id, type: NotificationType.GiftReceived });
+      expect(notifications).toHaveLength(1);
+      expect(notifications[0].payload).toMatchObject({
+        videoId,
+        senderUserId: sender.id,
+        giftCode: 'teddy',
+      });
+
+      // không có fanout phòng cho video gift
+      expect(giftSentCount()).toBe(0);
+    });
+
+    it('replay cùng Idempotency-Key → không trừ tiền lần 2, trả lại đúng GiftEvent cũ', async () => {
+      const [sender, author] = await Promise.all([
+        createUser('vg-idem-sender'),
+        createUser('vg-idem-author'),
+      ]);
+      await fund(sender.id);
+      const videoId = '7b39bb51-0000-4000-8000-000000000002';
+      videoAuthors.set(videoId, author.id);
+      const rose = await giftByCode('rose'); // 1 DIA
+
+      const first = await gift.sendVideoGift(
+        auth(sender.id),
+        videoId,
+        rose.id,
+        'vg-idem',
+      );
+      const second = await gift.sendVideoGift(
+        auth(sender.id),
+        videoId,
+        rose.id,
+        'vg-idem',
+      );
+
+      expect(second.replayed).toBe(true);
+      expect(second.giftEvent.id).toBe(first.giftEvent.id);
+      expect(await walletOf(sender.id)).toEqual({
+        balance: 1200 - 1,
+        earnings: 0,
+      });
+    });
+
+    it('tự tặng quà cho video của chính mình → 400 SELF_GIFT_FORBIDDEN, không trừ tiền', async () => {
+      const author = await createUser('vg-self');
+      await fund(author.id);
+      const videoId = '7b39bb51-0000-4000-8000-000000000003';
+      videoAuthors.set(videoId, author.id);
+      const rose = await giftByCode('rose');
+
+      await expect(
+        gift.sendVideoGift(auth(author.id), videoId, rose.id, 'vg-self-key'),
+      ).rejects.toMatchObject({ code: 'GIFT_SELF_GIFT_FORBIDDEN' });
+      expect(await walletOf(author.id)).toEqual({
+        balance: 1200,
+        earnings: 0,
+      });
+    });
   });
 });

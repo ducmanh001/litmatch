@@ -18,6 +18,7 @@ import { GIFT_REDIS } from './redis/gift-redis.provider';
 import { EconomyService } from '../economy';
 import { NotificationService, NotificationType } from '../notification';
 import { PartyRoomService } from '../party-room';
+import { ShortVideoService } from '../short-video';
 import { UserService } from '../user';
 
 import type { EntityManager } from 'typeorm';
@@ -67,6 +68,7 @@ export class GiftService {
     private readonly giftEventRepo: Repository<GiftEvent>,
     private readonly economy: EconomyService,
     private readonly partyRoomService: PartyRoomService,
+    private readonly shortVideoService: ShortVideoService,
     private readonly userService: UserService,
     private readonly notificationService: NotificationService,
     private readonly config: ConfigService<CoreApiEnv, true>,
@@ -249,6 +251,100 @@ export class GiftService {
     if (!result.replayed) {
       await this.publishGiftSent(roomId, gift, giftEvent);
       if (notification) await this.notificationService.sendPush(notification);
+    }
+    return { giftEvent, gift, replayed: result.replayed };
+  }
+
+  /**
+   * Tặng quà cho TÁC GIẢ video (video.html "Tặng") — người nhận suy từ video, client không
+   * gửi receiverUserId (chống gửi lệch người nhận). Cùng chốt tiền với quà trong phòng:
+   * `EconomyService.sendGift` 1 transaction + idempotency, GiftEvent ghi cùng transaction
+   * (context `videoId`, không `roomId`). Không có fanout realtime phòng — người nhận biết
+   * qua notification `gift_received`.
+   */
+  async sendVideoGift(
+    user: AuthenticatedUser,
+    videoId: string,
+    giftId: string,
+    idempotencyKey: string,
+  ): Promise<SendGiftResult> {
+    // Video phải nhìn thấy được với người tặng (published; guard trung tâm của short-video)
+    const video = await this.shortVideoService.getVideoOrThrow(user, videoId);
+    const receiverUserId = video.authorUserId;
+    if (receiverUserId === user.userId) {
+      throw new DomainException(
+        GiftErrors.SELF_GIFT_FORBIDDEN,
+        'Không tự tặng quà cho chính mình',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const gift = await this.giftRepo.findOneBy({ id: giftId, active: true });
+    if (!gift) {
+      throw new DomainException(
+        GiftErrors.GIFT_NOT_FOUND,
+        'Quà không tồn tại hoặc đã ngừng bán',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const receiver = await this.userService.getByIdOrThrow(receiverUserId);
+    const ratePercent = this.config.getOrThrow('GIFT_POINTS_RATE_PERCENT', {
+      infer: true,
+    });
+    const pointsAwarded = receiver.isGuest
+      ? 0
+      : Math.floor((gift.priceDiamond * ratePercent) / 100);
+
+    let notification: Notification | undefined;
+    const result = await this.economy.sendGift({
+      senderUserId: user.userId,
+      receiverUserId,
+      priceDiamond: gift.priceDiamond,
+      pointsAwarded,
+      idempotencyKey: giftSendIdempotencyKey(user.userId, idempotencyKey),
+      metadata: {
+        giftId: gift.id,
+        giftCode: gift.code,
+        videoId,
+        pointsRatePercent: ratePercent,
+        receiverIsGuest: receiver.isGuest,
+      },
+      withinTransaction: async (manager, transactionId) => {
+        await manager.save(
+          manager.create(GiftEvent, {
+            giftId: gift.id,
+            roomId: null,
+            videoId,
+            senderUserId: user.userId,
+            receiverUserId,
+            priceDiamond: gift.priceDiamond,
+            pointsAwarded,
+            pointsRatePercent: ratePercent,
+            transactionId,
+          }),
+        );
+        notification = await this.notificationService.createWithManager(
+          manager,
+          {
+            userId: receiverUserId,
+            type: NotificationType.GiftReceived,
+            payload: {
+              videoId,
+              senderUserId: user.userId,
+              giftCode: gift.code,
+              priceDiamond: gift.priceDiamond,
+            },
+          },
+        );
+      },
+    });
+
+    const giftEvent = await this.giftEventRepo.findOneByOrFail({
+      transactionId: result.transactionId,
+    });
+    if (!result.replayed && notification) {
+      await this.notificationService.sendPush(notification);
     }
     return { giftEvent, gift, replayed: result.replayed };
   }

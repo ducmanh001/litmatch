@@ -17,7 +17,12 @@ import {
 import { Throttle, minutes } from '@nestjs/throttler';
 
 import { GiftService } from './gift.service';
-import { GiftDto, GiftEventDto, SendGiftDto } from './dto/gift.dtos';
+import {
+  GiftDto,
+  GiftEventDto,
+  SendGiftDto,
+  SendVideoGiftDto,
+} from './dto/gift.dtos';
 import {
   ApiIdempotencyKeyHeader,
   IdempotencyKey,
@@ -61,6 +66,30 @@ export class GiftController {
       roomId,
       body.giftId,
       body.receiverUserId,
+      idempotencyKey,
+    );
+    return GiftEventDto.from(giftEvent, gift.code, replayed);
+  }
+
+  @Post('videos/:videoId/gifts')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 30, ttl: minutes(1) } })
+  @ApiIdempotencyKeyHeader()
+  @ApiOperation({
+    summary:
+      'Tặng quà cho tác giả video — người nhận suy từ video; cùng chốt tiền/idempotency với quà trong phòng',
+  })
+  @ApiOkResponse({ type: GiftEventDto })
+  async sendVideoGift(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('videoId', ParseUUIDPipe) videoId: string,
+    @Body() body: SendVideoGiftDto,
+    @IdempotencyKey() idempotencyKey: string,
+  ): Promise<GiftEventDto> {
+    const { giftEvent, gift, replayed } = await this.giftService.sendVideoGift(
+      user,
+      videoId,
+      body.giftId,
       idempotencyKey,
     );
     return GiftEventDto.from(giftEvent, gift.code, replayed);

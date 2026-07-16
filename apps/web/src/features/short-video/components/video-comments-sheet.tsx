@@ -2,6 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { isApiError } from '@litmatch/api-client';
+import { useEffect, useId, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { cn } from '../../../shared/lib/cn';
@@ -146,6 +147,31 @@ export function VideoCommentsSheet({
   open: boolean;
   onClose: () => void;
 }) {
+  const titleId = useId();
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    previouslyFocusedRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    closeButtonRef.current?.focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      onClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      previouslyFocusedRef.current?.focus();
+      previouslyFocusedRef.current = null;
+    };
+  }, [onClose, open]);
+
   return (
     <>
       {open && (
@@ -157,6 +183,10 @@ export function VideoCommentsSheet({
         />
       )}
       <div
+        role="dialog"
+        aria-labelledby={titleId}
+        aria-hidden={!open}
+        inert={!open}
         className={cn(
           'video-comments-sheet flex flex-col bg-white shadow-2xl shadow-black/30 dark:bg-surf',
           open && 'open',
@@ -166,10 +196,14 @@ export function VideoCommentsSheet({
           <div className="h-1 w-10 rounded-full bg-slate-300 dark:bg-white/20" />
         </div>
         <div className="flex shrink-0 items-center justify-between border-b border-black/5 px-5 py-3 dark:border-white/10">
-          <p className="text-sm font-bold text-slate-900 dark:text-white">
+          <p
+            id={titleId}
+            className="text-sm font-bold text-slate-900 dark:text-white"
+          >
             {commentCount} bình luận
           </p>
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={onClose}
             aria-label="Đóng"

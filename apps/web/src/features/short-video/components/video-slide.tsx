@@ -126,6 +126,7 @@ export function VideoSlide({
           src={video.playbackUrl}
           poster={video.thumbnailUrl ?? undefined}
           className="absolute inset-0 h-full w-full object-cover"
+          preload="metadata"
           muted={muted}
           loop
           playsInline

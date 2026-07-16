@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { showToast } from '../../../shared/lib/toast-store';
 import { useLikeVideo, useUnlikeVideo } from '../api';
 
-import type { VideoDto } from '../api';
+import type { ReactionStatusDto, VideoDto } from '../api';
 import type { SVGProps } from 'react';
 
 function HeartIcon({
@@ -33,11 +33,24 @@ function HeartIcon({
  * `GET /posts/{postId}/reactions`) — `liked` chỉ biết được sau khi tự bấm trong phiên này, mặc
  * định coi là chưa thích khi mount.
  */
-export function VideoLikeButton({ video }: { video: VideoDto }) {
-  const [reaction, setReaction] = useState({
+export function VideoLikeButton({
+  video,
+  reaction: controlledReaction,
+  onReactionChange,
+}: {
+  video: VideoDto;
+  reaction?: ReactionStatusDto;
+  onReactionChange?: (reaction: ReactionStatusDto) => void;
+}) {
+  const [localReaction, setLocalReaction] = useState<ReactionStatusDto>({
     liked: false,
     likeCount: video.likeCount,
   });
+  const reaction = controlledReaction ?? localReaction;
+  const setReaction = (next: ReactionStatusDto) => {
+    setLocalReaction(next);
+    onReactionChange?.(next);
+  };
   const like = useLikeVideo(video.id);
   const unlike = useUnlikeVideo(video.id);
   const pending = like.isPending || unlike.isPending;

@@ -14,32 +14,56 @@ export type VideoCommentDto = ApiSchema<'VideoCommentDto'>;
 export type ReactionStatusDto = ApiSchema<'ReactionStatusDto'>;
 export type ReportVideoDto = ApiSchema<'ReportVideoDto'>;
 
-/** `sort` thật từ backend (short-video.dtos.ts `ListVideosQueryDto`) — không có filter theo
- * quan hệ follow, `ranked` chỉ là engagement + time-decay toàn cục (video-ranking.service.ts). */
+/** `sort` thật từ backend (short-video.dtos.ts `ListVideosQueryDto`). */
 export type VideoFeedSort = 'recent' | 'ranked';
+/** Tab video.html: "Dành cho bạn" = for_you (mọi video), "Đang theo dõi" = following (video bạn bè). */
+export type VideoFeedScope = 'for_you' | 'following';
 
 const VIDEO_FEED_PAGE_LIMIT = 10;
 const VIDEO_COMMENTS_PAGE_LIMIT = 30;
+const VIDEO_AUTHOR_STALE_TIME_MS = 5 * 60 * 1000;
 
 export const shortVideoKeys = {
   listAll: ['short-video', 'list'] as const,
-  list: (sort: VideoFeedSort) => ['short-video', 'list', sort] as const,
+  list: (sort: VideoFeedSort, scope: VideoFeedScope) =>
+    ['short-video', 'list', sort, scope] as const,
   comments: (videoId: string) => ['short-video', 'comments', videoId] as const,
 };
 
-export function useVideoFeed(sort: VideoFeedSort) {
+export function useVideoFeed(sort: VideoFeedSort, scope: VideoFeedScope) {
   return useInfiniteQuery({
-    queryKey: shortVideoKeys.list(sort),
+    queryKey: shortVideoKeys.list(sort, scope),
     queryFn: async ({ pageParam }) => {
       const res = await apiClient.GET('/api/v1/videos', {
         params: {
-          query: { sort, limit: VIDEO_FEED_PAGE_LIMIT, cursor: pageParam },
+          query: {
+            sort,
+            feed: scope,
+            limit: VIDEO_FEED_PAGE_LIMIT,
+            cursor: pageParam,
+          },
         },
       });
       return res.data?.data;
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage?.nextCursor ?? undefined,
+  });
+}
+
+/** Tặng quà cho tác giả video — server suy người nhận từ video, giá đọc từ catalog server. */
+export function useSendVideoGift(videoId: string) {
+  return useMutation({
+    mutationFn: async (input: { giftId: string; idempotencyKey: string }) => {
+      const res = await apiClient.POST('/api/v1/videos/{videoId}/gifts', {
+        params: {
+          path: { videoId },
+          header: { 'Idempotency-Key': input.idempotencyKey },
+        },
+        body: { giftId: input.giftId },
+      });
+      return res.data?.data;
+    },
   });
 }
 
@@ -143,5 +167,6 @@ export function useAuthorProfile(userId: string) {
       });
       return res.data?.data;
     },
+    staleTime: VIDEO_AUTHOR_STALE_TIME_MS,
   });
 }
