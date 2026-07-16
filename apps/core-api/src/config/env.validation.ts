@@ -104,6 +104,8 @@ export interface CoreApiEnv {
   MOVIE_MATCH_URL_MAX_LENGTH: number;
   MOVIE_MATCH_ALLOWED_VIDEO_HOSTS: string;
   PALM_MATCH_TARGET_NAME_MAX_LENGTH: number;
+  PALM_MATCH_QUEUE_MAX_WAIT_SECONDS: number;
+  PALM_MATCH_SESSION_DURATION_SECONDS: number;
   DISCOVERY_GUEST_VISIBLE: boolean;
   DISCOVERY_AGE_BUCKETS: string;
   DISCOVERY_LOCATION_QUANTIZE_DEGREES: number;
@@ -357,6 +359,14 @@ export const coreApiEnvSchema = Joi.object({
 
   // Palm Match — Giai đoạn 5 (docs/services/palm-match-service.md § 5)
   PALM_MATCH_TARGET_NAME_MAX_LENGTH: Joi.number().integer().min(1).default(50),
+  PALM_MATCH_QUEUE_MAX_WAIT_SECONDS: Joi.number()
+    .integer()
+    .min(10)
+    .default(120),
+  PALM_MATCH_SESSION_DURATION_SECONDS: Joi.number()
+    .integer()
+    .min(30)
+    .default(300),
 
   // Discovery — browse-only W1 (docs/services/discovery-service.md)
   // Guest chưa gắn phone/social có xuất hiện trong browse không — chặn farm guest làm loãng pool
