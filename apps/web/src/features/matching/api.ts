@@ -9,6 +9,7 @@ export type TicketDto = ApiSchema<'TicketDto'>;
 
 export const matchingKeys = {
   all: ['matching'] as const,
+  current: ['matching', 'ticket', 'current'] as const,
   ticket: (id: string) => ['matching', 'ticket', id] as const,
 };
 
@@ -20,6 +21,7 @@ export function isPollingStatus(
 }
 
 export function useJoinQueue() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
       body: JoinQueueForm;
@@ -29,6 +31,20 @@ export function useJoinQueue() {
         params: { header: { 'Idempotency-Key': input.idempotencyKey } },
         body: input.body,
       });
+      return res.data?.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: matchingKeys.current });
+    },
+  });
+}
+
+/** Nguồn sự thật để phục hồi ticket queued/matched khi reload hoặc quay lại trang Matching. */
+export function useCurrentTicket() {
+  return useQuery({
+    queryKey: matchingKeys.current,
+    queryFn: async () => {
+      const res = await apiClient.GET('/api/v1/matching/tickets/current');
       return res.data?.data;
     },
   });
@@ -66,6 +82,7 @@ export function useCancelTicket(ticketId: string) {
       void queryClient.invalidateQueries({
         queryKey: matchingKeys.ticket(ticketId),
       });
+      void queryClient.invalidateQueries({ queryKey: matchingKeys.current });
     },
   });
 }
@@ -84,6 +101,7 @@ export function useConfirmTicket(ticketId: string) {
       void queryClient.invalidateQueries({
         queryKey: matchingKeys.ticket(ticketId),
       });
+      void queryClient.invalidateQueries({ queryKey: matchingKeys.current });
     },
   });
 }

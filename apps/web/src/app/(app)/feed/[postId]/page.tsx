@@ -11,7 +11,7 @@ export default async function PostDetailPage({
 }) {
   const { postId } = await params;
   return (
-    <section className="px-5">
+    <section className="mx-auto w-full max-w-xl min-w-0 px-5">
       <PostDetail postId={postId} />
     </section>
   );

@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { RealtimeEvents } from '@litmatch/common-dtos';
 import { DomainException } from '@litmatch/common-exceptions';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 
 import {
   isUniqueViolation,
@@ -184,6 +184,28 @@ export class MatchingService {
     return ticket;
   }
 
+  /**
+   * Ticket active của chính user đang đăng nhập — dùng để phục hồi UI sau reload/reconnect.
+   * Partial unique index `uq_match_tickets_active_user` đảm bảo tối đa 1 row; vẫn order rõ ràng
+   * để read-path an toàn nếu dữ liệu legacy từng vi phạm invariant.
+   */
+  async getActiveTicket(user: AuthenticatedUser): Promise<MatchTicket | null> {
+    return this.ticketRepo.findOne({
+      where: {
+        userId: user.userId,
+        status: In([MatchTicketStatus.Queued, MatchTicketStatus.Matched]),
+      },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /** Một nguồn giá cho cả debit và API response — client không được hard-code. */
+  getSpeedupPriceDiamond(): number {
+    return this.config.getOrThrow('MATCHING_SPEEDUP_PRICE_DIAMOND', {
+      infer: true,
+    });
+  }
+
   /** Huỷ ticket của chính mình — chỉ hợp lệ khi đang queued (state machine § 1). */
   async cancelTicket(
     user: AuthenticatedUser,
@@ -343,9 +365,7 @@ export class MatchingService {
     const maxPerHour = this.config.getOrThrow('MATCHING_SPEEDUP_MAX_PER_HOUR', {
       infer: true,
     });
-    const price = this.config.getOrThrow('MATCHING_SPEEDUP_PRICE_DIAMOND', {
-      infer: true,
-    });
+    const price = this.getSpeedupPriceDiamond();
     const boostMs = this.config.getOrThrow('MATCHING_PRIORITY_BOOST_MS', {
       infer: true,
     });

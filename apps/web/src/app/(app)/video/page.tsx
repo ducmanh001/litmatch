@@ -6,7 +6,7 @@ export const metadata: Metadata = { title: 'Video' };
 
 export default function VideoPage() {
   return (
-    <section>
+    <section aria-label="Video ngắn" className="h-[100dvh]">
       <VideoReelFeed />
     </section>
   );

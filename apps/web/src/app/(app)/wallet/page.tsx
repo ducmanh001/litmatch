@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: 'Ví & VIP' };
 
 export default function WalletPage() {
   return (
-    <section className="space-y-5 px-5">
+    <section className="mx-auto w-full max-w-2xl min-w-0 space-y-5 px-5">
       <div className="flex items-center gap-3 pt-2">
         <Link
           href="/profile"

@@ -1,6 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { isApiError } from '@litmatch/api-client';
+import { useState } from 'react';
+
+import { useIdempotencyKey } from '../../../shared/idempotency/use-idempotency-key';
+import {
+  useCreateSupportTicket,
+  useMySupportTickets,
+} from '../../../features/support/api';
+
+import type {
+  SupportTicketCategory,
+  SupportTicketDto,
+} from '../../../features/support/api';
 
 const FAQ = [
   {
@@ -83,17 +95,15 @@ function FaqItem({
 /** Trang trợ giúp tĩnh — đúng layouts/web/help.html. */
 export default function HelpPage() {
   const [feedback, setFeedback] = useState('');
-  const [sent, setSent] = useState(false);
+  const [category, setCategory] = useState<SupportTicketCategory>('feedback');
   const [search, setSearch] = useState('');
   const [openQuestion, setOpenQuestion] = useState<string | null>(
     FAQ[0].question,
   );
 
-  useEffect(() => {
-    if (!sent) return;
-    const timeout = setTimeout(() => setSent(false), 2000);
-    return () => clearTimeout(timeout);
-  }, [sent]);
+  const createTicket = useCreateSupportTicket();
+  const tickets = useMySupportTickets();
+  const { key, resetKey } = useIdempotencyKey();
 
   const query = search.trim().toLowerCase();
   const filteredFaq = query
@@ -157,24 +167,112 @@ export default function HelpPage() {
             value={feedback}
             onChange={(e) => {
               setFeedback(e.target.value);
-              setSent(false);
             }}
             placeholder="Mô tả góp ý, lỗi gặp phải, hoặc ý tưởng bạn muốn Litmatch có..."
             className="w-full resize-none bg-transparent text-sm outline-none placeholder:text-slate-400"
           />
+          <select
+            aria-label="Loại phản hồi"
+            value={category}
+            onChange={(event) =>
+              setCategory(event.target.value as SupportTicketCategory)
+            }
+            className="mt-3 h-10 w-full rounded-full bg-slate-100 px-4 text-sm dark:bg-surf2"
+          >
+            <option value="feedback">Góp ý chung</option>
+            <option value="bug">Báo lỗi</option>
+            <option value="idea">Đề xuất tính năng</option>
+          </select>
           <button
             type="button"
-            disabled={feedback.trim() === ''}
+            disabled={feedback.trim().length < 5 || createTicket.isPending}
             onClick={() => {
-              setSent(true);
-              setFeedback('');
+              createTicket.mutate(
+                { category, message: feedback, idempotencyKey: key },
+                {
+                  onSuccess: () => {
+                    setFeedback('');
+                    resetKey();
+                  },
+                },
+              );
             }}
             className="mt-3 w-full rounded-full bg-irisl py-3 font-bold text-white disabled:opacity-50"
           >
-            {sent ? 'Đã gửi, cảm ơn bạn ✓' : 'Gửi phản hồi'}
+            {createTicket.isPending ? 'Đang gửi…' : 'Gửi phản hồi'}
           </button>
+          {createTicket.isSuccess && (
+            <p className="mt-2 text-sm font-semibold text-emerald-600">
+              Đã ghi nhận phản hồi ✓
+            </p>
+          )}
+          {createTicket.error !== null && (
+            <p role="alert" className="mt-2 text-sm text-destructive">
+              {isApiError(createTicket.error)
+                ? createTicket.error.message
+                : 'Không thể gửi phản hồi. Vui lòng đăng nhập và thử lại.'}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-400">
+          Phản hồi của bạn
+        </p>
+        {tickets.isPending && (
+          <p className="text-sm text-slate-500">Đang tải…</p>
+        )}
+        {tickets.error !== null && (
+          <p className="text-sm text-slate-500">
+            Đăng nhập để theo dõi trạng thái phản hồi.
+          </p>
+        )}
+        {tickets.data !== undefined && tickets.data.items.length === 0 && (
+          <p className="text-sm text-slate-500">Bạn chưa gửi phản hồi nào.</p>
+        )}
+        <div className="space-y-2">
+          {tickets.data?.items.map((ticket) => (
+            <article
+              key={ticket.id}
+              className="rounded-2xl border border-black/5 bg-white p-4 dark:border-white/10 dark:bg-surf"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-bold">
+                  {categoryLabel(ticket.category)}
+                </span>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold dark:bg-surf2">
+                  {statusLabel(ticket.status)}
+                </span>
+              </div>
+              <p className="mt-2 line-clamp-3 text-sm">{ticket.message}</p>
+              {ticket.staffResponse !== null && (
+                <p className="mt-2 rounded-xl bg-emerald-500/10 p-3 text-sm">
+                  <b>Litmatch:</b> {ticket.staffResponse}
+                </p>
+              )}
+            </article>
+          ))}
         </div>
       </div>
     </main>
   );
+}
+
+function categoryLabel(category: SupportTicketDto['category']): string {
+  return category === 'bug'
+    ? 'Báo lỗi'
+    : category === 'idea'
+      ? 'Đề xuất'
+      : 'Góp ý';
+}
+
+function statusLabel(status: SupportTicketDto['status']): string {
+  const labels: Record<SupportTicketDto['status'], string> = {
+    open: 'Đã tiếp nhận',
+    in_progress: 'Đang xử lý',
+    resolved: 'Đã giải quyết',
+    closed: 'Đã đóng',
+  };
+  return labels[status];
 }

@@ -1,6 +1,12 @@
 'use client';
 
-import { useWallet } from '../api';
+import { isApiError } from '@litmatch/api-client';
+
+import { useIdempotencyKey } from '../../../shared/idempotency/use-idempotency-key';
+import { confirmAction } from '../../../shared/lib/confirm-store';
+import { showToast } from '../../../shared/lib/toast-store';
+import { DiamondIcon } from '../../../shared/ui/icons';
+import { usePurchaseVip, useVipPlans, useWallet } from '../api';
 
 import type { SVGProps } from 'react';
 
@@ -49,17 +55,45 @@ const BENEFITS = [
   },
 ];
 
-/**
- * Backend đã có POST /economy/vip/purchase (mua thật, cộng dồn hạn) nhưng KHÔNG có endpoint
- * GET liệt kê gói/giá VIP — bảng giá ở DB (vip_plans), "không hardcode" (docs/05 §5.1). Vì vậy
- * tab này chỉ dựng UI tĩnh (tab-switcher, promo, benefits) và disable nút nâng cấp với trạng
- * thái "sắp có" thay vì đoán/hardcode planId + giá ở FE — cần bổ sung GET /economy/vip/plans
- * trước khi wire nút này thật.
- */
 export function VipPlans() {
   const wallet = useWallet();
+  const plans = useVipPlans();
+  const purchaseVip = usePurchaseVip();
+  // Giữ nguyên key khi timeout/retry; chỉ reset sau response thành công từ server.
+  const { key: idempotencyKey, resetKey } = useIdempotencyKey();
   const vipTier = wallet.data?.vipTier ?? null;
   const vipExpiresAt = wallet.data?.vipExpiresAt ?? null;
+
+  const purchase = (plan: NonNullable<typeof plans.data>[number]): void => {
+    void (async () => {
+      const confirmed = await confirmAction({
+        title: `Nâng cấp ${plan.tier.toUpperCase()}?`,
+        message: `Gói ${plan.days} ngày có giá ${plan.priceDiamond} diamond. Thời hạn sẽ được cộng dồn nếu bạn đang có VIP.`,
+        actionLabel: `Mua với ${plan.priceDiamond} diamond`,
+      });
+      if (!confirmed) return;
+      purchaseVip.mutate(
+        { planId: plan.id, idempotencyKey },
+        {
+          onSuccess: (result) => {
+            if (result === undefined) return;
+            resetKey();
+            showToast(
+              `Đã nâng cấp ${result.tier.toUpperCase()} đến ${new Date(result.vipExpiresAt).toLocaleDateString('vi-VN')}`,
+            );
+          },
+        },
+      );
+    })();
+  };
+
+  const errorMessage = isApiError(plans.error)
+    ? plans.error.message
+    : isApiError(purchaseVip.error)
+      ? purchaseVip.error.message
+      : plans.error != null || purchaseVip.error != null
+        ? 'Có lỗi xảy ra, thử lại.'
+        : undefined;
 
   return (
     <div className="space-y-3">
@@ -106,18 +140,47 @@ export function VipPlans() {
         ))}
       </div>
 
-      <p className="rounded-2xl bg-slate-100 px-4 py-3 text-xs text-slate-500 dark:bg-surf2 dark:text-slate-400">
-        Bảng giá gói VIP đang được hoàn thiện — chưa thể hiển thị/mua ngay trên
-        web.
-      </p>
-      <button
-        type="button"
-        disabled
-        aria-label="Nâng cấp VIP ngay (sắp có)"
-        className="w-full rounded-full bg-gradient-to-br from-amber-400 to-amber-600 py-3.5 font-bold text-white opacity-50 shadow-lg shadow-amber-500/30"
-      >
-        Nâng cấp VIP ngay
-      </button>
+      <div className="space-y-3">
+        <h3 className="text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+          Chọn gói VIP
+        </h3>
+        {plans.isPending && (
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Đang tải bảng giá…
+          </p>
+        )}
+        {plans.isSuccess && (plans.data?.length ?? 0) === 0 && (
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Chưa có gói VIP nào đang bán.
+          </p>
+        )}
+        <ul className="grid gap-3 sm:grid-cols-2">
+          {(plans.data ?? []).map((plan) => (
+            <li key={plan.id}>
+              <button
+                type="button"
+                disabled={purchaseVip.isPending}
+                onClick={() => purchase(plan)}
+                className="w-full rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-left transition hover:border-amber-400 disabled:opacity-50"
+                aria-label={`Mua ${plan.tier.toUpperCase()} ${plan.days} ngày với ${plan.priceDiamond} diamond`}
+              >
+                <p className="font-bold">
+                  {plan.tier.toUpperCase()} · {plan.days} ngày
+                </p>
+                <p className="mt-1 flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-300">
+                  <DiamondIcon width={14} height={14} />
+                  {plan.priceDiamond} diamond
+                </p>
+              </button>
+            </li>
+          ))}
+        </ul>
+        {errorMessage !== undefined && (
+          <p role="alert" className="text-sm text-destructive">
+            {errorMessage}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

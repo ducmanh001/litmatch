@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Quanh đây — Litmatch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Fraunces:ital,wght@0,500;0,600;1,500;1,600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#0c0a10;
+    --bg-elev:#17111c;
+    --bg-elev-2:#1f1824;
+    --border:rgba(255,255,255,.09);
+    --border-soft:rgba(255,255,255,.06);
+    --text:#f5eff3;
+    --text-dim:#ab9dae;
+    --text-mute:#716574;
+    --pink:#ef4868;
+    --pink-2:#ff7f97;
+    --orange:#f5a24a;
+    --purple:#9c7ef0;
+    --teal:#45c7a8;
+    --grad-warm:linear-gradient(135deg,#ef4868,#f5a24a);
+    --grad-cool:linear-gradient(135deg,#9c7ef0,#ef4868);
+    --grad-teal:linear-gradient(135deg,#45c7a8,#9c7ef0);
+    --shadow-card:0 14px 34px -14px rgba(0,0,0,.55);
+    --shadow-pink:0 10px 26px -8px rgba(239,72,104,.5);
+    --radius-lg:22px;
+  }
+  *{box-sizing:border-box;}
+  body,h1,h2,h3,h4,h5,p,ul{margin:0;padding:0;}
+  body{font-family:'Be Vietnam Pro',sans-serif;background:var(--bg);color:var(--text);line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden;}
+  :focus-visible{outline:2px solid var(--pink-2);outline-offset:2px;}
+  .bg-decor{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;}
+  .glow{position:absolute;border-radius:50%;filter:blur(110px);}
+  .layout{position:relative;z-index:1;display:flex;min-height:100vh;}
+
+  /* SIDEBAR (đồng bộ với trang Ghép đôi) */
+  .sidebar{width:258px;flex-shrink:0;background:rgba(35,28,44,.66);border-right:1px solid var(--border);padding:26px 16px;display:flex;flex-direction:column;gap:3px;backdrop-filter:blur(18px);}
+  .logo{display:flex;align-items:center;gap:10px;padding:6px 10px 26px;}
+  .logo-dot{width:26px;height:26px;border-radius:50%;background:var(--grad-warm);flex-shrink:0;box-shadow:var(--shadow-pink);}
+  .logo-text{font-family:'Fraunces',serif;font-style:italic;font-weight:600;font-size:21px;}
+  .nav-item{display:flex;align-items:center;gap:13px;padding:11px 13px;border-radius:12px;color:var(--text-dim);text-decoration:none;font-weight:600;font-size:14.5px;transition:.18s ease;}
+  .nav-item svg{width:19px;height:19px;flex-shrink:0;}
+  .nav-item:hover{background:rgba(255,255,255,.045);color:var(--text);}
+  .nav-item.active{background:linear-gradient(135deg,rgba(239,72,104,.2),rgba(245,162,74,.1));color:#fff;box-shadow:inset 0 0 0 1px rgba(239,72,104,.3);}
+
+  .main{flex:1;padding:34px 42px 60px;max-width:1360px;}
+  .btn{border:none;cursor:pointer;font-family:inherit;font-weight:700;font-size:14px;border-radius:999px;display:inline-flex;align-items:center;gap:8px;transition:.18s ease;}
+  .btn svg{width:16px;height:16px;}
+  .card{background:var(--bg-elev);border:1px solid var(--border-soft);border-radius:var(--radius-lg);box-shadow:var(--shadow-card);}
+  .side-label{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--text-mute);text-transform:uppercase;margin-bottom:10px;}
+  .grid-2col{display:grid;grid-template-columns:1.65fr 1fr;gap:22px;}
+  .badge-icon{width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .badge-icon svg{width:20px;height:20px;color:#fff;}
+  .badge-pink{background:var(--grad-warm);box-shadow:0 8px 20px -6px rgba(239,72,104,.5);}
+  .badge-orange{background:linear-gradient(135deg,#f5a24a,#ef4868);box-shadow:0 8px 18px -6px rgba(245,162,74,.5);}
+
+  /* HEADER (không có khung viền, giống bản gốc) */
+  .page-header{display:flex;justify-content:space-between;align-items:flex-start;gap:32px;flex-wrap:wrap;margin-bottom:22px;}
+  .badge-pill{display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border:1px solid var(--border);border-radius:999px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--pink-2);margin-bottom:14px;}
+  .badge-pill svg{width:14px;height:14px;}
+  .page-header h1{font-family:'Fraunces',serif;font-weight:600;font-size:29px;line-height:1.32;color:#fff;max-width:560px;margin-bottom:12px;}
+  .page-header .sub{color:var(--text-dim);font-size:14.5px;max-width:520px;}
+  .stat-col{display:flex;flex-direction:column;gap:12px;flex-shrink:0;width:270px;}
+  .stat-box{padding:16px 18px;}
+  .stat-box .num{font-family:'Fraunces',serif;font-size:26px;font-weight:600;background:var(--grad-warm);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;}
+  .stat-box .label{font-size:13px;color:var(--text-dim);margin-top:2px;}
+  .stat-box .title{font-size:14.5px;font-weight:700;margin-bottom:3px;}
+
+  /* FILTER CARD */
+  .filter-card{padding:20px 24px;margin-bottom:24px;}
+  .toggle-row{display:flex;gap:10px;margin-bottom:18px;}
+  .toggle-btn{flex:1;justify-content:center;padding:12px 18px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--text-dim);}
+  .toggle-btn.active{background:var(--grad-warm);color:#fff;border-color:transparent;box-shadow:var(--shadow-pink);}
+  .filter-groups{display:flex;gap:40px;flex-wrap:wrap;}
+  .chip-row{display:flex;gap:8px;flex-wrap:wrap;}
+  .chip{padding:8px 16px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--text-dim);font-size:13.5px;font-weight:600;cursor:pointer;transition:.15s;font-family:inherit;}
+  .chip.active{background:var(--grad-warm);color:#fff;border-color:transparent;box-shadow:0 6px 16px -6px rgba(239,72,104,.45);}
+  .chip:hover:not(.active){border-color:var(--pink);color:var(--text);}
+
+  .section-title{font-family:'Fraunces',serif;font-weight:600;font-size:20px;color:#fff;margin-bottom:16px;}
+
+  /* PROFILE GRID */
+  .profile-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+  .profile-card{border-radius:18px;overflow:hidden;background:var(--bg-elev);border:1px solid var(--border-soft);box-shadow:var(--shadow-card);transition:transform .2s ease,box-shadow .2s ease;cursor:pointer;}
+  .profile-card:hover{transform:translateY(-5px);box-shadow:0 20px 40px -14px rgba(0,0,0,.6);}
+  .avatar-wrap{position:relative;height:148px;display:flex;align-items:center;justify-content:center;}
+  .avatar-warm{background:var(--grad-warm);}
+  .avatar-cool{background:var(--grad-cool);}
+  .avatar-teal{background:var(--grad-teal);}
+  .avatar-wrap .letter{font-family:'Fraunces',serif;font-size:44px;font-weight:600;color:rgba(255,255,255,.92);}
+  .match-badge{position:absolute;top:10px;left:10px;background:rgba(12,10,16,.55);backdrop-filter:blur(6px);color:#fff;font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:999px;}
+  .online-dot{position:absolute;top:12px;right:12px;width:10px;height:10px;border-radius:50%;background:#4ADE80;box-shadow:0 0 0 3px rgba(12,10,16,.55);}
+  .profile-info{padding:14px 15px 16px;}
+  .profile-info .name{font-size:14.5px;font-weight:700;}
+  .profile-info .meta{font-size:12px;color:var(--text-mute);margin:2px 0 9px;}
+  .tag-row{display:flex;gap:5px;flex-wrap:wrap;}
+  .tag-pill{font-size:11px;padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid var(--border-soft);color:var(--text-dim);}
+
+  /* SIDE COL */
+  .side-col{display:flex;flex-direction:column;gap:18px;}
+  .feature-card{padding:22px 24px;}
+  .feature-card h4{font-size:15.5px;font-weight:700;margin-bottom:16px;}
+  .feature-item{display:flex;gap:13px;align-items:flex-start;margin-bottom:16px;}
+  .feature-item:last-child{margin-bottom:0;}
+  .feature-item .badge-icon{width:40px;height:40px;border-radius:12px;}
+  .feature-item .badge-icon svg{width:18px;height:18px;}
+  .feature-item h5{font-size:14px;font-weight:700;margin-bottom:2px;}
+  .feature-item p{font-size:12.5px;color:var(--text-dim);}
+
+  .safety-card{padding:22px 24px;background:linear-gradient(160deg,rgba(239,72,104,.14),rgba(245,162,74,.06));border:1px solid rgba(239,72,104,.2);}
+  .safety-card .badge-icon{margin-bottom:12px;}
+  .safety-card h4{font-size:15px;font-weight:700;margin-bottom:8px;}
+  .safety-card p{font-size:13px;color:var(--text-dim);}
+
+  @media (prefers-reduced-motion: reduce){*{transition:none !important;}}
+  @media (max-width:1080px){.profile-grid{grid-template-columns:repeat(2,1fr);}}
+  @media (max-width:900px){
+    .sidebar{width:74px;padding:22px 8px;}
+    .logo-text,.nav-label{display:none;}
+    .nav-item{justify-content:center;}
+    .logo{justify-content:center;padding:4px 0 22px;}
+  }
+  @media (max-width:780px){
+    .grid-2col{grid-template-columns:1fr;}
+    .page-header{flex-direction:column;}
+    .stat-col{width:100%;flex-direction:row;}
+    .profile-grid{grid-template-columns:1fr 1fr;}
+    .main{padding:26px 20px 48px;}
+  }
+  @media (max-width:520px){.profile-grid{grid-template-columns:1fr;}.stat-col{flex-direction:column;}}
+</style>
+</head>
+<body>
+
+<div class="bg-decor">
+  <div class="glow" style="width:560px;height:560px;background:var(--pink);opacity:.16;top:-220px;left:-160px;"></div>
+  <div class="glow" style="width:480px;height:480px;background:var(--orange);opacity:.12;bottom:-180px;right:-120px;"></div>
+  <div class="glow" style="width:380px;height:380px;background:var(--purple);opacity:.10;top:45%;left:60%;"></div>
+</div>
+
+<svg style="display:none">
+  <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9a1 1 0 0 0 1 1H9a1 1 0 0 0 1-1v-4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v4a1 1 0 0 0 1 1h2.5a1 1 0 0 0 1-1v-9"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.4"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.8A2.8 2.8 0 0 1 6.8 3h10.4A2.8 2.8 0 0 1 20 5.8v7.4a2.8 2.8 0 0 1-2.8 2.8H10l-4.6 3.6v-3.6H6.8A2.8 2.8 0 0 1 4 13.2V5.8Z"/></symbol>
+  <symbol id="i-video" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2.6"/><path d="m21 8.5-5 3 5 3v-6Z"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3.4 20c0-3.3 2.5-5.4 5.6-5.4S14.6 16.7 14.6 20"/><circle cx="17.2" cy="9" r="2.3"/><path d="M15.9 14.3c2.3.35 4 2.2 4 5.2"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.3" width="6" height="6" rx="1.4"/><rect x="3.5" y="13.7" width="6" height="6" rx="1.4"/><path d="M12.7 6.3h7.8M12.7 9.7h7.8M12.7 15.7h7.8M12.7 19.1h7.8"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="2.4"/><path d="m4 7.2 8 5.8 8-5.8"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.2" r="3.6"/><path d="M4.5 20c0-4 3.4-6.6 7.5-6.6s7.5 2.6 7.5 6.6"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.6" cy="10.6" r="6.4"/><path d="m20 20-4.7-4.7"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.8 11a6.2 6.2 0 0 0 12.4 0"/><path d="M12 17.2v3.8M9 21h6"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.3S4.4 15.7 2.3 11.2C.5 7.6 2.6 4 6.2 4c2 0 3.6 1 5.8 3.3C14.2 5 15.8 4 17.8 4c3.6 0 5.7 3.6 3.9 7.2-2.1 4.5-9.7 9.1-9.7 9.1Z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 20 6.5v5.7c0 5-3.3 7.8-8 9.3-4.7-1.5-8-4.3-8-9.3V6.5L12 3.5Z"/><path d="m8.7 12.3 2.3 2.3 4.3-4.6"/></symbol>
+</svg>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-dot"></span><span class="logo-text">Litmatch</span></div>
+    <a class="nav-item" href="#"><svg><use href="#i-home"/></svg><span class="nav-label">Trang chủ</span></a>
+    <a class="nav-item active" href="#"><svg><use href="#i-pin"/></svg><span class="nav-label">Quanh đây</span></a>
+    <a class="nav-item" href="#"><svg><use href="#i-chat"/></svg><span class="nav-label">Ghép đôi</span></a>
+    <a class="nav-item" href="#"><svg><use href="#i-video"/></svg><span class="nav-label">Video</span></a>
+    <a class="nav-item" href="#"><svg><use href="#i-users"/></svg><span class="nav-label">Party</span></a>
+    <a class="nav-item" href="#"><svg><use href="#i-list"/></svg><span class="nav-label">Bảng tin</span></a>
+    <a class="nav-item" href="#"><svg><use href="#i-mail"/></svg><span class="nav-label">Tin nhắn</span></a>
+    <a class="nav-item" href="#"><svg><use href="#i-user"/></svg><span class="nav-label">Cá nhân</span></a>
+  </aside>
+
+  <main class="main">
+    <div class="page-header">
+      <div>
+        <div class="badge-pill"><svg><use href="#i-heart"/></svg>Hẹn hò có chủ đích</div>
+        <h1>Gặp một người thật lòng, bắt đầu từ một lời chào tử tế.</h1>
+        <p class="sub">Tìm người phù hợp hoặc khám phá những kết nối ở gần bạn. Chọn cách mở lời bằng trò chuyện hay voice khi bạn thực sự muốn tìm hiểu.</p>
+      </div>
+      <div class="stat-col">
+        <div class="card stat-box"><div class="num">02</div><div class="label">cách bắt đầu: trò chuyện hoặc voice</div></div>
+        <div class="card stat-box"><div class="title">Bạn luôn chủ động</div><div class="label">Xem hồ sơ trước, chỉ gửi lời mời khi thấy phù hợp.</div></div>
+      </div>
+    </div>
+
+    <div class="card filter-card">
+      <div class="toggle-row">
+        <button class="btn toggle-btn active"><svg><use href="#i-pin"/></svg>Quanh đây</button>
+        <button class="btn toggle-btn"><svg><use href="#i-search"/></svg>Khám phá phù hợp</button>
+      </div>
+      <div class="filter-groups">
+        <div>
+          <div class="side-label">Muốn làm quen với</div>
+          <div class="chip-row">
+            <button class="chip active">Mọi người</button>
+            <button class="chip">Nữ</button>
+            <button class="chip">Nam</button>
+            <button class="chip">Khác</button>
+          </div>
+        </div>
+        <div>
+          <div class="side-label">Khoảng tuổi</div>
+          <div class="chip-row">
+            <button class="chip active">Tất cả</button>
+            <button class="chip">18–24</button>
+            <button class="chip">25–30</button>
+            <button class="chip">31–40</button>
+            <button class="chip">41+</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2col">
+      <div>
+        <div class="side-label">Cùng ở gần đây</div>
+        <h2 class="section-title">Kết nối quanh bạn</h2>
+        <div class="profile-grid">
+          <div class="profile-card">
+            <div class="avatar-wrap avatar-warm"><span class="match-badge">96% phù hợp</span><span class="online-dot"></span><span class="letter">M</span></div>
+            <div class="profile-info"><div class="name">Minh Anh, 27</div><div class="meta">Đang hoạt động · 2km</div><div class="tag-row"><span class="tag-pill">Du lịch</span><span class="tag-pill">Cà phê</span><span class="tag-pill">Nhạc indie</span></div></div>
+          </div>
+          <div class="profile-card">
+            <div class="avatar-wrap avatar-cool"><span class="match-badge">88% phù hợp</span><span class="letter">K</span></div>
+            <div class="profile-info"><div class="name">Khôi Nguyên, 29</div><div class="meta">5 phút trước · 4km</div><div class="tag-row"><span class="tag-pill">Leo núi</span><span class="tag-pill">Nhiếp ảnh</span><span class="tag-pill">Sách</span></div></div>
+          </div>
+          <div class="profile-card">
+            <div class="avatar-wrap avatar-teal"><span class="match-badge">92% phù hợp</span><span class="online-dot"></span><span class="letter">B</span></div>
+            <div class="profile-info"><div class="name">Bảo Trâm, 24</div><div class="meta">Đang hoạt động · 1km</div><div class="tag-row"><span class="tag-pill">Yoga</span><span class="tag-pill">Ẩm thực</span><span class="tag-pill">Phim</span></div></div>
+          </div>
+          <div class="profile-card">
+            <div class="avatar-wrap avatar-warm"><span class="match-badge">85% phù hợp</span><span class="letter">G</span></div>
+            <div class="profile-info"><div class="name">Gia Hân, 26</div><div class="meta">12 phút trước · 3km</div><div class="tag-row"><span class="tag-pill">Vẽ</span><span class="tag-pill">Mèo</span><span class="tag-pill">Trà chiều</span></div></div>
+          </div>
+          <div class="profile-card">
+            <div class="avatar-wrap avatar-cool"><span class="match-badge">90% phù hợp</span><span class="online-dot"></span><span class="letter">Đ</span></div>
+            <div class="profile-info"><div class="name">Đức Anh, 30</div><div class="meta">Đang hoạt động · 6km</div><div class="tag-row"><span class="tag-pill">Chạy bộ</span><span class="tag-pill">Guitar</span><span class="tag-pill">Cà phê sáng</span></div></div>
+          </div>
+          <div class="profile-card">
+            <div class="avatar-wrap avatar-teal"><span class="match-badge">94% phù hợp</span><span class="letter">T</span></div>
+            <div class="profile-info"><div class="name">Thùy Linh, 25</div><div class="meta">20 phút trước · 2km</div><div class="tag-row"><span class="tag-pill">Du lịch</span><span class="tag-pill">Podcast</span><span class="tag-pill">Ẩm thực</span></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="side-col">
+        <div class="card feature-card">
+          <h4>Bắt đầu theo nhịp của bạn</h4>
+          <div class="feature-item">
+            <div class="badge-icon badge-pink"><svg><use href="#i-chat"/></svg></div>
+            <div><h5>Trò chuyện trước</h5><p>Dành thời gian tìm hiểu qua Soul Match.</p></div>
+          </div>
+          <div class="feature-item">
+            <div class="badge-icon badge-orange"><svg><use href="#i-mic"/></svg></div>
+            <div><h5>Nghe thấy sự đồng điệu</h5><p>Một cuộc Voice Match ngắn giúp câu chuyện tự nhiên hơn.</p></div>
+          </div>
+        </div>
+
+        <div class="card safety-card">
+          <div class="badge-icon badge-pink"><svg><use href="#i-shield"/></svg></div>
+          <h4>Hẹn hò an toàn, tôn trọng</h4>
+          <p>Hãy trò chuyện đủ lâu, tôn trọng ranh giới của nhau và chọn nơi công cộng nếu quyết định gặp mặt.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+document.querySelectorAll('.chip-row').forEach(function(group){
+  group.querySelectorAll('.chip').forEach(function(chip){
+    chip.addEventListener('click',function(){
+      group.querySelectorAll('.chip').forEach(function(c){c.classList.remove('active');});
+      chip.classList.add('active');
+    });
+  });
+});
+document.querySelectorAll('.toggle-btn').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    document.querySelectorAll('.toggle-btn').forEach(function(b){b.classList.remove('active');});
+    btn.classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

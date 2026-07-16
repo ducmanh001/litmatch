@@ -15,7 +15,9 @@ export function PostList() {
 
   return (
     <div className="space-y-4">
-      <PostComposer />
+      <div id="tao-bai-viet" className="scroll-mt-4">
+        <PostComposer />
+      </div>
       <FeedBanners />
 
       {feed.isPending && (

@@ -14,6 +14,7 @@ import { VideoComment } from './entities/video-comment.entity';
 import { VideoReaction } from './entities/video-reaction.entity';
 import { VideoStoragePort } from './ports/video-storage.port';
 import { VideoTranscodePort } from './ports/video-transcode.port';
+import { FriendService } from '../friend';
 import { ReportReason, SafetyService } from '../safety';
 
 import type { EntityManager } from 'typeorm';
@@ -44,6 +45,7 @@ export class ShortVideoService {
     private readonly reactionRepo: Repository<VideoReaction>,
     private readonly storagePort: VideoStoragePort,
     private readonly transcodePort: VideoTranscodePort,
+    private readonly friendService: FriendService,
     private readonly safetyService: SafetyService,
     private readonly config: ConfigService<CoreApiEnv, true>,
   ) {}
@@ -172,11 +174,27 @@ export class ShortVideoService {
     return video;
   }
 
-  async listPublished(query: ListVideosQueryDto): Promise<CursorPage<Video>> {
+  async listPublished(
+    query: ListVideosQueryDto,
+    user?: AuthenticatedUser,
+  ): Promise<CursorPage<Video>> {
+    // Tab "Đang theo dõi" (video.html): chỉ video của bạn bè — graph bạn là nguồn follow
+    // duy nhất hiện có (không có bảng follow riêng). Chưa có bạn nào → trang rỗng, không lỗi.
+    let friendIds: string[] | null = null;
+    if (query.feed === 'following' && user !== undefined) {
+      friendIds = await this.friendService.listFriendIds(user.userId);
+      if (friendIds.length === 0) {
+        return { items: [], meta: { nextCursor: null } };
+      }
+    }
+
     const after = this.decodeVideoCursor(query.cursor);
     const qb = this.videoRepo
       .createQueryBuilder('v')
       .where('v.status = :status', { status: VideoStatus.Published });
+    if (friendIds !== null) {
+      qb.andWhere('v.authorUserId IN (:...friendIds)', { friendIds });
+    }
 
     if (query.sort === 'ranked') {
       qb.andWhere('v.rankScore IS NOT NULL');

@@ -70,6 +70,12 @@ export class ListVideosQueryDto extends CursorPageQueryDto {
   @IsOptional()
   @IsIn(['recent', 'ranked'])
   sort?: 'recent' | 'ranked';
+
+  /** `following` = chỉ video của bạn bè (tab "Đang theo dõi" video.html). */
+  @ApiPropertyOptional({ enum: ['for_you', 'following'], default: 'for_you' })
+  @IsOptional()
+  @IsIn(['for_you', 'following'])
+  feed?: 'for_you' | 'following';
 }
 
 export class VideosPageDto {

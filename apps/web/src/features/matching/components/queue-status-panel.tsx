@@ -8,10 +8,12 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { useRealtimeEvent } from '../../../shared/realtime/use-realtime-event';
 import { Button } from '../../../shared/ui/button';
+import { MatchIcon, MicIcon } from '../../../shared/ui/icons';
 import {
   matchingKeys,
   useCancelTicket,
   useConfirmTicket,
+  useCurrentTicket,
   useTicket,
 } from '../api';
 import { MatchTypePicker } from './match-type-picker';
@@ -22,53 +24,92 @@ import type {
   MatchMatchedEventData,
 } from '@litmatch/common-dtos/pure';
 
-/** Pill "Huỷ tìm kiếm" của soul-match.html — viền, không nền, chỉ tô mờ khi hover. */
 const OUTLINE_PILL =
-  'border-black/10 bg-transparent hover:bg-black/5 dark:border-white/10 dark:bg-transparent dark:hover:bg-white/5';
-/** Màn hình toàn phần căn giữa (soul-match.html `#searchState`) — không còn bọc card viền. */
-const FULLSCREEN_STATE =
-  'flex flex-1 flex-col items-center justify-center gap-6 px-8 text-center';
+  'border-border bg-card hover:bg-muted dark:border-white/15 dark:bg-white/[0.05] dark:text-white dark:hover:bg-white/10';
+const CENTERED_STATE =
+  'flex min-h-[380px] flex-col items-center justify-center px-3 py-8 text-center sm:px-8';
+
+function RetryIcon() {
+  return (
+    <svg
+      width={19}
+      height={19}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M3 12a9 9 0 0 1 15.3-6.4M21 12a9 9 0 0 1-15.3 6.4" />
+      <path d="M18 3v4h-4M6 21v-4h4" />
+    </svg>
+  );
+}
+
+const SESSION_ICON =
+  'flex h-[50px] w-[50px] shrink-0 items-center justify-center rounded-full bg-iris/10 text-irisl dark:bg-rose-300/15 dark:text-white';
+
+/** Không hiện thẳng message kỹ thuật (vd "Validation failed (uuid is expected)") cho người dùng
+ * khi không khôi phục được phiên — log để debug, còn UI chỉ nói người dùng cần biết gì. */
+function logAndGetFriendlyMessage(error: unknown, fallback: string): string {
+  if (error !== null && error !== undefined) {
+    console.error('[matching] không khôi phục được phiên ghép đôi:', error);
+  }
+  return fallback;
+}
+
+function mutationErrorMessage(error: unknown): string | undefined {
+  if (isApiError(error)) return error.message;
+  if (error !== null && error !== undefined) {
+    return 'Không thể hoàn tất thao tác, vui lòng thử lại.';
+  }
+  return undefined;
+}
 
 export function QueueStatusPanel() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [ticketId, setTicketId] = useState<string | null>(null);
 
-  const ticketQuery = useTicket(ticketId);
-  const cancelTicket = useCancelTicket(ticketId ?? '');
-  const confirmTicket = useConfirmTicket(ticketId ?? '');
+  const currentTicketQuery = useCurrentTicket();
+  const activeTicketId =
+    ticketId ?? currentTicketQuery.data?.ticket?.id ?? null;
+  const ticketQuery = useTicket(activeTicketId);
+  const cancelTicket = useCancelTicket(activeTicketId ?? '');
+  const confirmTicket = useConfirmTicket(activeTicketId ?? '');
 
   const invalidateTicket = useCallback(() => {
-    if (ticketId === null) return;
+    if (activeTicketId === null) return;
     void queryClient.invalidateQueries({
-      queryKey: matchingKeys.ticket(ticketId),
+      queryKey: matchingKeys.ticket(activeTicketId),
     });
-  }, [queryClient, ticketId]);
+  }, [activeTicketId, queryClient]);
 
   // Realtime chỉ là gợi ý để refetch sớm — REST poll của useTicket vẫn là fallback thật.
   useRealtimeEvent<MatchMatchedEventData>(
     RealtimeEvents.MatchMatched,
     (data) => {
-      if (data.ticketId === ticketId) {
+      if (data.ticketId === activeTicketId) {
         invalidateTicket();
         return;
       }
-      // Ticket lạ trong khi CHƯA có ticket nào — đây là lời mời (Discovery/Invite) mình gửi vừa
-      // được chấp nhận: backend cố ý publish CÙNG event `match.matched` cho cả 2 bên
-      // (invite.service.ts#acceptInvite) để FE không cần logic riêng, chỉ cần nhận ticketId rồi
-      // đi tiếp y hệt luồng auto-match (matched → xác nhận → vào phòng). Không nhận khi ĐANG có
-      // ticket khác — tránh nhảy khỏi phiên đang xử lý dở.
-      if (ticketId === null) setTicketId(data.ticketId);
+      // Ticket lạ khi chưa có ticket là lời mời do phía còn lại vừa chấp nhận. Backend publish
+      // cùng event match.matched để luồng invite tiếp tục qua đúng state machine auto-match.
+      if (activeTicketId === null) setTicketId(data.ticketId);
     },
   );
   useRealtimeEvent<MatchConfirmedEventData>(
     RealtimeEvents.MatchConfirmed,
     (data) => {
-      if (data.ticketId === ticketId) invalidateTicket();
+      if (data.ticketId === activeTicketId) invalidateTicket();
     },
   );
 
   const ticket = ticketQuery.data;
+  const cancelError = mutationErrorMessage(cancelTicket.error);
+  const confirmError = mutationErrorMessage(confirmTicket.error);
 
   useEffect(() => {
     if (ticket?.status !== 'confirmed' || ticket.sessionId === null) return;
@@ -79,34 +120,94 @@ export function QueueStatusPanel() {
     router.replace(dest);
   }, [ticket, router]);
 
-  if (ticketId === null) {
+  if (ticketId === null && currentTicketQuery.isPending) {
+    return (
+      <div className={CENTERED_STATE} role="status">
+        <span className="h-10 w-10 animate-spin rounded-full border-2 border-iris/20 border-t-irisl" />
+        <p className="mt-4 text-sm font-semibold text-muted-foreground dark:text-white/70">
+          Đang kiểm tra phiên ghép đôi của bạn…
+        </p>
+      </div>
+    );
+  }
+
+  if (ticketId === null && currentTicketQuery.isError) {
+    const message = logAndGetFriendlyMessage(
+      currentTicketQuery.error,
+      'Đã có lỗi khi tải dữ liệu phiên của bạn. Thử lại, hoặc bắt đầu một phiên ghép đôi mới.',
+    );
+    return (
+      <div className={`${CENTERED_STATE} gap-5`}>
+        <div className={SESSION_ICON}>
+          <RetryIcon />
+        </div>
+        <div>
+          <p className="font-extrabold dark:text-white">
+            Không tải được phiên ghép đôi trước đó
+          </p>
+          <p
+            role="alert"
+            className="mt-2 text-sm text-muted-foreground dark:text-white/70"
+          >
+            {message}
+          </p>
+        </div>
+        <Button
+          type="button"
+          className="w-full max-w-xs bg-gradient-to-r from-aqua to-irisl text-white shadow-md shadow-iris/15 hover:brightness-95"
+          disabled={currentTicketQuery.isFetching}
+          onClick={() => void currentTicketQuery.refetch()}
+        >
+          <RetryIcon />
+          {currentTicketQuery.isFetching ? 'Đang thử lại…' : 'Thử lại'}
+        </Button>
+      </div>
+    );
+  }
+
+  if (activeTicketId === null) {
     return <MatchTypePicker onJoined={(joined) => setTicketId(joined.id)} />;
   }
 
   if (ticketQuery.isPending) {
     return (
-      <p className="flex-1 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
-        Đang tải trạng thái…
-      </p>
+      <div className={CENTERED_STATE} role="status">
+        <span className="h-10 w-10 animate-spin rounded-full border-2 border-iris/20 border-t-irisl" />
+        <p className="mt-4 text-sm font-semibold text-muted-foreground dark:text-white/70">
+          Đang tải trạng thái ghép đôi…
+        </p>
+      </div>
     );
   }
 
   if (ticketQuery.isError) {
-    const message = isApiError(ticketQuery.error)
-      ? ticketQuery.error.message
-      : 'Có lỗi xảy ra, thử lại.';
+    const message = logAndGetFriendlyMessage(
+      ticketQuery.error,
+      'Đã có lỗi khi tải dữ liệu phiên của bạn. Thử lại, hoặc bắt đầu một phiên ghép đôi mới.',
+    );
     return (
-      <div className={FULLSCREEN_STATE}>
-        <p role="alert" className="text-sm text-destructive">
-          {message}
-        </p>
+      <div className={`${CENTERED_STATE} gap-5`}>
+        <div className={SESSION_ICON}>
+          <RetryIcon />
+        </div>
+        <div>
+          <p className="font-extrabold dark:text-white">
+            Không tải được phiên ghép đôi trước đó
+          </p>
+          <p
+            role="alert"
+            className="mt-2 text-sm text-muted-foreground dark:text-white/70"
+          >
+            {message}
+          </p>
+        </div>
         <Button
           type="button"
-          variant="secondary"
-          className={`w-full ${OUTLINE_PILL}`}
+          className="w-full max-w-xs bg-gradient-to-r from-aqua to-irisl text-white shadow-md shadow-iris/15 hover:brightness-95"
           onClick={() => setTicketId(null)}
         >
-          Quay lại
+          <RetryIcon />
+          Chọn lại kiểu ghép đôi
         </Button>
       </div>
     );
@@ -114,32 +215,47 @@ export function QueueStatusPanel() {
 
   if (ticket === undefined) return null;
 
+  const matchLabel =
+    ticket.matchType === 'soul' ? 'Ghép đôi Tâm hồn' : 'Ghép đôi Voice';
+  const StateIcon = ticket.matchType === 'soul' ? MatchIcon : MicIcon;
+
   switch (ticket.status) {
     case 'queued':
       return (
-        <div className={FULLSCREEN_STATE}>
-          <div className="relative flex h-40 w-40 items-center justify-center">
-            <span className="pulsering absolute h-40 w-40 rounded-full border border-iris/40" />
-            <span className="pulsering2 absolute h-40 w-40 rounded-full border border-iris/40" />
-            <div className="relative z-10 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-irisl to-irisl text-4xl">
-              🔮
+        <div className={`${CENTERED_STATE} gap-6`} aria-live="polite">
+          <div className="relative flex h-44 w-44 items-center justify-center">
+            <span className="pulsering absolute h-40 w-40 rounded-full border border-iris/35" />
+            <span className="pulsering2 absolute h-40 w-40 rounded-full border border-iris/35" />
+            <div className="relative z-10 flex h-24 w-24 items-center justify-center rounded-[2rem] bg-irisl text-white">
+              <StateIcon width={34} height={34} />
             </div>
           </div>
-          <div className="space-y-2">
-            <p className="font-display text-2xl font-semibold italic">
+
+          <div className="max-w-md">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-muted-foreground dark:text-white/85">
+              {matchLabel}
+            </p>
+            <h2 className="mt-2 text-2xl font-extrabold dark:text-white">
               Đang tìm người ghép đôi…
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground dark:text-white/70">
+              Litmatch đang tìm trong lựa chọn của bạn. Trạng thái sẽ tự cập
+              nhật ngay khi có kết quả phù hợp.
             </p>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Ghép ẩn danh theo bộ lọc tuổi &amp; giới tính của bạn — thường mất
-              10–30 giây.
-            </p>
-            <p className="font-mono text-xs text-slate-400 dark:text-slate-500">
-              (vào hàng đợi lúc{' '}
-              {new Date(ticket.enqueuedAt).toLocaleTimeString('vi-VN')})
+            <p className="mt-3 text-[11px] font-semibold text-muted-foreground dark:text-white/60">
+              Vào hàng đợi lúc{' '}
+              {new Date(ticket.enqueuedAt).toLocaleTimeString('vi-VN', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
             </p>
           </div>
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            <SpeedupButton ticketId={ticket.id} />
+
+          <div className="flex flex-wrap items-start justify-center gap-2">
+            <SpeedupButton
+              ticketId={ticket.id}
+              priceDiamond={ticket.speedupPriceDiamond}
+            />
             <Button
               type="button"
               variant="secondary"
@@ -151,46 +267,88 @@ export function QueueStatusPanel() {
               {cancelTicket.isPending ? 'Đang huỷ…' : 'Huỷ tìm kiếm'}
             </Button>
           </div>
+          {cancelError !== undefined && (
+            <p
+              role="alert"
+              className="max-w-sm rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive"
+            >
+              {cancelError}
+            </p>
+          )}
         </div>
       );
     case 'matched':
       return (
-        <div className={FULLSCREEN_STATE}>
-          <p className="font-display text-2xl font-semibold italic">
-            Đã tìm thấy đối phương
-          </p>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Xác nhận sớm để bắt đầu, nếu không ticket sẽ hết hạn.
-          </p>
+        <div className={`${CENTERED_STATE} gap-5`} aria-live="polite">
+          <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-iris/10 text-irisl dark:bg-white/[0.05] dark:text-white">
+            <StateIcon width={34} height={34} />
+            <span className="absolute -right-1 -top-1 flex h-8 w-8 items-center justify-center rounded-full border-4 border-card bg-emerald-500 text-sm font-black text-white">
+              ✓
+            </span>
+          </div>
+          <div className="max-w-md">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-muted-foreground dark:text-white/85">
+              {matchLabel}
+            </p>
+            <h2 className="mt-2 text-2xl font-extrabold dark:text-white">
+              Đã tìm thấy một người phù hợp
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground dark:text-white/70">
+              Xác nhận khi bạn sẵn sàng. Kết nối chỉ bắt đầu sau khi cả hai
+              người đều đồng ý.
+            </p>
+          </div>
           <Button
             type="button"
-            className="w-full"
+            size="lg"
+            className="w-full max-w-xs bg-irisl text-white shadow-none hover:bg-irisl/90"
             disabled={confirmTicket.isPending}
             onClick={() => confirmTicket.mutate()}
           >
-            {confirmTicket.isPending ? 'Đang xác nhận…' : 'Xác nhận'}
+            {confirmTicket.isPending ? 'Đang xác nhận…' : 'Xác nhận kết nối'}
           </Button>
+          {confirmError !== undefined && (
+            <p
+              role="alert"
+              className="max-w-sm rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive"
+            >
+              {confirmError}
+            </p>
+          )}
         </div>
       );
     case 'confirmed':
       return (
-        <p className="flex-1 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
-          Đã xác nhận — đang chuyển vào phòng…
-        </p>
+        <div className={CENTERED_STATE} role="status">
+          <span className="h-10 w-10 animate-spin rounded-full border-2 border-iris/20 border-t-irisl" />
+          <p className="mt-4 text-sm font-semibold text-muted-foreground dark:text-white/70">
+            Đã xác nhận — đang chuyển vào phòng…
+          </p>
+        </div>
       );
     case 'expired':
     case 'cancelled':
       return (
-        <div className={FULLSCREEN_STATE}>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            {ticket.status === 'expired'
-              ? 'Ticket đã hết hạn.'
-              : 'Đã huỷ ticket.'}
-          </p>
+        <div className={`${CENTERED_STATE} gap-5`}>
+          <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-muted text-xl text-muted-foreground dark:bg-white/10 dark:text-white/70">
+            {ticket.status === 'expired' ? '⌛' : '✓'}
+          </div>
+          <div>
+            <h2 className="text-xl font-extrabold dark:text-white">
+              {ticket.status === 'expired'
+                ? 'Phiên tìm kiếm đã hết hạn'
+                : 'Đã huỷ tìm kiếm'}
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground dark:text-white/70">
+              {ticket.status === 'expired'
+                ? 'Bạn có thể bắt đầu một lượt ghép đôi mới.'
+                : 'Không có kết nối nào được tạo từ lượt tìm kiếm này.'}
+            </p>
+          </div>
           <Button
             type="button"
             variant="secondary"
-            className={OUTLINE_PILL}
+            className={`w-full max-w-xs ${OUTLINE_PILL}`}
             onClick={() => setTicketId(null)}
           >
             Tìm lại

@@ -376,5 +376,25 @@ describe('InviteService (unit — mock repo/redis/deps)', () => {
         service.listReceivedInvites(invitee, { limit: 20, cursor: 'garbage' }),
       ).rejects.toMatchObject({ code: MatchingErrors.INVITE_CURSOR_INVALID });
     });
+
+    it('re-check hidden set lúc đọc và loại inviter vừa bị block/report khỏi inbox', async () => {
+      const qb = {
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getMany: jest.fn(async () => []),
+      };
+      inviteRepo.createQueryBuilder.mockReturnValue(qb as never);
+      safetyService.getHiddenUserIds.mockResolvedValue([inviter.userId]);
+
+      await service.listReceivedInvites(invitee, { limit: 20 });
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'i.inviterUserId NOT IN (:...hiddenInviterIds)',
+        { hiddenInviterIds: [inviter.userId] },
+      );
+    });
   });
 });

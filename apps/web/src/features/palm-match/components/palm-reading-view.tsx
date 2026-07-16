@@ -1,122 +1,131 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
 
+import {
+  useCurrentPalmMatch,
+  useDismissPalmMatch,
+  useFlipPalmCard,
+  useJoinPalmQueue,
+  useRatePalmMatch,
+} from '../api';
 import { cn } from '../../../shared/lib/cn';
 
-type RateKind = 'like' | 'skip';
+import type { PalmMatchStateDto } from '../api';
 
-interface ZodiacSign {
-  symbol: string;
-  name: string;
-}
-
-const ZODIAC_SIGNS: readonly ZodiacSign[] = [
-  { symbol: '♈', name: 'Bạch Dương' },
-  { symbol: '♉', name: 'Kim Ngưu' },
-  { symbol: '♊', name: 'Song Tử' },
-  { symbol: '♋', name: 'Cự Giải' },
-  { symbol: '♌', name: 'Sư Tử' },
-  { symbol: '♍', name: 'Xử Nữ' },
-  { symbol: '♎', name: 'Thiên Bình' },
-  { symbol: '♏', name: 'Bọ Cạp' },
-  { symbol: '♐', name: 'Nhân Mã' },
-  { symbol: '♑', name: 'Ma Kết' },
-  { symbol: '♒', name: 'Bảo Bình' },
-  { symbol: '♓', name: 'Song Ngư' },
-];
-
-const FORTUNE_TEMPLATES: readonly string[] = [
-  'Một người mộng mơ gặp một người rực rỡ — hai bạn hợp nhau ở chỗ biết lắng nghe và biết toả sáng đúng lúc. Thử rủ nhau đi xem hoàng hôn xem sao 🌅',
-  'Một tâm hồn thích ổn định gặp một tâm hồn thích khám phá — nghe trái ngược nhưng lại bổ sung cho nhau rất đáng yêu 🌿',
-  'Cả hai đều sống tình cảm — dễ đồng cảm, chỉ cần nhường nhau một chút lúc tranh luận 💬',
-  'Một cặp năng lượng cao — hợp đi chơi xa, hợp thử món mới, chỉ cần đừng cùng bận rộn một lúc 🎈',
-  'Trầm tính gặp trầm tính — không cần nói nhiều vẫn hiểu nhau, chỉ cần chủ động rủ nhau trước 🍃',
-];
+type ZodiacSign = NonNullable<PalmMatchStateDto['mySign']>;
 
 const RESULT_COPY: Record<
-  RateKind,
+  NonNullable<PalmMatchStateDto['outcome']>,
   { icon: string; title: string; text: string }
 > = {
-  like: {
+  matched: {
     icon: '🎉',
-    title: 'Đã gửi lượt thích!',
-    text: 'Nếu họ cũng thích bạn, hồ sơ sẽ mở khoá và cuộc trò chuyện chuyển vào Tin nhắn.',
+    title: 'Hai bạn cùng thích nhau!',
+    text: 'Hồ sơ đã được mở khoá và hai bạn có thể bắt đầu trò chuyện.',
   },
-  skip: {
+  not_matched: {
     icon: '👋',
-    title: 'Đã bỏ qua',
+    title: 'Lượt bói đã kết thúc',
     text: 'Không sao cả — luôn có người phù hợp hơn ở lượt bói tiếp theo.',
+  },
+  expired: {
+    icon: '⌛',
+    title: 'Đã hết thời gian',
+    text: 'Lượt ghép đã đóng để không ai phải chờ vô hạn.',
+  },
+  cancelled: {
+    icon: '🌙',
+    title: 'Người ấy đã rời lượt bói',
+    text: 'Bạn có thể bắt đầu một lượt mới ngay bây giờ.',
   },
 };
 
-const SEARCH_DELAY_MS = 2600;
-
-interface PalmMatchResult {
-  mySign: ZodiacSign;
-  theirSign: ZodiacSign;
-  percent: number;
-  fortune: string;
-}
-
-function pickRandom<T>(items: readonly T[]): T {
-  return items[Math.floor(Math.random() * items.length)];
-}
-
-function createRandomMatch(): PalmMatchResult {
-  return {
-    mySign: pickRandom(ZODIAC_SIGNS),
-    theirSign: pickRandom(ZODIAC_SIGNS),
-    percent: 60 + Math.floor(Math.random() * 40),
-    fortune: pickRandom(FORTUNE_TEMPLATES),
-  };
-}
-
-type FlowState =
-  | { step: 'searching' }
-  | {
-      step: 'reveal';
-      match: PalmMatchResult;
-      flippedMe: boolean;
-      flippedThem: boolean;
-    }
-  | { step: 'fortune'; match: PalmMatchResult }
-  | { step: 'result'; rate: RateKind };
-
-/** UI ghép cặp ẩn danh/flip-card/% hợp duyên khớp layouts/web/palm-match.html — quyết định sản
- * phẩm 2026-07-15 dựng lại có chủ đích làm demo tĩnh (state cục bộ, không gọi API ghép cặp thật),
- * đè quyết định "bỏ hẳn phần này" ghi ở docs/07-roadmap.md § Frontend track (2026-07-14). */
+/** Palm Match hai phía: toàn bộ queue/flip/kết quả/rating lấy từ REST state của server. */
 export function PalmReadingView() {
-  const [flow, setFlow] = useState<FlowState>({ step: 'searching' });
+  const router = useRouter();
+  const current = useCurrentPalmMatch();
+  const join = useJoinPalmQueue();
+  const flip = useFlipPalmCard();
+  const rate = useRatePalmMatch();
+  const dismiss = useDismissPalmMatch();
+  const autoJoinStarted = useRef(false);
+  const [showFortune, setShowFortune] = useState(false);
+
+  const state = current.data;
 
   useEffect(() => {
-    if (flow.step !== 'searching') return undefined;
-    const timer = setTimeout(() => {
-      setFlow({
-        step: 'reveal',
-        match: createRandomMatch(),
-        flippedMe: false,
-        flippedThem: false,
-      });
-    }, SEARCH_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [flow.step]);
-
-  function flipCard(which: 'me' | 'them') {
-    setFlow((prev) => {
-      if (prev.step !== 'reveal') return prev;
-      return which === 'me'
-        ? { ...prev, flippedMe: true }
-        : { ...prev, flippedThem: true };
+    if (state?.state !== 'idle' || autoJoinStarted.current || join.isPending) {
+      return;
+    }
+    autoJoinStarted.current = true;
+    join.mutate(undefined, {
+      onError: () => {
+        autoJoinStarted.current = false;
+      },
     });
+  }, [join, state?.state]);
+
+  useEffect(() => {
+    setShowFortune(false);
+  }, [state?.sessionId]);
+
+  async function cancelAndGoHome() {
+    try {
+      await dismiss.mutateAsync(undefined);
+      router.push('/home');
+    } catch {
+      // Mutation giữ ApiError để InlineError render; không điều hướng khi server chưa huỷ.
+    }
   }
 
-  function restart() {
-    setFlow({ step: 'searching' });
+  async function restart() {
+    try {
+      await dismiss.mutateAsync(undefined);
+      setShowFortune(false);
+      autoJoinStarted.current = true;
+      await join.mutateAsync(undefined);
+    } catch {
+      autoJoinStarted.current = false;
+      // Mutation error được render tại màn hiện tại.
+    }
   }
 
-  if (flow.step === 'searching') {
+  const error =
+    current.error ?? join.error ?? flip.error ?? rate.error ?? dismiss.error;
+
+  if (current.isLoading) {
+    return <LoadingState label="Đang khôi phục lượt Palm Match..." />;
+  }
+
+  if (current.isError) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
+        <div className="mb-4 text-5xl" aria-hidden>
+          ⚠️
+        </div>
+        <h2 className="font-display mb-2 text-2xl font-semibold italic">
+          Chưa tải được Palm Match
+        </h2>
+        <p className="mb-6 text-sm text-red-600">{errorMessage(error)}</p>
+        <button
+          type="button"
+          onClick={() => void current.refetch()}
+          className="rounded-full bg-gradient-to-br from-irisl to-aqual px-8 py-3 font-bold text-white"
+        >
+          Thử lại
+        </button>
+      </div>
+    );
+  }
+
+  if (state === undefined) {
+    return <LoadingState label="Đang khôi phục lượt Palm Match..." />;
+  }
+
+  if (state.state === 'idle' || state.state === 'queued') {
     return (
       <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
         <div className="relative mb-8 flex h-40 w-40 items-center justify-center">
@@ -130,73 +139,99 @@ export function PalmReadingView() {
           Đang tìm người để bói cùng...
         </h2>
         <p className="mb-8 text-sm text-slate-500 dark:text-slate-400">
-          Ghép ẩn danh rồi cùng lật bài xem duyên số hai bạn thế nào — chỉ để
-          vui thôi nhé 😄
+          Ghép ẩn danh rồi mỗi người tự lật bài của mình — chỉ để vui thôi nhé
+          😄
         </p>
-        <Link
-          href="/home"
-          className="rounded-full border border-black/10 px-8 py-3 text-sm font-bold transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
-        >
-          Huỷ tìm kiếm
-        </Link>
-      </div>
-    );
-  }
-
-  if (flow.step === 'reveal') {
-    const { match, flippedMe, flippedThem } = flow;
-    const bothFlipped = flippedMe && flippedThem;
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
-        <p className="mb-1 text-sm text-slate-500 dark:text-slate-400">
-          Đã ghép với
-        </p>
-        <p className="mb-6 font-bold">Người lạ ẩn danh</p>
-        <div className="mb-8 flex items-center justify-center gap-6">
-          <FlipCard
-            flipped={flippedMe}
-            onFlip={() => flipCard('me')}
-            frontGradient="from-irisl to-aqual"
-            borderClass="border-irisl"
-            label="Bạn"
-            sign={match.mySign}
-            ariaLabel="Lật bài của bạn"
-          />
-          <span className="font-display text-2xl italic text-slate-300 dark:text-slate-600">
-            ×
-          </span>
-          <FlipCard
-            flipped={flippedThem}
-            onFlip={() => flipCard('them')}
-            frontGradient="from-aqual to-irisl"
-            borderClass="border-aqual"
-            label="Người ấy"
-            sign={match.theirSign}
-            ariaLabel="Lật bài của người ấy"
-          />
-        </div>
-        <p className="mb-8 text-sm font-semibold text-irisl">
-          {bothFlipped
-            ? 'Cả hai đã lộ bài rồi!'
-            : 'Chạm vào từng bàn tay để lật bài ✨'}
-        </p>
+        <InlineError error={error} />
         <button
           type="button"
-          disabled={!bothFlipped}
-          onClick={() => setFlow({ step: 'fortune', match })}
-          className={cn(
-            'w-full rounded-full bg-gradient-to-br from-irisl to-aqual py-3 font-bold text-white shadow-lg shadow-iris/30 transition-opacity',
-            !bothFlipped && 'opacity-40',
-          )}
+          disabled={dismiss.isPending}
+          onClick={() => void cancelAndGoHome()}
+          className="rounded-full border border-black/10 px-8 py-3 text-sm font-bold transition hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/5"
         >
-          Xem duyên số
+          {dismiss.isPending ? 'Đang huỷ...' : 'Huỷ tìm kiếm'}
         </button>
       </div>
     );
   }
 
-  if (flow.step === 'fortune') {
-    const { match } = flow;
+  if (state.state === 'completed') {
+    const copy = RESULT_COPY[state.outcome ?? 'cancelled'];
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
+        <div className="mb-5 text-5xl" aria-hidden>
+          {copy.icon}
+        </div>
+        <h2 className="font-display mb-2 text-2xl font-semibold italic">
+          {copy.title}
+        </h2>
+        <p className="mb-8 text-sm text-slate-500 dark:text-slate-400">
+          {copy.text}
+        </p>
+        <InlineError error={error} />
+        <div className="flex w-full flex-col gap-3">
+          {state.partnerUserId ? (
+            <Link
+              href={`/users/${state.partnerUserId}`}
+              className="w-full rounded-full bg-gradient-to-br from-irisl to-aqual py-3 font-bold text-white shadow-lg shadow-iris/30"
+            >
+              Xem hồ sơ và nhắn tin
+            </Link>
+          ) : null}
+          <button
+            type="button"
+            disabled={dismiss.isPending || join.isPending}
+            onClick={() => void restart()}
+            className={cn(
+              'w-full rounded-full py-3 font-bold disabled:opacity-50',
+              state.partnerUserId
+                ? 'border border-black/10 dark:border-white/10'
+                : 'bg-gradient-to-br from-irisl to-aqual text-white shadow-lg shadow-iris/30',
+            )}
+          >
+            {dismiss.isPending || join.isPending
+              ? 'Đang bắt đầu...'
+              : 'Bói với người khác'}
+          </button>
+          <Link
+            href="/home"
+            className="w-full rounded-full border border-black/10 py-3 text-center font-bold dark:border-white/10"
+          >
+            Về trang chủ
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (state.myRating === 'like') {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
+        <div className="relative mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-irisl to-aqual text-4xl">
+          💫
+        </div>
+        <h2 className="font-display mb-2 text-2xl font-semibold italic">
+          Đã gửi lượt thích
+        </h2>
+        <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+          Đang chờ lựa chọn của người ấy. Hồ sơ chỉ mở nếu cả hai cùng thích.
+        </p>
+        <SessionCountdown expiresAt={state.expiresAt} />
+        <InlineError error={error} />
+        <button
+          type="button"
+          disabled={dismiss.isPending || join.isPending}
+          onClick={() => void restart()}
+          className="mt-8 rounded-full border border-black/10 px-8 py-3 text-sm font-bold disabled:opacity-50 dark:border-white/10"
+        >
+          Dừng chờ và bói lượt khác
+        </button>
+      </div>
+    );
+  }
+
+  const bothFlipped = Boolean(state.myFlipped && state.opponentFlipped);
+  if (bothFlipped && showFortune) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
         <div className="pop-in mb-6 w-full rounded-3xl bg-gradient-to-br from-irisl to-aqual p-6 text-white">
@@ -204,27 +239,29 @@ export function PalmReadingView() {
             Độ hợp duyên
           </p>
           <p className="font-display mb-1 text-5xl font-semibold">
-            {match.percent}%
+            {state.compatibilityPercent}%
           </p>
           <p className="text-sm opacity-90">
-            {match.mySign.name} {match.mySign.symbol} &amp;{' '}
-            {match.theirSign.name} {match.theirSign.symbol}
+            {state.mySign?.name} {state.mySign?.symbol} &amp;{' '}
+            {state.opponentSign?.name} {state.opponentSign?.symbol}
           </p>
         </div>
-        <div
-          className="pop-in mb-8 rounded-2xl border border-black/5 bg-white p-5 dark:border-white/5 dark:bg-surf"
-          style={{ animationDelay: '.15s' }}
-        >
-          <p className="text-sm leading-relaxed">"{match.fortune}"</p>
+        <div className="pop-in mb-8 rounded-2xl border border-black/5 bg-white p-5 dark:border-white/5 dark:bg-surf">
+          <p className="text-sm leading-relaxed">“{state.fortune}”</p>
         </div>
         <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
           Bạn có muốn làm quen thật với người này không?
         </p>
+        <InlineError error={error} />
         <div className="grid w-full grid-cols-2 gap-3">
           <button
             type="button"
-            onClick={() => setFlow({ step: 'result', rate: 'skip' })}
-            className="flex flex-col items-center gap-2 rounded-2xl border border-black/5 bg-white py-4 transition hover:-translate-y-0.5 dark:border-white/5 dark:bg-surf"
+            disabled={rate.isPending}
+            onClick={() =>
+              state.sessionId &&
+              rate.mutate({ sessionId: state.sessionId, rating: 'skip' })
+            }
+            className="flex flex-col items-center gap-2 rounded-2xl border border-black/5 bg-white py-4 transition hover:-translate-y-0.5 disabled:opacity-50 dark:border-white/5 dark:bg-surf"
           >
             <span className="text-2xl" aria-hidden>
               😅
@@ -233,50 +270,134 @@ export function PalmReadingView() {
           </button>
           <button
             type="button"
-            onClick={() => setFlow({ step: 'result', rate: 'like' })}
-            className="flex flex-col items-center gap-2 rounded-2xl bg-gradient-to-br from-irisl to-aqual py-4 text-white transition hover:-translate-y-0.5"
+            disabled={rate.isPending}
+            onClick={() =>
+              state.sessionId &&
+              rate.mutate({ sessionId: state.sessionId, rating: 'like' })
+            }
+            className="flex flex-col items-center gap-2 rounded-2xl bg-gradient-to-br from-irisl to-aqual py-4 text-white transition hover:-translate-y-0.5 disabled:opacity-50"
           >
             <span className="text-2xl" aria-hidden>
               💫
             </span>
-            <span className="text-xs font-bold">Thích</span>
+            <span className="text-xs font-bold">
+              {rate.isPending ? 'Đang gửi...' : 'Thích'}
+            </span>
           </button>
         </div>
       </div>
     );
   }
 
-  const copy = RESULT_COPY[flow.rate];
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
-      <div className="mb-5 text-5xl">{copy.icon}</div>
-      <h2 className="font-display mb-2 text-2xl font-semibold italic">
-        {copy.title}
-      </h2>
-      <p className="mb-8 text-sm text-slate-500 dark:text-slate-400">
-        {copy.text}
+      <p className="mb-1 text-sm text-slate-500 dark:text-slate-400">
+        Đã ghép với
       </p>
-      <div className="flex w-full flex-col gap-3">
-        <button
-          type="button"
-          onClick={restart}
-          className="w-full rounded-full bg-gradient-to-br from-irisl to-aqual py-3 font-bold text-white shadow-lg shadow-iris/30"
-        >
-          Bói với người khác
-        </button>
-        <Link
-          href="/home"
-          className="w-full rounded-full border border-black/10 py-3 text-center font-bold dark:border-white/10"
-        >
-          Về trang chủ
-        </Link>
+      <p className="mb-2 font-bold">Người lạ ẩn danh</p>
+      <SessionCountdown expiresAt={state.expiresAt} />
+      <div className="mb-8 mt-6 flex items-center justify-center gap-6">
+        <FlipCard
+          flipped={Boolean(state.myFlipped)}
+          disabled={flip.isPending}
+          onFlip={() => state.sessionId && flip.mutate(state.sessionId)}
+          frontGradient="from-irisl to-aqual"
+          borderClass="border-irisl"
+          label="Bạn"
+          sign={state.mySign}
+          ariaLabel="Lật bài của bạn"
+        />
+        <span className="font-display text-2xl italic text-slate-300 dark:text-slate-600">
+          ×
+        </span>
+        <FlipCard
+          flipped={Boolean(state.opponentFlipped)}
+          disabled
+          frontGradient="from-aqual to-irisl"
+          borderClass="border-aqual"
+          label="Người ấy"
+          sign={state.opponentSign}
+          ariaLabel="Bài của người ấy"
+        />
       </div>
+      <p className="mb-6 text-sm font-semibold text-irisl">
+        {bothFlipped
+          ? 'Cả hai đã lộ bài rồi!'
+          : state.myFlipped
+            ? 'Đã lật bài — đang chờ người ấy ✨'
+            : 'Chạm vào bàn tay của bạn để lật bài ✨'}
+      </p>
+      <InlineError error={error} />
+      <button
+        type="button"
+        disabled={!bothFlipped}
+        onClick={() => setShowFortune(true)}
+        className={cn(
+          'w-full rounded-full bg-gradient-to-br from-irisl to-aqual py-3 font-bold text-white shadow-lg shadow-iris/30 transition-opacity',
+          !bothFlipped && 'opacity-40',
+        )}
+      >
+        Xem duyên số
+      </button>
     </div>
   );
 }
 
+function LoadingState({ label }: { label: string }) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
+      <div className="mb-5 h-10 w-10 animate-spin rounded-full border-4 border-irisl/20 border-t-irisl" />
+      <p className="text-sm font-semibold text-slate-500">{label}</p>
+    </div>
+  );
+}
+
+function SessionCountdown({ expiresAt }: { expiresAt?: string }) {
+  const [seconds, setSeconds] = useState(() => remainingSeconds(expiresAt));
+
+  useEffect(() => {
+    setSeconds(remainingSeconds(expiresAt));
+    if (!expiresAt) return undefined;
+    const timer = window.setInterval(
+      () => setSeconds(remainingSeconds(expiresAt)),
+      1000,
+    );
+    return () => window.clearInterval(timer);
+  }, [expiresAt]);
+
+  if (!expiresAt) return null;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = String(seconds % 60).padStart(2, '0');
+  return (
+    <p className="text-xs font-semibold text-slate-400" aria-live="polite">
+      Còn {minutes}:{remainder}
+    </p>
+  );
+}
+
+function remainingSeconds(expiresAt?: string): number {
+  if (!expiresAt) return 0;
+  return Math.max(0, Math.ceil((Date.parse(expiresAt) - Date.now()) / 1000));
+}
+
+function InlineError({ error }: { error: unknown }) {
+  if (!error) return null;
+  return (
+    <p className="mb-4 rounded-xl bg-red-50 px-4 py-2 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-300">
+      {errorMessage(error)}
+    </p>
+  );
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error
+    ? error.message
+    : 'Có lỗi xảy ra, vui lòng thử lại.';
+}
+
 function FlipCard({
   flipped,
+  disabled,
   onFlip,
   frontGradient,
   borderClass,
@@ -285,11 +406,12 @@ function FlipCard({
   ariaLabel,
 }: {
   flipped: boolean;
-  onFlip: () => void;
+  disabled: boolean;
+  onFlip?: () => void;
   frontGradient: string;
   borderClass: string;
   label: string;
-  sign: ZodiacSign;
+  sign?: ZodiacSign;
   ariaLabel: string;
 }) {
   return (
@@ -298,7 +420,7 @@ function FlipCard({
       aria-label={ariaLabel}
       aria-pressed={flipped}
       data-flipped={flipped ? 'true' : 'false'}
-      disabled={flipped}
+      disabled={disabled || flipped}
       onClick={onFlip}
       className="flip-card h-36 w-28 disabled:cursor-default"
     >
@@ -317,7 +439,7 @@ function FlipCard({
             borderClass,
           )}
         >
-          <span className="mb-1 text-3xl">{sign.symbol}</span>
+          <span className="mb-1 text-3xl">{sign?.symbol ?? '·'}</span>
           <span className="text-xs font-bold">{label}</span>
         </div>
       </div>

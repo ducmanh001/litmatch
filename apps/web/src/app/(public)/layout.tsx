@@ -15,7 +15,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Link
             href="/"
-            className="font-display flex items-center gap-2 text-xl font-semibold italic"
+            className="font-display flex items-center gap-2 text-xl font-semibold italic text-iris dark:text-irisl"
           >
             <LogoMark />
             Litmatch
@@ -61,7 +61,9 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
       <footer className="relative z-10 border-t border-black/5 dark:border-white/5">
         <div className="mx-auto grid max-w-6xl grid-cols-1 gap-10 px-6 py-12 sm:grid-cols-2 md:grid-cols-4">
           <div>
-            <p className="font-display mb-3 text-xl italic">Litmatch</p>
+            <p className="font-display mb-3 text-xl italic text-iris dark:text-irisl">
+              Litmatch
+            </p>
             <p className="max-w-[220px] text-sm text-slate-500 dark:text-slate-400">
               Ẩn danh trước, chân thật sau — kết nối đúng người, đúng nhịp.
             </p>

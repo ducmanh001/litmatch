@@ -83,6 +83,7 @@ describe('ShortVideoService (unit — mock repo/ports/dataSource)', () => {
   >;
   let storagePort: jest.Mocked<VideoStoragePort>;
   let transcodePort: jest.Mocked<VideoTranscodePort>;
+  let friendService: { listFriendIds: jest.Mock };
   let safetyService: { reportVideo: jest.Mock };
   let manager: {
     findOne: jest.Mock;
@@ -175,6 +176,7 @@ describe('ShortVideoService (unit — mock repo/ports/dataSource)', () => {
       ),
     };
 
+    friendService = { listFriendIds: jest.fn(async () => []) };
     service = new ShortVideoService(
       dataSource as unknown as DataSource,
       videoRepo as unknown as Repository<Video>,
@@ -183,6 +185,7 @@ describe('ShortVideoService (unit — mock repo/ports/dataSource)', () => {
       reactionRepo as unknown as Repository<VideoReaction>,
       storagePort,
       transcodePort,
+      friendService as never,
       safetyService as unknown as SafetyService,
       configStub,
     );
@@ -310,6 +313,18 @@ describe('ShortVideoService (unit — mock repo/ports/dataSource)', () => {
       );
       const video = await service.getVideoOrThrow(viewer, 'video-1');
       expect(video.status).toBe(VideoStatus.Published);
+    });
+  });
+
+  describe('listPublished feed=following', () => {
+    it('chưa có bạn nào → trang rỗng ngay, không chạy query videos', async () => {
+      friendService.listFriendIds.mockResolvedValue([]);
+      const page = await service.listPublished(
+        { limit: 10, feed: 'following' } as never,
+        viewer,
+      );
+      expect(page).toEqual({ items: [], meta: { nextCursor: null } });
+      expect(friendService.listFriendIds).toHaveBeenCalledWith(viewer.userId);
     });
   });
 

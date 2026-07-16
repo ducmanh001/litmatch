@@ -28,8 +28,12 @@ import {
 } from './dto/invite.dtos';
 import { ApiCursorPageQuery } from '../../common/decorators/cursor-page-query.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { UserService } from '../user';
 
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
+import type { MatchInvite } from './entities/match-invite.entity';
+import type { User } from '../user';
+import type { CursorPage } from '@litmatch/common-dtos';
 
 /**
  * CTA "mời Voice/Soul Match" (W4, docs/services/matching-service.md § Invite) — directed invite,
@@ -40,7 +44,10 @@ import type { AuthenticatedUser } from '../../common/decorators/current-user.dec
 @ApiBearerAuth()
 @Controller('matching/invites')
 export class InviteController {
-  constructor(private readonly inviteService: InviteService) {}
+  constructor(
+    private readonly inviteService: InviteService,
+    private readonly userService: UserService,
+  ) {}
 
   @Post()
   @Throttle({ default: { limit: 10, ttl: minutes(1) } })
@@ -53,9 +60,7 @@ export class InviteController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateInviteDto,
   ): Promise<MatchInviteDto> {
-    return MatchInviteDto.from(
-      await this.inviteService.createInvite(user, dto),
-    );
+    return this.toDto(await this.inviteService.createInvite(user, dto));
   }
 
   @Get()
@@ -68,7 +73,7 @@ export class InviteController {
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: CursorPageQueryDto,
   ): Promise<MatchInvitesPageDto> {
-    return MatchInvitesPageDto.from(
+    return this.toPageDto(
       await this.inviteService.listReceivedInvites(user, query),
     );
   }
@@ -82,7 +87,7 @@ export class InviteController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<MatchInviteDto> {
-    return MatchInviteDto.from(await this.inviteService.getInvite(user, id));
+    return this.toDto(await this.inviteService.getInvite(user, id));
   }
 
   @Post(':id/accept')
@@ -96,8 +101,10 @@ export class InviteController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<MatchInviteAcceptedDto> {
+    const result = await this.inviteService.acceptInvite(user, id);
     return MatchInviteAcceptedDto.from(
-      await this.inviteService.acceptInvite(user, id),
+      result,
+      await this.userService.getByIdOrThrow(result.invite.inviterUserId),
     );
   }
 
@@ -109,9 +116,7 @@ export class InviteController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<MatchInviteDto> {
-    return MatchInviteDto.from(
-      await this.inviteService.declineInvite(user, id),
-    );
+    return this.toDto(await this.inviteService.declineInvite(user, id));
   }
 
   @Post(':id/cancel')
@@ -124,6 +129,25 @@ export class InviteController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<MatchInviteDto> {
-    return MatchInviteDto.from(await this.inviteService.cancelInvite(user, id));
+    return this.toDto(await this.inviteService.cancelInvite(user, id));
+  }
+
+  private async toDto(invite: MatchInvite): Promise<MatchInviteDto> {
+    return MatchInviteDto.from(
+      invite,
+      await this.userService.getByIdOrThrow(invite.inviterUserId),
+    );
+  }
+
+  private async toPageDto(
+    page: CursorPage<MatchInvite>,
+  ): Promise<MatchInvitesPageDto> {
+    const inviters = await this.userService.findByIds(
+      page.items.map((invite) => invite.inviterUserId),
+    );
+    const invitersById = new Map<string, User>(
+      inviters.map((inviter) => [inviter.id, inviter]),
+    );
+    return MatchInvitesPageDto.from(page, invitersById);
   }
 }

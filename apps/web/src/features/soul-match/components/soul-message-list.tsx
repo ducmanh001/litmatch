@@ -54,8 +54,8 @@ export function SoulMessageList({ sessionId }: { sessionId: string }) {
           <div
             className={
               message.senderRole === 'me'
-                ? 'max-w-[75%] rounded-2xl rounded-tr-md bg-gradient-to-br from-irisl to-irisl px-4 py-2.5 text-sm text-white'
-                : 'max-w-[75%] rounded-2xl rounded-tl-md bg-slate-100 px-4 py-2.5 text-sm dark:bg-surf2'
+                ? 'max-w-[75%] min-w-0 whitespace-pre-wrap rounded-2xl rounded-tr-md bg-gradient-to-br from-irisl to-irisl px-4 py-2.5 text-sm text-white [overflow-wrap:anywhere]'
+                : 'max-w-[75%] min-w-0 whitespace-pre-wrap rounded-2xl rounded-tl-md bg-slate-100 px-4 py-2.5 text-sm [overflow-wrap:anywhere] dark:bg-surf2'
             }
           >
             {message.content}

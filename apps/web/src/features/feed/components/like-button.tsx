@@ -42,15 +42,16 @@ export function LikeButton({
   return (
     <button
       type="button"
+      aria-label={`${liked ? 'Bỏ thích' : 'Thích'} bài viết, ${likeCount} lượt thích`}
       aria-pressed={liked}
       disabled={pending}
       onClick={() => (liked ? unlike.mutate() : like.mutate())}
-      className={`flex items-center gap-1.5 disabled:opacity-50 ${
+      className={`flex min-w-0 w-full items-center justify-center gap-2 rounded-xl px-2 py-2.5 text-sm font-semibold transition hover:bg-black/5 disabled:opacity-50 dark:hover:bg-white/5 ${
         liked ? 'text-rose-500' : 'text-slate-500 dark:text-slate-400'
       }`}
     >
       <HeartIcon filled={liked} />
-      <span className="text-xs font-semibold">{likeCount}</span>
+      <span>{liked ? 'Đã thích' : 'Thích'}</span>
     </button>
   );
 }

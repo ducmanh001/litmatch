@@ -47,7 +47,9 @@ export function CommentList({ postId }: { postId: string }) {
               key={comment.id}
               className="rounded-2xl border border-black/5 bg-white px-3 py-2.5 dark:border-white/5 dark:bg-surf"
             >
-              <p className="text-sm">{comment.content}</p>
+              <p className="whitespace-pre-wrap text-sm [overflow-wrap:anywhere]">
+                {comment.content}
+              </p>
               <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
                 {new Date(comment.createdAt).toLocaleString('vi-VN')}
               </p>

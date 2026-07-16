@@ -83,12 +83,18 @@ export class ShortVideoController {
 
   @Get()
   @ApiOperation({
-    summary: 'Danh sách video published — sort=recent (default) | ranked',
+    summary:
+      'Danh sách video published — sort=recent (default) | ranked; feed=following chỉ video của bạn bè',
   })
   @ApiCursorPageQuery()
   @ApiOkResponse({ type: VideosPageDto })
-  async list(@Query() query: ListVideosQueryDto): Promise<VideosPageDto> {
-    return VideosPageDto.from(await this.videoService.listPublished(query));
+  async list(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: ListVideosQueryDto,
+  ): Promise<VideosPageDto> {
+    return VideosPageDto.from(
+      await this.videoService.listPublished(query, user),
+    );
   }
 
   @Get(':id')

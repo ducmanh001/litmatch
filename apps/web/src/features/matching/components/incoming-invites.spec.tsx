@@ -26,6 +26,12 @@ function inviteFixture(
     expiresAt: new Date().toISOString(),
     sessionId: null,
     createdAt: new Date().toISOString(),
+    inviterProfile: {
+      id: 'user-a',
+      nickname: 'Mai Anh',
+      gender: 'female',
+      avatarId: 'avatar-mai-anh',
+    },
     ...overrides,
   };
 }
@@ -47,13 +53,14 @@ describe('IncomingInvites', () => {
     routerReplace.mockClear();
   });
 
-  it('không có lời mời — không render gì', async () => {
+  it('không có lời mời — hiển thị trạng thái rỗng rõ ràng', async () => {
     vi.spyOn(apiClient, 'GET').mockResolvedValue({
       data: { data: { items: [], nextCursor: null } },
     } as never);
-    const { container } = renderInvites();
+    renderInvites();
 
-    await vi.waitFor(() => expect(container).toBeEmptyDOMElement());
+    expect(await screen.findByText('Chưa có lời mời mới')).toBeVisible();
+    expect(screen.getByText('Lời mời dành cho bạn')).toBeVisible();
   });
 
   it('có lời mời — chấp nhận thì confirm ticket rồi điều hướng vào đúng session', async () => {
@@ -82,8 +89,9 @@ describe('IncomingInvites', () => {
     });
 
     renderInvites();
+    expect(await screen.findByText('Mai Anh')).toBeVisible();
     const user = userEvent.setup();
-    await user.click(await screen.findByRole('button', { name: 'Chấp nhận' }));
+    await user.click(screen.getByRole('button', { name: 'Chấp nhận' }));
 
     await vi.waitFor(() =>
       expect(routerReplace).toHaveBeenCalledWith('/matching/soul/session-42'),

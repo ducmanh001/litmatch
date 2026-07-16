@@ -190,10 +190,21 @@ export class InviteService {
     user: AuthenticatedUser,
     query: CursorPageQueryDto,
   ): Promise<CursorPage<MatchInvite>> {
+    // Re-check hidden set ở MỖI lần đọc inbox: block/report có thể phát sinh sau khi invite được
+    // tạo; không buộc user phải nhìn hoặc phản hồi lời mời từ người họ vừa ẩn.
+    const hiddenInviterIds = await this.safetyService.getHiddenUserIds(
+      user.userId,
+    );
     const qb = this.inviteRepo
       .createQueryBuilder('i')
       .where('i.inviteeUserId = :userId', { userId: user.userId })
       .andWhere('i.status = :status', { status: MatchInviteStatus.Pending });
+
+    if (hiddenInviterIds.length > 0) {
+      qb.andWhere('i.inviterUserId NOT IN (:...hiddenInviterIds)', {
+        hiddenInviterIds,
+      });
+    }
 
     if (query.cursor) {
       const pos = this.decodeInviteCursor(query.cursor);

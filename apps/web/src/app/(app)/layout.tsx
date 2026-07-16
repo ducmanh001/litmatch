@@ -11,10 +11,11 @@ import {
 } from '../../shared/realtime/socket';
 import { ConfirmSheet } from '../../shared/ui/confirm-sheet';
 import {
+  DiscoveryIcon,
   FeedIcon,
   FriendsIcon,
   HomeIcon,
-  LogoMark,
+  MatchIcon,
   PartyIcon,
   ProfileIcon,
   VideoIcon,
@@ -26,22 +27,29 @@ import type { ReactNode } from 'react';
 import type { ComponentType, SVGProps } from 'react';
 
 /**
- * Nav sau login khai 1 chỗ (docs/12 § 12.8 bước 3) — đúng 6 mục & nhãn của
- * layouts/web/*.html (sidebar desktop và bottom nav di động dùng chung 1 danh sách, không
- * còn tách sidebarOnly). Ghép đôi/Khám phá/Ví không có trong nav của mockup — vào qua Trang
- * chủ (mode-card, diamond badge) và Hồ sơ, đúng discovery.html chỉ được link từ trang landing.
+ * Nav sau login khai 1 chỗ (docs/12 § 12.8 bước 3). Desktop đủ không gian nên giữ toàn bộ
+ * điểm đến chính; bottom nav chỉ giữ 6 mục dùng thường xuyên để nhãn không va nhau trên máy
+ * nhỏ. Quanh đây và Ghép đôi là hai hành trình cốt lõi nên luôn hiện ở cả hai breakpoint.
  */
 const NAV_ITEMS = [
-  { href: '/home', label: 'Trang chủ', Icon: HomeIcon },
-  { href: '/video', label: 'Video', Icon: VideoIcon },
-  { href: '/party', label: 'Party', Icon: PartyIcon },
-  { href: '/feed', label: 'Bảng tin', Icon: FeedIcon },
-  { href: '/friends', label: 'Tin nhắn', Icon: FriendsIcon },
-  { href: '/profile', label: 'Cá nhân', Icon: ProfileIcon },
+  { href: '/home', label: 'Trang chủ', Icon: HomeIcon, mobile: true },
+  {
+    href: '/discovery',
+    label: 'Quanh đây',
+    Icon: DiscoveryIcon,
+    mobile: true,
+  },
+  { href: '/matching', label: 'Ghép đôi', Icon: MatchIcon, mobile: true },
+  { href: '/video', label: 'Video', Icon: VideoIcon, mobile: true },
+  { href: '/party', label: 'Party', Icon: PartyIcon, mobile: false },
+  { href: '/feed', label: 'Bảng tin', Icon: FeedIcon, mobile: true },
+  { href: '/friends', label: 'Tin nhắn', Icon: FriendsIcon, mobile: false },
+  { href: '/profile', label: 'Cá nhân', Icon: ProfileIcon, mobile: true },
 ] satisfies ReadonlyArray<{
   href: string;
   label: string;
   Icon: ComponentType<SVGProps<SVGSVGElement>>;
+  mobile: boolean;
 }>;
 
 /**
@@ -94,70 +102,75 @@ function AppChrome({ children }: { children: ReactNode }) {
   const fullBleed = FULL_BLEED_CONTENT_PATTERN.test(pathname);
 
   return (
-    <div className="md:flex md:bg-slate-100 md:dark:bg-black">
-      <nav
-        className="hidden md:sticky md:top-0 md:z-40 md:flex md:h-screen md:w-20 md:shrink-0 md:flex-col md:gap-1.5 md:border-r md:border-black/5 md:bg-white/80 md:px-3 md:py-8 md:backdrop-blur lg:w-60 lg:px-4 dark:md:border-white/5 dark:md:bg-surf/60"
-        aria-label="Điều hướng chính"
-      >
-        <Link
-          href="/home"
-          className="font-display mb-6 hidden items-center gap-2 px-3 text-lg font-semibold italic lg:flex"
-        >
-          <LogoMark />
-          Litmatch
-        </Link>
-        {NAV_ITEMS.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={isActive(item.href) ? 'page' : undefined}
-            className={`flex items-center justify-center gap-3 rounded-xl px-3 py-3 transition lg:justify-start ${
-              isActive(item.href)
-                ? 'bg-iris/10 font-bold text-irisl'
-                : 'font-semibold text-slate-400 hover:bg-black/5 dark:hover:bg-white/5'
-            }`}
-          >
-            <item.Icon width={20} height={20} />
-            <span className="hidden text-sm lg:inline">{item.label}</span>
-          </Link>
-        ))}
-      </nav>
-
-      <div
-        className={`relative mx-auto min-h-screen w-full max-w-[430px] md:max-w-2xl md:flex-1 lg:max-w-[1200px] ${
-          fullBleed ? '' : 'pb-24 md:pb-10'
-        }`}
-        style={{ contain: 'layout' }}
-      >
-        {!fullBleed && (
-          <div className="flex justify-end px-5 pt-3">
-            <ThemeSwitcher />
-          </div>
-        )}
-
-        <main className={fullBleed ? '' : 'py-4'}>{children}</main>
-
+    <div className="md:bg-slate-100 dark:md:bg-ink">
+      <div className="md:grid md:min-h-screen md:grid-cols-[5rem_minmax(0,1fr)] lg:grid-cols-[15rem_minmax(0,1fr)]">
         <nav
-          className="fixed inset-x-0 bottom-0 z-40 mx-auto flex h-16 max-w-[430px] items-center justify-around border-t border-black/5 bg-white/90 px-2 backdrop-blur md:hidden dark:border-white/5 dark:bg-surf/90"
-          aria-label="Điều hướng chính (di động)"
+          className="hidden md:sticky md:top-0 md:z-40 md:flex md:h-screen md:w-full md:flex-col md:gap-1.5 md:overflow-y-auto md:border-r md:border-black/5 md:bg-white/80 md:px-3 md:py-8 md:backdrop-blur lg:px-4 dark:md:border-white/5 dark:md:bg-[#110d14]/55"
+          aria-label="Điều hướng chính"
         >
+          <Link
+            href="/home"
+            className="font-display mb-6 hidden items-center gap-2.5 px-3 text-lg font-semibold italic text-iris lg:flex dark:text-[#f5eff3]"
+          >
+            <span className="h-6.5 w-6.5 shrink-0 rounded-full bg-gradient-to-br from-irisl to-aqual shadow-md shadow-iris/30" />
+            Litmatch
+          </Link>
           {NAV_ITEMS.map((item) => (
             <Link
               key={item.href}
               href={item.href}
               aria-current={isActive(item.href) ? 'page' : undefined}
-              className={`flex flex-col items-center gap-1 ${
-                isActive(item.href) ? 'text-irisl' : 'text-slate-400'
+              className={`flex items-center justify-center gap-3 rounded-xl px-3 py-3 transition lg:justify-start ${
+                isActive(item.href)
+                  ? 'bg-gradient-to-br from-iris/20 to-aqua/10 font-bold text-iris shadow-sm shadow-iris/10 dark:text-white dark:ring-1 dark:ring-inset dark:ring-iris/30'
+                  : 'font-semibold text-muted-foreground hover:bg-iris/10 hover:text-iris dark:text-[#ab9dae] dark:hover:bg-white/5 dark:hover:text-[#f5eff3]'
               }`}
             >
               <item.Icon width={20} height={20} />
-              <span className="text-[10px] font-bold">{item.label}</span>
+              <span className="hidden text-sm lg:inline">{item.label}</span>
             </Link>
           ))}
         </nav>
 
-        <ToastStack />
-        <ConfirmSheet />
+        <div
+          className={`relative mx-auto min-h-screen w-full min-w-0 max-w-[430px] ${
+            fullBleed ? 'md:max-w-none' : 'md:max-w-[1200px]'
+          } ${fullBleed ? '' : 'pb-24 md:pb-10'}`}
+        >
+          {!fullBleed && (
+            <div className="flex justify-end px-5 pt-3">
+              <ThemeSwitcher />
+            </div>
+          )}
+
+          <main className={`min-w-0 ${fullBleed ? '' : 'py-4'}`}>
+            {children}
+          </main>
+
+          <nav
+            className="fixed inset-x-0 bottom-0 z-40 mx-auto flex h-16 max-w-[430px] items-center justify-around border-t border-black/5 bg-white/90 px-2 backdrop-blur md:hidden dark:border-white/5 dark:bg-surf/90"
+            aria-label="Điều hướng chính (di động)"
+          >
+            {NAV_ITEMS.filter((item) => item.mobile).map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={isActive(item.href) ? 'page' : undefined}
+                className={`flex flex-col items-center gap-1 ${
+                  isActive(item.href)
+                    ? 'text-iris dark:text-irisl'
+                    : 'text-muted-foreground'
+                }`}
+              >
+                <item.Icon width={20} height={20} />
+                <span className="text-[10px] font-bold">{item.label}</span>
+              </Link>
+            ))}
+          </nav>
+
+          <ToastStack />
+          <ConfirmSheet />
+        </div>
       </div>
     </div>
   );

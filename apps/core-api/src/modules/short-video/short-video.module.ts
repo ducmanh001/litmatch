@@ -17,11 +17,14 @@ import {
   DevVideoTranscodeProvider,
   VideoTranscodePort,
 } from './ports/video-transcode.port';
+import { FriendModule } from '../friend';
 import { SafetyModule } from '../safety';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Video, VideoView, VideoComment, VideoReaction]),
+    // Graph bạn bè cho feed "Đang theo dõi" (video.html) — nguồn follow duy nhất hiện có.
+    FriendModule,
     SafetyModule,
   ],
   controllers: [ShortVideoController],
