@@ -21,7 +21,7 @@ Env: copy `.env.example` → `.env.local` (đã có sẵn cho local). Đọc env
 | Route          | Ghi chú                                                                                                                             |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `/login`       | OTP 2 bước (phone → code), redirect về trang trước đó sau login                                                                     |
-| `/`            | Dashboard — card "Phòng đang live" thật, phần còn lại demo dán nhãn (`features/dashboard/`)                                         |
+| `/`            | Dashboard — stat card + chart + "Phòng đang live" + audit log gần đây, toàn bộ `GET /admin/dashboard` thật (`features/dashboard/`)  |
 | `/users`       | Danh sách user — lọc status/nickname, ban/unban, modal hồ sơ (`features/users/`)                                                    |
 | `/moderation`  | Tab báo cáo (thật) + tab "Video ngắn chờ duyệt" (thật) (`features/moderation/`)                                                     |
 | `/gifts`       | Gift catalog — tạo quà mới, sửa giá, bật/tắt (`features/gifts/`)                                                                    |
