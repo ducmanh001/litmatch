@@ -1,0 +1,173 @@
+# Development overlay. Luôn gọi cùng docker-compose.yml gốc qua `pnpm dev:up` để tất cả service
+# ở chung một network; file gốc vẫn chỉ là hạ tầng, không đổi hành vi production/CI.
+x-node-workspace: &node-workspace
+  build:
+    context: .
+    dockerfile: Dockerfile.dev
+  working_dir: /workspace
+  init: true
+  volumes:
+    - .:/workspace
+    - litmatch_node_modules:/workspace/node_modules
+    - litmatch_pnpm_store:/pnpm/store
+
+x-backend-env: &backend-env
+  NODE_ENV: development
+  DATABASE_URL: postgresql://litmatch:litmatch_local@postgres:5432/litmatch
+  REDIS_URL: redis://redis:6379
+  KAFKA_BROKERS: kafka:19092
+  CORS_ORIGINS: http://localhost:4200,http://localhost:4300
+  # URL trả cho browser phải là public host URL; RoomServiceClient của core gọi qua DNS nội bộ.
+  LIVEKIT_URL: ws://localhost:7880
+  LIVEKIT_API_URL: http://livekit:7880
+
+services:
+  deps:
+    <<: *node-workspace
+    command:
+      ['pnpm', 'install', '--frozen-lockfile', '--store-dir', '/pnpm/store']
+    restart: 'no'
+
+  migrate:
+    <<: *node-workspace
+    env_file: .env
+    environment: *backend-env
+    command: ['pnpm', 'db:migrate']
+    restart: 'no'
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+  livekit:
+    image: livekit/livekit-server:v1.13.1@sha256:2c6869d2d5ff6c9c0166f47be1c92dad6928bfecfa5e4060a6ece48db8accfa3
+    command: --config /etc/livekit.yaml
+    ports:
+      - '7880:7880'
+      - '7881:7881'
+      - '50000-50200:50000-50200/udp'
+      - '6789:6789'
+    volumes:
+      - ./apps/media-server/livekit.compose.yaml:/etc/livekit.yaml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  core-api:
+    <<: *node-workspace
+    env_file: .env
+    environment:
+      <<: *backend-env
+      WATCHPACK_POLLING: 'true'
+    command: ['pnpm', 'nx', 'serve', 'core-api']
+    ports:
+      - '3000:3000'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      livekit:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'wget -qO- http://127.0.0.1:3000/health/ready >/dev/null || exit 1',
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+
+  signaling-gateway:
+    <<: *node-workspace
+    env_file: .env
+    environment:
+      <<: *backend-env
+      WATCHPACK_POLLING: 'true'
+    command: ['pnpm', 'nx', 'serve', 'signaling-gateway']
+    ports:
+      - '3001:3001'
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'wget -qO- http://127.0.0.1:3001/health/ready >/dev/null || exit 1',
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+
+  admin:
+    <<: *node-workspace
+    environment:
+      CHOKIDAR_USEPOLLING: 'true'
+      VITE_API_URL: http://localhost:3000
+    command:
+      [
+        'pnpm',
+        'exec',
+        'vite',
+        '--config',
+        '/workspace/apps/admin/vite.config.mts',
+        '--host',
+        '0.0.0.0',
+        '--port',
+        '4200',
+      ]
+    ports:
+      - '4200:4200'
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'wget -qO- http://127.0.0.1:4200/ >/dev/null || exit 1']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+
+  web:
+    <<: *node-workspace
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+      NEXT_PUBLIC_SOCKET_URL: http://localhost:3001
+      NEXT_PUBLIC_LIVEKIT_URL: ws://localhost:7880
+      NEXT_TELEMETRY_DISABLED: '1'
+      WATCHPACK_POLLING: 'true'
+    command:
+      [
+        'pnpm',
+        'exec',
+        'next',
+        'dev',
+        'apps/web',
+        '--webpack',
+        '--hostname',
+        '0.0.0.0',
+        '--port',
+        '4300',
+      ]
+    ports:
+      - '4300:4300'
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'wget -qO- http://127.0.0.1:4300/ >/dev/null || exit 1']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+
+volumes:
+  litmatch_node_modules:
+  litmatch_pnpm_store:
