@@ -6,6 +6,8 @@ import type { CursorPage } from '@litmatch/common-dtos';
 
 export class ListPendingVideosQueryDto extends CursorPageQueryDto {}
 
+export class ListPublishedVideosQueryDto extends CursorPageQueryDto {}
+
 export class AdminVideoDto {
   @ApiProperty() id!: string;
   @ApiProperty() authorUserId!: string;

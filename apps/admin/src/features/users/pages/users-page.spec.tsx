@@ -104,4 +104,18 @@ describe('UsersPage', () => {
     const banButton = await screen.findByRole('button', { name: 'Khoá' });
     expect(banButton).toBeDisabled();
   });
+
+  it('bấm nickname — mở modal hồ sơ, Escape đóng lại', async () => {
+    vi.spyOn(apiClient, 'GET').mockResolvedValue({
+      data: { data: { items: [user()], total: 1 } },
+    } as never);
+    renderPage();
+
+    fireEvent.click(await screen.findByText('alice'));
+    expect(await screen.findByText('Hồ sơ người dùng')).toBeVisible();
+    expect(screen.getByText(`ID: ${user().id}`)).toBeVisible();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByText('Hồ sơ người dùng')).toBeNull();
+  });
 });

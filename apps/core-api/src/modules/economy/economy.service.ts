@@ -1,7 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@litmatch/common-exceptions';
-import { Repository } from 'typeorm';
+import { MoreThan, Repository } from 'typeorm';
 
 import type { EntityManager } from 'typeorm';
 
@@ -40,6 +40,28 @@ export interface TransactionView {
   status: string;
   diamondDelta: string;
   createdAt: Date;
+}
+
+export interface IapProductCatalogView {
+  productId: string;
+  provider: IapProvider;
+  diamonds: string;
+  active: boolean;
+}
+
+export interface VipPlanCatalogView {
+  id: string;
+  tier: VipTier;
+  days: number;
+  priceDiamond: string;
+  active: boolean;
+}
+
+export interface AdminEconomyAnalytics {
+  dailyDiamondSpent: Array<{ date: string; amount: string }>;
+  totalDiamondSpent: string;
+  activeVipUsers: number;
+  activeSvipUsers: number;
 }
 
 /**
@@ -86,6 +108,171 @@ export class EconomyService {
     }));
   }
 
+  /** Catalog VIP active — client chỉ được mua planId lấy từ read contract này. */
+  async listVipPlans(): Promise<
+    Array<{
+      id: string;
+      tier: VipTier;
+      days: number;
+      priceDiamond: string;
+    }>
+  > {
+    const plans = await this.planRepo.find({
+      where: { active: true },
+      order: { priceDiamond: 'ASC' },
+    });
+    return plans.map((plan) => ({
+      id: plan.id,
+      tier: plan.tier,
+      days: plan.days,
+      priceDiamond: plan.priceDiamond,
+    }));
+  }
+
+  /** Read model quản trị — gồm cả item inactive, không expose repository/entity ra module khác. */
+  async listCatalogForAdmin(): Promise<{
+    iapProducts: IapProductCatalogView[];
+    vipPlans: VipPlanCatalogView[];
+  }> {
+    const [products, plans] = await Promise.all([
+      this.productRepo.find({ order: { diamonds: 'ASC' } }),
+      this.planRepo.find({ order: { priceDiamond: 'ASC' } }),
+    ]);
+    return {
+      iapProducts: products.map((product) => ({
+        productId: product.productId,
+        provider: product.provider,
+        diamonds: product.diamonds,
+        active: product.active,
+      })),
+      vipPlans: plans.map((plan) => ({
+        id: plan.id,
+        tier: plan.tier,
+        days: plan.days,
+        priceDiamond: plan.priceDiamond,
+        active: plan.active,
+      })),
+    };
+  }
+
+  async setIapProductActive(
+    manager: EntityManager,
+    productId: string,
+    active: boolean,
+  ): Promise<IapProductCatalogView> {
+    const repo = manager.getRepository(IapProduct);
+    const product = await repo.findOneBy({ productId });
+    if (!product) {
+      throw new DomainException(
+        EconomyErrors.IAP_PRODUCT_UNKNOWN,
+        `Product ${productId} không tồn tại`,
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    product.active = active;
+    const saved = await repo.save(product);
+    return {
+      productId: saved.productId,
+      provider: saved.provider,
+      diamonds: saved.diamonds,
+      active: saved.active,
+    };
+  }
+
+  async setVipPlanActive(
+    manager: EntityManager,
+    planId: string,
+    active: boolean,
+  ): Promise<VipPlanCatalogView> {
+    const repo = manager.getRepository(VipPlan);
+    const plan = await repo.findOneBy({ id: planId });
+    if (!plan) {
+      throw new DomainException(
+        EconomyErrors.VIP_PLAN_UNKNOWN,
+        `Gói VIP ${planId} không tồn tại`,
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    plan.active = active;
+    const saved = await repo.save(plan);
+    return {
+      id: saved.id,
+      tier: saved.tier,
+      days: saved.days,
+      priceDiamond: saved.priceDiamond,
+      active: saved.active,
+    };
+  }
+
+  /** Composition cho broadcast admin; chỉ trả ID, không làm lộ Wallet persistence. */
+  async listActiveVipUserIds(): Promise<string[]> {
+    const wallets = await this.walletRepo.find({
+      select: { userId: true },
+      where: { vipExpiresAt: MoreThan(new Date()) },
+    });
+    return wallets.map((wallet) => wallet.userId);
+  }
+
+  /**
+   * Dashboard chỉ tổng hợp DIA đã chảy vào system_revenue; không quy đổi giả sang tiền fiat.
+   * IAP/VIP/store price không đủ dữ liệu đa tiền tệ để báo cáo doanh thu VND chính xác.
+   */
+  async getAdminAnalytics(
+    now = new Date(),
+    days = 7,
+  ): Promise<AdminEconomyAnalytics> {
+    const start = new Date(now);
+    start.setUTCHours(0, 0, 0, 0);
+    start.setUTCDate(start.getUTCDate() - (days - 1));
+    const rows = await this.txnRepo.manager.query<
+      Array<{ date: string; amount: string }>
+    >(
+      `
+        SELECT to_char(date_trunc('day', le.created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS date,
+               SUM(le.amount)::text AS amount
+          FROM ledger_entries le
+          JOIN ledger_accounts la ON la.id = le.account_id
+         WHERE la.kind = $1
+           AND le.currency = $2
+           AND le.direction = $3
+           AND le.created_at >= $4
+         GROUP BY date_trunc('day', le.created_at AT TIME ZONE 'UTC')
+         ORDER BY date ASC
+      `,
+      [
+        LedgerAccountKind.SystemRevenue,
+        LedgerCurrency.Diamond,
+        LedgerDirection.Credit,
+        start,
+      ],
+    );
+    const byDate = new Map(rows.map((row) => [row.date, row.amount]));
+    const dailyDiamondSpent = Array.from({ length: days }, (_, index) => {
+      const date = new Date(start);
+      date.setUTCDate(date.getUTCDate() + index);
+      const key = date.toISOString().slice(0, 10);
+      return { date: key, amount: byDate.get(key) ?? '0' };
+    });
+    const [activeVipUsers, activeSvipUsers] = await Promise.all([
+      this.walletRepo.countBy({
+        vipTier: VipTier.Vip,
+        vipExpiresAt: MoreThan(now),
+      }),
+      this.walletRepo.countBy({
+        vipTier: VipTier.Svip,
+        vipExpiresAt: MoreThan(now),
+      }),
+    ]);
+    return {
+      dailyDiamondSpent,
+      totalDiamondSpent: dailyDiamondSpent
+        .reduce((sum, day) => sum + BigInt(day.amount), 0n)
+        .toString(),
+      activeVipUsers,
+      activeSvipUsers,
+    };
+  }
+
   /**
    * Nạp diamond từ IAP. Idempotency thật = provider transaction id (server tự sinh) —
    * client gửi lại receipt bao nhiêu lần cũng chỉ credit đúng 1 lần (docs/10 § Economy).
@@ -124,6 +311,7 @@ export class EconomyService {
         provider,
         productId,
         providerTransactionId: verified.providerTransactionId,
+        diamonds: product.diamonds,
       },
       entries: [
         {
@@ -186,7 +374,13 @@ export class EconomyService {
       type: TransactionType.VipPurchase,
       idempotencyKey: `vip:${userId}:${idempotencyKey}`,
       actorUserId: userId,
-      metadata: { planId, tier: plan.tier, days: plan.days },
+      // Snapshot đủ giá + thời hạn đã áp dụng; đổi catalog sau này không diễn giải lại lịch sử.
+      metadata: {
+        planId,
+        tier: plan.tier,
+        days: plan.days,
+        priceDiamond: plan.priceDiamond,
+      },
       entries: [
         {
           accountKind: LedgerAccountKind.UserWallet,

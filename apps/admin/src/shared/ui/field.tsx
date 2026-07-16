@@ -20,8 +20,11 @@ export function Field({
   className,
 }: FieldProps) {
   return (
-    <div className={cn('space-y-1.5', className)}>
-      <label htmlFor={htmlFor} className="text-sm font-medium">
+    <div className={cn('flex flex-col gap-1.5', className)}>
+      <label
+        htmlFor={htmlFor}
+        className="text-xs font-bold text-muted-foreground"
+      >
         {label}
       </label>
       {children}

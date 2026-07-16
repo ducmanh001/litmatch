@@ -3,8 +3,14 @@ import { DataSource } from 'typeorm';
 
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
 import { InitAuthUser1751900000000 } from '../../database/migrations/1751900000000-init-auth-user';
+import { UserProfilePreferences1755800000000 } from '../../database/migrations/1755800000000-user-profile-preferences';
 import { UserRole1753600000000 } from '../../database/migrations/1753600000000-user-role';
 import { AdminAuditLog1753700000000 } from '../../database/migrations/1753700000000-admin-audit-log';
+import { AdminCatalogAuditTarget1755000000000 } from '../../database/migrations/1755000000000-admin-catalog-audit-target';
+import { Notification1753000000000 } from '../../database/migrations/1753000000000-notification';
+import { AdminRolePermissions1755100000000 } from '../../database/migrations/1755100000000-admin-role-permissions';
+import { SupportTicket1755300000000 } from '../../database/migrations/1755300000000-support-ticket';
+import { AdminSupportPermission1755400000000 } from '../../database/migrations/1755400000000-admin-support-permission';
 import { MatchingCore1752200000000 } from '../../database/migrations/1752200000000-matching-core';
 import { EconomyLedger1752000000000 } from '../../database/migrations/1752000000000-economy-ledger';
 import { EconomyRefund1752100000000 } from '../../database/migrations/1752100000000-economy-refund';
@@ -30,16 +36,31 @@ import { LedgerAccount } from '../economy/entities/ledger-account.entity';
 import { LedgerEntry } from '../economy/entities/ledger-entry.entity';
 import { OutboxEvent } from '../economy/entities/outbox-event.entity';
 import { LedgerTransaction } from '../economy/entities/transaction.entity';
-import { Wallet } from '../economy/entities/wallet.entity';
+import { VipTier, Wallet } from '../economy/entities/wallet.entity';
 import {
   IapProduct,
   IapProvider,
   IapReceipt,
 } from '../economy/entities/iap.entities';
 import { VipPlan } from '../economy/entities/vip-plan.entity';
+import {
+  Notification,
+  NotificationService,
+  NotificationType,
+} from '../notification';
+import {
+  SupportService,
+  SupportTicketCategory,
+  SupportTicketStatus,
+} from '../support';
+import { SupportTicket } from '../support/entities/support-ticket.entity';
 
 import { AdminService } from './admin.service';
 import { AdminErrors } from './admin.errors';
+import { BroadcastAudience } from './dto/admin-config.dto';
+import { AdminPermission } from './admin.constants';
+import { AdminRolePermission } from './entities/admin-role-permission.entity';
+import { Roles } from '@litmatch/common-dtos';
 
 import type { ConfigService } from '@nestjs/config';
 import type { CoreApiEnv } from '../../config/env.validation';
@@ -129,9 +150,13 @@ d('Admin integration (Postgres thật)', () => {
         IapReceipt,
         VipPlan,
         OutboxEvent,
+        Notification,
+        AdminRolePermission,
+        SupportTicket,
       ],
       migrations: [
         InitAuthUser1751900000000,
+        UserProfilePreferences1755800000000,
         UserRole1753600000000,
         EconomyLedger1752000000000,
         EconomyRefund1752100000000,
@@ -140,6 +165,11 @@ d('Admin integration (Postgres thật)', () => {
         ReportTargetVideo1754900000000,
         PartyRoomGift1752700000000,
         AdminAuditLog1753700000000,
+        AdminCatalogAuditTarget1755000000000,
+        Notification1753000000000,
+        AdminRolePermissions1755100000000,
+        SupportTicket1755300000000,
+        AdminSupportPermission1755400000000,
         ReportStatus1753800000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
@@ -161,6 +191,7 @@ d('Admin integration (Postgres thật)', () => {
     // đây (chỉ test createGift/updateGift/listAllForAdmin), nên stub các phần đó.
     const giftService = new GiftService(
       ds.getRepository(Gift),
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
@@ -188,13 +219,22 @@ d('Admin integration (Postgres thật)', () => {
     );
     // Video moderation không phải trọng tâm suite này (test riêng ở short-video.integration.spec.ts) — stub.
     const shortVideoServiceStub = {} as never;
+    const notificationService = new NotificationService(
+      ds.getRepository(Notification),
+      { send: jest.fn().mockResolvedValue(undefined) } as never,
+    );
+    const supportService = new SupportService(ds.getRepository(SupportTicket));
     admin = new AdminService(
       ds,
+      ds.getRepository(AdminRolePermission),
       userService,
       safetyService,
       giftService,
       economyService,
       shortVideoServiceStub,
+      { countActiveRooms: jest.fn().mockResolvedValue(0) } as never,
+      supportService,
+      notificationService,
       auditLogService,
     );
   });
@@ -585,5 +625,216 @@ d('Admin integration (Postgres thật)', () => {
         .findBy({ targetId: fakeId });
       expect(logs).toHaveLength(0);
     });
+  });
+
+  describe('Config + broadcast thật', () => {
+    it('bật/tắt VIP plan atomic cùng audit với target id không phải UUID', async () => {
+      const actor = await createUser('config-actor');
+
+      const updated = await admin.setVipPlanActive(actor.id, 'vip-30d', false);
+      expect(updated.active).toBe(false);
+      expect(
+        await ds.getRepository(VipPlan).findOneByOrFail({ id: 'vip-30d' }),
+      ).toMatchObject({ active: false });
+
+      const logs = await ds.getRepository(AdminAuditLog).findBy({
+        targetId: 'vip-30d',
+        action: 'economy.vip_plan.updated',
+      });
+      expect(logs).toHaveLength(1);
+      expect(logs[0].metadata).toMatchObject({ active: false });
+
+      // Không để thay đổi catalog của test này làm hỏng test/suite chạy sau.
+      await admin.setVipPlanActive(actor.id, 'vip-30d', true);
+    });
+
+    it('broadcast VIP chỉ tạo notification cho user đang có VIP và ghi audit', async () => {
+      const actor = await createUser('broadcast-actor');
+      const vipUser = await createUser('broadcast-vip');
+      const freeUser = await createUser('broadcast-free');
+      await ds.getRepository(Wallet).save(
+        ds.getRepository(Wallet).create({
+          userId: vipUser.id,
+          balance: '0',
+          earnings: '0',
+          vipTier: VipTier.Vip,
+          vipExpiresAt: new Date(Date.now() + 86_400_000),
+        }),
+      );
+
+      const result = await admin.broadcastNotification(actor.id, {
+        title: 'Tin VIP',
+        body: 'Chỉ dành cho VIP',
+        audience: BroadcastAudience.Vip,
+      });
+
+      expect(result.recipientCount).toBe(1);
+      expect(
+        await ds.getRepository(Notification).findBy({
+          userId: vipUser.id,
+          type: NotificationType.AdminBroadcast,
+        }),
+      ).toHaveLength(1);
+      expect(
+        await ds.getRepository(Notification).findBy({
+          userId: freeUser.id,
+          type: NotificationType.AdminBroadcast,
+        }),
+      ).toHaveLength(0);
+      expect(
+        await ds.getRepository(AdminAuditLog).findBy({
+          targetId: result.broadcastId,
+          action: 'notification.broadcast.sent',
+        }),
+      ).toHaveLength(1);
+    });
+  });
+
+  describe('Support ticket', () => {
+    it('tạo idempotent, user theo dõi và admin xử lý cùng audit log', async () => {
+      const actor = await createUser('support-admin');
+      actor.role = Roles.Admin;
+      await ds.getRepository(User).save(actor);
+      const reporter = await createUser('support-reporter');
+      const support = new SupportService(ds.getRepository(SupportTicket));
+
+      const first = await support.createTicket(
+        reporter.id,
+        {
+          category: SupportTicketCategory.Bug,
+          message: 'Ứng dụng bị lỗi khi mở phòng',
+        },
+        'ticket-key-1',
+      );
+      const replay = await support.createTicket(
+        reporter.id,
+        {
+          category: SupportTicketCategory.Bug,
+          message: 'Ứng dụng bị lỗi khi mở phòng',
+        },
+        'ticket-key-1',
+      );
+      expect(replay.id).toBe(first.id);
+      expect((await support.listMine(reporter.id, 20)).items).toHaveLength(1);
+
+      const updated = await admin.updateSupportTicket(actor.id, first.id, {
+        status: SupportTicketStatus.Resolved,
+        staffResponse: 'Đã khắc phục, vui lòng thử lại.',
+      });
+      expect(updated).toMatchObject({
+        status: SupportTicketStatus.Resolved,
+        staffResponse: 'Đã khắc phục, vui lòng thử lại.',
+      });
+      expect(
+        await ds.getRepository(AdminAuditLog).findBy({
+          targetId: first.id,
+          action: 'support.ticket.updated',
+        }),
+      ).toHaveLength(1);
+    });
+  });
+
+  describe('Permission + staff enforcement', () => {
+    it('đọc policy seed và cập nhật moderator atomic cùng audit', async () => {
+      const actor = await createUser('permission-actor');
+      actor.role = Roles.Admin;
+      await ds.getRepository(User).save(actor);
+
+      expect(
+        await admin.hasPermission(actor.id, AdminPermission.ManagePermissions),
+      ).toBe(true);
+      expect(
+        (await admin.getPermissionMatrix()).find(
+          (item) => item.permission === AdminPermission.ManageGifts,
+        ),
+      ).toMatchObject({ moderator: false, admin: true });
+
+      await admin.setRolePermission(
+        actor.id,
+        Roles.Moderator,
+        AdminPermission.ManageGifts,
+        true,
+      );
+      expect(
+        await ds.getRepository(AdminRolePermission).findOneByOrFail({
+          role: Roles.Moderator,
+          permission: AdminPermission.ManageGifts,
+        }),
+      ).toMatchObject({ enabled: true });
+      expect(
+        await ds.getRepository(AdminAuditLog).findBy({
+          targetId: 'moderator:manage_gifts',
+          action: 'admin.role_permission.updated',
+        }),
+      ).toHaveLength(1);
+    });
+
+    it('không cho tắt manage_permissions của admin', async () => {
+      const actor = await createUser('permission-lockout');
+      actor.role = Roles.Admin;
+      await ds.getRepository(User).save(actor);
+
+      await expect(
+        admin.setRolePermission(
+          actor.id,
+          Roles.Admin,
+          AdminPermission.ManagePermissions,
+          false,
+        ),
+      ).rejects.toMatchObject({
+        code: AdminErrors.CANNOT_DISABLE_PERMISSION_CONTROL,
+      });
+    });
+
+    it('đổi role staff persist + audit; không cho actor tự hạ chính mình', async () => {
+      const actor = await createUser('staff-actor');
+      actor.role = Roles.Admin;
+      await ds.getRepository(User).save(actor);
+      const target = await createUser('staff-target');
+
+      const promoted = await admin.setStaffRole(
+        actor.id,
+        target.id,
+        Roles.Moderator,
+      );
+      expect(promoted.role).toBe(Roles.Moderator);
+      expect((await admin.listStaff()).map((staff) => staff.id)).toContain(
+        target.id,
+      );
+      expect(
+        await ds.getRepository(AdminAuditLog).findBy({
+          targetId: target.id,
+          action: 'admin.staff_role.updated',
+        }),
+      ).toHaveLength(1);
+
+      await expect(
+        admin.setStaffRole(actor.id, actor.id, Roles.User),
+      ).rejects.toMatchObject({ code: AdminErrors.CANNOT_CHANGE_OWN_ROLE });
+    });
+  });
+
+  it('dashboard tổng hợp user, diamond system_revenue và audit thật', async () => {
+    const user = await createUser('dashboard-user');
+    await economyService.creditFromIap(
+      user.id,
+      IapProvider.Google,
+      { devTransactionId: `dashboard-${++seedCounter}` },
+      'com.litmatch.diamond.1200',
+    );
+    await economyService.purchaseVip(
+      user.id,
+      'vip-30d',
+      `dashboard-vip-${seedCounter}`,
+    );
+
+    const dashboard = await admin.getDashboard();
+    expect(dashboard.activeUsers).toBeGreaterThan(0);
+    expect(BigInt(dashboard.totalDiamondSpentSevenDays)).toBeGreaterThanOrEqual(
+      500n,
+    );
+    expect(dashboard.dailyDiamondSpent).toHaveLength(7);
+    expect(dashboard.userTiers.vip).toBeGreaterThanOrEqual(1);
+    expect(dashboard.recentActivities.length).toBeGreaterThan(0);
   });
 });

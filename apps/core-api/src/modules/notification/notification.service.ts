@@ -20,6 +20,11 @@ export interface CreateNotificationInput {
   payload: Record<string, unknown>;
 }
 
+export interface BroadcastNotificationInput {
+  title: string;
+  body: string;
+}
+
 /**
  * Facade Notification (docs/services/notification-service.md): module sinh sự kiện gọi thẳng
  * qua DI (không Outbox/Kafka — chỉ 1 consumer, vẫn modular monolith). `createWithManager` cho
@@ -47,6 +52,27 @@ export class NotificationService {
 
   async create(input: CreateNotificationInput): Promise<Notification> {
     return this.createWithManager(this.notificationRepo.manager, input);
+  }
+
+  async createBroadcastWithManager(
+    manager: EntityManager,
+    userIds: readonly string[],
+    input: BroadcastNotificationInput,
+  ): Promise<Notification[]> {
+    if (userIds.length === 0) return [];
+    const repo = manager.getRepository(Notification);
+    return repo.save(
+      userIds.map((userId) =>
+        repo.create({
+          userId,
+          type: NotificationType.AdminBroadcast,
+          payload: { title: input.title, body: input.body },
+          readAt: null,
+        }),
+      ),
+      // Giới hạn kích thước mỗi INSERT nhưng vẫn giữ cùng transaction của manager.
+      { chunk: 500 },
+    );
   }
 
   /**
