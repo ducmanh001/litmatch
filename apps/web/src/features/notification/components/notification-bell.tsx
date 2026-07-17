@@ -106,7 +106,7 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
           <button
             type="button"
             onClick={() => void refetch()}
-            className="mt-2 text-xs font-bold text-rose-700 dark:text-irisl"
+            className="mt-2 text-xs font-bold text-irisl"
           >
             Thử lại
           </button>
@@ -136,7 +136,7 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
           type="button"
           disabled={isFetchingNextPage}
           onClick={() => void fetchNextPage()}
-          className="w-full border-t border-black/5 px-4 py-2.5 text-xs font-bold text-rose-700 disabled:opacity-50 dark:border-white/5 dark:text-irisl"
+          className="w-full border-t border-black/5 px-4 py-2.5 text-xs font-bold text-irisl disabled:opacity-50 dark:border-white/5"
         >
           {isFetchingNextPage ? 'Đang tải…' : 'Xem thêm'}
         </button>

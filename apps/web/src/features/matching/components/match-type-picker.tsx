@@ -95,7 +95,7 @@ export function MatchTypePicker({
                 <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-iris/10 text-irisl transition group-has-[:checked]:bg-irisl group-has-[:checked]:text-white dark:bg-white/[0.05] dark:text-white">
                   <option.Icon width={21} height={21} />
                 </span>
-                <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground group-has-[:checked]:border-iris/20 group-has-[:checked]:bg-iris/10 group-has-[:checked]:text-rose-700 dark:border-white/10 dark:bg-surf dark:text-white/70 dark:group-has-[:checked]:border-rose-300/25 dark:group-has-[:checked]:bg-rose-300/10 dark:group-has-[:checked]:text-white">
+                <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground group-has-[:checked]:border-iris/20 group-has-[:checked]:bg-iris/10 group-has-[:checked]:text-irisl dark:border-white/10 dark:bg-surf dark:text-white/70 dark:group-has-[:checked]:border-rose-300/25 dark:group-has-[:checked]:bg-rose-300/10 dark:group-has-[:checked]:text-white">
                   {option.eyebrow}
                 </span>
               </div>

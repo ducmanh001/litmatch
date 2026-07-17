@@ -17,6 +17,12 @@ x-backend-env: &backend-env
   REDIS_URL: redis://redis:6379
   KAFKA_BROKERS: kafka:19092
   CORS_ORIGINS: http://localhost:4200,http://localhost:4300
+  # .:/workspace bind-mount dùng chung cho mọi service node-workspace, nên mặc định
+  # .nx/workspace-data (kể cả DB chống vòng lặp task theo PID) bị các container chia sẻ.
+  # Container khác nhau có PID namespace riêng nhưng hay trùng PID thấp -> Nx nhận nhầm
+  # là "task tự gọi lại chính nó" và core-api/signaling-gateway thoát ngay khi start.
+  # Trỏ workspace-data ra /tmp (không phải volume nào) để mỗi container có state Nx riêng.
+  NX_WORKSPACE_DATA_DIRECTORY: /tmp/nx-workspace-data
   # URL trả cho browser phải là public host URL; RoomServiceClient của core gọi qua DNS nội bộ.
   LIVEKIT_URL: ws://localhost:7880
   LIVEKIT_API_URL: http://livekit:7880

@@ -74,7 +74,7 @@ export function PublicProfileView({ userId }: { userId: string }) {
             {profile.data.interests?.map((tag) => (
               <span
                 key={tag}
-                className="rounded-full bg-iris/10 px-2.5 py-1 text-[11px] font-semibold text-rose-700 dark:bg-white/10 dark:text-white/85"
+                className="rounded-full bg-iris/10 px-2.5 py-1 text-[11px] font-semibold text-irisl dark:bg-white/10 dark:text-white/85"
               >
                 {tag}
               </span>

@@ -44,6 +44,19 @@
   --aqua: 242 166 90;
   --aqual: 242 166 90;
   --diamond-rgb: 79 195 217;
+
+  /* Badge-pill eyebrow (docs/13, layouts/web/quanh-day.html) — biến riêng vì dark:<utility>
+     của Tailwind từng thua text-rose-700 base cùng specificity (custom-variant @where() hoà
+     specificity, ai đứng sau trong CSS biên dịch thắng, không phải class nào đứng sau trong
+     className) — đổi qua biến CSS đổi theo :root/.dark là cách chuẩn xác, không phụ thuộc thứ
+     tự Tailwind biên dịch. */
+  --eyebrow-bg: linear-gradient(
+    135deg,
+    rgb(var(--iris) / 0.16),
+    rgb(var(--iris) / 0.06)
+  );
+  --eyebrow-border: rgb(var(--iris) / 0.55);
+  --eyebrow-text: rgb(var(--irisl));
 }
 
 [data-theme='orange'] {
@@ -67,6 +80,14 @@
   --diamond-foreground: #4fc3d9; /* dark: chip diamond dùng luôn màu diamond, đúng mockup */
   --destructive: #f43f5e; /* rose-500 — đủ tương phản trên nền tối */
   --destructive-foreground: #fef2f2;
+
+  --eyebrow-bg: linear-gradient(
+    135deg,
+    rgba(239, 72, 104, 0.32),
+    rgba(255, 127, 151, 0.14)
+  );
+  --eyebrow-border: rgba(240, 87, 127, 0.4);
+  --eyebrow-text: #ffc7d9;
 }
 
 @theme inline {

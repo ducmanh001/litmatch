@@ -43,7 +43,7 @@ export default function MatchingPage() {
         />
         <div className="relative flex flex-col gap-5 md:flex-row md:items-center md:justify-between md:gap-8">
           <div className="min-w-0 md:max-w-xl">
-            <p className="mb-2 text-xs font-extrabold uppercase tracking-[0.16em] text-rose-700 dark:text-white/85">
+            <p className="mb-2 text-xs font-extrabold uppercase tracking-[0.16em] text-irisl dark:text-white/85">
               Tìm người yêu · tìm người đồng hành
             </p>
             <h2 className="text-2xl font-extrabold leading-tight dark:text-white sm:text-3xl">

@@ -320,7 +320,7 @@ export function PostCard({
               type="button"
               aria-expanded={contentExpanded}
               onClick={() => setContentExpanded((value) => !value)}
-              className="mt-1 text-xs font-bold text-rose-700 transition hover:opacity-80 dark:text-irisl"
+              className="mt-1 text-xs font-bold text-irisl transition hover:opacity-80"
             >
               {contentExpanded ? 'Thu gọn' : 'Xem thêm'}
             </button>

@@ -63,11 +63,23 @@ export function BrandMark({ className }: { className?: string }) {
   );
 }
 
+/** Id gradient dùng chung cho MỌI icon trong eyebrow-pill (mọi trang) — định nghĩa 1 lần duy
+ * nhất ở đây, icon nào muốn tô gradient chỉ cần trỏ `fill`/`stroke` về `url(#${EYEBROW_ICON_GRADIENT_ID})`
+ * thay vì tự khai `<linearGradient>` riêng (tránh lặp lại nhiều defs cùng màu rải khắp các trang). */
+export const EYEBROW_ICON_GRADIENT_ID = 'eyebrow-icon-gradient';
+
 /** Eyebrow-tag đúng badge-pill của layouts/web/quanh-day.html — dùng chung cho mọi header thay
  * vì mỗi trang tự bịa 1 kiểu. `icon` bị ép về đúng 1 cỡ (h-3 w-3) bất kể caller truyền
  * width/height gì cho icon component — tránh lặp lại lỗi trước đó (icon Quanh đây 22px làm pill
  * phồng to hơn hẳn các trang khác dù cùng dùng chung component này). `as="h1"` cho trang dùng
- * badge-pill này làm tiêu đề chính (không có heading lớn riêng bên dưới như Quanh đây). */
+ * badge-pill này làm tiêu đề chính (không có heading lớn riêng bên dưới như Quanh đây).
+ *
+ * Icon luôn được tô bằng gradient thương hiệu (không chỉ currentColor phẳng): icon dùng
+ * stroke (đa số icon trong shared/ui/icons.tsx) tự động ăn gradient qua override `stroke` ở
+ * đây — kế thừa xuống path/rect/circle con giống hệt cách currentColor kế thừa trước đây, callер
+ * không cần sửa gì. Icon dùng fill riêng (vd trái tim Quanh đây) phải tự trỏ
+ * `fill={`url(#${EYEBROW_ICON_GRADIENT_ID})`}` vì `fill` không bị ép ở tầng này (ép luôn fill sẽ
+ * biến các icon line-art fill="none" thành khối đặc, sai hình dạng gốc). */
 export function HeaderEyebrow({
   icon,
   className,
@@ -82,10 +94,37 @@ export function HeaderEyebrow({
   return (
     <Tag
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border border-iris/15 bg-iris/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.1em] text-rose-700 [&>svg]:h-3 [&>svg]:w-3 dark:border-rose-300/25 dark:bg-rose-300/10 dark:text-rose-300',
+        'inline-flex items-center gap-2.25 rounded-full border px-2.5 py-1 text-[12.5px] font-bold uppercase tracking-[0.04em] text-irisl dark:text-[#ffc7d9] [&>svg]:h-3 [&>svg]:w-3 [&>svg]:stroke-[url(#eyebrow-icon-gradient)]',
         className,
       )}
+      style={{
+        alignItems: 'center',
+        gap: '9px',
+        background: 'var(--grad-soft)',
+        border: '1px solid rgba(240, 87, 127, .4)',
+        fontSize: '12.5px',
+        fontWeight: 700,
+        letterSpacing: '.04em',
+        color: '#ffc7d9',
+      }}
     >
+      {/* display:none làm trình duyệt bỏ qua luôn gradient bên trong (mất icon) — phải để
+      SVG này render bình thường, chỉ ẩn bằng kích thước 0 + position:absolute (inline style
+      để thắng chắc chắn class kích thước [&>svg]:h-3 áp lên mọi svg con của Tag). */}
+      <svg style={{ position: 'absolute', width: 0, height: 0 }} aria-hidden>
+        <defs>
+          <linearGradient
+            id={EYEBROW_ICON_GRADIENT_ID}
+            x1="0%"
+            y1="0%"
+            x2="100%"
+            y2="100%"
+          >
+            <stop offset="0%" stopColor="#ef4868" />
+            <stop offset="100%" stopColor="#ff7f97" />
+          </linearGradient>
+        </defs>
+      </svg>
       {icon}
       {children}
     </Tag>
@@ -127,7 +166,7 @@ export function PageHeader({
               <HeaderEyebrow
                 as={children ? 'p' : 'h1'}
                 icon={eyebrowIcon}
-                className="hidden px-3.5 py-2 text-sm md:flex [&>svg]:h-4 [&>svg]:w-4"
+                className="hidden px-3.5 py-2 text-[12.5px] md:flex [&>svg]:h-4 [&>svg]:w-4"
               >
                 {eyebrow}
               </HeaderEyebrow>

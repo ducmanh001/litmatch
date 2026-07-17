@@ -12,12 +12,16 @@ import { DiscoveryCard } from '../../../features/discovery/components/discovery-
 import { DiscoveryDetailSheet } from '../../../features/discovery/components/discovery-detail-sheet';
 import {
   DiscoveryFilters,
+  DiscoveryModeToggle,
   getDiscoveryAgeBounds,
 } from '../../../features/discovery/components/discovery-filters';
 import { NearbyOptIn } from '../../../features/discovery/components/nearby-opt-in';
 import { useCreateInvite } from '../../../features/matching/invite-api';
 import { MicIcon } from '../../../shared/ui/icons';
-import { PageHeader } from '../../../shared/ui/page-header';
+import {
+  EYEBROW_ICON_GRADIENT_ID,
+  PageHeader,
+} from '../../../shared/ui/page-header';
 
 import type {
   DiscoveryCardDto,
@@ -43,6 +47,20 @@ function HeartLineIcon() {
       aria-hidden
     >
       <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.7-7.5 1.1-1.1a5.5 5.5 0 0 0 0-7.8Z" />
+    </svg>
+  );
+}
+
+/** Heart tô gradient thương hiệu dùng chung của eyebrow-pill (xem EYEBROW_ICON_GRADIENT_ID ở
+ * page-header.tsx) — icon fill riêng nên phải tự trỏ url(#id), không ăn được override stroke
+ * mà HeaderEyebrow áp cho các icon dùng stroke. */
+function EyebrowHeartIcon() {
+  return (
+    <svg width={22} height={22} viewBox="0 0 24 24" aria-hidden>
+      <path
+        fill={`url(#${EYEBROW_ICON_GRADIENT_ID})`}
+        d="M12 21s-7.5-4.9-10.2-9.3C.3 8.8 1.6 5 5.2 4.2c2-.4 3.9.5 4.9 2.1L12 8.5l1.9-2.2c1-1.6 2.9-2.5 4.9-2.1C22.4 5 23.7 8.8 22.2 11.7 19.5 16.1 12 21 12 21z"
+      />
     </svg>
   );
 }
@@ -136,7 +154,7 @@ export default function DiscoveryPage() {
     <div className="mx-auto w-full max-w-[1120px] px-5 pt-0 md:px-8 md:pb-16 md:pt-0">
       <PageHeader
         eyebrow="Hẹn hò có chủ đích"
-        eyebrowIcon={<HeartLineIcon />}
+        eyebrowIcon={<EyebrowHeartIcon />}
       />
 
       <section className="rounded-3xl border border-iris/15 bg-card p-6 shadow-sm shadow-iris/[0.04] dark:border-white/10 dark:bg-gradient-to-br dark:from-surf dark:to-iris/[0.04] dark:shadow-none sm:p-8">
@@ -149,6 +167,14 @@ export default function DiscoveryPage() {
               Tìm người phù hợp hoặc khám phá những kết nối ở gần bạn. Chọn cách
               mở lời bằng trò chuyện hay voice khi bạn thực sự muốn tìm hiểu.
             </p>
+            <DiscoveryModeToggle
+              mode={mode}
+              onModeChange={(nextMode) => {
+                setMode(nextMode);
+                setSelected(null);
+              }}
+              className="mt-5"
+            />
           </div>
 
           <div className="hidden shrink-0 gap-3 md:flex md:w-[270px] md:flex-col">
@@ -181,11 +207,6 @@ export default function DiscoveryPage() {
           onGenderChange={setGender}
           ageRange={ageRange}
           onAgeRangeChange={setAgeRange}
-          mode={mode}
-          onModeChange={(nextMode) => {
-            setMode(nextMode);
-            setSelected(null);
-          }}
         />
       </div>
 
@@ -200,7 +221,7 @@ export default function DiscoveryPage() {
             <section aria-labelledby="discovery-results-heading">
               <div className="mb-4 flex items-end justify-between gap-4">
                 <div>
-                  <p className="text-xs font-extrabold tracking-[0.12em] text-rose-700 dark:text-white/85">
+                  <p className="text-xs font-extrabold tracking-[0.12em] text-irisl dark:text-white/85">
                     {mode === 'browse' ? 'DÀNH CHO BẠN' : 'CÙNG Ở GẦN ĐÂY'}
                   </p>
                   <h2
@@ -306,7 +327,7 @@ export default function DiscoveryPage() {
             </h2>
             <div className="mt-4 space-y-4">
               <div className="flex gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-iris/10 text-rose-700 dark:bg-rose-300/15 dark:text-white">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-iris/10 text-irisl dark:bg-rose-300/15 dark:text-white">
                   <MessageIcon />
                 </span>
                 <div>
@@ -319,7 +340,7 @@ export default function DiscoveryPage() {
                 </div>
               </div>
               <div className="flex gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-iris/10 text-rose-700 dark:bg-rose-300/15 dark:text-white">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-iris/10 text-irisl dark:bg-rose-300/15 dark:text-white">
                   <MicIcon width={18} height={18} />
                 </span>
                 <div>

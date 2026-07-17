@@ -226,7 +226,7 @@ function TrendingRooms() {
         <button
           type="button"
           onClick={() => void refetch()}
-          className="mt-2 text-xs font-bold text-rose-700 dark:text-white"
+          className="mt-2 text-xs font-bold text-irisl dark:text-white"
         >
           Thử lại
         </button>
@@ -273,7 +273,7 @@ function SectionHeading({
   return (
     <div className="flex items-end justify-between gap-4">
       <div>
-        <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-rose-700 dark:text-irisl">
+        <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-irisl">
           {eyebrow}
         </p>
         <h2 className="font-display mt-1 text-xl font-semibold sm:text-2xl">
@@ -318,7 +318,7 @@ export default function HomePage() {
         <div className="pointer-events-none absolute -right-20 top-10 h-72 w-72 rounded-full border-[42px] border-white/25 dark:border-white/10" />
 
         <div className="relative z-10 max-w-2xl">
-          {/* <span className="inline-flex rounded-full border border-iris/20 bg-white/65 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.18em] text-rose-700 backdrop-blur dark:border-rose-300/25 dark:bg-rose-300/10 dark:text-rose-300">
+          {/* <span className="inline-flex rounded-full border border-iris/20 bg-white/65 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.18em] text-irisl backdrop-blur dark:border-rose-300/25 dark:bg-rose-300/10 dark:text-rose-300">
             Hẹn hò nghiêm túc · đồng hành lâu dài
           </span> */}
           <h1 className="font-display mt-5 max-w-2xl text-3xl font-semibold leading-[1.12] text-slate-950 sm:text-4xl lg:text-5xl dark:text-white">
@@ -393,7 +393,7 @@ export default function HomePage() {
                 {['Du lịch', 'Cà phê', 'Đọc sách'].map((tag) => (
                   <span
                     key={tag}
-                    className="font-mono rounded-full bg-iris/10 px-2.5 py-1 text-[10px] text-rose-700 dark:bg-white/10 dark:text-white/85"
+                    className="font-mono rounded-full bg-iris/10 px-2.5 py-1 text-[10px] text-irisl dark:bg-white/10 dark:text-white/85"
                   >
                     {tag}
                   </span>
@@ -407,14 +407,14 @@ export default function HomePage() {
       <section className="mt-5 rounded-[1.75rem] border border-black/5 bg-white p-5 dark:border-white/10 dark:bg-surf sm:p-6">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-rose-700 dark:text-irisl">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-irisl">
               Truy cập nhanh
             </p>
             <h2 className="mt-1 text-base font-bold sm:text-lg">
               Tiếp tục khám phá Litmatch
             </h2>
           </div>
-          <span className="rounded-full bg-iris/10 px-2.5 py-1 text-[10px] font-bold text-rose-700 dark:bg-white/10 dark:text-white/75">
+          <span className="rounded-full bg-iris/10 px-2.5 py-1 text-[10px] font-bold text-irisl dark:bg-white/10 dark:text-white/75">
             4 lựa chọn
           </span>
         </div>
@@ -525,7 +525,7 @@ export default function HomePage() {
             <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-iris/10 text-irisl">
               <DiscoveryIcon width={20} height={20} />
             </span>
-            <p className="mt-5 text-[11px] font-extrabold uppercase tracking-[0.18em] text-rose-700 dark:text-irisl">
+            <p className="mt-5 text-[11px] font-extrabold uppercase tracking-[0.18em] text-irisl">
               Khám phá
             </p>
             <h2 className="font-display mt-1 max-w-xs text-2xl font-semibold leading-tight">

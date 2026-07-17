@@ -33,7 +33,7 @@ export function FeedSidebar() {
           </div>
           <Link
             href="/party"
-            className="rounded-full bg-iris/10 px-2.5 py-1 text-[11px] font-bold text-rose-700 dark:text-irisl"
+            className="rounded-full bg-iris/10 px-2.5 py-1 text-[11px] font-bold text-irisl"
           >
             Xem tất cả
           </Link>

@@ -76,64 +76,74 @@ function LocationIcon() {
 const CHIP_BASE =
   'shrink-0 rounded-full border px-3.5 py-2 text-xs font-bold whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
 
+/** Nút chuyển "Quanh đây"/"Khám phá phù hợp" — tách riêng khỏi `DiscoveryFilters` để trang có
+ * thể đặt trong hero (ngay dưới mô tả) thay vì kẹt trong card filter cuộn riêng bên dưới. */
+export function DiscoveryModeToggle({
+  mode,
+  onModeChange,
+  className,
+}: {
+  mode: 'browse' | 'nearby';
+  onModeChange: (mode: 'browse' | 'nearby') => void;
+  className?: string;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Cách tìm người phù hợp"
+      className={cn('flex flex-wrap gap-2.5', className)}
+    >
+      <button
+        type="button"
+        aria-pressed={mode === 'nearby'}
+        onClick={() => onModeChange('nearby')}
+        className={cn(
+          'flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border px-4 py-2.5 text-sm font-bold transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+          mode === 'nearby'
+            ? 'border-transparent bg-gradient-to-r from-aqua to-irisl text-white shadow-sm shadow-iris/15'
+            : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground dark:border-white/15 dark:text-white/75 dark:hover:bg-white/[0.08] dark:hover:text-white',
+        )}
+      >
+        <LocationIcon />
+        Quanh đây
+      </button>
+      <button
+        type="button"
+        aria-pressed={mode === 'browse'}
+        onClick={() => onModeChange('browse')}
+        className={cn(
+          'flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border px-4 py-2.5 text-sm font-bold transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+          mode === 'browse'
+            ? 'border-transparent bg-gradient-to-r from-aqua to-irisl text-white shadow-sm shadow-iris/15'
+            : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground dark:border-white/15 dark:text-white/75 dark:hover:bg-white/[0.08] dark:hover:text-white',
+        )}
+      >
+        <BrowseIcon />
+        Khám phá phù hợp
+      </button>
+    </div>
+  );
+}
+
 export function DiscoveryFilters({
   gender,
   onGenderChange,
   ageRange,
   onAgeRangeChange,
-  mode,
-  onModeChange,
 }: {
   gender: Gender | undefined;
   onGenderChange: (gender: Gender | undefined) => void;
   ageRange: DiscoveryAgeRange;
   onAgeRangeChange: (ageRange: DiscoveryAgeRange) => void;
-  mode: 'browse' | 'nearby';
-  onModeChange: (mode: 'browse' | 'nearby') => void;
 }) {
   return (
     <section
       aria-label="Bộ lọc hồ sơ"
       className="rounded-3xl border border-iris/15 bg-card p-4 shadow-sm shadow-iris/[0.04] dark:border-white/10 dark:bg-surf dark:shadow-none md:p-5"
     >
-      <div
-        role="group"
-        aria-label="Cách tìm người phù hợp"
-        className="mb-4 flex gap-2"
-      >
-        <button
-          type="button"
-          aria-pressed={mode === 'nearby'}
-          onClick={() => onModeChange('nearby')}
-          className={cn(
-            'flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-2xl border px-3.5 py-2 text-xs font-bold transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:flex-1',
-            mode === 'nearby'
-              ? 'border-transparent bg-gradient-to-r from-aqua to-irisl text-white shadow-sm shadow-iris/15'
-              : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground dark:border-white/10 dark:text-white/75 dark:hover:bg-white/[0.08] dark:hover:text-white',
-          )}
-        >
-          <LocationIcon />
-          Quanh đây
-        </button>
-        <button
-          type="button"
-          aria-pressed={mode === 'browse'}
-          onClick={() => onModeChange('browse')}
-          className={cn(
-            'flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-2xl border px-3.5 py-2 text-xs font-bold transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-            mode === 'browse'
-              ? 'border-transparent bg-gradient-to-r from-aqua to-irisl text-white shadow-sm shadow-iris/15'
-              : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground dark:border-white/10 dark:text-white/75 dark:hover:bg-white/[0.08] dark:hover:text-white',
-          )}
-        >
-          <BrowseIcon />
-          <span className="min-w-0 truncate">Khám phá phù hợp</span>
-        </button>
-      </div>
-
       <div className="grid gap-4 md:grid-cols-2 md:gap-6">
         <fieldset className="min-w-0">
-          <legend className="mb-2 text-xs font-extrabold tracking-wide text-rose-700 dark:text-white/85">
+          <legend className="mb-2 text-xs font-extrabold tracking-wide text-irisl dark:text-white/85">
             MUỐN LÀM QUEN VỚI
           </legend>
           <div className="no-scrollbar flex gap-2 overflow-x-auto pb-0.5">
@@ -157,7 +167,7 @@ export function DiscoveryFilters({
         </fieldset>
 
         <fieldset className="min-w-0">
-          <legend className="mb-2 text-xs font-extrabold tracking-wide text-rose-700 dark:text-white/75">
+          <legend className="mb-2 text-xs font-extrabold tracking-wide text-irisl dark:text-white/75">
             KHOẢNG TUỔI
           </legend>
           <div className="no-scrollbar flex gap-2 overflow-x-auto pb-0.5">
