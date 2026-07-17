@@ -722,7 +722,12 @@
   function showToast(message, kind){
     var el = document.createElement('div');
     el.className = 'toast' + (kind === 'warn' ? ' warn' : '');
-    el.innerHTML = '<span class="toast-dot"></span><span>' + message + '</span>';
+    var dot = document.createElement('span');
+    dot.className = 'toast-dot';
+    var text = document.createElement('span');
+    text.textContent = message;
+    el.appendChild(dot);
+    el.appendChild(text);
     toastStack.appendChild(el);
     setTimeout(function(){
       el.classList.add('leaving');
