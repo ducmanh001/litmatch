@@ -563,12 +563,16 @@
         el.style.opacity = '0';
         el.style.transform = 'translateY(8px)';
         el.style.transition = 'all .2s ease';
-        el.innerHTML =
-          '<span>' +
-          (opts.icon || (opts.tone === 'warn' ? '⚠️' : '✓')) +
-          '</span><span>' +
-          msg +
-          '</span>';
+
+        var iconSpan = document.createElement('span');
+        iconSpan.textContent = opts.icon || (opts.tone === 'warn' ? '⚠️' : '✓');
+
+        var msgSpan = document.createElement('span');
+        msgSpan.textContent = msg;
+
+        el.appendChild(iconSpan);
+        el.appendChild(msgSpan);
+
         stack.appendChild(el);
         requestAnimationFrame(function () {
           el.style.opacity = '1';
