@@ -67,7 +67,8 @@ Quy tắc gốc module:
 | Event contract/handler              | `events/`       | Event versioning; DB write + publish dùng outbox khi cần                                                        |
 
 `common/` chỉ dành cho hạ tầng trung lập dùng chung. Không chuyển nghiệp vụ của một
-module vào `common/` chỉ để tránh import.
+module vào `common/` chỉ để tránh import. Quy tắc quyết định pure helper nên nằm ở
+`common/` hay giữ trong module: [11-engineering-principles.md § DRY có chọn lọc](./11-engineering-principles.md#dry-có-chọn-lọc-aha-trước-abstraction).
 
 ## 16.4 Public API và ownership
 

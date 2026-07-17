@@ -54,6 +54,10 @@ diamonds tăng dần; read-only, không trả gói inactive. Client (web) chọn
 
 ### Mua VIP bằng diamond
 
+`GET /api/v1/economy/vip/plans` — catalog gói VIP đang bán (`active=true`), sắp xếp theo giá
+diamond tăng dần. Client lấy `planId`, tier, số ngày và giá hiển thị từ đây; không hardcode bảng
+giá hoặc tự gửi giá trong request mua.
+
 `POST /api/v1/economy/vip/purchase` {planId} + header `Idempotency-Key` (bắt buộc)
 
 1. Tra `vip_plans` → giá diamond + số ngày; **snapshot `{planId, priceDiamond, days}` vào `transactions.metadata`** (versioned pricing — đổi giá gói sau này không đụng giao dịch cũ). Ledger: Nợ `user_wallet` / Có `system_revenue` (check `balance - price >= 0` **sau khi** `SELECT ... FOR UPDATE` wallet — không tin số dư đọc trước đó).

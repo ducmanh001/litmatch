@@ -59,7 +59,12 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
   let ticketRepo: jest.Mocked<
     Pick<
       Repository<MatchTicket>,
-      'save' | 'create' | 'findOneBy' | 'findOneByOrFail' | 'increment'
+      | 'save'
+      | 'create'
+      | 'findOne'
+      | 'findOneBy'
+      | 'findOneByOrFail'
+      | 'increment'
     >
   >;
   let redis: {
@@ -84,6 +89,7 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
     ticketRepo = {
       save: jest.fn(async (t) => t as MatchTicket),
       create: jest.fn((input) => Object.assign(new MatchTicket(), input)),
+      findOne: jest.fn(),
       findOneBy: jest.fn(),
       findOneByOrFail: jest.fn(),
       increment: jest.fn(async () => ({
@@ -321,6 +327,32 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
         code: MatchingErrors.TICKET_FORBIDDEN,
       });
       expect(manager.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getActiveTicket — phục hồi state sau reload', () => {
+    it.each([MatchTicketStatus.Queued, MatchTicketStatus.Matched])(
+      'trả ticket %s của đúng user từ auth',
+      async (status) => {
+        const active = makeTicket({ status });
+        ticketRepo.findOne.mockResolvedValueOnce(active);
+
+        await expect(service.getActiveTicket(me)).resolves.toBe(active);
+        expect(ticketRepo.findOne).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({ userId: me.userId }),
+          }),
+        );
+      },
+    );
+
+    it('không có queued/matched → null, không biến thành 404', async () => {
+      ticketRepo.findOne.mockResolvedValueOnce(null);
+      await expect(service.getActiveTicket(me)).resolves.toBeNull();
+    });
+
+    it('giá speed-up trả cho DTO đọc đúng config server', () => {
+      expect(service.getSpeedupPriceDiamond()).toBe(50);
     });
   });
 

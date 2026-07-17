@@ -1,16 +1,23 @@
 import { DataSource } from 'typeorm';
+import Redis from 'ioredis';
 
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
 import { InitAuthUser1751900000000 } from '../../database/migrations/1751900000000-init-auth-user';
+import { UserProfilePreferences1755800000000 } from '../../database/migrations/1755800000000-user-profile-preferences';
 import { MatchingCore1752200000000 } from '../../database/migrations/1752200000000-matching-core';
 import { MatchingGenderPreference1752300000000 } from '../../database/migrations/1752300000000-matching-gender-preference';
 import { UserRole1753600000000 } from '../../database/migrations/1753600000000-user-role';
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
+import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
 import { ReportStatus1753800000000 } from '../../database/migrations/1753800000000-report-status';
 import { DiscoveryUsersIndex1754000000000 } from '../../database/migrations/1754000000000-discovery-users-index';
+import { DiscoveryNearby1754600000000 } from '../../database/migrations/1754600000000-discovery-nearby';
 
 import { DiscoveryService } from './discovery.service';
 import { DiscoveryErrors } from './discovery.errors';
+import { NearbyService } from './nearby.service';
+import { DiscoverySetting } from './entities/discovery-setting.entity';
+import { UserLocation } from './entities/user-location.entity';
 import { SafetyService } from '../safety';
 import { Block } from '../safety/entities/block.entity';
 import { Report, ReportReason } from '../safety/entities/report.entity';
@@ -42,6 +49,13 @@ const CONFIG: Record<string, unknown> = {
   SAFETY_TRUST_SCORE_FLOOR: 0,
   DISCOVERY_GUEST_VISIBLE: false,
   DISCOVERY_AGE_BUCKETS: '18,25,31,41',
+  DISCOVERY_LOCATION_UPDATE_RATE_LIMIT_PER_HOUR: 12,
+  DISCOVERY_NEARBY_QUERY_RATE_LIMIT_PER_HOUR: 30,
+  DISCOVERY_LOCATION_QUANTIZE_DEGREES: 0.0045,
+  DISCOVERY_LOCATION_FRESHNESS_HOURS: 24,
+  DISCOVERY_NEARBY_RADIUS_KM: 20,
+  DISCOVERY_DISTANCE_BUCKETS_KM: '1,3,5,10,20',
+  DISCOVERY_NEARBY_CANDIDATE_CAP: 500,
 };
 const configStub = {
   getOrThrow: (key: string) => {
@@ -55,6 +69,8 @@ d('Discovery integration (Postgres thật)', () => {
   let discovery: DiscoveryService;
   let userService: UserService;
   let safety: SafetyService;
+  let nearby: NearbyService;
+  let redis: Redis;
 
   async function createUser(
     nickname: string,
@@ -96,15 +112,18 @@ d('Discovery integration (Postgres thật)', () => {
     ds = new DataSource({
       type: 'postgres',
       url: url.toString(),
-      entities: [User, Report, Block],
+      entities: [User, Report, Block, DiscoverySetting, UserLocation],
       migrations: [
         InitAuthUser1751900000000,
+        UserProfilePreferences1755800000000,
         UserRole1753600000000,
         MatchingCore1752200000000,
         MatchingGenderPreference1752300000000,
         Safety1752800000000,
+        ReportTargetVideo1754900000000,
         ReportStatus1753800000000,
         DiscoveryUsersIndex1754000000000,
+        DiscoveryNearby1754600000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -112,6 +131,11 @@ d('Discovery integration (Postgres thật)', () => {
     });
     await ds.initialize();
     await ds.runMigrations();
+
+    redis = new Redis(process.env['REDIS_URL'] ?? 'redis://localhost:6379', {
+      db: 14, // riêng biệt với db 15 của matching.integration.spec — tránh đụng key giữa 2 suite
+    });
+    await redis.flushdb();
 
     userService = new UserService(ds.getRepository(User), configStub);
     safety = new SafetyService(
@@ -122,9 +146,19 @@ d('Discovery integration (Postgres thật)', () => {
       configStub,
     );
     discovery = new DiscoveryService(userService, safety, configStub);
+    nearby = new NearbyService(
+      ds.getRepository(UserLocation),
+      ds.getRepository(DiscoverySetting),
+      ds,
+      userService,
+      safety,
+      redis,
+      configStub,
+    );
   });
 
   afterAll(async () => {
+    await redis.quit().catch(() => undefined);
     await ds.destroy();
   });
 
@@ -244,5 +278,179 @@ d('Discovery integration (Postgres thật)', () => {
 
     expect(seen.size).toBe(created.length);
     for (const u of created) expect(seen.has(u.id)).toBe(true);
+  });
+
+  describe('Nearby (W4)', () => {
+    // Trung tâm TP.HCM — các điểm test lệch đủ xa nhau để không phụ thuộc vào jitter (jitter chỉ
+    // ảnh hưởng bucket hiển thị, KHÔNG ảnh hưởng việc có nằm trong bán kính hay không).
+    const CENTER = { lat: 10.7626, lon: 106.6602 };
+    const NEAR = { lat: 10.78, lon: 106.68 }; // ~2.7km — trong bán kính mặc định 20km
+    const FAR = { lat: 11.05, lon: 106.66 }; // ~32km — ngoài bán kính mặc định 20km
+
+    it('chưa setLocation → NEARBY_LOCATION_MISSING dù đã opt-in', async () => {
+      const viewer = await createUser('nearby-no-location');
+      await nearby.setVisible(
+        { userId: viewer.id, isGuest: false, role: 'user' },
+        true,
+      );
+
+      await expect(
+        nearby.listNearby(
+          { userId: viewer.id, isGuest: false, role: 'user' },
+          { limit: 20 },
+        ),
+      ).rejects.toMatchObject({
+        code: DiscoveryErrors.NEARBY_LOCATION_MISSING,
+      });
+    });
+
+    it('chưa opt-in nearbyVisible → NEARBY_NOT_OPTED_IN dù đã setLocation', async () => {
+      const viewer = await createUser('nearby-no-optin');
+      const viewerAuth = {
+        userId: viewer.id,
+        isGuest: false,
+        role: 'user' as const,
+      };
+      await nearby.setLocation(viewerAuth, CENTER);
+
+      await expect(
+        nearby.listNearby(viewerAuth, { limit: 20 }),
+      ).rejects.toMatchObject({ code: DiscoveryErrors.NEARBY_NOT_OPTED_IN });
+    });
+
+    it('reciprocity: chỉ thấy user KHÁC cũng đã opt-in, ở gần, và loại người ở xa', async () => {
+      const [viewer, near, far, notOptIn] = await Promise.all([
+        createUser('nearby-viewer-1'),
+        createUser('nearby-near-1'),
+        createUser('nearby-far-1'),
+        createUser('nearby-not-optin-1'),
+      ]);
+      const viewerAuth = {
+        userId: viewer.id,
+        isGuest: false,
+        role: 'user' as const,
+      };
+      const nearAuth = {
+        userId: near.id,
+        isGuest: false,
+        role: 'user' as const,
+      };
+      const farAuth = { userId: far.id, isGuest: false, role: 'user' as const };
+      const notOptInAuth = {
+        userId: notOptIn.id,
+        isGuest: false,
+        role: 'user' as const,
+      };
+
+      await Promise.all([
+        nearby.setVisible(viewerAuth, true),
+        nearby.setVisible(nearAuth, true),
+        nearby.setVisible(farAuth, true),
+        // notOptIn: setLocation nhưng KHÔNG bật nearbyVisible
+      ]);
+      await Promise.all([
+        nearby.setLocation(viewerAuth, CENTER),
+        nearby.setLocation(nearAuth, NEAR),
+        nearby.setLocation(farAuth, FAR),
+        nearby.setLocation(notOptInAuth, NEAR),
+      ]);
+
+      const page = await nearby.listNearby(viewerAuth, { limit: 50 });
+      const ids = page.items.map((i) => i.user.id);
+
+      expect(ids).toContain(near.id);
+      expect(ids).not.toContain(far.id); // ngoài bán kính
+      expect(ids).not.toContain(notOptIn.id); // chưa opt-in — reciprocity
+      expect(ids).not.toContain(viewer.id); // tự loại chính mình
+
+      const nearItem = page.items.find((i) => i.user.id === near.id);
+      expect(nearItem?.distanceBucket).toMatch(/km/);
+      // Không bao giờ trả số km/toạ độ chính xác — chỉ có field distanceBucket dạng chuỗi.
+      expect(Object.keys(nearItem as object)).not.toContain('distanceKm');
+      expect(Object.keys(nearItem as object)).not.toContain('lat');
+    });
+
+    it('block 2 chiều vẫn bị loại khỏi nearby dù cùng bật + ở gần', async () => {
+      const [viewer, blocked] = await Promise.all([
+        createUser('nearby-viewer-block'),
+        createUser('nearby-blocked'),
+      ]);
+      const viewerAuth = {
+        userId: viewer.id,
+        isGuest: false,
+        role: 'user' as const,
+      };
+      const blockedAuth = {
+        userId: blocked.id,
+        isGuest: false,
+        role: 'user' as const,
+      };
+      await safety.block(viewer.id, blocked.id);
+
+      await Promise.all([
+        nearby.setVisible(viewerAuth, true),
+        nearby.setVisible(blockedAuth, true),
+      ]);
+      await Promise.all([
+        nearby.setLocation(viewerAuth, CENTER),
+        nearby.setLocation(blockedAuth, NEAR),
+      ]);
+
+      const page = await nearby.listNearby(viewerAuth, { limit: 50 });
+      expect(page.items.map((i) => i.user.id)).not.toContain(blocked.id);
+    });
+
+    it('tắt nearbyVisible xoá vị trí — bật lại vẫn KHÔNG thấy user khác cho tới khi setLocation lại', async () => {
+      const [viewer, target] = await Promise.all([
+        createUser('nearby-toggle-viewer'),
+        createUser('nearby-toggle-target'),
+      ]);
+      const viewerAuth = {
+        userId: viewer.id,
+        isGuest: false,
+        role: 'user' as const,
+      };
+      const targetAuth = {
+        userId: target.id,
+        isGuest: false,
+        role: 'user' as const,
+      };
+      await nearby.setVisible(viewerAuth, true);
+      await nearby.setLocation(viewerAuth, CENTER);
+      await nearby.setVisible(targetAuth, true);
+      await nearby.setLocation(targetAuth, NEAR);
+
+      let page = await nearby.listNearby(viewerAuth, { limit: 50 });
+      expect(page.items.map((i) => i.user.id)).toContain(target.id);
+
+      // target tắt nearby → vị trí bị xoá
+      await nearby.setVisible(targetAuth, false);
+      page = await nearby.listNearby(viewerAuth, { limit: 50 });
+      expect(page.items.map((i) => i.user.id)).not.toContain(target.id);
+
+      // target bật lại nhưng CHƯA setLocation lại → vẫn không xuất hiện (không còn row cũ)
+      await nearby.setVisible(targetAuth, true);
+      page = await nearby.listNearby(viewerAuth, { limit: 50 });
+      expect(page.items.map((i) => i.user.id)).not.toContain(target.id);
+    });
+
+    it('vượt rate limit ghi vị trí (Redis Lua thật) → NEARBY_RATE_LIMITED', async () => {
+      const viewer = await createUser('nearby-ratelimit');
+      const viewerAuth = {
+        userId: viewer.id,
+        isGuest: false,
+        role: 'user' as const,
+      };
+      const maxPerHour = CONFIG[
+        'DISCOVERY_LOCATION_UPDATE_RATE_LIMIT_PER_HOUR'
+      ] as number;
+
+      for (let i = 0; i < maxPerHour; i++) {
+        await nearby.setLocation(viewerAuth, CENTER);
+      }
+      await expect(
+        nearby.setLocation(viewerAuth, CENTER),
+      ).rejects.toMatchObject({ code: DiscoveryErrors.NEARBY_RATE_LIMITED });
+    });
   });
 });

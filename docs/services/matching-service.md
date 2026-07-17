@@ -61,6 +61,10 @@ Mọi transition khác throw `MATCHING_TICKET_INVALID_TRANSITION`.
   Debit `UserWallet` / Credit `SystemRevenue`, cùng pattern `ledger.record()` + `SELECT FOR UPDATE` như `purchaseVip` — KHÔNG side-effect nghiệp vụ nào khác (không set VIP, không outbox riêng — chỉ default outbox event theo balanceDelta). Thêm `TransactionType.MatchingSpeedup = 'matching_speedup'` vào `transaction.entity.ts`.
 - Rate limit `MATCHING_SPEEDUP_MAX_PER_HOUR`: đếm bằng Redis counter `matching:speedup:count:{userId}` (`INCR` + `EXPIRE 3600` chỉ khi counter vừa tạo — atomic bằng 1 lệnh Lua nhỏ hoặc `SET ... NX EX` cho lần đầu), **không** dùng cột đếm trên `MatchTicket` (tránh sai khi nhiều ticket). Vượt giới hạn → `MATCHING_SPEEDUP_RATE_LIMITED` (409), KHÔNG gọi `spendDiamond` (chặn trước khi trừ tiền, không trừ rồi hoàn).
 - Thứ tự bắt buộc: check rate limit → `spendDiamond` (đã tự lock+idempotent) → cập nhật `priorityDeadline`/score Redis. Nếu bước cuối lỗi sau khi đã trừ tiền: đây là tiền đã trừ đúng 1 lần (idempotency đảm bảo), completion phía Redis retry được an toàn (không trừ tiền lại).
+- Mọi `TicketDto` bắt buộc trả `speedupPriceDiamond` đọc từ chính
+  `MATCHING_SPEEDUP_PRICE_DIAMOND`; `SpeedupResultDto.ticket` cũng dùng cùng field này. Client chỉ
+  hiển thị giá server trả, không hard-code. Server vẫn đọc lại config khi debit nên response
+  client cũ/cache cũ không bao giờ là nguồn quyết định số diamond bị trừ.
 
 ## 5. Entity
 
@@ -73,6 +77,7 @@ Mọi transition khác throw `MATCHING_TICKET_INVALID_TRANSITION`.
 | Endpoint                             | Idempotency-Key | Mô tả                                                                                                                                                    |
 | ------------------------------------ | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `POST /matching/tickets`             | có              | Vào hàng đợi (body: `matchType`, `genderPreference?` — § 2.1) — 409 `MATCHING_TICKET_ALREADY_QUEUED` nếu đã có ticket active (khớp partial unique index) |
+| `GET /matching/tickets/current`      | không           | Phục hồi sau reload: trả `{ ticket: TicketDto \| null }` của chính user từ auth; active chỉ gồm `queued\|matched`                                        |
 | `DELETE /matching/tickets/:id`       | không           | Huỷ ticket của chính mình (check ownership — IDOR, docs/10 § 10.1.D)                                                                                     |
 | `GET /matching/tickets/:id`          | không           | Trạng thái ticket (poll)                                                                                                                                 |
 | `POST /matching/tickets/:id/confirm` | không           | Xác nhận match — check ownership + đúng session đang `pending_confirm`                                                                                   |
@@ -90,3 +95,100 @@ Check block/report **không chỉ lúc vào queue** — bắt buộc verify lạ
 `MATCHING_SPEEDUP_PRICE_DIAMOND`, `MATCHING_SPEEDUP_MAX_PER_HOUR`,
 `MATCHING_PRIORITY_BOOST_MS` đã có đủ trong `.env.example`, `CoreApiEnv` và
 `coreApiEnvSchema` (Joi); code đọc qua `ConfigService<CoreApiEnv, true>`.
+
+## 9. Invite — CTA "mời Voice/Soul Match" (W4) {#invite}
+
+> Mitigation chính cho rủi ro graph bạn bè sparse (docs/plans/2026-07-14-plan-6-tinh-nang-social-discovery.md
+> § 3.1, § 4, § 6): Discovery/Nearby chỉ cho xem profile là ngõ cụt cho dating app — directed
+> invite là lối vào **có chủ đích** cho pipeline matching sẵn có, KHÔNG phải friend-request flow
+> mới. Sống trong module `matching` (`services/invite.service.ts`) vì ghi thẳng
+> `MatchTicket`/`MatchSession` — Discovery/Nearby chỉ là UI nguồn `inviteeUserId`.
+
+### 9.1 State machine `MatchInvite`
+
+```text
+pending ──(invitee accept)──▶ accepted
+   │
+   ├──(invitee decline)──▶ declined
+   ├──(inviter cancel, trước khi có phản hồi)──▶ cancelled
+   └──(sweeper: quá MATCHING_INVITE_TTL_SECONDS)──▶ expired
+```
+
+Transition hợp lệ duy nhất (`MATCH_INVITE_TRANSITIONS`, không tin client gửi trạng thái đích):
+`pending→accepted|declined|expired|cancelled`. Mọi transition khác throw
+`MATCHING_INVITE_INVALID_TRANSITION`. Lazy-expire: `accept`/`decline`/`cancel` đều tự kiểm tra
+`expiresAt` tại THỜI ĐIỂM hành động (docs/10 § 10.0.C) — không tin sweeper đã chạy kịp.
+
+### 9.2 Accept — tạo trực tiếp ticket/session, bỏ qua hàng đợi shard
+
+Khác auto-match (2 ticket độc lập vào queue rồi chờ matcher ghép), accept invite tạo **trực
+tiếp** 2 `MatchTicket{status: matched}` + 1 `MatchSession{status: pending_confirm}` trong 1
+transaction — tái dùng NGUYÊN các validate của `tryPair` (§ 2):
+
+- **1-user-1-queue** (docs/06): cùng partial unique index `uq_match_tickets_active_user` — insert
+  2 ticket mới cũng phải qua index này; vi phạm (1 trong 2 bên đang bận queue/session khác) →
+  rollback toàn bộ, trả `MATCHING_INVITE_ACCEPT_USER_BUSY` (409), **invite giữ nguyên `pending`**
+  để thử lại sau (không mất lượt, không tự huỷ invite).
+- **`canPair` (block/report)**: re-check TẠI THỜI ĐIỂM accept, không chỉ lúc tạo invite — block
+  có thể phát sinh SAU khi mời, TRƯỚC khi accept. Fail → invite tự chuyển `declined`.
+  **Cảnh báo kỹ thuật đã bắt qua test thật**: việc chuyển `declined` và throw lỗi PHẢI ở 2
+  transaction khác nhau — throw trong CÙNG transaction vừa ghi `declined` sẽ ROLLBACK luôn phần
+  ghi đó (Postgres transaction semantics), khiến invite "giả vờ" báo lỗi nhưng DB vẫn `pending`.
+  `InviteService.precheckAccept` chạy transaction riêng, COMMIT xong mới throw ở tầng gọi.
+- **KHÔNG check gender preference** lúc accept (khác auto-match) — đây là **consent trực tiếp**:
+  invitee chủ động chấp nhận ĐÚNG người này (đã thấy profile ở browse/nearby), không phải anonymous
+  auto-pairing cần lọc trước khi biết đối phương là ai. Quyết định thiết kế, không phải thiếu sót.
+- **Idempotent** qua `inviteAcceptIdempotencyKey(inviteId, 'inviter'|'invitee')` — accept lặp lại
+  (retry mạng, hoặc gọi 2 lần) đọc lại ĐÚNG 2 ticket + session đã tạo, không tạo đôi (docs/05 § 5.10).
+- Sau khi tạo, publish CÙNG realtime event `match.matched` mà auto-match dùng — client dùng lại
+  đúng 1 chỗ lắng nghe rồi gọi `confirmTicket()` như bình thường, không cần logic riêng cho luồng
+  invite. Response `accept` trả kèm `inviteeTicketId` (ticket của chính người gọi) để FE biết
+  `ticketId` nào dùng cho `confirmTicket`.
+
+### 9.3 Voice invite KHÔNG tạo Friendship (quyết định chốt 2026-07-14)
+
+`docs/02-domain-model.md` từng mô tả Friendship "tạo ra sau Soul/Voice Match" nhưng **code chỉ
+implement rating/like cho `MatchType.Soul`** (`soul-match.service.ts` chặn cứng
+`matchType !== Soul`) — gap tài liệu-code có từ trước W4, không phải lỗi phát sinh ở invite.
+Quyết định: **giữ nguyên scope code hiện tại** — mời Voice Match chỉ vào cuộc gọi tính phí theo
+phút như bình thường, KHÔNG thêm cơ chế like/reveal mới cho Voice. `docs/02` đã sửa lại cho khớp
+(chỉ Soul Match có Friendship). Nếu sau này muốn Voice cũng dẫn tới Friendship — đó là một
+tính năng mới, cần plan riêng, không phải phần mở rộng ngầm của invite.
+
+### 9.4 Chống spam mời — đối xứng, không phân biệt giới tính trong logic
+
+`MATCHING_INVITE_RATE_LIMIT_PER_HOUR` áp dụng NHƯ NHAU cho mọi user (Redis INCR+EXPIRE+Lua atomic,
+`common/redis/rate-limit.ts` — cùng pattern speed-up § 4). Quyết định chốt 2026-07-14: KHÔNG hard-
+code ngưỡng khác nhau theo giới tính người nhận (rủi ro pháp lý/đạo đức + khó test) — theo dõi số
+liệu report/block phát sinh từ invite theo giới tính sau khi ship, siết thêm bằng cách hạ ngưỡng
+chung hoặc thêm setting "ai được mời tôi" ở invitee nếu cần, không đoán hộ trước.
+
+### 9.5 API (`api/v1/matching/invites`)
+
+| Endpoint                             | Mô tả                                                                                                                                                  |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `POST /matching/invites`             | Tạo invite (`inviteeUserId`, `matchType`) — 409 nếu đã có invite pending tới đúng người, oracle-safe nếu invitee trong hidden-set/không tồn tại/banned |
+| `GET /matching/invites`              | Danh sách invite ĐANG CHỜ (pending) gửi tới chính mình, cursor-paginated; re-check hidden-set mỗi lần đọc                                              |
+| `GET /matching/invites/:id`          | Chi tiết 1 invite — chỉ inviter/invitee xem được                                                                                                       |
+| `POST /matching/invites/:id/accept`  | Chấp nhận — xem § 9.2                                                                                                                                  |
+| `POST /matching/invites/:id/decline` | Từ chối — chỉ invitee                                                                                                                                  |
+| `POST /matching/invites/:id/cancel`  | Huỷ invite đã gửi — chỉ inviter, trước khi có phản hồi                                                                                                 |
+
+Mọi `MatchInviteDto` compose thêm `inviterProfile: PublicProfileDto` để invitee thấy tối thiểu
+nickname/avatar/gender trước khi quyết định. Không tự thêm birth date/tuổi chính xác, region,
+trust score, status hay dữ liệu riêng tư khác. Danh sách inbox batch-load profile qua public API
+của User module (không query repository User từ Matching, không N+1). Nếu block/report phát sinh
+sau khi tạo invite, hidden-set được đọc lại ở request inbox kế tiếp nên invite đó không còn hiện;
+`accept` vẫn re-check `canPair` độc lập vì read-filter không phải chốt correctness.
+
+### 9.6 Entity + config
+
+`MatchInvite extends BaseAppEntity`: `inviterUserId`, `inviteeUserId`, `matchType`,
+`status (enum MatchInviteStatus)`, `expiresAt`, `respondedAt (nullable)`,
+`sessionId (nullable, set khi accepted)`. Partial unique index `uq_match_invites_pending_pair
+(inviter_user_id, invitee_user_id) WHERE status='pending'` — chặn double-submit ở DB (không phải
+cơ chế rate-limit chính, đó là Redis § 9.4).
+
+Config: `MATCHING_INVITE_TTL_SECONDS` (mặc định 3600), `MATCHING_INVITE_RATE_LIMIT_PER_HOUR`
+(mặc định 10), `MATCHING_INVITE_SWEEPER_INTERVAL_MS` (mặc định 60000 — `InviteSweeperService`
+chỉ housekeeping, KHÔNG phải chốt correctness vì accept/decline/cancel đều tự lazy-expire).

@@ -21,6 +21,7 @@ import { IsEnum, IsOptional } from 'class-validator';
 import { AvatarService } from './avatar.service';
 import {
   AvatarAssetDto,
+  AvatarBuyResultDto,
   AvatarConfigDto,
   EquipAvatarItemDto,
 } from './dto/avatar.dtos';
@@ -83,11 +84,12 @@ export class AvatarController {
   @HttpCode(HttpStatus.OK)
   @ApiIdempotencyKeyHeader()
   @ApiOperation({ summary: 'Mua item trả phí — trừ diamond qua Economy' })
+  @ApiOkResponse({ type: AvatarBuyResultDto })
   async buy(
     @CurrentUser() user: AuthenticatedUser,
     @Param('assetId', ParseUUIDPipe) assetId: string,
     @IdempotencyKey() idempotencyKey: string,
-  ): Promise<{ replayed: boolean }> {
+  ): Promise<AvatarBuyResultDto> {
     return this.avatarService.buy(user.userId, assetId, idempotencyKey);
   }
 

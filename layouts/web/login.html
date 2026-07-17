@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="vi" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Litmatch — Đăng nhập</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        --ink: 27 20 32;
+        --surf: 36 27 41;
+        --surf2: 74 46 69;
+        --paper: 251 243 239;
+        --iris: 232 87 124;
+        --irisl: 232 87 124;
+        --aqua: 242 166 90;
+        --aqual: 242 166 90;
+        --diamond: 79 195 217;
+      }
+      html[data-theme='orange'] {
+        --ink: 16 11 9;
+        --surf: 29 22 19;
+        --surf2: 42 33 29;
+        --paper: 248 244 242;
+        --iris: 232 67 31;
+        --irisl: 255 90 54;
+        --aqua: 224 136 21;
+        --aqual: 245 164 40;
+      }
+      .theme-dot {
+        transition: transform 0.15s ease;
+      }
+      .theme-dot[data-active='true'] {
+        box-shadow:
+          0 0 0 2px rgb(var(--paper)),
+          0 0 0 3px rgb(var(--irisl));
+      }
+    </style>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              ink: 'rgb(var(--ink) / <alpha-value>)',
+              surf: 'rgb(var(--surf) / <alpha-value>)',
+              surf2: 'rgb(var(--surf2) / <alpha-value>)',
+              paper: 'rgb(var(--paper) / <alpha-value>)',
+              iris: 'rgb(var(--iris) / <alpha-value>)',
+              irisl: 'rgb(var(--irisl) / <alpha-value>)',
+              aqua: 'rgb(var(--aqua) / <alpha-value>)',
+              aqual: 'rgb(var(--aqual) / <alpha-value>)',
+              diamond: 'rgb(var(--diamond) / <alpha-value>)',
+            },
+            fontFamily: {
+              display: ['Fraunces', 'serif'],
+              body: ['"Be Vietnam Pro"', 'sans-serif'],
+              mono: ['"IBM Plex Mono"', 'monospace'],
+            },
+          },
+        },
+      };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;1,500;1,600&family=Be+Vietnam+Pro:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: 'Be Vietnam Pro', sans-serif;
+      }
+      .font-display {
+        font-family: 'Fraunces', serif;
+      }
+      .glow::before,
+      .glow::after {
+        content: '';
+        position: absolute;
+        width: 420px;
+        height: 420px;
+        border-radius: 9999px;
+        filter: blur(110px);
+        z-index: 0;
+      }
+      .glow::before {
+        background: rgb(var(--irisl));
+        opacity: 0.22;
+        top: -10%;
+        left: 10%;
+      }
+      .glow::after {
+        background: rgb(var(--aqual));
+        opacity: 0.16;
+        bottom: -10%;
+        right: 5%;
+      }
+      html:not(.dark) .glow::before {
+        opacity: 0.1;
+      }
+      html:not(.dark) .glow::after {
+        opacity: 0.08;
+      }
+    </style>
+  </head>
+  <body
+    class="bg-paper dark:bg-ink text-slate-900 dark:text-slate-50 min-h-screen transition-colors duration-300 relative overflow-hidden"
+  >
+    <div
+      class="fixed top-4 right-4 z-50 flex items-center gap-1.5 bg-white/95 dark:bg-surf/95 backdrop-blur border border-black/5 dark:border-white/10 rounded-full p-1.5 shadow-lg"
+      role="group"
+      aria-label="Chọn giao diện màu"
+    >
+      <button
+        onclick="setTheme('pink')"
+        data-theme-btn="pink"
+        data-active="true"
+        class="theme-dot w-5 h-5 rounded-full"
+        style="background: #e8577c"
+        aria-label="Giao diện hồng"
+      ></button>
+      <button
+        onclick="setTheme('orange')"
+        data-theme-btn="orange"
+        data-active="false"
+        class="theme-dot w-5 h-5 rounded-full"
+        style="background: linear-gradient(135deg, #ff5a36, #e08815)"
+        aria-label="Giao diện cam"
+      ></button>
+      <button
+        onclick="setTheme('white')"
+        data-theme-btn="white"
+        data-active="false"
+        class="theme-dot w-5 h-5 rounded-full border border-black/10"
+        style="background: #fbf3ef"
+        aria-label="Giao diện trắng"
+      ></button>
+    </div>
+    <div
+      class="glow absolute inset-0 pointer-events-none overflow-hidden"
+    ></div>
+
+    <main
+      class="relative z-10 min-h-screen flex items-center justify-center px-6 py-12"
+    >
+      <div class="w-full max-w-sm">
+        <div class="flex flex-col items-center mb-8">
+          <svg width="44" height="44" viewBox="0 0 28 28" class="mb-3">
+            <circle
+              cx="11"
+              cy="14"
+              r="8"
+              fill="rgb(var(--irisl))"
+              opacity=".9"
+            />
+            <circle
+              cx="18"
+              cy="14"
+              r="8"
+              fill="rgb(var(--aqual))"
+              opacity=".75"
+            />
+          </svg>
+          <h1 class="font-display italic font-semibold text-2xl">
+            Chào mừng đến Litmatch
+          </h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            Ẩn danh, an toàn, chỉ mất 30 giây
+          </p>
+        </div>
+
+        <div
+          class="bg-white dark:bg-surf border border-black/5 dark:border-white/5 rounded-3xl p-6 shadow-xl shadow-black/5"
+        >
+          <!-- phone step -->
+          <div id="phoneStep">
+            <label
+              class="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 block"
+              >SỐ ĐIỆN THOẠI</label
+            >
+            <div class="flex gap-2 mb-4">
+              <span
+                class="px-3 py-3 rounded-xl bg-slate-100 dark:bg-surf2 text-sm font-semibold"
+                >+84</span
+              >
+              <input
+                type="tel"
+                placeholder="912 345 678"
+                class="flex-1 px-4 py-3 rounded-xl bg-slate-100 dark:bg-surf2 outline-none focus:ring-2 focus:ring-iris text-sm"
+              />
+            </div>
+            <button
+              onclick="showOtp()"
+              class="w-full py-3 rounded-xl font-bold text-white bg-gradient-to-br from-irisl to-irisl shadow-lg shadow-iris/30 mb-5"
+            >
+              Gửi mã OTP
+            </button>
+
+            <div class="flex items-center gap-3 mb-5">
+              <div class="h-px flex-1 bg-black/10 dark:bg-white/10"></div>
+              <span class="text-xs text-slate-400">hoặc tiếp tục với</span>
+              <div class="h-px flex-1 bg-black/10 dark:bg-white/10"></div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-3 mb-5">
+              <button
+                onclick="lmToast('Đang chuyển tới Google...')"
+                class="py-3 rounded-xl bg-slate-100 dark:bg-surf2 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-surf transition"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24">
+                  <path
+                    fill="#EA4335"
+                    d="M12 10.2v3.9h5.5c-.24 1.35-1.68 3.96-5.5 3.96-3.3 0-6-2.73-6-6.1s2.7-6.1 6-6.1c1.88 0 3.14.8 3.86 1.49l2.63-2.53C16.9 3.16 14.7 2.2 12 2.2 6.9 2.2 2.75 6.5 2.75 12s4.15 9.8 9.25 9.8c5.34 0 8.88-3.75 8.88-9.03 0-.61-.07-1.07-.15-1.53H12z"
+                  />
+                </svg>
+              </button>
+              <button
+                onclick="lmToast('Đang chuyển tới Apple...')"
+                class="py-3 rounded-xl bg-slate-100 dark:bg-surf2 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-surf transition"
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path
+                    d="M16.365 1.43c0 1.14-.468 2.16-1.223 2.94-.83.86-2.11 1.53-3.13 1.44-.14-1.08.44-2.24 1.2-2.97.79-.77 2.17-1.35 3.15-1.41zM20.6 17.14c-.55 1.27-.81 1.83-1.52 2.95-.99 1.56-2.39 3.51-4.13 3.53-1.54.02-1.94-1-4.03-.99-2.09.01-2.53 1.01-4.07.99-1.74-.02-3.06-1.77-4.05-3.33C.55 16.94-.6 12.4 1.06 9.32c.83-1.54 2.32-2.52 3.94-2.54 1.51-.02 2.94 1.02 3.86 1.02.92 0 2.65-1.26 4.47-1.08.76.03 2.9.31 4.27 2.33-.11.07-2.55 1.49-2.52 4.44.03 3.53 3.1 4.71 3.14 4.73-.02.06-.49 1.68-1.62 3.32z"
+                  />
+                </svg>
+              </button>
+              <button
+                onclick="lmToast('Đang chuyển tới Facebook...')"
+                class="py-3 rounded-xl bg-slate-100 dark:bg-surf2 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-surf transition"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24">
+                  <path
+                    fill="#1877F2"
+                    d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.68.24 2.68.24v2.96h-1.51c-1.49 0-1.95.93-1.95 1.89v2.26h3.32l-.53 3.49h-2.79V24C19.61 23.1 24 18.1 24 12.07z"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- otp step (hidden initially) -->
+          <div id="otpStep" class="hidden">
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
+              Nhập mã gồm 6 số vừa gửi tới
+              <span class="font-semibold text-slate-700 dark:text-slate-200"
+                >+84 912 345 678</span
+              >
+            </p>
+            <div class="flex gap-2 justify-between mb-5" id="otpBoxes">
+              <input
+                maxlength="1"
+                inputmode="numeric"
+                data-otp-idx="0"
+                class="otp-box w-11 h-13 py-3 text-center text-lg font-bold rounded-xl bg-slate-100 dark:bg-surf2 outline-none focus:ring-2 focus:ring-iris"
+              />
+              <input
+                maxlength="1"
+                inputmode="numeric"
+                data-otp-idx="1"
+                class="otp-box w-11 h-13 py-3 text-center text-lg font-bold rounded-xl bg-slate-100 dark:bg-surf2 outline-none focus:ring-2 focus:ring-iris"
+              />
+              <input
+                maxlength="1"
+                inputmode="numeric"
+                data-otp-idx="2"
+                class="otp-box w-11 h-13 py-3 text-center text-lg font-bold rounded-xl bg-slate-100 dark:bg-surf2 outline-none focus:ring-2 focus:ring-iris"
+              />
+              <input
+                maxlength="1"
+                inputmode="numeric"
+                data-otp-idx="3"
+                class="otp-box w-11 h-13 py-3 text-center text-lg font-bold rounded-xl bg-slate-100 dark:bg-surf2 outline-none focus:ring-2 focus:ring-iris"
+              />
+              <input
+                maxlength="1"
+                inputmode="numeric"
+                data-otp-idx="4"
+                class="otp-box w-11 h-13 py-3 text-center text-lg font-bold rounded-xl bg-slate-100 dark:bg-surf2 outline-none focus:ring-2 focus:ring-iris"
+              />
+              <input
+                maxlength="1"
+                inputmode="numeric"
+                data-otp-idx="5"
+                class="otp-box w-11 h-13 py-3 text-center text-lg font-bold rounded-xl bg-slate-100 dark:bg-surf2 outline-none focus:ring-2 focus:ring-iris"
+              />
+            </div>
+            <p
+              id="otpError"
+              class="hidden text-xs font-semibold text-rose-500 -mt-3 mb-4"
+            >
+              Vui lòng nhập đủ 6 số
+            </p>
+            <button
+              onclick="verifyOtp()"
+              class="block text-center w-full py-3 rounded-xl font-bold text-white bg-gradient-to-br from-irisl to-irisl shadow-lg shadow-iris/30 mb-3"
+            >
+              Xác nhận
+            </button>
+            <button
+              onclick="showPhone()"
+              class="w-full text-center text-sm font-semibold text-slate-500 dark:text-slate-400"
+            >
+              ← Đổi số điện thoại
+            </button>
+          </div>
+
+          <div class="flex items-center gap-3 my-5">
+            <div class="h-px flex-1 bg-black/10 dark:bg-white/10"></div>
+          </div>
+          <a
+            href="home.html"
+            class="block text-center text-sm font-bold text-irisl"
+            >Dùng thử với tài khoản khách →</a
+          >
+        </div>
+
+        <p class="text-xs text-center text-slate-400 mt-6 leading-relaxed">
+          Bằng việc tiếp tục, bạn xác nhận đã đủ 18 tuổi và đồng ý với Điều
+          khoản dịch vụ &amp; Chính sách riêng tư.
+        </p>
+      </div>
+    </main>
+
+    <script>
+      function showOtp() {
+        document.getElementById('phoneStep').classList.add('hidden');
+        document.getElementById('otpStep').classList.remove('hidden');
+        document.querySelector('.otp-box').focus();
+      }
+      function showPhone() {
+        document.getElementById('otpStep').classList.add('hidden');
+        document.getElementById('phoneStep').classList.remove('hidden');
+      }
+      var otpBoxes = document.querySelectorAll('.otp-box');
+      otpBoxes.forEach(function (box, i) {
+        box.addEventListener('input', function () {
+          box.value = box.value.replace(/[^0-9]/g, '');
+          if (box.value && i < otpBoxes.length - 1) otpBoxes[i + 1].focus();
+          document.getElementById('otpError').classList.add('hidden');
+        });
+        box.addEventListener('keydown', function (e) {
+          if (e.key === 'Backspace' && !box.value && i > 0)
+            otpBoxes[i - 1].focus();
+        });
+      });
+      function verifyOtp() {
+        var code = Array.prototype.map
+          .call(otpBoxes, function (b) {
+            return b.value;
+          })
+          .join('');
+        if (code.length < 6) {
+          document.getElementById('otpError').classList.remove('hidden');
+          lmToast('Vui lòng nhập đủ 6 số', { tone: 'warn' });
+          return;
+        }
+        lmToast('Xác thực thành công, đang vào Litmatch...');
+        setTimeout(function () {
+          window.location.href = 'home.html';
+        }, 700);
+      }
+    </script>
+
+    <script>
+      function setTheme(t) {
+        const html = document.documentElement;
+        if (t === 'white') {
+          html.classList.remove('dark');
+        } else {
+          html.classList.add('dark');
+          html.setAttribute('data-theme', t);
+        }
+        document.querySelectorAll('[data-theme-btn]').forEach((b) => {
+          b.dataset.active = b.dataset.themeBtn === t ? 'true' : 'false';
+        });
+      }
+    </script>
+
+    <!-- ===== Shared toast + confirm-sheet system (lm* helpers) ===== -->
+    <div
+      id="lmToastStack"
+      class="fixed bottom-24 md:bottom-8 inset-x-0 z-[300] flex flex-col items-center gap-2 px-4 pointer-events-none"
+    ></div>
+    <div id="lmConfirmOverlay" class="fixed inset-0 z-[310] hidden">
+      <div
+        class="absolute inset-0 bg-black/50"
+        onclick="lmCloseConfirm()"
+      ></div>
+      <div
+        id="lmConfirmPanel"
+        class="absolute bottom-0 inset-x-0 max-w-[430px] mx-auto bg-white dark:bg-surf rounded-t-3xl p-6 pb-8 translate-y-full transition-transform duration-300"
+      >
+        <div
+          class="w-10 h-1.5 rounded-full bg-slate-200 dark:bg-white/10 mx-auto mb-5"
+        ></div>
+        <p id="lmConfirmTitle" class="font-bold text-lg mb-1.5">Tiêu đề</p>
+        <p
+          id="lmConfirmMsg"
+          class="text-sm text-slate-500 dark:text-slate-400 mb-5 leading-relaxed"
+        >
+          Nội dung
+        </p>
+        <div id="lmConfirmExtra"></div>
+        <div class="flex gap-3">
+          <button
+            onclick="lmCloseConfirm()"
+            class="flex-1 py-3 rounded-2xl font-bold text-sm bg-slate-100 dark:bg-surf2"
+          >
+            Huỷ
+          </button>
+          <button
+            id="lmConfirmActionBtn"
+            class="flex-1 py-3 rounded-2xl font-bold text-sm text-white bg-gradient-to-br from-irisl to-irisl"
+          >
+            Xác nhận
+          </button>
+        </div>
+      </div>
+    </div>
+    <script>
+      // Scope the overlay/toast stack to the visible app-frame (if one exists on this page)
+      // instead of the full browser viewport -- otherwise on a wide PC screen the backdrop
+      // bleeds across the whole window instead of just the app card.
+      function lmSyncFrame() {
+        var frame = document.querySelector('[data-lm-frame]');
+        var overlay = document.getElementById('lmConfirmOverlay');
+        var stack = document.getElementById('lmToastStack');
+        if (!frame) {
+          overlay.style.cssText = '';
+          stack.style.cssText = '';
+          return;
+        }
+        var r = frame.getBoundingClientRect();
+        overlay.style.cssText =
+          'position:fixed;left:' +
+          r.left +
+          'px;top:' +
+          r.top +
+          'px;width:' +
+          r.width +
+          'px;height:' +
+          r.height +
+          'px;right:auto;bottom:auto;';
+        stack.style.cssText =
+          'position:fixed;left:' +
+          r.left +
+          'px;width:' +
+          r.width +
+          'px;bottom:' +
+          (window.innerHeight - r.bottom + 24) +
+          'px;top:auto;right:auto;';
+      }
+      window.addEventListener('resize', lmSyncFrame);
+      window.addEventListener('orientationchange', lmSyncFrame);
+
+      function lmToast(msg, opts) {
+        opts = opts || {};
+        lmSyncFrame();
+        var stack = document.getElementById('lmToastStack');
+        if (!stack) return;
+        var el = document.createElement('div');
+        el.className =
+          'pointer-events-auto max-w-[92%] flex items-center gap-2 px-4 py-3 rounded-2xl shadow-xl shadow-black/10 text-sm font-semibold ' +
+          (opts.tone === 'warn'
+            ? 'bg-rose-500 text-white'
+            : 'bg-ink text-white dark:bg-white dark:text-ink');
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(8px)';
+        el.style.transition = 'all .2s ease';
+        el.innerHTML =
+          '<span>' +
+          (opts.icon || (opts.tone === 'warn' ? '⚠️' : '✓')) +
+          '</span><span>' +
+          msg +
+          '</span>';
+        stack.appendChild(el);
+        requestAnimationFrame(function () {
+          el.style.opacity = '1';
+          el.style.transform = 'translateY(0)';
+        });
+        setTimeout(function () {
+          el.style.opacity = '0';
+          el.style.transform = 'translateY(8px)';
+          setTimeout(function () {
+            el.remove();
+          }, 200);
+        }, 2600);
+      }
+      var lmConfirmCallback = null;
+      function lmConfirm(title, msg, onConfirm, opts) {
+        opts = opts || {};
+        lmSyncFrame();
+        document.getElementById('lmConfirmTitle').textContent = title;
+        document.getElementById('lmConfirmMsg').textContent = msg;
+        document.getElementById('lmConfirmExtra').innerHTML =
+          opts.extraHtml || '';
+        var btn = document.getElementById('lmConfirmActionBtn');
+        btn.textContent = opts.actionLabel || 'Xác nhận';
+        btn.className =
+          'flex-1 py-3 rounded-2xl font-bold text-sm text-white ' +
+          (opts.tone === 'danger'
+            ? 'bg-rose-500'
+            : 'bg-gradient-to-br from-irisl to-irisl');
+        lmConfirmCallback = onConfirm || null;
+        document.getElementById('lmConfirmOverlay').classList.remove('hidden');
+        requestAnimationFrame(function () {
+          document
+            .getElementById('lmConfirmPanel')
+            .classList.remove('translate-y-full');
+        });
+      }
+      function lmCloseConfirm() {
+        var panel = document.getElementById('lmConfirmPanel');
+        panel.classList.add('translate-y-full');
+        setTimeout(function () {
+          document.getElementById('lmConfirmOverlay').classList.add('hidden');
+          document.getElementById('lmConfirmActionBtn').style.display = '';
+        }, 300);
+      }
+      document
+        .getElementById('lmConfirmActionBtn')
+        .addEventListener('click', function () {
+          var cb = lmConfirmCallback;
+          lmCloseConfirm();
+          if (cb) cb();
+        });
+    </script>
+  </body>
+</html>

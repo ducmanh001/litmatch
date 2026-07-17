@@ -37,4 +37,8 @@ export class AuditLogService {
       }),
     );
   }
+
+  async listRecent(limit: number): Promise<AdminAuditLog[]> {
+    return this.repo.find({ order: { createdAt: 'DESC' }, take: limit });
+  }
 }

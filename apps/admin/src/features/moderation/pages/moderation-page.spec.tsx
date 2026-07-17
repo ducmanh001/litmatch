@@ -96,8 +96,136 @@ describe('ModerationPage', () => {
     } as never);
     renderPage();
 
-    await screen.findByText('resolved');
+    await screen.findByText('Đã xử lý');
     expect(screen.queryByRole('button', { name: 'Đã xử lý' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Bỏ qua' })).toBeNull();
+  });
+
+  it('tab Video ngắn chờ duyệt — Duyệt gọi đúng endpoint approve', async () => {
+    vi.spyOn(apiClient, 'GET').mockImplementation(async (path: string) => {
+      if (path === '/api/v1/admin/videos/pending') {
+        return {
+          data: {
+            data: {
+              items: [
+                {
+                  id: 'v1',
+                  authorUserId: 'author-1',
+                  status: 'pending_review',
+                  playbackUrl: null,
+                  thumbnailUrl: null,
+                  caption: 'video test',
+                  createdAt: new Date().toISOString(),
+                },
+              ],
+              nextCursor: null,
+            },
+          },
+        } as never;
+      }
+      return { data: { data: { items: [], total: 0 } } } as never;
+    });
+    const postSpy = vi.spyOn(apiClient, 'POST').mockResolvedValue({
+      data: { data: {} },
+    } as never);
+
+    renderPage();
+    fireEvent.click(screen.getByRole('tab', { name: 'Video chờ duyệt' }));
+
+    const approveButton = await screen.findByRole('button', { name: 'Duyệt' });
+    await act(async () => fireEvent.click(approveButton));
+
+    expect(postSpy).toHaveBeenCalledWith('/api/v1/admin/videos/{id}/approve', {
+      params: { path: { id: 'v1' } },
+    });
+  });
+
+  it('tab Video đã đăng — Gỡ khỏi feed gọi đúng endpoint remove', async () => {
+    vi.spyOn(apiClient, 'GET').mockImplementation(async (path: string) => {
+      if (path === '/api/v1/admin/videos/published') {
+        return {
+          data: {
+            data: {
+              items: [
+                {
+                  id: 'v2',
+                  authorUserId: 'author-2',
+                  status: 'published',
+                  playbackUrl: 'https://cdn.test/video.mp4',
+                  thumbnailUrl: null,
+                  caption: 'published video',
+                  createdAt: new Date().toISOString(),
+                },
+              ],
+              nextCursor: null,
+            },
+          },
+        } as never;
+      }
+      return { data: { data: { items: [], total: 0 } } } as never;
+    });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const postSpy = vi.spyOn(apiClient, 'POST').mockResolvedValue({
+      data: { data: {} },
+    } as never);
+
+    renderPage();
+    fireEvent.click(screen.getByRole('tab', { name: 'Video đã đăng' }));
+    const removeButton = await screen.findByRole('button', {
+      name: 'Gỡ khỏi feed',
+    });
+    await act(async () => fireEvent.click(removeButton));
+
+    expect(postSpy).toHaveBeenCalledWith('/api/v1/admin/videos/{id}/remove', {
+      params: { path: { id: 'v2' } },
+    });
+  });
+
+  it('tab Hỗ trợ — cập nhật ticket sang resolved kèm phản hồi', async () => {
+    vi.spyOn(apiClient, 'GET').mockImplementation(async (path: string) => {
+      if (path === '/api/v1/admin/support/tickets') {
+        return {
+          data: {
+            data: {
+              items: [
+                {
+                  id: 'ticket-1',
+                  userId: 'user-1',
+                  category: 'bug',
+                  message: 'Không mở được phòng',
+                  status: 'open',
+                  staffResponse: null,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                },
+              ],
+              meta: { nextCursor: null },
+            },
+          },
+        } as never;
+      }
+      return { data: { data: { items: [], total: 0 } } } as never;
+    });
+    const patchSpy = vi.spyOn(apiClient, 'PATCH').mockResolvedValue({
+      data: { data: {} },
+    } as never);
+
+    renderPage();
+    fireEvent.click(screen.getByRole('tab', { name: 'Hỗ trợ' }));
+    expect(await screen.findByText('Không mở được phòng')).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Phản hồi ticket ticket-1'), {
+      target: { value: 'Đã sửa lỗi' },
+    });
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Đã giải quyết' })),
+    );
+
+    expect(patchSpy).toHaveBeenCalledWith(
+      '/api/v1/admin/support/tickets/{id}',
+      {
+        params: { path: { id: 'ticket-1' } },
+        body: { status: 'resolved', staffResponse: 'Đã sửa lỗi' },
+      },
+    );
   });
 });

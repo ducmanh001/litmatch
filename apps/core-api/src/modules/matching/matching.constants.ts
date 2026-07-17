@@ -45,3 +45,47 @@ export function requeueIdempotencyKey(
 ): string {
   return `matching:requeue:${sessionId}:${expiredTicketId}`;
 }
+
+/**
+ * Ticket tạo trực tiếp từ invite accept (bỏ qua hàng đợi shard) — tất định theo (invite, vai
+ * trò), accept lặp lại (retry) không tạo ticket đôi qua unique constraint idempotency_key
+ * (docs/05 § 5.10), tương tự `joinIdempotencyKey` nhưng nguồn là invite thay vì client key.
+ */
+export function inviteAcceptIdempotencyKey(
+  inviteId: string,
+  role: 'inviter' | 'invitee',
+): string {
+  return `matching:invite-accept:${inviteId}:${role}`;
+}
+
+/**
+ * Derive ageBand từ birthDate — pure function (tách khỏi `MatchingService` để `InviteService`
+ * dùng chung khi tạo ticket trực tiếp từ invite accept, docs/11 § DRY có chọn lọc: cùng phép
+ * tính, 2 chỗ gọi trong CÙNG module thì tách hàm chung, không cần đẩy ra `common/`).
+ */
+export function ageBandOf(birthDate: string | null, bandSize: number): number {
+  if (!birthDate) return UNKNOWN_AGE_BAND;
+  const birth = new Date(birthDate);
+  if (Number.isNaN(birth.getTime())) return UNKNOWN_AGE_BAND;
+  const now = new Date();
+  let age = now.getFullYear() - birth.getFullYear();
+  const beforeBirthday =
+    now.getMonth() < birth.getMonth() ||
+    (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate());
+  if (beforeBirthday) age -= 1;
+  if (age < 0) return UNKNOWN_AGE_BAND;
+  return Math.floor(age / bandSize);
+}
+
+/**
+ * Snapshot 1 lần lúc enqueue (docs/services/safety-service.md § 3.2) — trust score < 100 cộng
+ * thêm ms vào score, làm chậm priority chứ không chặn hẳn matching. Pure function — lý do tách
+ * giống `ageBandOf`.
+ */
+export function trustPenaltyMsOf(
+  trustScore: number,
+  perPoint: number,
+  maxMs: number,
+): number {
+  return Math.min(maxMs, Math.max(0, 100 - trustScore) * perPoint);
+}

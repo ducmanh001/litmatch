@@ -16,7 +16,11 @@ export function SoulMessageList({ sessionId }: { sessionId: string }) {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   if (messages.isPending) {
-    return <p className="text-sm text-muted-foreground">Đang tải tin nhắn…</p>;
+    return (
+      <p className="px-5 py-4 text-center text-sm text-slate-500 dark:text-slate-400">
+        Đang tải tin nhắn…
+      </p>
+    );
   }
 
   if (messages.isError) {
@@ -24,7 +28,7 @@ export function SoulMessageList({ sessionId }: { sessionId: string }) {
       ? messages.error.message
       : 'Có lỗi xảy ra, thử lại.';
     return (
-      <p role="alert" className="text-sm text-destructive">
+      <p role="alert" className="px-5 py-4 text-sm text-destructive">
         {message}
       </p>
     );
@@ -34,24 +38,28 @@ export function SoulMessageList({ sessionId }: { sessionId: string }) {
 
   if (items.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="px-5 py-4 text-center text-sm text-slate-500 dark:text-slate-400">
         Chưa có tin nhắn nào — bắt đầu trò chuyện đi!
       </p>
     );
   }
 
   return (
-    <ul className="space-y-2">
+    <ul className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
       {items.map((message) => (
         <li
           key={message.id}
-          className={
-            message.senderRole === 'me'
-              ? 'ml-auto max-w-[80%] rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground'
-              : 'mr-auto max-w-[80%] rounded-lg bg-card px-3 py-2 text-sm'
-          }
+          className={message.senderRole === 'me' ? 'flex justify-end' : 'flex'}
         >
-          {message.content}
+          <div
+            className={
+              message.senderRole === 'me'
+                ? 'max-w-[75%] min-w-0 whitespace-pre-wrap rounded-2xl rounded-tr-md bg-gradient-to-br from-irisl to-irisl px-4 py-2.5 text-sm text-white [overflow-wrap:anywhere]'
+                : 'max-w-[75%] min-w-0 whitespace-pre-wrap rounded-2xl rounded-tl-md bg-slate-100 px-4 py-2.5 text-sm [overflow-wrap:anywhere] dark:bg-surf2'
+            }
+          >
+            {message.content}
+          </div>
         </li>
       ))}
     </ul>

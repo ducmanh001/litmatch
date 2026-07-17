@@ -8,12 +8,14 @@ import { PalmMatchErrors } from './palm-match.errors';
 import { PalmMatchService } from './palm-match.service';
 
 import type { ConfigService } from '@nestjs/config';
-import type { Repository } from 'typeorm';
+import type { DataSource, Repository } from 'typeorm';
 
 import type { CoreApiEnv } from '../../config/env.validation';
 
 const CONFIG: Record<string, unknown> = {
   PALM_MATCH_TARGET_NAME_MAX_LENGTH: 50,
+  PALM_MATCH_QUEUE_MAX_WAIT_SECONDS: 120,
+  PALM_MATCH_SESSION_DURATION_SECONDS: 300,
 };
 const configStub = {
   getOrThrow: (key: string) => {
@@ -58,6 +60,9 @@ describe('PalmMatchService (unit — mock repo)', () => {
     service = new PalmMatchService(
       templateRepo as unknown as Repository<PalmReadingTemplate>,
       configStub,
+      {} as DataSource,
+      {} as never,
+      {} as never,
     );
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-07-13T03:00:00.000Z'));

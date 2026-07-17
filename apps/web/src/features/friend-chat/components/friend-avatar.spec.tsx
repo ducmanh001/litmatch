@@ -1,26 +1,22 @@
 import { render, screen } from '@testing-library/react';
 
-import { FriendAvatar, hashToHue } from './friend-avatar';
-
-describe('hashToHue', () => {
-  it('deterministic — cùng id luôn ra cùng hue', () => {
-    expect(hashToHue('user-1')).toBe(hashToHue('user-1'));
-  });
-
-  it('nằm trong khoảng 0-359', () => {
-    expect(hashToHue('user-1')).toBeGreaterThanOrEqual(0);
-    expect(hashToHue('user-1')).toBeLessThan(360);
-    expect(hashToHue('')).toBeGreaterThanOrEqual(0);
-  });
-
-  it('id khác nhau thường ra hue khác nhau', () => {
-    expect(hashToHue('user-1')).not.toBe(hashToHue('user-2'));
-  });
-});
+import { FriendAvatar } from './friend-avatar';
 
 describe('FriendAvatar', () => {
-  it('hiển thị chữ cái đầu viết hoa của nickname', () => {
+  it('dùng nickname làm alt text', () => {
     render(<FriendAvatar userId="u1" nickname="mưa" />);
-    expect(screen.getByText('M')).toBeInTheDocument();
+    expect(screen.getByAltText('mưa')).toBeInTheDocument();
+  });
+
+  it('src deterministic theo userId (cùng id luôn ra cùng ảnh)', () => {
+    const { container: a } = render(<FriendAvatar userId="u1" nickname="A" />);
+    const { container: b } = render(<FriendAvatar userId="u1" nickname="B" />);
+    expect(a.querySelector('img')?.src).toBe(b.querySelector('img')?.src);
+  });
+
+  it('userId khác nhau ra src khác nhau', () => {
+    const { container: a } = render(<FriendAvatar userId="u1" nickname="A" />);
+    const { container: b } = render(<FriendAvatar userId="u2" nickname="A" />);
+    expect(a.querySelector('img')?.src).not.toBe(b.querySelector('img')?.src);
   });
 });

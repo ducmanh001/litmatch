@@ -19,7 +19,12 @@ import {
 import { Throttle, minutes } from '@nestjs/throttler';
 
 import { MatchingService } from './matching.service';
-import { JoinQueueDto, SpeedupResultDto, TicketDto } from './dto/matching.dtos';
+import {
+  ActiveTicketResponseDto,
+  JoinQueueDto,
+  SpeedupResultDto,
+  TicketDto,
+} from './dto/matching.dtos';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import {
   ApiIdempotencyKeyHeader,
@@ -48,6 +53,22 @@ export class MatchingController {
   ): Promise<TicketDto> {
     return TicketDto.from(
       await this.matchingService.joinQueue(user, dto, idempotencyKey),
+      this.matchingService.getSpeedupPriceDiamond(),
+    );
+  }
+
+  @Get('tickets/current')
+  @ApiOperation({
+    summary:
+      'Ticket active (queued/matched) của chính mình — phục hồi queue sau reload',
+  })
+  @ApiOkResponse({ type: ActiveTicketResponseDto })
+  async getCurrentTicket(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ActiveTicketResponseDto> {
+    return ActiveTicketResponseDto.from(
+      await this.matchingService.getActiveTicket(user),
+      this.matchingService.getSpeedupPriceDiamond(),
     );
   }
 
@@ -60,7 +81,10 @@ export class MatchingController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<TicketDto> {
-    return TicketDto.from(await this.matchingService.getTicket(user, id));
+    return TicketDto.from(
+      await this.matchingService.getTicket(user, id),
+      this.matchingService.getSpeedupPriceDiamond(),
+    );
   }
 
   @Delete('tickets/:id')
@@ -70,7 +94,10 @@ export class MatchingController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<TicketDto> {
-    return TicketDto.from(await this.matchingService.cancelTicket(user, id));
+    return TicketDto.from(
+      await this.matchingService.cancelTicket(user, id),
+      this.matchingService.getSpeedupPriceDiamond(),
+    );
   }
 
   @Post('tickets/:id/confirm')
@@ -84,7 +111,10 @@ export class MatchingController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<TicketDto> {
-    return TicketDto.from(await this.matchingService.confirmTicket(user, id));
+    return TicketDto.from(
+      await this.matchingService.confirmTicket(user, id),
+      this.matchingService.getSpeedupPriceDiamond(),
+    );
   }
 
   @Post('tickets/:id/speedup')
@@ -105,6 +135,7 @@ export class MatchingController {
       result.transactionId,
       result.replayed,
       result.ticket,
+      this.matchingService.getSpeedupPriceDiamond(),
     );
   }
 }

@@ -92,7 +92,10 @@ describe('MovieMatchService (unit — mock repo/dataSource/friendService/redis)'
     service = new MovieMatchService(
       dataSource as never,
       sessionRepo as unknown as Repository<MovieSession>,
+      // messageRepo/safetyService chỉ dùng ở flow ẩn danh — suite này test flow bạn bè
+      { save: jest.fn(), create: jest.fn(), findOneBy: jest.fn() } as never,
       friendService as unknown as FriendService,
+      { canPair: jest.fn(async () => true) } as never,
       configStub,
       redis as never,
     );

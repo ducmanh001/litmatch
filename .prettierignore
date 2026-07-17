@@ -7,3 +7,6 @@ pnpm-lock.yaml
 
 # Next.js tự sinh file này khi build; không format lại output của framework.
 apps/web/next-env.d.ts
+
+# Mockup HTML la nguon yeu cau (giu nguyen ban goc do designer/user cung cap), khong format
+layouts/

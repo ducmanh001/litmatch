@@ -1,17 +1,19 @@
-import { TopupPackages } from '../../../features/wallet/components/topup-packages';
-import { WalletBalance } from '../../../features/wallet/components/wallet-balance';
+import { WalletTabs } from '../../../features/wallet/components/wallet-tabs';
+import { WalletIcon } from '../../../shared/ui/icons';
+import { PageHeader } from '../../../shared/ui/page-header';
 
 import type { Metadata } from 'next';
 
-export const metadata: Metadata = { title: 'Ví kim cương' };
+export const metadata: Metadata = { title: 'Ví & VIP' };
 
 export default function WalletPage() {
   return (
-    <section className="mx-auto max-w-md space-y-4">
-      <h1 className="text-2xl font-semibold">Ví kim cương</h1>
-      <WalletBalance />
-      <h2 className="text-lg font-medium">Nạp kim cương</h2>
-      <TopupPackages />
+    <section className="mx-auto w-full max-w-2xl min-w-0 space-y-5 px-5">
+      <PageHeader
+        eyebrow="Số dư & gói VIP"
+        eyebrowIcon={<WalletIcon width={16} height={16} />}
+      />
+      <WalletTabs />
     </section>
   );
 }

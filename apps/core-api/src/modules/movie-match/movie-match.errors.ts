@@ -13,4 +13,16 @@ export const MovieMatchErrors = {
   ENDED: 'MOVIE_SESSION_ENDED',
   /** `videoUrl` sai format, quá dài, hoặc domain không nằm trong whitelist. */
   INVALID_VIDEO_URL: 'MOVIE_SESSION_INVALID_VIDEO_URL',
+  /** Rating gọi trước khi phase xem kết thúc (chưa "Kết thúc"/chưa hết giờ). */
+  RATING_NOT_OPEN: 'MOVIE_SESSION_RATING_NOT_OPEN',
+  /** Đổi rating đã chốt — mỗi bên chỉ đánh giá một lần. */
+  RATING_CONFLICT: 'MOVIE_SESSION_RATING_CONFLICT',
+  /** Chat quá MOVIE_MATCH_MESSAGE_MAX_LENGTH. */
+  MESSAGE_TOO_LONG: 'MOVIE_SESSION_MESSAGE_TOO_LONG',
+  /** Cùng Idempotency-Key nhưng nội dung/session khác (docs/05 § 5.10). */
+  MESSAGE_IDEMPOTENCY_CONFLICT: 'MOVIE_SESSION_MESSAGE_IDEMPOTENCY_CONFLICT',
+  /** Reaction emoji ngoài whitelist. */
+  REACTION_INVALID: 'MOVIE_SESSION_REACTION_INVALID',
+  /** Không có video nào trong MOVIE_MATCH_ANON_VIDEO_URLS — lỗi cấu hình vận hành. */
+  ANON_VIDEO_POOL_EMPTY: 'MOVIE_SESSION_ANON_VIDEO_POOL_EMPTY',
 } as const;

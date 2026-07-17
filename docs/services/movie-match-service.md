@@ -93,3 +93,31 @@ polling).
 `MOVIE_MATCH_URL_MAX_LENGTH` (mặc định 2048), `MOVIE_MATCH_ALLOWED_VIDEO_HOSTS` (mặc định
 `youtube.com,youtu.be`, danh sách phân tách dấu phẩy — validate `videoUrl` phải khớp 1 trong các
 host này).
+
+## 9. Flow ghép ẨN DANH (movie-match.html) — bổ sung 2026-07-16
+
+Ngoài phiên xem chung giữa bạn bè (§ 2-5), Movie Match có flow ghép người lạ theo đúng 4 màn
+mockup: search → watch → rating → result. Plan chi tiết + bảng giả định:
+`docs/plans/2026-07-15-ui-contract-completion.md § Movie Match ghép ẩn danh`.
+
+- **Queue/matcher**: `movie_match_queue_entries` (PK user_id) + advisory transaction lock
+  (`litmatch:movie-match:pairing`) + PK `movie_session_active_participants.user_id` — cùng kỹ
+  thuật Palm Match. `SafetyService.canPair` re-check ĐÚNG LÚC ghép.
+- **Session**: tái dùng `movie_sessions` với cột additive `mode`
+  (`friend|anonymous`), `expires_at` (deadline, lazy expiry → mở phase rating),
+  `watch_ended_at` ("Kết thúc"/hết giờ), `low_rating`/`high_rating`
+  (`like|boring|rude`), `outcome` (`matched|not_matched|cancelled|expired`). Video do SERVER
+  chọn từ `MOVIE_MATCH_ANON_VIDEO_URLS` — client không gửi URL.
+- **Ẩn danh**: bộ endpoint riêng `/movie-match/anon/*` trả state view role-relative;
+  `partnerUserId` CHỈ xuất hiện khi `outcome=matched`. KHÔNG dùng `MovieSessionDto`
+  (DTO đó expose partnerUserId — đúng cho friend mode, sai cho ẩn danh).
+- **Rating**: mỗi bên một lần (khác giá trị → 409); non-like → terminal `not_matched` ngay;
+  mutual-like → `FriendService.ensureFriendship(source=movie_match)` CÙNG transaction — cùng
+  bất biến Soul/Palm Match. Rating chỉ mở sau `watch_ended_at` (409 `RATING_NOT_OPEN` trước đó).
+- **Chat**: `movie_session_messages` append-only theo session (2 người CHƯA là bạn — không có
+  Conversation), Idempotency-Key unique DB, cursor theo `seq`; DTO trả vai trò `me|partner`.
+- **Reaction**: realtime-only (`movie.reaction.sent`, không persist, không kèm userId),
+  whitelist emoji `😂😍😱👏` + throttle.
+- **Config**: `MOVIE_MATCH_ANON_VIDEO_URLS`, `MOVIE_MATCH_ANON_DURATION_SECONDS` (mặc định
+  1080 = 18:00 đúng timer mockup), `MOVIE_MATCH_QUEUE_MAX_WAIT_SECONDS`,
+  `MOVIE_MATCH_MESSAGE_MAX_LENGTH`.

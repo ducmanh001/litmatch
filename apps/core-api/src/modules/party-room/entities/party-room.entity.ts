@@ -12,6 +12,14 @@ export enum PartyRoomStatus {
   Closed = 'closed',
 }
 
+export enum PartyRoomCategory {
+  Talk = 'talk',
+  Sing = 'sing',
+  Friend = 'friend',
+  Study = 'study',
+  Other = 'other',
+}
+
 export enum PartyRoomCloseReason {
   /** Host rời/rớt — GĐ3 chọn đóng phòng thay vì transfer host (party-room-service.md § 4). */
   HostLeft = 'host_left',
@@ -21,6 +29,8 @@ export enum PartyRoomCloseReason {
   Swept = 'swept',
   /** Tạo LiveKit room thất bại ngay sau khi tạo row — compensate. */
   Error = 'error',
+  /** Moderator/admin chủ động kết thúc phòng vi phạm hoặc cần can thiệp vận hành. */
+  AdminClosed = 'admin_closed',
 }
 
 /**
@@ -45,6 +55,9 @@ export class PartyRoom {
 
   @Column({ type: 'int' })
   speakerLimit!: number;
+
+  @Column({ type: 'varchar', length: 16, default: PartyRoomCategory.Talk })
+  category!: PartyRoomCategory;
 
   /**
    * SNAPSHOT URL LiveKit chốt theo region của HOST lúc tạo phòng (GĐ7 — ADR 0005): room sống

@@ -1,0 +1,1391 @@
+<!doctype html>
+<html lang="vi" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Litmatch — Video ngắn</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        --ink: 27 20 32;
+        --surf: 36 27 41;
+        --surf2: 74 46 69;
+        --paper: 251 243 239;
+        --iris: 232 87 124;
+        --irisl: 232 87 124;
+        --aqua: 242 166 90;
+        --aqual: 242 166 90;
+        --diamond: 79 195 217;
+      }
+      html[data-theme='orange'] {
+        --ink: 16 11 9;
+        --surf: 29 22 19;
+        --surf2: 42 33 29;
+        --paper: 248 244 242;
+        --iris: 232 67 31;
+        --irisl: 255 90 54;
+        --aqua: 224 136 21;
+        --aqual: 245 164 40;
+      }
+      .theme-dot {
+        transition: transform 0.15s ease;
+      }
+      .theme-dot[data-active='true'] {
+        box-shadow:
+          0 0 0 2px rgb(var(--paper)),
+          0 0 0 3px rgb(var(--irisl));
+      }
+    </style>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              ink: 'rgb(var(--ink) / <alpha-value>)',
+              surf: 'rgb(var(--surf) / <alpha-value>)',
+              surf2: 'rgb(var(--surf2) / <alpha-value>)',
+              paper: 'rgb(var(--paper) / <alpha-value>)',
+              iris: 'rgb(var(--iris) / <alpha-value>)',
+              irisl: 'rgb(var(--irisl) / <alpha-value>)',
+              aqua: 'rgb(var(--aqua) / <alpha-value>)',
+              aqual: 'rgb(var(--aqual) / <alpha-value>)',
+              diamond: 'rgb(var(--diamond) / <alpha-value>)',
+            },
+            fontFamily: {
+              display: ['Fraunces', 'serif'],
+              body: ['"Be Vietnam Pro"', 'sans-serif'],
+              mono: ['"IBM Plex Mono"', 'monospace'],
+            },
+          },
+        },
+      };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;1,500;1,600&family=Be+Vietnam+Pro:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: 'Be Vietnam Pro', sans-serif;
+      }
+      .font-display {
+        font-family: 'Fraunces', serif;
+      }
+      .reel-scroller {
+        scroll-snap-type: y mandatory;
+        overflow-y: scroll;
+      }
+      .reel-scroller::-webkit-scrollbar {
+        display: none;
+      }
+      .reel-scroller {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+      .reel-slide {
+        scroll-snap-align: start;
+        scroll-snap-stop: always;
+      }
+      #commentsSheet {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        max-width: 430px;
+        margin: 0 auto;
+        height: 68%;
+        transform: translateY(100%);
+        transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        border-top-left-radius: 1.5rem;
+        border-top-right-radius: 1.5rem;
+        z-index: 50;
+      }
+      #commentsSheet.open {
+        transform: translateY(0);
+      }
+      @media (min-width: 768px) {
+        #commentsSheet {
+          position: static;
+          max-width: none;
+          margin: 0;
+          height: auto;
+          align-self: stretch;
+          width: 0;
+          opacity: 0;
+          overflow: hidden;
+          transform: none;
+          transition:
+            width 0.25s ease,
+            opacity 0.2s ease,
+            margin-left 0.25s ease;
+          border-radius: 1.5rem;
+        }
+        #commentsSheet.open {
+          width: 340px;
+          opacity: 1;
+          margin-left: 1.25rem;
+        }
+      }
+      @keyframes discRotate {
+        from {
+          transform: rotate(0);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .disc-spin {
+        animation: discRotate 4s linear infinite;
+      }
+      .action-btn {
+        transition: transform 0.12s ease;
+      }
+      .action-btn:active {
+        transform: scale(0.88);
+      }
+    </style>
+  </head>
+  <body
+    class="bg-ink md:bg-slate-100 md:dark:bg-black text-slate-50 transition-colors duration-300"
+  >
+    <div class="md:flex">
+      <nav
+        class="hidden md:flex md:flex-col md:sticky md:top-0 md:h-screen md:w-20 lg:w-60 md:shrink-0 md:py-8 md:px-3 lg:px-4 md:border-r md:border-black/5 md:dark:border-white/5 md:bg-white/80 md:dark:bg-surf/60 md:backdrop-blur md:z-40 md:gap-1.5"
+      >
+        <div
+          class="hidden lg:flex items-center gap-2 font-display italic font-semibold text-lg px-3 mb-6"
+        >
+          <svg width="20" height="20" viewBox="0 0 28 28">
+            <circle
+              cx="11"
+              cy="14"
+              r="8"
+              fill="rgb(var(--irisl))"
+              opacity=".9"
+            />
+            <circle
+              cx="18"
+              cy="14"
+              r="8"
+              fill="rgb(var(--aqual))"
+              opacity=".75"
+            />
+          </svg>
+          Litmatch
+        </div>
+        <a
+          href="home.html"
+          class="flex items-center gap-3 px-3 py-3 rounded-xl justify-center lg:justify-start transition text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 font-semibold"
+          ><svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path
+              d="M12 3l9 8h-3v9h-5v-6H11v6H6v-9H3z"
+              stroke-linejoin="round"
+            /></svg
+          ><span class="hidden lg:inline text-sm">Trang chủ</span></a
+        >
+        <a
+          href="video.html"
+          class="flex items-center gap-3 px-3 py-3 rounded-xl justify-center lg:justify-start transition bg-iris/10 text-irisl font-bold"
+          ><svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <rect x="3" y="4" width="18" height="16" rx="3" />
+            <path
+              d="M10 9.5l5 2.5-5 2.5z"
+              fill="currentColor"
+              stroke="none"
+            /></svg
+          ><span class="hidden lg:inline text-sm">Video</span></a
+        >
+        <a
+          href="party-list.html"
+          class="flex items-center gap-3 px-3 py-3 rounded-xl justify-center lg:justify-start transition text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 font-semibold"
+          ><svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <circle cx="9" cy="7" r="3" />
+            <circle cx="17" cy="8" r="2.5" />
+            <path
+              d="M2 21v-1a6 6 0 016-6h1a6 6 0 016 6v1M16 14a5 5 0 015 5v2"
+              stroke-linecap="round"
+            /></svg
+          ><span class="hidden lg:inline text-sm">Party</span></a
+        >
+        <a
+          href="feed.html"
+          class="flex items-center gap-3 px-3 py-3 rounded-xl justify-center lg:justify-start transition text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 font-semibold"
+          ><svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <rect x="3" y="3" width="18" height="18" rx="4" />
+            <path
+              d="M8 13l3 3 5-6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            /></svg
+          ><span class="hidden lg:inline text-sm">Bảng tin</span></a
+        >
+        <a
+          href="messages.html"
+          class="flex items-center gap-3 px-3 py-3 rounded-xl justify-center lg:justify-start transition text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 font-semibold"
+          ><svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path
+              d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"
+              stroke-linejoin="round"
+            /></svg
+          ><span class="hidden lg:inline text-sm">Tin nhắn</span></a
+        >
+        <a
+          href="profile.html"
+          class="flex items-center gap-3 px-3 py-3 rounded-xl justify-center lg:justify-start transition text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 font-semibold"
+          ><svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <circle cx="12" cy="8" r="4" />
+            <path d="M4 21c0-4 4-6 8-6s8 2 8 6" stroke-linecap="round" /></svg
+          ><span class="hidden lg:inline text-sm">Cá nhân</span></a
+        >
+      </nav>
+
+      <div
+        class="md:flex-1 md:flex md:items-start md:justify-center md:py-6 md:px-6"
+      >
+        <div
+          data-lm-frame
+          class="max-w-[430px] md:max-w-md mx-auto h-screen md:h-[calc(100vh_-_3rem)] relative md:rounded-[2rem] md:overflow-hidden md:border md:border-white/10 md:shadow-2xl md:shadow-black/40 bg-black"
+        >
+          <div
+            class="absolute top-0 inset-x-0 z-30 flex items-center justify-between px-4 pt-3"
+          >
+            <div
+              class="flex items-center gap-1.5 bg-black/40 backdrop-blur rounded-full p-1.5"
+              role="group"
+              aria-label="Chọn giao diện màu"
+            >
+              <button
+                onclick="setTheme('pink')"
+                data-theme-btn="pink"
+                data-active="true"
+                class="theme-dot w-4 h-4 rounded-full"
+                style="background: #e8577c"
+                aria-label="Giao diện hồng"
+              ></button>
+              <button
+                onclick="setTheme('orange')"
+                data-theme-btn="orange"
+                data-active="false"
+                class="theme-dot w-4 h-4 rounded-full"
+                style="background: linear-gradient(135deg, #ff5a36, #e08815)"
+                aria-label="Giao diện cam"
+              ></button>
+              <button
+                onclick="setTheme('white')"
+                data-theme-btn="white"
+                data-active="false"
+                class="theme-dot w-4 h-4 rounded-full border border-white/30"
+                style="background: #fbf3ef"
+                aria-label="Giao diện trắng"
+              ></button>
+            </div>
+            <a
+              href="home.html"
+              class="md:hidden w-8 h-8 rounded-full bg-black/40 backdrop-blur flex items-center justify-center text-white"
+              ><svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+              >
+                <path
+                  d="M15 18l-6-6 6-6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                /></svg
+            ></a>
+          </div>
+
+          <div
+            class="absolute top-11 inset-x-0 z-30 flex items-center justify-center gap-6 text-sm font-bold"
+          >
+            <button class="text-white/50">Đang theo dõi</button>
+            <button class="text-white relative">
+              Dành cho bạn<span
+                class="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-white"
+              ></span>
+            </button>
+          </div>
+
+          <div class="reel-scroller h-full w-full">
+            <!-- REEL 1 -->
+            <section
+              class="reel-slide relative h-full w-full flex items-end bg-gradient-to-br from-irisl to-aqual"
+            >
+              <div
+                class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/5 to-black/30"
+              ></div>
+              <div
+                class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-white/15 backdrop-blur flex items-center justify-center"
+              >
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="white">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </div>
+              <!-- right action rail (mobile overlay only; desktop uses the external rail beside the video) -->
+              <div
+                class="md:hidden absolute right-3 bottom-28 z-20 flex flex-col items-center gap-5"
+              >
+                <div class="relative">
+                  <img
+                    src="https://api.dicebear.com/7.x/adventurer/svg?seed=Linh"
+                    class="w-11 h-11 rounded-full border-2 border-white bg-surf2"
+                  />
+                  <span
+                    class="absolute -bottom-2 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-irisl text-white flex items-center justify-center text-xs font-bold"
+                    >+</span
+                  >
+                </div>
+                <button
+                  onclick="toggleLike(this)"
+                  data-liked="false"
+                  data-count="812"
+                  class="action-btn flex flex-col items-center gap-1 text-white"
+                >
+                  <svg
+                    class="heart-icon"
+                    width="30"
+                    height="30"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                  >
+                    <path
+                      d="M12 21s-7.5-4.6-10-9.2C.5 8.4 2 5 5.5 5c2 0 3.4 1.1 4.5 2.6C11.1 6.1 12.5 5 14.5 5 18 5 19.5 8.4 22 11.8 19.5 16.4 12 21 12 21z"
+                    />
+                  </svg>
+                  <span class="text-xs font-bold like-count">812</span>
+                </button>
+                <button
+                  onclick="openComments(0)"
+                  class="action-btn flex flex-col items-center gap-1 text-white"
+                >
+                  <svg
+                    width="28"
+                    height="28"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                  >
+                    <path
+                      d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                  <span class="text-xs font-bold">96</span>
+                </button>
+                <button
+                  class="action-btn flex flex-col items-center gap-1 text-white"
+                >
+                  <svg
+                    width="26"
+                    height="26"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                  >
+                    <path d="M6 3h12l3 5-9 13L3 8z" />
+                    <path d="M3 8h18M9 3l3 5 3-5M12 8l-2 13M12 8l2 13" />
+                  </svg>
+                  <span class="text-xs font-bold">Tặng</span>
+                </button>
+                <div
+                  class="w-9 h-9 rounded-full bg-gradient-to-br from-irisl to-aqual disc-spin flex items-center justify-center mt-1 border-2 border-black/20"
+                >
+                  <div class="w-3 h-3 rounded-full bg-black/60"></div>
+                </div>
+              </div>
+              <!-- bottom info -->
+              <div class="relative z-20 px-4 pb-6 w-[78%]">
+                <p class="font-bold text-base">
+                  Linh, 26
+                  <span class="font-mono text-xs font-normal opacity-80"
+                    >· 3 km</span
+                  >
+                </p>
+                <p class="text-sm mt-1 leading-snug">
+                  Một ngày cuối tuần chậm rãi ở Đà Lạt 🌿 ai rảnh nhắn mình chỉ
+                  đường quán cà phê ngon nha
+                </p>
+                <p class="text-xs mt-2 flex items-center gap-1.5 opacity-90">
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path d="M12 3v10.55A4 4 0 1014 17V7h4V3z" /></svg
+                  >Âm thanh gốc · Linh
+                </p>
+                <a
+                  href="voice-match.html"
+                  class="inline-flex items-center gap-1.5 mt-3 text-xs font-bold bg-white/15 backdrop-blur px-3 py-1.5 rounded-full"
+                >
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"
+                    />
+                    <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" />
+                  </svg>
+                  Voice Match ngay
+                </a>
+              </div>
+            </section>
+
+            <!-- REEL 2 -->
+            <section
+              class="reel-slide relative h-full w-full flex items-end bg-gradient-to-br from-surf2 to-surf"
+            >
+              <div
+                class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/5 to-black/30"
+              ></div>
+              <div
+                class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-white/15 backdrop-blur flex items-center justify-center"
+              >
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="white">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </div>
+              <div
+                class="md:hidden absolute right-3 bottom-28 z-20 flex flex-col items-center gap-5"
+              >
+                <div class="relative">
+                  <img
+                    src="https://api.dicebear.com/7.x/adventurer/svg?seed=Khoi"
+                    class="w-11 h-11 rounded-full border-2 border-white bg-surf2"
+                  />
+                  <span
+                    class="absolute -bottom-2 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-irisl text-white flex items-center justify-center text-xs font-bold"
+                    >+</span
+                  >
+                </div>
+                <button
+                  onclick="toggleLike(this)"
+                  data-liked="false"
+                  data-count="1204"
+                  class="action-btn flex flex-col items-center gap-1 text-white"
+                >
+                  <svg
+                    class="heart-icon"
+                    width="30"
+                    height="30"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                  >
+                    <path
+                      d="M12 21s-7.5-4.6-10-9.2C.5 8.4 2 5 5.5 5c2 0 3.4 1.1 4.5 2.6C11.1 6.1 12.5 5 14.5 5 18 5 19.5 8.4 22 11.8 19.5 16.4 12 21 12 21z"
+                    />
+                  </svg>
+                  <span class="text-xs font-bold like-count">1204</span>
+                </button>
+                <button
+                  onclick="openComments(1)"
+                  class="action-btn flex flex-col items-center gap-1 text-white"
+                >
+                  <svg
+                    width="28"
+                    height="28"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                  >
+                    <path
+                      d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                  <span class="text-xs font-bold">203</span>
+                </button>
+                <button
+                  class="action-btn flex flex-col items-center gap-1 text-white"
+                >
+                  <svg
+                    width="26"
+                    height="26"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                  >
+                    <path d="M6 3h12l3 5-9 13L3 8z" />
+                    <path d="M3 8h18M9 3l3 5 3-5M12 8l-2 13M12 8l2 13" />
+                  </svg>
+                  <span class="text-xs font-bold">Tặng</span>
+                </button>
+                <div
+                  class="w-9 h-9 rounded-full bg-gradient-to-br from-irisl to-aqual disc-spin flex items-center justify-center mt-1 border-2 border-black/20"
+                >
+                  <div class="w-3 h-3 rounded-full bg-black/60"></div>
+                </div>
+              </div>
+              <div class="relative z-20 px-4 pb-6 w-[78%]">
+                <p class="font-bold text-base">
+                  Khôi, 29
+                  <span class="font-mono text-xs font-normal opacity-80"
+                    >· 7 km</span
+                  >
+                </p>
+                <p class="text-sm mt-1 leading-snug">
+                  Set thử ban nhạc mới trong Party Room tối nay, ai mê indie vào
+                  nghe cùng 🎸
+                </p>
+                <p class="text-xs mt-2 flex items-center gap-1.5 opacity-90">
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path d="M12 3v10.55A4 4 0 1014 17V7h4V3z" /></svg
+                  >Âm thanh gốc · Khôi
+                </p>
+                <a
+                  href="party-room.html"
+                  class="inline-flex items-center gap-1.5 mt-3 text-xs font-bold bg-white/15 backdrop-blur px-3 py-1.5 rounded-full"
+                >
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <circle cx="9" cy="7" r="3" />
+                    <circle cx="17" cy="8" r="2.5" />
+                    <path
+                      d="M2 21v-1a6 6 0 016-6h1a6 6 0 016 6v1M16 14a5 5 0 015 5v2"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                  Vào Party Room
+                </a>
+              </div>
+            </section>
+
+            <!-- REEL 3 -->
+            <section
+              class="reel-slide relative h-full w-full flex items-end bg-gradient-to-br from-diamond to-irisl"
+            >
+              <div
+                class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/5 to-black/30"
+              ></div>
+              <div
+                class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-white/15 backdrop-blur flex items-center justify-center"
+              >
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="white">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </div>
+              <div
+                class="md:hidden absolute right-3 bottom-28 z-20 flex flex-col items-center gap-5"
+              >
+                <div class="relative">
+                  <img
+                    src="https://api.dicebear.com/7.x/adventurer/svg?seed=Vy2"
+                    class="w-11 h-11 rounded-full border-2 border-white bg-surf2"
+                  />
+                  <span
+                    class="absolute -bottom-2 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-irisl text-white flex items-center justify-center text-xs font-bold"
+                    >+</span
+                  >
+                </div>
+                <button
+                  onclick="toggleLike(this)"
+                  data-liked="false"
+                  data-count="455"
+                  class="action-btn flex flex-col items-center gap-1 text-white"
+                >
+                  <svg
+                    class="heart-icon"
+                    width="30"
+                    height="30"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                  >
+                    <path
+                      d="M12 21s-7.5-4.6-10-9.2C.5 8.4 2 5 5.5 5c2 0 3.4 1.1 4.5 2.6C11.1 6.1 12.5 5 14.5 5 18 5 19.5 8.4 22 11.8 19.5 16.4 12 21 12 21z"
+                    />
+                  </svg>
+                  <span class="text-xs font-bold like-count">455</span>
+                </button>
+                <button
+                  onclick="openComments(2)"
+                  class="action-btn flex flex-col items-center gap-1 text-white"
+                >
+                  <svg
+                    width="28"
+                    height="28"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                  >
+                    <path
+                      d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                  <span class="text-xs font-bold">58</span>
+                </button>
+                <button
+                  class="action-btn flex flex-col items-center gap-1 text-white"
+                >
+                  <svg
+                    width="26"
+                    height="26"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                  >
+                    <path d="M6 3h12l3 5-9 13L3 8z" />
+                    <path d="M3 8h18M9 3l3 5 3-5M12 8l-2 13M12 8l2 13" />
+                  </svg>
+                  <span class="text-xs font-bold">Tặng</span>
+                </button>
+                <div
+                  class="w-9 h-9 rounded-full bg-gradient-to-br from-irisl to-aqual disc-spin flex items-center justify-center mt-1 border-2 border-black/20"
+                >
+                  <div class="w-3 h-3 rounded-full bg-black/60"></div>
+                </div>
+              </div>
+              <div class="relative z-20 px-4 pb-6 w-[78%]">
+                <p class="font-bold text-base">
+                  Vy, 24
+                  <span class="font-mono text-xs font-normal opacity-80"
+                    >· 1 km</span
+                  >
+                </p>
+                <p class="text-sm mt-1 leading-snug">
+                  15 giây thôi cũng đủ để thấy nụ cười thật — Soul Match xong
+                  mới biết vậy 😄
+                </p>
+                <p class="text-xs mt-2 flex items-center gap-1.5 opacity-90">
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path d="M12 3v10.55A4 4 0 1014 17V7h4V3z" /></svg
+                  >Âm thanh gốc · Vy
+                </p>
+                <a
+                  href="soul-match.html"
+                  class="inline-flex items-center gap-1.5 mt-3 text-xs font-bold bg-white/15 backdrop-blur px-3 py-1.5 rounded-full"
+                >
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                  Thử Soul Match
+                </a>
+              </div>
+            </section>
+          </div>
+
+          <!-- bottom nav (mobile only) -->
+          <nav
+            class="md:hidden absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur border-t border-white/10 flex justify-around items-center h-16 px-2 z-40"
+          >
+            <a
+              href="home.html"
+              class="flex flex-col items-center gap-1 text-white/50"
+              ><svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M12 3l9 8h-3v9h-5v-6H11v6H6v-9H3z"
+                  stroke-linejoin="round"
+                /></svg
+              ><span class="text-[10px] font-semibold">Trang chủ</span></a
+            >
+            <a
+              href="video.html"
+              class="flex flex-col items-center gap-1 text-irisl"
+              ><svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <rect x="3" y="4" width="18" height="16" rx="3" />
+                <path
+                  d="M10 9.5l5 2.5-5 2.5z"
+                  fill="currentColor"
+                  stroke="none"
+                /></svg
+              ><span class="text-[10px] font-bold">Video</span></a
+            >
+            <a
+              href="party-list.html"
+              class="flex flex-col items-center gap-1 text-white/50"
+              ><svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <circle cx="9" cy="7" r="3" />
+                <circle cx="17" cy="8" r="2.5" />
+                <path
+                  d="M2 21v-1a6 6 0 016-6h1a6 6 0 016 6v1M16 14a5 5 0 015 5v2"
+                  stroke-linecap="round"
+                /></svg
+              ><span class="text-[10px] font-semibold">Party</span></a
+            >
+            <a
+              href="feed.html"
+              class="flex flex-col items-center gap-1 text-white/50"
+              ><svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="4" />
+                <path
+                  d="M8 13l3 3 5-6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                /></svg
+              ><span class="text-[10px] font-semibold">Bảng tin</span></a
+            >
+            <a
+              href="messages.html"
+              class="flex flex-col items-center gap-1 text-white/50"
+              ><svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"
+                  stroke-linejoin="round"
+                /></svg
+              ><span class="text-[10px] font-semibold">Tin nhắn</span></a
+            >
+            <a
+              href="profile.html"
+              class="flex flex-col items-center gap-1 text-white/50"
+              ><svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <circle cx="12" cy="8" r="4" />
+                <path
+                  d="M4 21c0-4 4-6 8-6s8 2 8 6"
+                  stroke-linecap="round"
+                /></svg
+              ><span class="text-[10px] font-semibold">Cá nhân</span></a
+            >
+          </nav>
+        </div>
+
+        <!-- external action rail: desktop-only, sits beside the video like TikTok web, syncs to whichever reel is in view -->
+        <div
+          class="hidden md:flex md:flex-col md:items-center md:justify-end md:gap-5 md:pb-10 md:pl-4 md:self-stretch"
+        >
+          <div class="relative">
+            <img
+              id="extAvatar"
+              src="https://api.dicebear.com/7.x/adventurer/svg?seed=Linh"
+              class="w-11 h-11 rounded-full border-2 border-white dark:border-white/80 bg-surf2"
+            />
+            <span
+              class="absolute -bottom-2 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-irisl text-white flex items-center justify-center text-xs font-bold"
+              >+</span
+            >
+          </div>
+          <button
+            id="extLikeBtn"
+            onclick="extToggleLike()"
+            class="action-btn flex flex-col items-center gap-1 text-slate-600 dark:text-white"
+          >
+            <svg
+              id="extLikeIcon"
+              width="28"
+              height="28"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+            >
+              <path
+                d="M12 21s-7.5-4.6-10-9.2C.5 8.4 2 5 5.5 5c2 0 3.4 1.1 4.5 2.6C11.1 6.1 12.5 5 14.5 5 18 5 19.5 8.4 22 11.8 19.5 16.4 12 21 12 21z"
+              />
+            </svg>
+            <span id="extLikeCount" class="text-xs font-bold">812</span>
+          </button>
+          <button
+            onclick="openComments(currentActiveReel)"
+            class="action-btn flex flex-col items-center gap-1 text-slate-600 dark:text-white"
+          >
+            <svg
+              width="26"
+              height="26"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+            >
+              <path
+                d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"
+                stroke-linejoin="round"
+              />
+            </svg>
+            <span id="extCommentCount" class="text-xs font-bold">96</span>
+          </button>
+          <button
+            class="action-btn flex flex-col items-center gap-1 text-slate-600 dark:text-white"
+          >
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+            >
+              <path d="M6 3h12l3 5-9 13L3 8z" />
+              <path d="M3 8h18M9 3l3 5 3-5M12 8l-2 13M12 8l2 13" />
+            </svg>
+            <span class="text-xs font-bold">Tặng</span>
+          </button>
+          <div
+            class="w-9 h-9 rounded-full bg-gradient-to-br from-irisl to-aqual disc-spin flex items-center justify-center mt-1 border-2 border-black/10 dark:border-black/20"
+          >
+            <div class="w-3 h-3 rounded-full bg-black/60"></div>
+          </div>
+        </div>
+
+        <!-- comments sheet: mobile = overlay bottom sheet, desktop = real side panel next to the video -->
+        <div
+          id="commentsBackdrop"
+          onclick="closeComments()"
+          class="hidden md:hidden fixed inset-0 bg-black/50 z-40"
+        ></div>
+        <div
+          id="commentsSheet"
+          class="bg-white dark:bg-surf flex flex-col shadow-2xl shadow-black/30"
+        >
+          <div
+            class="md:hidden flex items-center justify-center pt-3 pb-1 shrink-0"
+          >
+            <div
+              class="w-10 h-1 bg-slate-300 dark:bg-white/20 rounded-full"
+            ></div>
+          </div>
+          <div
+            class="flex items-center justify-between px-5 py-3 border-b border-black/5 dark:border-white/10 shrink-0"
+          >
+            <p
+              class="font-bold text-sm text-slate-900 dark:text-white"
+              id="commentsCount"
+            >
+              Bình luận
+            </p>
+            <button
+              onclick="closeComments()"
+              class="w-8 h-8 rounded-full bg-slate-100 dark:bg-surf2 flex items-center justify-center text-slate-500 dark:text-slate-300"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+              >
+                <path d="M6 6l12 12M18 6L6 18" stroke-linecap="round" />
+              </svg>
+            </button>
+          </div>
+          <div
+            id="commentsList"
+            class="flex-1 overflow-y-auto px-5 py-3 space-y-4 text-slate-900 dark:text-white"
+          ></div>
+          <div
+            class="flex items-center gap-2 px-4 py-3 border-t border-black/5 dark:border-white/10 shrink-0"
+          >
+            <img
+              src="https://api.dicebear.com/7.x/adventurer/svg?seed=Ban"
+              class="w-8 h-8 rounded-full bg-surf2 shrink-0"
+            />
+            <input
+              id="commentInput"
+              type="text"
+              placeholder="Viết bình luận..."
+              class="flex-1 bg-slate-100 dark:bg-surf2 rounded-full px-4 py-2 text-sm outline-none text-slate-900 dark:text-white min-w-0"
+            />
+            <button
+              onclick="sendComment()"
+              class="text-irisl font-bold text-sm shrink-0"
+            >
+              Gửi
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      var commentsData = [
+        [
+          {
+            name: 'Mai ẩn danh',
+            avatar: 'MaiX',
+            text: 'Đà Lạt đẹp thế, chỉ quán cà phê đi bạn ơi 😍',
+            time: '2 giờ',
+            likes: 12,
+          },
+          {
+            name: 'Quang ẩn danh',
+            avatar: 'QuangA',
+            text: 'Giọng nói dễ thương ghê',
+            time: '1 giờ',
+            likes: 8,
+          },
+          {
+            name: 'Hà ẩn danh',
+            avatar: 'HaX',
+            text: 'Cho mình xin chỗ đó với 🙏',
+            time: '45 phút',
+            likes: 3,
+          },
+          {
+            name: 'Sơn ẩn danh',
+            avatar: 'SonV',
+            text: 'Voice Match xong chưa mà biết giọng hay vậy 😄',
+            time: '20 phút',
+            likes: 1,
+          },
+        ],
+        [
+          {
+            name: 'Tùng ẩn danh',
+            avatar: 'TungM',
+            text: 'Bài này hay quá, tên bài là gì vậy?',
+            time: '3 giờ',
+            likes: 20,
+          },
+          {
+            name: 'Vy ẩn danh',
+            avatar: 'VyA2',
+            text: 'Vào nghe cùng đây 🙋',
+            time: '2 giờ',
+            likes: 5,
+          },
+          {
+            name: 'Bảo ẩn danh',
+            avatar: 'BaoQ',
+            text: 'Party Room này lúc nào cũng vui',
+            time: '1 giờ',
+            likes: 7,
+          },
+        ],
+        [
+          {
+            name: 'Đạt ẩn danh',
+            avatar: 'DatN',
+            text: 'Nụ cười tỏa nắng luôn á ☀️',
+            time: '5 giờ',
+            likes: 31,
+          },
+          {
+            name: 'Linh ẩn danh',
+            avatar: 'LinhB',
+            text: 'Soul Match hay ghê, mình thử luôn',
+            time: '1 giờ',
+            likes: 9,
+          },
+          {
+            name: 'Kiên ẩn danh',
+            avatar: 'KienV',
+            text: '😍😍😍',
+            time: '20 phút',
+            likes: 2,
+          },
+        ],
+      ];
+      var currentReelIndex = 0;
+
+      var reelActionState = [
+        { liked: false, likeCount: 812, avatar: 'Linh', commentCount: 96 },
+        { liked: false, likeCount: 1204, avatar: 'Khoi', commentCount: 203 },
+        { liked: false, likeCount: 455, avatar: 'Vy2', commentCount: 58 },
+      ];
+      var currentActiveReel = 0;
+
+      function updateExternalRail(idx) {
+        var s = reelActionState[idx];
+        document.getElementById('extAvatar').src =
+          'https://api.dicebear.com/7.x/adventurer/svg?seed=' + s.avatar;
+        document.getElementById('extLikeCount').textContent = s.likeCount;
+        document
+          .getElementById('extLikeIcon')
+          .setAttribute('fill', s.liked ? 'currentColor' : 'none');
+        document
+          .getElementById('extLikeBtn')
+          .classList.toggle('text-irisl', s.liked);
+        document.getElementById('extCommentCount').textContent = s.commentCount;
+      }
+
+      function extToggleLike() {
+        var s = reelActionState[currentActiveReel];
+        s.liked = !s.liked;
+        s.likeCount += s.liked ? 1 : -1;
+        updateExternalRail(currentActiveReel);
+      }
+
+      document.addEventListener('DOMContentLoaded', function () {
+        var scroller = document.querySelector('.reel-scroller');
+        if (!scroller) return;
+        scroller.addEventListener('scroll', function () {
+          var idx = Math.round(scroller.scrollTop / scroller.clientHeight);
+          idx = Math.max(0, Math.min(reelActionState.length - 1, idx));
+          if (idx !== currentActiveReel) {
+            currentActiveReel = idx;
+            updateExternalRail(idx);
+          }
+        });
+        updateExternalRail(0);
+      });
+
+      function renderComments(idx) {
+        var list = commentsData[idx];
+        document.getElementById('commentsCount').textContent =
+          list.length + ' bình luận';
+        document.getElementById('commentsList').innerHTML = list
+          .map(function (c) {
+            return (
+              '<div class="flex gap-3">' +
+              '<img src="https://api.dicebear.com/7.x/adventurer/svg?seed=' +
+              c.avatar +
+              '" class="w-9 h-9 rounded-full bg-surf2 shrink-0">' +
+              '<div class="flex-1 min-w-0">' +
+              '<p class="text-sm font-bold">' +
+              c.name +
+              '</p>' +
+              '<p class="text-sm leading-snug">' +
+              c.text +
+              '</p>' +
+              '<div class="flex items-center gap-3 mt-1"><span class="text-xs text-slate-400">' +
+              c.time +
+              '</span><button class="text-xs text-slate-400 font-semibold">Trả lời</button></div>' +
+              '</div>' +
+              '<button onclick="this.classList.toggle(\'text-irisl\')" class="flex flex-col items-center gap-0.5 text-slate-400 shrink-0">' +
+              '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7.5-4.6-10-9.2C.5 8.4 2 5 5.5 5c2 0 3.4 1.1 4.5 2.6C11.1 6.1 12.5 5 14.5 5 18 5 19.5 8.4 22 11.8 19.5 16.4 12 21 12 21z"/></svg>' +
+              '<span class="text-[10px]">' +
+              c.likes +
+              '</span></button>' +
+              '</div>'
+            );
+          })
+          .join('');
+      }
+
+      function openComments(idx) {
+        currentReelIndex = idx;
+        renderComments(idx);
+        document.getElementById('commentsBackdrop').classList.remove('hidden');
+        requestAnimationFrame(function () {
+          document.getElementById('commentsSheet').classList.add('open');
+        });
+      }
+
+      function closeComments() {
+        document.getElementById('commentsSheet').classList.remove('open');
+        setTimeout(function () {
+          document.getElementById('commentsBackdrop').classList.add('hidden');
+        }, 300);
+      }
+
+      function sendComment() {
+        var input = document.getElementById('commentInput');
+        var text = input.value.trim();
+        if (!text) return;
+        commentsData[currentReelIndex].unshift({
+          name: 'Bạn',
+          avatar: 'Ban',
+          text: text,
+          time: 'Vừa xong',
+          likes: 0,
+        });
+        renderComments(currentReelIndex);
+        input.value = '';
+      }
+
+      function toggleLike(btn) {
+        const liked = btn.dataset.liked === 'true';
+        const icon = btn.querySelector('.heart-icon');
+        const countEl = btn.querySelector('.like-count');
+        let count = parseInt(btn.dataset.count, 10);
+        if (!liked) {
+          count++;
+          icon.setAttribute('fill', 'currentColor');
+          btn.classList.add('text-irisl');
+        } else {
+          count--;
+          icon.setAttribute('fill', 'none');
+          btn.classList.remove('text-irisl');
+        }
+        btn.dataset.liked = (!liked).toString();
+        btn.dataset.count = count;
+        countEl.textContent = count;
+      }
+      function setTheme(t) {
+        const html = document.documentElement;
+        if (t === 'white') {
+          html.classList.remove('dark');
+        } else {
+          html.classList.add('dark');
+          html.setAttribute('data-theme', t);
+        }
+        document.querySelectorAll('[data-theme-btn]').forEach((b) => {
+          b.dataset.active = b.dataset.themeBtn === t ? 'true' : 'false';
+        });
+      }
+    </script>
+
+    <!-- ===== Shared toast + confirm-sheet system (lm* helpers) ===== -->
+    <div
+      id="lmToastStack"
+      class="fixed bottom-24 md:bottom-8 inset-x-0 z-[300] flex flex-col items-center gap-2 px-4 pointer-events-none"
+    ></div>
+    <div id="lmConfirmOverlay" class="fixed inset-0 z-[310] hidden">
+      <div
+        class="absolute inset-0 bg-black/50"
+        onclick="lmCloseConfirm()"
+      ></div>
+      <div
+        id="lmConfirmPanel"
+        class="absolute bottom-0 inset-x-0 max-w-[430px] mx-auto bg-white dark:bg-surf rounded-t-3xl p-6 pb-8 translate-y-full transition-transform duration-300"
+      >
+        <div
+          class="w-10 h-1.5 rounded-full bg-slate-200 dark:bg-white/10 mx-auto mb-5"
+        ></div>
+        <p id="lmConfirmTitle" class="font-bold text-lg mb-1.5">Tiêu đề</p>
+        <p
+          id="lmConfirmMsg"
+          class="text-sm text-slate-500 dark:text-slate-400 mb-5 leading-relaxed"
+        >
+          Nội dung
+        </p>
+        <div id="lmConfirmExtra"></div>
+        <div class="flex gap-3">
+          <button
+            onclick="lmCloseConfirm()"
+            class="flex-1 py-3 rounded-2xl font-bold text-sm bg-slate-100 dark:bg-surf2"
+          >
+            Huỷ
+          </button>
+          <button
+            id="lmConfirmActionBtn"
+            class="flex-1 py-3 rounded-2xl font-bold text-sm text-white bg-gradient-to-br from-irisl to-irisl"
+          >
+            Xác nhận
+          </button>
+        </div>
+      </div>
+    </div>
+    <script>
+      // Scope the overlay/toast stack to the visible app-frame (if one exists on this page)
+      // instead of the full browser viewport -- otherwise on a wide PC screen the backdrop
+      // bleeds across the whole window instead of just the app card.
+      function lmSyncFrame() {
+        var frame = document.querySelector('[data-lm-frame]');
+        var overlay = document.getElementById('lmConfirmOverlay');
+        var stack = document.getElementById('lmToastStack');
+        if (!frame) {
+          overlay.style.cssText = '';
+          stack.style.cssText = '';
+          return;
+        }
+        var r = frame.getBoundingClientRect();
+        overlay.style.cssText =
+          'position:fixed;left:' +
+          r.left +
+          'px;top:' +
+          r.top +
+          'px;width:' +
+          r.width +
+          'px;height:' +
+          r.height +
+          'px;right:auto;bottom:auto;';
+        stack.style.cssText =
+          'position:fixed;left:' +
+          r.left +
+          'px;width:' +
+          r.width +
+          'px;bottom:' +
+          (window.innerHeight - r.bottom + 24) +
+          'px;top:auto;right:auto;';
+      }
+      window.addEventListener('resize', lmSyncFrame);
+      window.addEventListener('orientationchange', lmSyncFrame);
+
+      function lmToast(msg, opts) {
+        opts = opts || {};
+        lmSyncFrame();
+        var stack = document.getElementById('lmToastStack');
+        if (!stack) return;
+        var el = document.createElement('div');
+        el.className =
+          'pointer-events-auto max-w-[92%] flex items-center gap-2 px-4 py-3 rounded-2xl shadow-xl shadow-black/10 text-sm font-semibold ' +
+          (opts.tone === 'warn'
+            ? 'bg-rose-500 text-white'
+            : 'bg-ink text-white dark:bg-white dark:text-ink');
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(8px)';
+        el.style.transition = 'all .2s ease';
+        el.innerHTML =
+          '<span>' +
+          (opts.icon || (opts.tone === 'warn' ? '⚠️' : '✓')) +
+          '</span><span>' +
+          msg +
+          '</span>';
+        stack.appendChild(el);
+        requestAnimationFrame(function () {
+          el.style.opacity = '1';
+          el.style.transform = 'translateY(0)';
+        });
+        setTimeout(function () {
+          el.style.opacity = '0';
+          el.style.transform = 'translateY(8px)';
+          setTimeout(function () {
+            el.remove();
+          }, 200);
+        }, 2600);
+      }
+      var lmConfirmCallback = null;
+      function lmConfirm(title, msg, onConfirm, opts) {
+        opts = opts || {};
+        lmSyncFrame();
+        document.getElementById('lmConfirmTitle').textContent = title;
+        document.getElementById('lmConfirmMsg').textContent = msg;
+        document.getElementById('lmConfirmExtra').innerHTML =
+          opts.extraHtml || '';
+        var btn = document.getElementById('lmConfirmActionBtn');
+        btn.textContent = opts.actionLabel || 'Xác nhận';
+        btn.className =
+          'flex-1 py-3 rounded-2xl font-bold text-sm text-white ' +
+          (opts.tone === 'danger'
+            ? 'bg-rose-500'
+            : 'bg-gradient-to-br from-irisl to-irisl');
+        lmConfirmCallback = onConfirm || null;
+        document.getElementById('lmConfirmOverlay').classList.remove('hidden');
+        requestAnimationFrame(function () {
+          document
+            .getElementById('lmConfirmPanel')
+            .classList.remove('translate-y-full');
+        });
+      }
+      function lmCloseConfirm() {
+        var panel = document.getElementById('lmConfirmPanel');
+        panel.classList.add('translate-y-full');
+        setTimeout(function () {
+          document.getElementById('lmConfirmOverlay').classList.add('hidden');
+          document.getElementById('lmConfirmActionBtn').style.display = '';
+        }, 300);
+      }
+      document
+        .getElementById('lmConfirmActionBtn')
+        .addEventListener('click', function () {
+          var cb = lmConfirmCallback;
+          lmCloseConfirm();
+          if (cb) cb();
+        });
+    </script>
+  </body>
+</html>

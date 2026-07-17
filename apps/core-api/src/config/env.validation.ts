@@ -72,6 +72,9 @@ export interface CoreApiEnv {
   SOUL_RATING_WINDOW_SECONDS: number;
   SOUL_CHAT_MESSAGE_MAX_LENGTH: number;
   FRIEND_MESSAGE_MAX_LENGTH: number;
+  STREAK_MILESTONE_DAYS: string;
+  STREAK_WARNING_HOURS: number;
+  STREAK_WARNING_CHECK_INTERVAL_MS: number;
   LIVEKIT_URL: string;
   LIVEKIT_REGION_URLS: string;
   LIVEKIT_API_URL: string;
@@ -100,9 +103,39 @@ export interface CoreApiEnv {
   NOTIFICATION_PUSH_PROVIDER: 'dev' | 'fcm';
   MOVIE_MATCH_URL_MAX_LENGTH: number;
   MOVIE_MATCH_ALLOWED_VIDEO_HOSTS: string;
+  MOVIE_MATCH_ANON_VIDEO_URLS: string;
+  MOVIE_MATCH_ANON_DURATION_SECONDS: number;
+  MOVIE_MATCH_QUEUE_MAX_WAIT_SECONDS: number;
+  MOVIE_MATCH_MESSAGE_MAX_LENGTH: number;
   PALM_MATCH_TARGET_NAME_MAX_LENGTH: number;
+  PALM_MATCH_QUEUE_MAX_WAIT_SECONDS: number;
+  PALM_MATCH_SESSION_DURATION_SECONDS: number;
   DISCOVERY_GUEST_VISIBLE: boolean;
   DISCOVERY_AGE_BUCKETS: string;
+  DISCOVERY_LOCATION_QUANTIZE_DEGREES: number;
+  DISCOVERY_LOCATION_FRESHNESS_HOURS: number;
+  DISCOVERY_NEARBY_RADIUS_KM: number;
+  DISCOVERY_DISTANCE_BUCKETS_KM: string;
+  DISCOVERY_LOCATION_UPDATE_RATE_LIMIT_PER_HOUR: number;
+  DISCOVERY_NEARBY_QUERY_RATE_LIMIT_PER_HOUR: number;
+  DISCOVERY_NEARBY_CANDIDATE_CAP: number;
+  MATCHING_INVITE_TTL_SECONDS: number;
+  MATCHING_INVITE_RATE_LIMIT_PER_HOUR: number;
+  MATCHING_INVITE_SWEEPER_INTERVAL_MS: number;
+  MOOD_STATUS_TTL_HOURS: number;
+  STORY_TTL_HOURS: number;
+  STORY_SWEEPER_INTERVAL_MS: number;
+  VIDEO_CAPTION_MAX_LENGTH: number;
+  VIDEO_MODERATION_MODE: 'pre' | 'post';
+  VIDEO_QUALIFIED_VIEW_MIN_MS: number;
+  VIDEO_UPLOAD_TIMEOUT_SECONDS: number;
+  VIDEO_SWEEPER_INTERVAL_MS: number;
+  VIDEO_REPORT_AUTOHIDE_THRESHOLD: number;
+  VIDEO_RANK_WEIGHT_VIEW: number;
+  VIDEO_RANK_WEIGHT_LIKE: number;
+  VIDEO_RANK_WEIGHT_COMMENT: number;
+  VIDEO_RANK_TIME_DECAY_HOURS: number;
+  VIDEO_RANKING_JOB_INTERVAL_MS: number;
   THROTTLE_TTL_SECONDS: number;
   THROTTLE_LIMIT: number;
 }
@@ -235,6 +268,16 @@ export const coreApiEnvSchema = Joi.object({
     .max(4000)
     .default(2000),
 
+  // Streak trò chuyện (docs/services/streak-service.md, mở rộng module friend — W2)
+  // Mốc ngày chạm milestone (realtime + notification), phân tách dấu phẩy, tăng dần
+  STREAK_MILESTONE_DAYS: Joi.string().default('3,7,14,30,50,100'),
+  // Giờ UTC trong ngày (0-23) — cron chỉ cảnh báo SAU mốc giờ này (gần hết ngày mà chưa nhắn)
+  STREAK_WARNING_HOURS: Joi.number().integer().min(0).max(23).default(20),
+  STREAK_WARNING_CHECK_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(60_000)
+    .default(3_600_000),
+
   // Calling — Giai đoạn 2 (docs/services/calling-service.md § 6); key/secret khớp livekit.yaml
   LIVEKIT_URL: Joi.string()
     .uri({ scheme: ['ws', 'wss'] })
@@ -317,9 +360,31 @@ export const coreApiEnvSchema = Joi.object({
   MOVIE_MATCH_URL_MAX_LENGTH: Joi.number().integer().min(1).default(2048),
   // Danh sách phân tách dấu phẩy — parse mảng ở service (không parse ở Joi cho đơn giản)
   MOVIE_MATCH_ALLOWED_VIDEO_HOSTS: Joi.string().default('youtube.com,youtu.be'),
+  // Flow ghép ẩn danh (movie-match.html): server chọn video từ danh sách này (phân tách dấu phẩy)
+  MOVIE_MATCH_ANON_VIDEO_URLS: Joi.string().default(
+    'https://www.youtube.com/watch?v=aqz-KE-bpKQ,https://www.youtube.com/watch?v=eRsGyueVLvQ',
+  ),
+  // 18:00 đúng timer badge mockup
+  MOVIE_MATCH_ANON_DURATION_SECONDS: Joi.number()
+    .integer()
+    .min(60)
+    .default(1080),
+  MOVIE_MATCH_QUEUE_MAX_WAIT_SECONDS: Joi.number()
+    .integer()
+    .min(10)
+    .default(120),
+  MOVIE_MATCH_MESSAGE_MAX_LENGTH: Joi.number().integer().min(1).default(500),
 
   // Palm Match — Giai đoạn 5 (docs/services/palm-match-service.md § 5)
   PALM_MATCH_TARGET_NAME_MAX_LENGTH: Joi.number().integer().min(1).default(50),
+  PALM_MATCH_QUEUE_MAX_WAIT_SECONDS: Joi.number()
+    .integer()
+    .min(10)
+    .default(120),
+  PALM_MATCH_SESSION_DURATION_SECONDS: Joi.number()
+    .integer()
+    .min(30)
+    .default(300),
 
   // Discovery — browse-only W1 (docs/services/discovery-service.md)
   // Guest chưa gắn phone/social có xuất hiện trong browse không — chặn farm guest làm loãng pool
@@ -327,6 +392,80 @@ export const coreApiEnvSchema = Joi.object({
   // Mốc tuổi tăng dần, phân tách dấu phẩy — bucket rộng, không lộ tuổi chính xác (vd 18,25,31,41
   // → 18-24, 25-30, 31-40, 41+); parse mảng ở service, không parse ở Joi cho đơn giản
   DISCOVERY_AGE_BUCKETS: Joi.string().default('18,25,31,41'),
+
+  // Nearby — W4 (docs/services/discovery-service.md § Nearby)
+  // Lưới quantize toạ độ tại nguồn (độ) — ~0.0045° xấp xỉ 500m ở vĩ độ Việt Nam (10-21°N);
+  // xấp xỉ do 1° kinh độ co lại theo cos(lat), chấp nhận sai số cho MVP (không cần PostGIS)
+  DISCOVERY_LOCATION_QUANTIZE_DEGREES: Joi.number().positive().default(0.0045),
+  // Vị trí quá hạn tự biến mất khỏi nearby (derive khi đọc, không cron dọn `user_locations`)
+  DISCOVERY_LOCATION_FRESHNESS_HOURS: Joi.number().integer().min(1).default(24),
+  // Bán kính tìm kiếm tối đa — dùng làm bounding-box prefilter trước khi tính haversine chính xác
+  DISCOVERY_NEARBY_RADIUS_KM: Joi.number().positive().default(20),
+  // Mốc khoảng cách tăng dần (km), phân tách dấu phẩy — API chỉ trả bucket, không bao giờ trả
+  // khoảng cách/toạ độ chính xác (vd 1,3,5,10,20 → "<1km", "1-3km", ... "20km+")
+  DISCOVERY_DISTANCE_BUCKETS_KM: Joi.string().default('1,3,5,10,20'),
+  // Chống spam cập nhật vị trí (rò rỉ lộ trình di chuyển) — số lần ghi vị trí tối đa/giờ
+  DISCOVERY_LOCATION_UPDATE_RATE_LIMIT_PER_HOUR: Joi.number()
+    .integer()
+    .min(1)
+    .default(12),
+  // Chống dò quét trilateration bằng nhiều truy vấn liên tiếp — số lần truy vấn nearby tối đa/giờ
+  DISCOVERY_NEARBY_QUERY_RATE_LIMIT_PER_HOUR: Joi.number()
+    .integer()
+    .min(1)
+    .default(30),
+  // Trần an toàn số candidate lấy từ DB trước khi sort/paginate ở app (MVP: bounding-box btree +
+  // haversine, không PostGIS — xem docs/services/discovery-service.md § Nearby)
+  DISCOVERY_NEARBY_CANDIDATE_CAP: Joi.number().integer().min(1).default(500),
+
+  // CTA mời Voice/Soul Match — W4, mở rộng module `matching` (docs/services/matching-service.md § Invite)
+  // Invite hết hạn nếu người nhận không phản hồi — sweeper chuyển Pending → Expired
+  MATCHING_INVITE_TTL_SECONDS: Joi.number().integer().min(30).default(3_600),
+  // Đối xứng cho mọi user (không phân biệt giới tính trong logic) — chống spam mời hàng loạt
+  MATCHING_INVITE_RATE_LIMIT_PER_HOUR: Joi.number()
+    .integer()
+    .min(1)
+    .default(10),
+  MATCHING_INVITE_SWEEPER_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(10_000)
+    .default(60_000),
+
+  // Mood — preset-only W1 (docs/services/mood-service.md)
+  // TTL mood tính từ lúc set (snapshot vào expiresAt) — hết hạn = derive khi đọc, không cron
+  MOOD_STATUS_TTL_HOURS: Joi.number().integer().min(1).default(24),
+
+  // Stories — W3 (docs/services/feed-service.md § 8)
+  // TTL story tính từ lúc tạo (snapshot vào expiresAt) — hết hạn = filter lúc đọc, sweeper chỉ dọn rác
+  STORY_TTL_HOURS: Joi.number().integer().min(1).default(24),
+  STORY_SWEEPER_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(60_000)
+    .default(3_600_000),
+
+  // Video ngắn — W5, hướng Momo (docs/services/short-video-service.md)
+  VIDEO_CAPTION_MAX_LENGTH: Joi.number().integer().min(1).default(500),
+  // pre = duyệt trước khi public (dating app VN, mặc định an toàn); post = public ngay, duyệt sau
+  VIDEO_MODERATION_MODE: Joi.string().valid('pre', 'post').default('pre'),
+  // Watch-time tối thiểu để tính 1 view "qualified" — cộng Video.viewCount đúng 1 lần khi vượt ngưỡng
+  VIDEO_QUALIFIED_VIEW_MIN_MS: Joi.number().integer().min(0).default(3_000),
+  // Video kẹt ở 'uploading' quá lâu (client bỏ dở/crash giữa chừng) → sweeper expire sang 'failed'
+  VIDEO_UPLOAD_TIMEOUT_SECONDS: Joi.number().integer().min(60).default(3_600),
+  VIDEO_SWEEPER_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(60_000)
+    .default(3_600_000),
+  // Số distinct reporter để auto-hide (published → removed) — KHÔNG phải trust-score cá nhân
+  VIDEO_REPORT_AUTOHIDE_THRESHOLD: Joi.number().integer().min(1).default(5),
+  // rankScore = view*W_VIEW + like*W_LIKE + comment*W_COMMENT, decay theo giờ kể từ createdAt
+  VIDEO_RANK_WEIGHT_VIEW: Joi.number().min(0).default(1),
+  VIDEO_RANK_WEIGHT_LIKE: Joi.number().min(0).default(3),
+  VIDEO_RANK_WEIGHT_COMMENT: Joi.number().min(0).default(5),
+  VIDEO_RANK_TIME_DECAY_HOURS: Joi.number().positive().default(48),
+  VIDEO_RANKING_JOB_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(60_000)
+    .default(1_800_000),
 
   THROTTLE_TTL_SECONDS: Joi.number().integer().min(1).default(60),
   THROTTLE_LIMIT: Joi.number().integer().min(1).default(100),

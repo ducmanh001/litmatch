@@ -31,6 +31,10 @@ import {
 } from './dto/feed.dtos';
 import { ApiCursorPageQuery } from '../../common/decorators/cursor-page-query.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import {
+  ApiIdempotencyKeyHeader,
+  IdempotencyKey,
+} from '../../common/decorators/idempotency-key.decorator';
 
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 
@@ -41,13 +45,19 @@ export class FeedController {
   constructor(private readonly feedService: FeedService) {}
 
   @HttpPost('posts')
-  @ApiOperation({ summary: 'Đăng bài — guest bị chặn (docs/06)' })
+  @ApiIdempotencyKeyHeader()
+  @ApiOperation({
+    summary: 'Đăng bài — guest bị chặn (docs/06), audience mặc định public',
+  })
   @ApiCreatedResponse({ type: PostDto })
   async createPost(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreatePostDto,
+    @IdempotencyKey() idempotencyKey: string,
   ): Promise<PostDto> {
-    return PostDto.from(await this.feedService.createPost(user, dto));
+    return PostDto.from(
+      await this.feedService.createPost(user, dto, idempotencyKey),
+    );
   }
 
   @Get('posts')
@@ -62,6 +72,23 @@ export class FeedController {
     @Query() query: CursorPageQueryDto,
   ): Promise<PostsPageDto> {
     return PostsPageDto.from(await this.feedService.listFeed(user, query));
+  }
+
+  @Get('users/:userId/posts')
+  @ApiOperation({
+    summary:
+      'Timeline 1 tác giả — audience tự khớp quan hệ (mình/bạn/người lạ), docs/services/feed-service.md § 7',
+  })
+  @ApiCursorPageQuery()
+  @ApiOkResponse({ type: PostsPageDto })
+  async listUserTimeline(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Query() query: CursorPageQueryDto,
+  ): Promise<PostsPageDto> {
+    return PostsPageDto.from(
+      await this.feedService.listUserTimeline(user, userId, query),
+    );
   }
 
   @Get('posts/:postId')

@@ -12,10 +12,18 @@ const envSchema = z.object({
   NEXT_PUBLIC_SOCKET_URL: z.url(),
   /** URL LiveKit SFU (ws://). */
   NEXT_PUBLIC_LIVEKIT_URL: z.url(),
+  /** OAuth client id (Google Identity Services) — trống = nút Google báo "chưa cấu hình". */
+  NEXT_PUBLIC_AUTH_GOOGLE_CLIENT_ID: z.string().optional(),
+  /** Service id Sign in with Apple (web) — trống = nút Apple báo "chưa cấu hình". */
+  NEXT_PUBLIC_AUTH_APPLE_CLIENT_ID: z.string().optional(),
 });
 
 export const env = envSchema.parse({
   NEXT_PUBLIC_API_URL: process.env['NEXT_PUBLIC_API_URL'],
   NEXT_PUBLIC_SOCKET_URL: process.env['NEXT_PUBLIC_SOCKET_URL'],
   NEXT_PUBLIC_LIVEKIT_URL: process.env['NEXT_PUBLIC_LIVEKIT_URL'],
+  NEXT_PUBLIC_AUTH_GOOGLE_CLIENT_ID:
+    process.env['NEXT_PUBLIC_AUTH_GOOGLE_CLIENT_ID'] || undefined,
+  NEXT_PUBLIC_AUTH_APPLE_CLIENT_ID:
+    process.env['NEXT_PUBLIC_AUTH_APPLE_CLIENT_ID'] || undefined,
 });

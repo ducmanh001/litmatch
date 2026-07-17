@@ -1,6 +1,7 @@
 import { DomainException } from '@litmatch/common-exceptions';
 
-import { FriendService, canonicalPair } from './friend.service';
+import { canonicalPair } from '../../common/entities/canonical-pair';
+import { FriendService } from './friend.service';
 import { FriendErrors } from './friend.errors';
 import { Conversation } from './entities/conversation.entity';
 import { Message } from './entities/message.entity';
@@ -12,6 +13,7 @@ import type { EntityManager, Repository } from 'typeorm';
 import type { CoreApiEnv } from '../../config/env.validation';
 import type { Friendship } from './entities/friendship.entity';
 import type { ConversationService } from './services/conversation.service';
+import type { StreakService } from './services/streak.service';
 
 const USER_A = 'user-a';
 const USER_B = 'user-b';
@@ -36,6 +38,7 @@ function makeConversation(overrides: Partial<Conversation> = {}): Conversation {
 
 describe('FriendService (unit — mock repo/conversationService/redis)', () => {
   let friendshipRepo: { exists: jest.Mock; createQueryBuilder: jest.Mock };
+  let memberStateRepo: { findOne: jest.Mock; createQueryBuilder: jest.Mock };
   let conversationService: {
     findByPair: jest.Mock;
     findById: jest.Mock;
@@ -44,12 +47,18 @@ describe('FriendService (unit — mock repo/conversationService/redis)', () => {
   };
   let safetyService: { isBlocked: jest.Mock };
   let notificationService: { create: jest.Mock; sendPush: jest.Mock };
+  let streakService: { recordActivity: jest.Mock };
   let redis: { publish: jest.Mock };
   let service: FriendService;
 
   beforeEach(() => {
     friendshipRepo = {
       exists: jest.fn(async () => true),
+      createQueryBuilder: jest.fn(),
+    };
+    // Mặc định: chưa có member state (chưa đọc/mute gì) — test mute override findOne.
+    memberStateRepo = {
+      findOne: jest.fn(async () => null),
       createQueryBuilder: jest.fn(),
     };
     safetyService = { isBlocked: jest.fn(async () => false) };
@@ -74,10 +83,18 @@ describe('FriendService (unit — mock repo/conversationService/redis)', () => {
         meta: { nextCursor: null },
       })),
     };
+    streakService = {
+      recordActivity: jest.fn(async () => ({
+        streak: {},
+        milestoneHit: null,
+      })),
+    };
     redis = { publish: jest.fn(async () => 1) };
     service = new FriendService(
       friendshipRepo as unknown as Repository<Friendship>,
+      memberStateRepo as never,
       conversationService as unknown as ConversationService,
+      streakService as unknown as StreakService,
       safetyService as never,
       notificationService as never,
       configStub,
@@ -270,6 +287,61 @@ describe('FriendService (unit — mock repo/conversationService/redis)', () => {
         expect(c.envelope.data.senderUserId).toBe(USER_A); // không che, khác Soul Match
         expect(c.envelope.data.content).toBe('xin chào');
       }
+    });
+
+    it('gọi streakService.recordActivity SAU KHI message đã persist', async () => {
+      await service.sendMessage(USER_A, 'conv-1', 'hi', 'k1');
+      expect(streakService.recordActivity).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'conv-1' }),
+        USER_A,
+      );
+    });
+
+    it('trúng milestone → publish thêm friend.streak.increased cho CẢ 2', async () => {
+      streakService.recordActivity.mockResolvedValue({
+        streak: {},
+        milestoneHit: 7,
+      });
+      await service.sendMessage(USER_A, 'conv-1', 'hi', 'k1');
+      // 2 lần cho friend.message + 2 lần cho friend.streak.increased
+      expect(redis.publish).toHaveBeenCalledTimes(4);
+      const streakCalls = redis.publish.mock.calls
+        .map(([, raw]: [string, string]) => JSON.parse(raw))
+        .filter(
+          (e: { event: string }) => e.event === 'friend.streak.increased',
+        );
+      expect(streakCalls).toHaveLength(2);
+      expect(streakCalls[0].data).toEqual({
+        conversationId: 'conv-1',
+        currentStreak: 7,
+      });
+    });
+
+    it('streakService lỗi → KHÔNG làm fail message đã gửi thành công', async () => {
+      streakService.recordActivity.mockRejectedValue(new Error('boom'));
+      const message = await service.sendMessage(USER_A, 'conv-1', 'hi', 'k1');
+      expect(message.id).toBe('msg-1');
+    });
+
+    it('người nhận đã mute → KHÔNG tạo notification, message vẫn gửi + realtime đủ 2 bên', async () => {
+      memberStateRepo.findOne.mockResolvedValue({
+        conversationId: 'conv-1',
+        userId: USER_B,
+        lastReadAt: null,
+        mutedAt: new Date(),
+      });
+      const message = await service.sendMessage(USER_A, 'conv-1', 'hi', 'k1');
+      expect(message.id).toBe('msg-1');
+      expect(redis.publish).toHaveBeenCalledTimes(2);
+      expect(notificationService.create).not.toHaveBeenCalled();
+    });
+
+    it('người nhận không mute → vẫn tạo notification như cũ', async () => {
+      const message = await service.sendMessage(USER_A, 'conv-1', 'hi', 'k1');
+      expect(message.id).toBe('msg-1');
+      expect(notificationService.create).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: USER_B }),
+      );
     });
   });
 });

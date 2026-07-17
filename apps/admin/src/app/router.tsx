@@ -67,6 +67,30 @@ export const router = createBrowserRouter([
                   ).EconomyPage,
                 }),
               },
+              {
+                path: 'rooms',
+                lazy: async () => ({
+                  Component: (
+                    await import('../features/rooms/pages/rooms-page')
+                  ).RoomsPage,
+                }),
+              },
+              {
+                path: 'config',
+                lazy: async () => ({
+                  Component: (
+                    await import('../features/config/pages/config-page')
+                  ).ConfigPage,
+                }),
+              },
+              {
+                path: 'permissions',
+                lazy: async () => ({
+                  Component: (
+                    await import('../features/permissions/pages/permissions-page')
+                  ).PermissionsPage,
+                }),
+              },
             ],
           },
         ],

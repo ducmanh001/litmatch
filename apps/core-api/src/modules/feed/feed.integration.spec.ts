@@ -2,18 +2,39 @@ import { DataSource } from 'typeorm';
 
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
 import { InitAuthUser1751900000000 } from '../../database/migrations/1751900000000-init-auth-user';
+import { UserProfilePreferences1755800000000 } from '../../database/migrations/1755800000000-user-profile-preferences';
 import { UserRole1753600000000 } from '../../database/migrations/1753600000000-user-role';
 import { MatchingCore1752200000000 } from '../../database/migrations/1752200000000-matching-core';
 import { MatchingGenderPreference1752300000000 } from '../../database/migrations/1752300000000-matching-gender-preference';
+import { SoulMatch1752400000000 } from '../../database/migrations/1752400000000-soul-match';
+import { FriendChat1752600000000 } from '../../database/migrations/1752600000000-friend-chat';
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
+import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
 import { Feed1752900000000 } from '../../database/migrations/1752900000000-feed';
 import { Notification1753000000000 } from '../../database/migrations/1753000000000-notification';
+import { ConversationStreak1754200000000 } from '../../database/migrations/1754200000000-conversation-streak';
+import { FeedAudience1754300000000 } from '../../database/migrations/1754300000000-feed-audience';
+import { MessageAttachment1754400000000 } from '../../database/migrations/1754400000000-message-attachment';
+import { Story1754500000000 } from '../../database/migrations/1754500000000-story';
 
 import { FeedService } from './feed.service';
 import { FeedErrors } from './feed.errors';
 import { Comment } from './entities/comment.entity';
-import { Post } from './entities/post.entity';
+import { Post, PostAudience } from './entities/post.entity';
 import { Reaction } from './entities/reaction.entity';
+import { Story, StoryAudience } from './entities/story.entity';
+import { StoryView } from './entities/story-view.entity';
+import { StoryService } from './services/story.service';
+import { Conversation } from '../friend/entities/conversation.entity';
+import { ConversationStreak } from '../friend/entities/conversation-streak.entity';
+import {
+  Friendship,
+  FriendshipSource,
+} from '../friend/entities/friendship.entity';
+import { Message } from '../friend/entities/message.entity';
+import { FriendService } from '../friend/friend.service';
+import { ConversationService } from '../friend/services/conversation.service';
+import { StreakService } from '../friend/services/streak.service';
 import { NotificationService } from '../notification';
 import {
   Notification,
@@ -49,6 +70,10 @@ const CONFIG: Record<string, unknown> = {
   SAFETY_TRUST_PENALTY_PER_REPORT: 5,
   SAFETY_TRUST_PENALTY_DAILY_CAP: 20,
   SAFETY_TRUST_SCORE_FLOOR: 0,
+  FRIEND_MESSAGE_MAX_LENGTH: 2000,
+  STREAK_MILESTONE_DAYS: '3,7,14,30,50,100',
+  STREAK_WARNING_HOURS: 0,
+  STORY_TTL_HOURS: 24,
 };
 const configStub = {
   getOrThrow: (key: string) => {
@@ -62,6 +87,8 @@ d('Feed integration (Postgres thật)', () => {
   let feed: FeedService;
   let safety: SafetyService;
   let notification: NotificationService;
+  let friend: FriendService;
+  let story: StoryService;
 
   async function createUser(nickname: string, isGuest = false): Promise<User> {
     const repo = ds.getRepository(User);
@@ -74,6 +101,12 @@ d('Feed integration (Postgres thật)', () => {
         birthDate: '2000-01-01',
         gender: Gender.Unknown,
       }),
+    );
+  }
+
+  async function makeFriends(a: User, b: User): Promise<void> {
+    await ds.transaction((manager) =>
+      friend.ensureFriendship(manager, a.id, b.id, FriendshipSource.SoulMatch),
     );
   }
 
@@ -99,15 +132,37 @@ d('Feed integration (Postgres thật)', () => {
     ds = new DataSource({
       type: 'postgres',
       url: url.toString(),
-      entities: [User, Report, Block, Post, Comment, Reaction, Notification],
+      entities: [
+        User,
+        Report,
+        Block,
+        Post,
+        Comment,
+        Reaction,
+        Notification,
+        Friendship,
+        Conversation,
+        Message,
+        ConversationStreak,
+        Story,
+        StoryView,
+      ],
       migrations: [
         InitAuthUser1751900000000,
+        UserProfilePreferences1755800000000,
         UserRole1753600000000,
         MatchingCore1752200000000,
         MatchingGenderPreference1752300000000,
+        SoulMatch1752400000000,
+        FriendChat1752600000000,
         Safety1752800000000,
+        ReportTargetVideo1754900000000,
         Feed1752900000000,
         Notification1753000000000,
+        ConversationStreak1754200000000,
+        FeedAudience1754300000000,
+        MessageAttachment1754400000000,
+        Story1754500000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -130,13 +185,42 @@ d('Feed integration (Postgres thật)', () => {
     notification = new NotificationService(ds.getRepository(Notification), {
       send: async () => undefined,
     } as never);
+    const conversationService = new ConversationService(
+      ds.getRepository(Conversation),
+      ds.getRepository(Message),
+    );
+    const streakService = new StreakService(
+      ds,
+      ds.getRepository(ConversationStreak),
+      configStub,
+    );
+    friend = new FriendService(
+      ds.getRepository(Friendship),
+      // member state (read/mute) không dùng ở suite này — stub rỗng
+      { findOne: async () => null } as never,
+      conversationService,
+      streakService,
+      safety,
+      notification as never,
+      configStub,
+      // stub publish — realtime friend.message/streak không phải trọng tâm suite này
+      { publish: async () => 1 } as never,
+    );
     feed = new FeedService(
       ds,
       ds.getRepository(Post),
       ds.getRepository(Comment),
       ds.getRepository(Reaction),
       safety,
+      friend,
       notification,
+    );
+    story = new StoryService(
+      ds.getRepository(Story),
+      ds.getRepository(StoryView),
+      friend,
+      safety,
+      configStub,
     );
   });
 
@@ -154,6 +238,7 @@ d('Feed integration (Postgres thật)', () => {
       {
         content: 'bài của B',
       },
+      'k-block',
     );
 
     // Trước khi block: A thấy bình thường
@@ -196,12 +281,14 @@ d('Feed integration (Postgres thật)', () => {
       {
         content: 'công khai',
       },
+      'k-guest',
     );
 
     await expect(
       feed.createPost(
         { userId: guestUser.id, isGuest: true, role: 'user' },
         { content: 'x' },
+        'k-guest-2',
       ),
     ).rejects.toMatchObject({ code: FeedErrors.GUEST_FORBIDDEN });
     await expect(
@@ -232,6 +319,7 @@ d('Feed integration (Postgres thật)', () => {
       {
         content: 'race test',
       },
+      'k-race',
     );
     const user = { userId: liker.id, isGuest: false, role: 'user' } as const;
 
@@ -265,6 +353,7 @@ d('Feed integration (Postgres thật)', () => {
       {
         content: 'toggle test',
       },
+      'k-toggle',
     );
     const user = { userId: liker.id, isGuest: false, role: 'user' } as const;
 
@@ -287,6 +376,7 @@ d('Feed integration (Postgres thật)', () => {
       {
         content: 'cmt test',
       },
+      'k-cmt',
     );
     const authorUser = {
       userId: author.id,
@@ -342,6 +432,7 @@ d('Feed integration (Postgres thật)', () => {
       {
         content: 'owner post',
       },
+      'k-idor',
     );
     const comment = await feed.createComment(
       { userId: owner.id, isGuest: false, role: 'user' },
@@ -361,5 +452,360 @@ d('Feed integration (Postgres thật)', () => {
         comment.id,
       ),
     ).rejects.toMatchObject({ code: FeedErrors.COMMENT_NOT_FOUND });
+  });
+
+  it('idempotency-key trùng (retry mạng) → không tạo 2 bài, trả lại post cũ', async () => {
+    const author = await createUser('idem-author');
+    const user = { userId: author.id, isGuest: false, role: 'user' } as const;
+
+    const first = await feed.createPost(
+      user,
+      { content: 'idem test' },
+      'same-key',
+    );
+    const second = await feed.createPost(
+      user,
+      { content: 'idem test' },
+      'same-key',
+    );
+    expect(second.id).toBe(first.id);
+
+    const count = await ds
+      .getRepository(Post)
+      .countBy({ authorUserId: author.id });
+    expect(count).toBe(1);
+  });
+
+  it('idempotency-key trùng nhưng nội dung khác → 409, không tạo bài mới', async () => {
+    const author = await createUser('idem-conflict-author');
+    const user = { userId: author.id, isGuest: false, role: 'user' } as const;
+
+    await feed.createPost(user, { content: 'bản gốc' }, 'same-key-2');
+    await expect(
+      feed.createPost(user, { content: 'bản khác' }, 'same-key-2'),
+    ).rejects.toMatchObject({ code: FeedErrors.POST_IDEMPOTENCY_CONFLICT });
+  });
+
+  it('audience: feed toàn cục CHỈ hiện public — bài friends/only_me không lộ ra', async () => {
+    const author = await createUser('aud-author');
+    const stranger = await createUser('aud-stranger');
+    const publicPost = await feed.createPost(
+      { userId: author.id, isGuest: false, role: 'user' },
+      { content: 'public', audience: PostAudience.Public },
+      'k-aud-public',
+    );
+    const friendsPost = await feed.createPost(
+      { userId: author.id, isGuest: false, role: 'user' },
+      { content: 'friends only', audience: PostAudience.Friends },
+      'k-aud-friends',
+    );
+    const onlyMePost = await feed.createPost(
+      { userId: author.id, isGuest: false, role: 'user' },
+      { content: 'chi minh', audience: PostAudience.OnlyMe },
+      'k-aud-only-me',
+    );
+
+    const page = await feed.listFeed(
+      { userId: stranger.id, isGuest: false, role: 'user' },
+      { limit: 20 },
+    );
+    const ids = page.items.map((p) => p.id);
+    expect(ids).toContain(publicPost.id);
+    expect(ids).not.toContain(friendsPost.id);
+    expect(ids).not.toContain(onlyMePost.id);
+  });
+
+  it('audience friends: người lạ không thấy, bạn bè thấy được, tác giả luôn thấy hết qua timeline', async () => {
+    const author = await createUser('tl-author');
+    const friendUser = await createUser('tl-friend');
+    const stranger = await createUser('tl-stranger');
+    await makeFriends(author, friendUser);
+
+    const publicPost = await feed.createPost(
+      { userId: author.id, isGuest: false, role: 'user' },
+      { content: 'public', audience: PostAudience.Public },
+      'k-tl-public',
+    );
+    const friendsPost = await feed.createPost(
+      { userId: author.id, isGuest: false, role: 'user' },
+      { content: 'friends only', audience: PostAudience.Friends },
+      'k-tl-friends',
+    );
+    const onlyMePost = await feed.createPost(
+      { userId: author.id, isGuest: false, role: 'user' },
+      { content: 'chi minh', audience: PostAudience.OnlyMe },
+      'k-tl-only-me',
+    );
+
+    const strangerView = await feed.listUserTimeline(
+      { userId: stranger.id, isGuest: false, role: 'user' },
+      author.id,
+      { limit: 20 },
+    );
+    expect(strangerView.items.map((p) => p.id)).toEqual([publicPost.id]);
+
+    const friendView = await feed.listUserTimeline(
+      { userId: friendUser.id, isGuest: false, role: 'user' },
+      author.id,
+      { limit: 20 },
+    );
+    expect(friendView.items.map((p) => p.id).sort()).toEqual(
+      [publicPost.id, friendsPost.id].sort(),
+    );
+
+    const selfView = await feed.listUserTimeline(
+      { userId: author.id, isGuest: false, role: 'user' },
+      author.id,
+      { limit: 20 },
+    );
+    expect(selfView.items.map((p) => p.id).sort()).toEqual(
+      [publicPost.id, friendsPost.id, onlyMePost.id].sort(),
+    );
+
+    // Đi thẳng URL GET /posts/:id cũng bị chặn audience, không riêng gì timeline
+    await expect(
+      feed.getPostOrThrow(
+        { userId: stranger.id, isGuest: false, role: 'user' },
+        onlyMePost.id,
+      ),
+    ).rejects.toMatchObject({ code: FeedErrors.POST_NOT_FOUND });
+  });
+
+  it('timeline: block 2 chiều → trả rỗng dù có bài public (giống hệt 0 bài, không lộ block)', async () => {
+    const author = await createUser('tl-block-author');
+    const blocker = await createUser('tl-block-viewer');
+    await feed.createPost(
+      { userId: author.id, isGuest: false, role: 'user' },
+      { content: 'public' },
+      'k-tl-block',
+    );
+    await safety.block(blocker.id, author.id);
+
+    const page = await feed.listUserTimeline(
+      { userId: blocker.id, isGuest: false, role: 'user' },
+      author.id,
+      { limit: 20 },
+    );
+    expect(page.items).toHaveLength(0);
+  });
+
+  describe('stories (docs/services/feed-service.md § 8)', () => {
+    it('ring: chỉ thấy story của mình + bạn bè, không thấy người lạ', async () => {
+      const [me, friendUser, stranger] = await Promise.all([
+        createUser('st-ring-me'),
+        createUser('st-ring-friend'),
+        createUser('st-ring-stranger'),
+      ]);
+      await makeFriends(me, friendUser);
+      const meUser = { userId: me.id, isGuest: false, role: 'user' } as const;
+
+      const myStory = await story.createStory(
+        meUser,
+        { mediaUrl: 'https://cdn.example/me.jpg' },
+        'k-ring-me',
+      );
+      const friendStory = await story.createStory(
+        { userId: friendUser.id, isGuest: false, role: 'user' },
+        { mediaUrl: 'https://cdn.example/friend.jpg' },
+        'k-ring-friend',
+      );
+      await story.createStory(
+        { userId: stranger.id, isGuest: false, role: 'user' },
+        { mediaUrl: 'https://cdn.example/stranger.jpg' },
+        'k-ring-stranger',
+      );
+
+      const ring = await story.getRing(meUser);
+      const ids = ring.map((s) => s.id);
+      expect(ids).toContain(myStory.id);
+      expect(ids).toContain(friendStory.id);
+      expect(ids).toHaveLength(2);
+    });
+
+    it('idempotency-key trùng cùng mediaUrl → trả lại story cũ, không tạo đôi', async () => {
+      const author = await createUser('st-idem-author');
+      const user = { userId: author.id, isGuest: false, role: 'user' } as const;
+      const first = await story.createStory(
+        user,
+        { mediaUrl: 'https://cdn.example/idem.jpg' },
+        'same-key',
+      );
+      const second = await story.createStory(
+        user,
+        { mediaUrl: 'https://cdn.example/idem.jpg' },
+        'same-key',
+      );
+      expect(second.id).toBe(first.id);
+      const count = await ds
+        .getRepository(Story)
+        .countBy({ authorUserId: author.id });
+      expect(count).toBe(1);
+    });
+
+    it('audience=friends: người lạ trực tiếp GET /:id → 404; bạn bè xem được', async () => {
+      const [author, friendUser, stranger] = await Promise.all([
+        createUser('st-view-author'),
+        createUser('st-view-friend'),
+        createUser('st-view-stranger'),
+      ]);
+      await makeFriends(author, friendUser);
+      const s = await story.createStory(
+        { userId: author.id, isGuest: false, role: 'user' },
+        {
+          mediaUrl: 'https://cdn.example/v.jpg',
+          audience: StoryAudience.Friends,
+        },
+        'k-view',
+      );
+
+      await expect(
+        story.getStoryOrThrow(
+          { userId: stranger.id, isGuest: false, role: 'user' },
+          s.id,
+        ),
+      ).rejects.toMatchObject({ code: FeedErrors.STORY_NOT_FOUND });
+
+      const seen = await story.viewStory(
+        { userId: friendUser.id, isGuest: false, role: 'user' },
+        s.id,
+      );
+      expect(seen.id).toBe(s.id);
+    });
+
+    it('story hết hạn (giả lập expiresAt quá khứ) → 404 dù đúng audience', async () => {
+      const author = await createUser('st-expired-author');
+      const s = await story.createStory(
+        { userId: author.id, isGuest: false, role: 'user' },
+        { mediaUrl: 'https://cdn.example/exp.jpg' },
+        'k-expired',
+      );
+      await ds
+        .getRepository(Story)
+        .update({ id: s.id }, { expiresAt: new Date(Date.now() - 1000) });
+
+      await expect(
+        story.getStoryOrThrow(
+          { userId: author.id, isGuest: false, role: 'user' },
+          s.id,
+        ),
+      ).rejects.toMatchObject({ code: FeedErrors.STORY_NOT_FOUND });
+    });
+
+    it('self-view không tạo StoryView, view người khác thì có + tác giả xem được viewers', async () => {
+      const [author, viewer] = await Promise.all([
+        createUser('st-viewers-author'),
+        createUser('st-viewers-viewer'),
+      ]);
+      await makeFriends(author, viewer);
+      const authorUser = {
+        userId: author.id,
+        isGuest: false,
+        role: 'user',
+      } as const;
+      const s = await story.createStory(
+        authorUser,
+        { mediaUrl: 'https://cdn.example/vw.jpg' },
+        'k-viewers',
+      );
+
+      await story.viewStory(authorUser, s.id); // tự xem — không đếm
+      await story.viewStory(
+        { userId: viewer.id, isGuest: false, role: 'user' },
+        s.id,
+      );
+      await story.viewStory(
+        { userId: viewer.id, isGuest: false, role: 'user' },
+        s.id,
+      ); // xem lại — idempotent
+
+      const viewerIds = await story.listViewers(authorUser, s.id);
+      expect(viewerIds).toEqual([viewer.id]);
+
+      const viewCount = await ds
+        .getRepository(StoryView)
+        .countBy({ storyId: s.id });
+      expect(viewCount).toBe(1);
+    });
+
+    it('listViewers lọc bỏ viewer đã bị tác giả block SAU KHI xem (lọc lúc đọc)', async () => {
+      const [author, viewer] = await Promise.all([
+        createUser('st-viewers-block-author'),
+        createUser('st-viewers-block-viewer'),
+      ]);
+      await makeFriends(author, viewer);
+      const authorUser = {
+        userId: author.id,
+        isGuest: false,
+        role: 'user',
+      } as const;
+      const s = await story.createStory(
+        authorUser,
+        { mediaUrl: 'https://cdn.example/vwb.jpg' },
+        'k-viewers-block',
+      );
+      await story.viewStory(
+        { userId: viewer.id, isGuest: false, role: 'user' },
+        s.id,
+      );
+
+      await safety.block(author.id, viewer.id);
+      const viewerIds = await story.listViewers(authorUser, s.id);
+      expect(viewerIds).toEqual([]);
+    });
+
+    it('reply story → DM thật qua FriendService, attachment snapshot mediaUrl', async () => {
+      const [author, friendUser] = await Promise.all([
+        createUser('st-reply-author'),
+        createUser('st-reply-friend'),
+      ]);
+      await makeFriends(author, friendUser);
+      const s = await story.createStory(
+        { userId: author.id, isGuest: false, role: 'user' },
+        { mediaUrl: 'https://cdn.example/reply.jpg' },
+        'k-reply-story',
+      );
+
+      const message = await story.replyToStory(
+        { userId: friendUser.id, isGuest: false, role: 'user' },
+        s.id,
+        'story dep qua',
+        'k-reply-msg',
+      );
+      expect(message.attachment).toEqual({
+        kind: 'story_reply',
+        payload: { storyId: s.id, mediaUrl: 'https://cdn.example/reply.jpg' },
+      });
+
+      // Đi trọn pipeline Friend Chat thật — message thật sự nằm trong conversation của 2 người
+      const conv = await friend.getConversationWithFriend(
+        author.id,
+        friendUser.id,
+      );
+      const page = await friend.listMessages(author.id, conv.id, 20);
+      expect(page.items.map((m) => m.id)).toContain(message.id);
+    });
+
+    it('block 2 chiều → getStoryOrThrow 404 dù đúng audience/còn hạn', async () => {
+      const [author, blocker] = await Promise.all([
+        createUser('st-block-author'),
+        createUser('st-block-viewer'),
+      ]);
+      const s = await story.createStory(
+        { userId: author.id, isGuest: false, role: 'user' },
+        {
+          mediaUrl: 'https://cdn.example/blk.jpg',
+          audience: StoryAudience.Public,
+        },
+        'k-story-block',
+      );
+      await safety.block(blocker.id, author.id);
+
+      await expect(
+        story.getStoryOrThrow(
+          { userId: blocker.id, isGuest: false, role: 'user' },
+          s.id,
+        ),
+      ).rejects.toMatchObject({ code: FeedErrors.STORY_NOT_FOUND });
+    });
   });
 });

@@ -11,8 +11,8 @@ export default async function PartyRoomPage({
 }) {
   const { roomId } = await params;
   return (
-    <section className="mx-auto max-w-md space-y-4">
+    <div className="mx-auto w-full max-w-xl min-w-0">
       <PartyStage roomId={roomId} />
-    </section>
+    </div>
   );
 }

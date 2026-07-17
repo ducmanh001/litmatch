@@ -21,6 +21,8 @@ import {
   IapProductDto,
   PurchaseVipDto,
   VerifyIapDto,
+  VipPlanDto,
+  VipPurchaseResultDto,
   WalletDto,
 } from './dto/economy.dtos';
 import { ApiCursorPageQuery } from '../../common/decorators/cursor-page-query.decorator';
@@ -52,6 +54,13 @@ export class EconomyController {
     return this.economyService.listIapProducts();
   }
 
+  @Get('vip/plans')
+  @ApiOperation({ summary: 'Catalog gói VIP đang bán (active)' })
+  @ApiOkResponse({ type: VipPlanDto, isArray: true })
+  listVipPlans(): Promise<VipPlanDto[]> {
+    return this.economyService.listVipPlans();
+  }
+
   @Post('iap/verify')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 10, ttl: minutes(1) } })
@@ -74,11 +83,12 @@ export class EconomyController {
   @ApiOperation({
     summary: 'Mua VIP bằng diamond — gia hạn cộng dồn nếu đang active',
   })
+  @ApiOkResponse({ type: VipPurchaseResultDto })
   purchaseVip(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: PurchaseVipDto,
     @IdempotencyKey() idempotencyKey: string,
-  ) {
+  ): Promise<VipPurchaseResultDto> {
     return this.economyService.purchaseVip(
       user.userId,
       dto.planId,

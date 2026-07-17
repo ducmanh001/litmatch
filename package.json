@@ -9,6 +9,12 @@
   },
   "scripts": {
     "bootstrap": "pnpm install --frozen-lockfile && pnpm infra:up && pnpm db:migrate && pnpm doctor",
+    "dev:up": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d",
+    "dev:rebuild": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build",
+    "dev:down": "docker compose -f docker-compose.yml -f docker-compose.dev.yml down --remove-orphans",
+    "dev:logs": "docker compose -f docker-compose.yml -f docker-compose.dev.yml logs --follow --tail=200",
+    "dev:ps": "docker compose -f docker-compose.yml -f docker-compose.dev.yml ps",
+    "dev:install": "docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm deps",
     "build": "nx run-many -t build",
     "test": "nx run-many -t test",
     "lint": "nx run-many -t lint",

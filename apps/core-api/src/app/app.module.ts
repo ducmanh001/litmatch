@@ -27,12 +27,15 @@ import { FriendModule } from '../modules/friend';
 import { GiftModule } from '../modules/gift';
 import { MatchingModule } from '../modules/matching';
 import { MiniGameModule } from '../modules/mini-game';
+import { MoodModule } from '../modules/mood';
 import { MovieMatchModule } from '../modules/movie-match';
 import { NotificationModule } from '../modules/notification';
 import { PalmMatchModule } from '../modules/palm-match';
 import { PartyRoomModule } from '../modules/party-room';
 import { SafetyModule } from '../modules/safety';
+import { ShortVideoModule } from '../modules/short-video';
 import { SoulMatchModule } from '../modules/soul-match';
+import { SupportModule } from '../modules/support';
 import { UserModule } from '../modules/user';
 
 import { HealthController } from './health.controller';
@@ -94,6 +97,9 @@ import { ReadinessService } from './readiness.service';
     MiniGameModule,
     AdminModule,
     DiscoveryModule,
+    MoodModule,
+    ShortVideoModule,
+    SupportModule,
   ],
   controllers: [HealthController],
   providers: [

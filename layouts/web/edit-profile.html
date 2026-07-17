@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="vi" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Litmatch — Chỉnh sửa hồ sơ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        --ink: 27 20 32;
+        --surf: 36 27 41;
+        --surf2: 74 46 69;
+        --paper: 251 243 239;
+        --iris: 232 87 124;
+        --irisl: 232 87 124;
+        --aqua: 242 166 90;
+        --aqual: 242 166 90;
+        --diamond: 79 195 217;
+      }
+      html[data-theme='orange'] {
+        --ink: 16 11 9;
+        --surf: 29 22 19;
+        --surf2: 42 33 29;
+        --paper: 248 244 242;
+        --iris: 232 67 31;
+        --irisl: 255 90 54;
+        --aqua: 224 136 21;
+        --aqual: 245 164 40;
+      }
+      .theme-dot {
+        transition: transform 0.15s ease;
+      }
+      .theme-dot[data-active='true'] {
+        box-shadow:
+          0 0 0 2px rgb(var(--paper)),
+          0 0 0 3px rgb(var(--irisl));
+      }
+    </style>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              ink: 'rgb(var(--ink) / <alpha-value>)',
+              surf: 'rgb(var(--surf) / <alpha-value>)',
+              surf2: 'rgb(var(--surf2) / <alpha-value>)',
+              paper: 'rgb(var(--paper) / <alpha-value>)',
+              iris: 'rgb(var(--iris) / <alpha-value>)',
+              irisl: 'rgb(var(--irisl) / <alpha-value>)',
+              aqua: 'rgb(var(--aqua) / <alpha-value>)',
+              aqual: 'rgb(var(--aqual) / <alpha-value>)',
+              diamond: 'rgb(var(--diamond) / <alpha-value>)',
+            },
+            fontFamily: {
+              display: ['Fraunces', 'serif'],
+              body: ['"Be Vietnam Pro"', 'sans-serif'],
+              mono: ['"IBM Plex Mono"', 'monospace'],
+            },
+          },
+        },
+      };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;1,500;1,600&family=Be+Vietnam+Pro:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: 'Be Vietnam Pro', sans-serif;
+      }
+      .font-display {
+        font-family: 'Fraunces', serif;
+      }
+      .pill[data-on='true'] {
+        background: rgb(var(--irisl));
+        color: #fff;
+        border-color: transparent;
+      }
+      .pill[data-on='false'] {
+        background: transparent;
+      }
+    </style>
+  </head>
+  <body
+    class="bg-paper dark:bg-ink md:bg-slate-100 md:dark:bg-black text-slate-900 dark:text-slate-50 transition-colors duration-300"
+  >
+    <div
+      data-lm-frame
+      class="max-w-[430px] md:max-w-xl mx-auto min-h-screen relative pb-10 md:my-6 md:rounded-[2rem] md:border md:border-black/10 md:dark:border-white/10 md:shadow-2xl md:shadow-black/10 md:overflow-hidden bg-paper dark:bg-ink"
+    >
+      <div class="flex justify-end px-5 pt-3">
+        <div
+          class="flex items-center gap-1.5 bg-white dark:bg-surf border border-black/5 dark:border-white/10 rounded-full p-1.5"
+          role="group"
+          aria-label="Chọn giao diện màu"
+        >
+          <button
+            onclick="setTheme('pink')"
+            data-theme-btn="pink"
+            data-active="true"
+            class="theme-dot w-4 h-4 rounded-full"
+            style="background: #e8577c"
+            aria-label="Giao diện hồng"
+          ></button>
+          <button
+            onclick="setTheme('orange')"
+            data-theme-btn="orange"
+            data-active="false"
+            class="theme-dot w-4 h-4 rounded-full"
+            style="background: linear-gradient(135deg, #ff5a36, #e08815)"
+            aria-label="Giao diện cam"
+          ></button>
+          <button
+            onclick="setTheme('white')"
+            data-theme-btn="white"
+            data-active="false"
+            class="theme-dot w-4 h-4 rounded-full border border-black/10"
+            style="background: #fbf3ef"
+            aria-label="Giao diện trắng"
+          ></button>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between px-5 pt-2 pb-4">
+        <a
+          href="profile.html"
+          class="w-9 h-9 rounded-full bg-slate-100 dark:bg-surf2 flex items-center justify-center"
+          ><svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+          >
+            <path
+              d="M15 18l-6-6 6-6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            /></svg
+        ></a>
+        <h1 class="font-display italic font-semibold text-xl">
+          Chỉnh sửa hồ sơ
+        </h1>
+        <button
+          onclick="saveProfile()"
+          class="text-sm font-bold text-irisl px-2"
+        >
+          Lưu
+        </button>
+      </div>
+
+      <div class="flex flex-col items-center mb-6">
+        <div class="relative w-24 h-24">
+          <img
+            src="https://api.dicebear.com/7.x/adventurer/svg?seed=Minh"
+            class="w-24 h-24 rounded-full border-4 border-paper dark:border-ink bg-surf2"
+          />
+          <button
+            class="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-irisl text-white flex items-center justify-center border-2 border-paper dark:border-ink"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="white"
+              stroke-width="2.5"
+            >
+              <path
+                d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+        <button class="text-sm font-bold text-irisl mt-3">
+          Đổi ảnh đại diện
+        </button>
+      </div>
+
+      <div class="px-5 space-y-5">
+        <div>
+          <label
+            class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2 block"
+            >Tên hiển thị</label
+          >
+          <input
+            type="text"
+            value="Minh"
+            class="w-full bg-white dark:bg-surf border border-black/5 dark:border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-irisl"
+          />
+        </div>
+
+        <div>
+          <label
+            class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2 block"
+            >Ngày sinh</label
+          >
+          <input
+            type="text"
+            value="14/03/1999"
+            class="w-full bg-white dark:bg-surf border border-black/5 dark:border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-irisl"
+          />
+        </div>
+
+        <div>
+          <label
+            class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2 block"
+            >Giới tính</label
+          >
+          <div class="flex gap-2">
+            <button
+              onclick="selectPill(this, 'gender')"
+              data-pill-group="gender"
+              class="pill flex-1 border border-black/10 dark:border-white/10 rounded-full py-2.5 text-sm font-semibold"
+              data-on="false"
+            >
+              Nữ
+            </button>
+            <button
+              onclick="selectPill(this, 'gender')"
+              data-pill-group="gender"
+              class="pill flex-1 border border-black/10 dark:border-white/10 rounded-full py-2.5 text-sm font-semibold"
+              data-on="true"
+            >
+              Nam
+            </button>
+            <button
+              onclick="selectPill(this, 'gender')"
+              data-pill-group="gender"
+              class="pill flex-1 border border-black/10 dark:border-white/10 rounded-full py-2.5 text-sm font-semibold"
+              data-on="false"
+            >
+              Khác
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label
+            class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2 block"
+            >Giới thiệu bản thân</label
+          >
+          <textarea
+            rows="3"
+            class="w-full bg-white dark:bg-surf border border-black/5 dark:border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-irisl resize-none"
+          >
+Sống chậm, yêu thật, cười nhiều 🌿</textarea>
+        </div>
+
+        <div>
+          <label
+            class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2 block"
+            >Sở thích
+            <span class="font-normal normal-case text-slate-400"
+              >(chọn tối đa 5)</span
+            ></label
+          >
+          <div class="flex flex-wrap gap-2">
+            <button
+              onclick="toggleTag(this)"
+              class="pill border border-black/10 dark:border-white/10 rounded-full px-3.5 py-2 text-xs font-semibold"
+              data-on="true"
+            >
+              Du lịch
+            </button>
+            <button
+              onclick="toggleTag(this)"
+              class="pill border border-black/10 dark:border-white/10 rounded-full px-3.5 py-2 text-xs font-semibold"
+              data-on="true"
+            >
+              Cà phê
+            </button>
+            <button
+              onclick="toggleTag(this)"
+              class="pill border border-black/10 dark:border-white/10 rounded-full px-3.5 py-2 text-xs font-semibold"
+              data-on="true"
+            >
+              Indie
+            </button>
+            <button
+              onclick="toggleTag(this)"
+              class="pill border border-black/10 dark:border-white/10 rounded-full px-3.5 py-2 text-xs font-semibold"
+              data-on="false"
+            >
+              Đọc sách
+            </button>
+            <button
+              onclick="toggleTag(this)"
+              class="pill border border-black/10 dark:border-white/10 rounded-full px-3.5 py-2 text-xs font-semibold"
+              data-on="false"
+            >
+              Nấu ăn
+            </button>
+            <button
+              onclick="toggleTag(this)"
+              class="pill border border-black/10 dark:border-white/10 rounded-full px-3.5 py-2 text-xs font-semibold"
+              data-on="false"
+            >
+              Gym
+            </button>
+            <button
+              onclick="toggleTag(this)"
+              class="pill border border-black/10 dark:border-white/10 rounded-full px-3.5 py-2 text-xs font-semibold"
+              data-on="false"
+            >
+              Phim ảnh
+            </button>
+            <button
+              onclick="toggleTag(this)"
+              class="pill border border-black/10 dark:border-white/10 rounded-full px-3.5 py-2 text-xs font-semibold"
+              data-on="false"
+            >
+              Chụp ảnh
+            </button>
+            <button
+              onclick="toggleTag(this)"
+              class="pill border border-black/10 dark:border-white/10 rounded-full px-3.5 py-2 text-xs font-semibold"
+              data-on="false"
+            >
+              Thú cưng
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label
+            class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2 block"
+            >Đang tìm kiếm</label
+          >
+          <div
+            class="bg-white dark:bg-surf border border-black/5 dark:border-white/10 rounded-2xl p-4 space-y-4"
+          >
+            <div>
+              <p class="text-sm font-semibold mb-2">Giới tính quan tâm</p>
+              <div class="flex gap-2">
+                <button
+                  onclick="selectPill(this, 'seek')"
+                  data-pill-group="seek"
+                  class="pill flex-1 border border-black/10 dark:border-white/10 rounded-full py-2 text-xs font-semibold"
+                  data-on="true"
+                >
+                  Nữ
+                </button>
+                <button
+                  onclick="selectPill(this, 'seek')"
+                  data-pill-group="seek"
+                  class="pill flex-1 border border-black/10 dark:border-white/10 rounded-full py-2 text-xs font-semibold"
+                  data-on="false"
+                >
+                  Nam
+                </button>
+                <button
+                  onclick="selectPill(this, 'seek')"
+                  data-pill-group="seek"
+                  class="pill flex-1 border border-black/10 dark:border-white/10 rounded-full py-2 text-xs font-semibold"
+                  data-on="false"
+                >
+                  Cả hai
+                </button>
+              </div>
+            </div>
+            <div>
+              <p class="text-sm font-semibold mb-2">
+                Độ tuổi:
+                <span
+                  id="ageRangeLabel"
+                  class="font-normal text-slate-500 dark:text-slate-400"
+                  >22 – 30</span
+                >
+              </p>
+              <input
+                id="ageMin"
+                type="range"
+                min="18"
+                max="45"
+                value="22"
+                class="w-full accent-irisl"
+                oninput="updateAgeRange()"
+              />
+              <input
+                id="ageMax"
+                type="range"
+                min="18"
+                max="45"
+                value="30"
+                class="w-full accent-irisl -mt-1"
+                oninput="updateAgeRange()"
+              />
+            </div>
+          </div>
+        </div>
+
+        <button
+          onclick="saveProfile()"
+          class="w-full bg-irisl text-white font-bold py-3.5 rounded-full shadow-lg shadow-iris/30 mt-2"
+        >
+          Lưu thay đổi
+        </button>
+      </div>
+    </div>
+
+    <script>
+      function selectPill(btn, group) {
+        document
+          .querySelectorAll('[data-pill-group="' + group + '"]')
+          .forEach(function (b) {
+            b.dataset.on = 'false';
+          });
+        btn.dataset.on = 'true';
+      }
+      function toggleTag(btn) {
+        btn.dataset.on = btn.dataset.on === 'true' ? 'false' : 'true';
+      }
+      function updateAgeRange() {
+        var min = document.getElementById('ageMin');
+        var max = document.getElementById('ageMax');
+        if (parseInt(min.value) > parseInt(max.value)) {
+          min.value = max.value;
+        }
+        document.getElementById('ageRangeLabel').textContent =
+          min.value + ' – ' + max.value;
+      }
+      function saveProfile() {
+        var btn = event.target;
+        var old = btn.textContent;
+        btn.textContent = 'Đã lưu ✓';
+        lmToast('Đã lưu thay đổi hồ sơ');
+        setTimeout(function () {
+          btn.textContent = old;
+        }, 1500);
+      }
+      function setTheme(t) {
+        const html = document.documentElement;
+        if (t === 'white') {
+          html.classList.remove('dark');
+        } else {
+          html.classList.add('dark');
+          html.setAttribute('data-theme', t);
+        }
+        document.querySelectorAll('[data-theme-btn]').forEach((b) => {
+          b.dataset.active = b.dataset.themeBtn === t ? 'true' : 'false';
+        });
+      }
+    </script>
+
+    <!-- ===== Shared toast + confirm-sheet system (lm* helpers) ===== -->
+    <div
+      id="lmToastStack"
+      class="fixed bottom-24 md:bottom-8 inset-x-0 z-[300] flex flex-col items-center gap-2 px-4 pointer-events-none"
+    ></div>
+    <div id="lmConfirmOverlay" class="fixed inset-0 z-[310] hidden">
+      <div
+        class="absolute inset-0 bg-black/50"
+        onclick="lmCloseConfirm()"
+      ></div>
+      <div
+        id="lmConfirmPanel"
+        class="absolute bottom-0 inset-x-0 max-w-[430px] mx-auto bg-white dark:bg-surf rounded-t-3xl p-6 pb-8 translate-y-full transition-transform duration-300"
+      >
+        <div
+          class="w-10 h-1.5 rounded-full bg-slate-200 dark:bg-white/10 mx-auto mb-5"
+        ></div>
+        <p id="lmConfirmTitle" class="font-bold text-lg mb-1.5">Tiêu đề</p>
+        <p
+          id="lmConfirmMsg"
+          class="text-sm text-slate-500 dark:text-slate-400 mb-5 leading-relaxed"
+        >
+          Nội dung
+        </p>
+        <div id="lmConfirmExtra"></div>
+        <div class="flex gap-3">
+          <button
+            onclick="lmCloseConfirm()"
+            class="flex-1 py-3 rounded-2xl font-bold text-sm bg-slate-100 dark:bg-surf2"
+          >
+            Huỷ
+          </button>
+          <button
+            id="lmConfirmActionBtn"
+            class="flex-1 py-3 rounded-2xl font-bold text-sm text-white bg-gradient-to-br from-irisl to-irisl"
+          >
+            Xác nhận
+          </button>
+        </div>
+      </div>
+    </div>
+    <script>
+      // Scope the overlay/toast stack to the visible app-frame (if one exists on this page)
+      // instead of the full browser viewport -- otherwise on a wide PC screen the backdrop
+      // bleeds across the whole window instead of just the app card.
+      function lmSyncFrame() {
+        var frame = document.querySelector('[data-lm-frame]');
+        var overlay = document.getElementById('lmConfirmOverlay');
+        var stack = document.getElementById('lmToastStack');
+        if (!frame) {
+          overlay.style.cssText = '';
+          stack.style.cssText = '';
+          return;
+        }
+        var r = frame.getBoundingClientRect();
+        overlay.style.cssText =
+          'position:fixed;left:' +
+          r.left +
+          'px;top:' +
+          r.top +
+          'px;width:' +
+          r.width +
+          'px;height:' +
+          r.height +
+          'px;right:auto;bottom:auto;';
+        stack.style.cssText =
+          'position:fixed;left:' +
+          r.left +
+          'px;width:' +
+          r.width +
+          'px;bottom:' +
+          (window.innerHeight - r.bottom + 24) +
+          'px;top:auto;right:auto;';
+      }
+      window.addEventListener('resize', lmSyncFrame);
+      window.addEventListener('orientationchange', lmSyncFrame);
+
+      function lmToast(msg, opts) {
+        opts = opts || {};
+        lmSyncFrame();
+        var stack = document.getElementById('lmToastStack');
+        if (!stack) return;
+        var el = document.createElement('div');
+        el.className =
+          'pointer-events-auto max-w-[92%] flex items-center gap-2 px-4 py-3 rounded-2xl shadow-xl shadow-black/10 text-sm font-semibold ' +
+          (opts.tone === 'warn'
+            ? 'bg-rose-500 text-white'
+            : 'bg-ink text-white dark:bg-white dark:text-ink');
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(8px)';
+        el.style.transition = 'all .2s ease';
+        el.innerHTML =
+          '<span>' +
+          (opts.icon || (opts.tone === 'warn' ? '⚠️' : '✓')) +
+          '</span><span>' +
+          msg +
+          '</span>';
+        stack.appendChild(el);
+        requestAnimationFrame(function () {
+          el.style.opacity = '1';
+          el.style.transform = 'translateY(0)';
+        });
+        setTimeout(function () {
+          el.style.opacity = '0';
+          el.style.transform = 'translateY(8px)';
+          setTimeout(function () {
+            el.remove();
+          }, 200);
+        }, 2600);
+      }
+      var lmConfirmCallback = null;
+      function lmConfirm(title, msg, onConfirm, opts) {
+        opts = opts || {};
+        lmSyncFrame();
+        document.getElementById('lmConfirmTitle').textContent = title;
+        document.getElementById('lmConfirmMsg').textContent = msg;
+        document.getElementById('lmConfirmExtra').innerHTML =
+          opts.extraHtml || '';
+        var btn = document.getElementById('lmConfirmActionBtn');
+        btn.textContent = opts.actionLabel || 'Xác nhận';
+        btn.className =
+          'flex-1 py-3 rounded-2xl font-bold text-sm text-white ' +
+          (opts.tone === 'danger'
+            ? 'bg-rose-500'
+            : 'bg-gradient-to-br from-irisl to-irisl');
+        lmConfirmCallback = onConfirm || null;
+        document.getElementById('lmConfirmOverlay').classList.remove('hidden');
+        requestAnimationFrame(function () {
+          document
+            .getElementById('lmConfirmPanel')
+            .classList.remove('translate-y-full');
+        });
+      }
+      function lmCloseConfirm() {
+        var panel = document.getElementById('lmConfirmPanel');
+        panel.classList.add('translate-y-full');
+        setTimeout(function () {
+          document.getElementById('lmConfirmOverlay').classList.add('hidden');
+          document.getElementById('lmConfirmActionBtn').style.display = '';
+        }, 300);
+      }
+      document
+        .getElementById('lmConfirmActionBtn')
+        .addEventListener('click', function () {
+          var cb = lmConfirmCallback;
+          lmCloseConfirm();
+          if (cb) cb();
+        });
+    </script>
+  </body>
+</html>

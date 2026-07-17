@@ -1,0 +1,19 @@
+# Image tối thiểu chỉ phục vụ Docker Compose development. Source và node_modules được mount lúc
+# runtime; Dockerfile production của từng backend app vẫn là source cho CI/release image.
+FROM node:22-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2
+
+WORKDIR /workspace
+
+# `su-exec` giúp process trong bind mount ghi bằng UID/GID của developer host, không sinh file
+# root-owned khi Vite/Next/Webpack tạo cache hoặc output hot reload.
+RUN apk add --no-cache su-exec \
+  && corepack enable pnpm
+
+COPY docker/dev-entrypoint.sh /usr/local/bin/litmatch-dev-entrypoint
+RUN chmod 755 /usr/local/bin/litmatch-dev-entrypoint
+
+ENV HOME=/pnpm \
+    PNPM_HOME=/pnpm \
+    PATH=/pnpm:${PATH}
+
+ENTRYPOINT ["/usr/local/bin/litmatch-dev-entrypoint"]

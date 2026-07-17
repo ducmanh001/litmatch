@@ -6,9 +6,8 @@ export const metadata: Metadata = { title: 'Hồ sơ' };
 
 export default function ProfilePage() {
   return (
-    <section className="space-y-4">
-      <h1 className="text-2xl font-semibold">Hồ sơ của tôi</h1>
+    <div className="mx-auto w-full max-w-2xl min-w-0">
       <ProfileView />
-    </section>
+    </div>
   );
 }

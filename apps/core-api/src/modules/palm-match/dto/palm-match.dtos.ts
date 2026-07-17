@@ -1,6 +1,10 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 
+import {
+  PalmMatchOutcome,
+  PalmMatchRating,
+} from '../entities/palm-match-session.entity';
 import { PalmMatchCategory } from '../entities/palm-reading-template.entity';
 
 /**
@@ -31,4 +35,70 @@ export class PalmMatchReadingDto {
 
   @ApiProperty({ description: 'Ngày server (UTC, YYYY-MM-DD) dùng làm seed' })
   forDate!: string;
+}
+
+export enum PalmMatchClientState {
+  Idle = 'idle',
+  Queued = 'queued',
+  Active = 'active',
+  Completed = 'completed',
+}
+
+export class PalmZodiacSignDto {
+  @ApiProperty()
+  key!: string;
+
+  @ApiProperty()
+  symbol!: string;
+
+  @ApiProperty()
+  name!: string;
+}
+
+/** Một shape duy nhất để poll/reload không phải ghép business state ở client. */
+export class PalmMatchStateDto {
+  @ApiProperty({ enum: PalmMatchClientState })
+  state!: PalmMatchClientState;
+
+  @ApiPropertyOptional({ format: 'uuid' })
+  sessionId?: string;
+
+  @ApiPropertyOptional({ format: 'date-time' })
+  queuedAt?: string;
+
+  @ApiPropertyOptional({ format: 'date-time' })
+  expiresAt?: string;
+
+  @ApiPropertyOptional()
+  myFlipped?: boolean;
+
+  @ApiPropertyOptional()
+  opponentFlipped?: boolean;
+
+  @ApiPropertyOptional({ type: PalmZodiacSignDto })
+  mySign?: PalmZodiacSignDto;
+
+  @ApiPropertyOptional({ type: PalmZodiacSignDto })
+  opponentSign?: PalmZodiacSignDto;
+
+  @ApiPropertyOptional({ minimum: 60, maximum: 99 })
+  compatibilityPercent?: number;
+
+  @ApiPropertyOptional()
+  fortune?: string;
+
+  @ApiPropertyOptional({ enum: PalmMatchRating })
+  myRating?: PalmMatchRating;
+
+  @ApiPropertyOptional({ enum: PalmMatchOutcome })
+  outcome?: PalmMatchOutcome;
+
+  @ApiPropertyOptional({ description: 'Chỉ xuất hiện sau mutual-like' })
+  partnerUserId?: string;
+}
+
+export class RatePalmMatchDto {
+  @ApiProperty({ enum: PalmMatchRating })
+  @IsEnum(PalmMatchRating)
+  rating!: PalmMatchRating;
 }

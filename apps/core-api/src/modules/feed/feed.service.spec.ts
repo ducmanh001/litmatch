@@ -3,11 +3,12 @@ import { DomainException } from '@litmatch/common-exceptions';
 import { FeedService } from './feed.service';
 import { FeedErrors } from './feed.errors';
 import { Comment } from './entities/comment.entity';
-import { Post } from './entities/post.entity';
+import { Post, PostAudience } from './entities/post.entity';
 import { Reaction } from './entities/reaction.entity';
 
 import type { EntityManager, Repository } from 'typeorm';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
+import type { FriendService } from '../friend';
 import type { SafetyService } from '../safety';
 
 const me: AuthenticatedUser = {
@@ -28,6 +29,8 @@ function makePost(overrides: Partial<Post> = {}): Post {
     authorUserId: me.userId,
     content: 'hello',
     imageUrl: null,
+    audience: PostAudience.Public,
+    idempotencyKey: 'feed:post:user-me:key-1',
     likeCount: 0,
     commentCount: 0,
     deletedAt: null,
@@ -48,6 +51,7 @@ describe('FeedService (unit — mock repo/safetyService)', () => {
   >;
   let reactionRepo: { exists: jest.Mock };
   let safetyService: { getBlockedUserIds: jest.Mock; isBlocked: jest.Mock };
+  let friendService: { areFriends: jest.Mock };
   let notificationService: {
     createWithManager: jest.Mock;
     sendPush: jest.Mock;
@@ -84,6 +88,7 @@ describe('FeedService (unit — mock repo/safetyService)', () => {
       getBlockedUserIds: jest.fn(async () => []),
       isBlocked: jest.fn(async () => false),
     };
+    friendService = { areFriends: jest.fn(async () => false) };
     notificationService = {
       createWithManager: jest.fn(async (_manager, input) => ({
         id: 'notif-1',
@@ -112,6 +117,7 @@ describe('FeedService (unit — mock repo/safetyService)', () => {
       commentRepo as unknown as Repository<Comment>,
       reactionRepo as unknown as Repository<Reaction>,
       safetyService as unknown as SafetyService,
+      friendService as unknown as FriendService,
       notificationService as never,
     );
   });
@@ -124,7 +130,9 @@ describe('FeedService (unit — mock repo/safetyService)', () => {
   describe('createPost', () => {
     it('guest bị chặn, không đụng DB', async () => {
       expectDomainError(
-        await service.createPost(guest, { content: 'hi' }).catch((e) => e),
+        await service
+          .createPost(guest, { content: 'hi' }, 'key-1')
+          .catch((e) => e),
         FeedErrors.GUEST_FORBIDDEN,
       );
       expect(postRepo.save).not.toHaveBeenCalled();
@@ -132,15 +140,60 @@ describe('FeedService (unit — mock repo/safetyService)', () => {
 
     it('thiếu cả content lẫn imageUrl → 422', async () => {
       expectDomainError(
-        await service.createPost(me, {}).catch((e) => e),
+        await service.createPost(me, {}, 'key-1').catch((e) => e),
         FeedErrors.POST_CONTENT_REQUIRED,
       );
     });
 
-    it('có content → tạo post đúng authorUserId', async () => {
-      const post = await service.createPost(me, { content: 'xin chào' });
+    it('có content → tạo post đúng authorUserId, audience mặc định public', async () => {
+      const post = await service.createPost(
+        me,
+        { content: 'xin chào' },
+        'key-1',
+      );
       expect(post.authorUserId).toBe(me.userId);
       expect(post.content).toBe('xin chào');
+      expect(post.audience).toBe(PostAudience.Public);
+      expect(post.idempotencyKey).toBe('feed:post:user-me:key-1');
+    });
+
+    it('audience client gửi lên được tôn trọng khi hợp lệ', async () => {
+      const post = await service.createPost(
+        me,
+        { content: 'chỉ bạn bè xem', audience: PostAudience.Friends },
+        'key-1',
+      );
+      expect(post.audience).toBe(PostAudience.Friends);
+    });
+
+    it('idempotency-key trùng (unique violation) + cùng nội dung → trả lại post cũ', async () => {
+      postRepo.save.mockRejectedValueOnce(
+        Object.assign(new Error('duplicate'), { code: '23505' }),
+      );
+      postRepo.findOneBy.mockResolvedValueOnce(
+        makePost({ content: 'xin chào' }),
+      );
+      const post = await service.createPost(
+        me,
+        { content: 'xin chào' },
+        'key-1',
+      );
+      expect(post.id).toBe('post-1');
+    });
+
+    it('idempotency-key trùng nhưng nội dung khác → 409 POST_IDEMPOTENCY_CONFLICT', async () => {
+      postRepo.save.mockRejectedValueOnce(
+        Object.assign(new Error('duplicate'), { code: '23505' }),
+      );
+      postRepo.findOneBy.mockResolvedValueOnce(
+        makePost({ content: 'nội dung khác' }),
+      );
+      expectDomainError(
+        await service
+          .createPost(me, { content: 'xin chào' }, 'key-1')
+          .catch((e) => e),
+        FeedErrors.POST_IDEMPOTENCY_CONFLICT,
+      );
     });
   });
 
@@ -170,12 +223,113 @@ describe('FeedService (unit — mock repo/safetyService)', () => {
       );
     });
 
-    it('caller chính là tác giả → không check block', async () => {
+    it('caller chính là tác giả → không check block/audience', async () => {
       postRepo.findOneBy.mockResolvedValue(
-        makePost({ authorUserId: me.userId }),
+        makePost({ authorUserId: me.userId, audience: PostAudience.OnlyMe }),
       );
       await service.getPostOrThrow(me, 'post-1');
       expect(safetyService.isBlocked).not.toHaveBeenCalled();
+      expect(friendService.areFriends).not.toHaveBeenCalled();
+    });
+
+    it('bài only_me, người khác gọi trực tiếp GET /posts/:id → CÙNG 404 (bỏ qua URL trực tiếp)', async () => {
+      postRepo.findOneBy.mockResolvedValue(
+        makePost({ authorUserId: 'other', audience: PostAudience.OnlyMe }),
+      );
+      expectDomainError(
+        await service.getPostOrThrow(me, 'post-1').catch((e) => e),
+        FeedErrors.POST_NOT_FOUND,
+      );
+    });
+
+    it('bài friends, người lạ (không phải bạn) → 404', async () => {
+      postRepo.findOneBy.mockResolvedValue(
+        makePost({ authorUserId: 'other', audience: PostAudience.Friends }),
+      );
+      friendService.areFriends.mockResolvedValue(false);
+      expectDomainError(
+        await service.getPostOrThrow(me, 'post-1').catch((e) => e),
+        FeedErrors.POST_NOT_FOUND,
+      );
+    });
+
+    it('bài friends, là bạn → xem được', async () => {
+      postRepo.findOneBy.mockResolvedValue(
+        makePost({ authorUserId: 'other', audience: PostAudience.Friends }),
+      );
+      friendService.areFriends.mockResolvedValue(true);
+      const post = await service.getPostOrThrow(me, 'post-1');
+      expect(post.id).toBe('post-1');
+    });
+
+    it('bài public, người lạ → xem được, không cần check bạn bè', async () => {
+      postRepo.findOneBy.mockResolvedValue(
+        makePost({ authorUserId: 'other', audience: PostAudience.Public }),
+      );
+      const post = await service.getPostOrThrow(me, 'post-1');
+      expect(post.id).toBe('post-1');
+      expect(friendService.areFriends).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listUserTimeline', () => {
+    function makeTimelineQb() {
+      return {
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getMany: jest.fn(async () => []),
+      };
+    }
+
+    it('tự xem mình → audience gồm cả public+friends+only_me', async () => {
+      const qb = makeTimelineQb();
+      postRepo.createQueryBuilder.mockReturnValue(qb as never);
+      await service.listUserTimeline(me, me.userId, { limit: 20 });
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'p.audience IN (:...audiences)',
+        {
+          audiences: [
+            PostAudience.Public,
+            PostAudience.Friends,
+            PostAudience.OnlyMe,
+          ],
+        },
+      );
+    });
+
+    it('xem người lạ (không phải bạn) → chỉ audience public', async () => {
+      const qb = makeTimelineQb();
+      postRepo.createQueryBuilder.mockReturnValue(qb as never);
+      friendService.areFriends.mockResolvedValue(false);
+      await service.listUserTimeline(me, 'other', { limit: 20 });
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'p.audience IN (:...audiences)',
+        {
+          audiences: [PostAudience.Public],
+        },
+      );
+    });
+
+    it('xem bạn bè → audience public+friends', async () => {
+      const qb = makeTimelineQb();
+      postRepo.createQueryBuilder.mockReturnValue(qb as never);
+      friendService.areFriends.mockResolvedValue(true);
+      await service.listUserTimeline(me, 'other', { limit: 20 });
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'p.audience IN (:...audiences)',
+        {
+          audiences: [PostAudience.Public, PostAudience.Friends],
+        },
+      );
+    });
+
+    it('block 2 chiều → trả rỗng, KHÔNG throw (giống hệt 0 bài viết)', async () => {
+      safetyService.isBlocked.mockResolvedValueOnce(true);
+      const page = await service.listUserTimeline(me, 'other', { limit: 20 });
+      expect(page).toEqual({ items: [], meta: { nextCursor: null } });
+      expect(postRepo.createQueryBuilder).not.toHaveBeenCalled();
     });
   });
 

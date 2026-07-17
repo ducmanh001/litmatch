@@ -11,8 +11,8 @@ export default async function ChatPage({
 }) {
   const { friendUserId } = await params;
   return (
-    <section className="mx-auto max-w-md space-y-4">
+    <div className="mx-auto w-full max-w-xl min-w-0">
       <ConversationThread friendUserId={friendUserId} />
-    </section>
+    </div>
   );
 }

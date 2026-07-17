@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Litmatch — Redesign Quanh đây &amp; Ghép đôi</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #0a0509;
+    --bg-base: #170a10;
+    --bg-sidebar: #130810;
+    --bg-card: #211219;
+    --bg-card-hover: #2a1720;
+    --pink: #ff4f7e;
+    --orange: #ff9152;
+    --gradient: linear-gradient(135deg, #ff4f7e 0%, #ff9152 100%);
+    --text-primary: #f8eef1;
+    --text-secondary: #ad99a3;
+    --text-muted: #7d6b74;
+    --border: rgba(255,255,255,0.08);
+    --tag-bg: rgba(255,79,126,0.15);
+    --tag-text: #ff8fac;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg-page);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    padding: 32px 16px;
+  }
+  .caption {
+    max-width: 1180px;
+    margin: 0 auto 14px;
+    color: #6b6469;
+    font-size: 13px;
+  }
+  .shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: flex;
+    background: var(--bg-base);
+    color: var(--text-primary);
+    border-radius: 22px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    min-height: 800px;
+    box-shadow: 0 30px 60px -30px rgba(0,0,0,0.6);
+  }
+  /* sidebar */
+  .sidebar {
+    width: 214px;
+    flex-shrink: 0;
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border);
+    padding: 26px 14px;
+    display: flex;
+    flex-direction: column;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 0 8px;
+    margin-bottom: 30px;
+    font-size: 17px;
+    font-weight: 700;
+  }
+  .brand-dot {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--gradient);
+    flex-shrink: 0;
+  }
+  .nav { display: flex; flex-direction: column; gap: 2px; }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 10px 12px;
+    border-radius: 11px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    font-family: inherit;
+  }
+  .nav-item i { width: 16px; text-align: center; font-size: 15px; }
+  .nav-item:hover { background: var(--bg-card); color: var(--text-primary); }
+  .nav-item.active {
+    background: linear-gradient(135deg, rgba(255,79,126,0.18), rgba(255,145,82,0.10));
+    color: #fff;
+  }
+  .nav-spacer { flex: 1; }
+  .user-chip {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    background: var(--gradient);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px; color: #fff;
+    margin: 0 10px;
+  }
+  /* main */
+  .main { flex: 1; padding: 36px 40px 44px; min-width: 0; }
+  .page { display: none; }
+  .page.active { display: block; }
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    background: var(--tag-bg);
+    color: var(--tag-text);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    padding: 6px 14px;
+    border-radius: 999px;
+    margin-bottom: 16px;
+  }
+  h1.page-heading {
+    font-size: 29px;
+    font-weight: 700;
+    line-height: 1.28;
+    margin: 0 0 12px;
+    max-width: 640px;
+  }
+  .lede {
+    font-size: 14.5px;
+    color: var(--text-secondary);
+    line-height: 1.65;
+    max-width: 580px;
+    margin: 0 0 26px;
+  }
+  /* stat row */
+  .stat-row { display: flex; gap: 16px; margin-bottom: 22px; }
+  .stat-card {
+    flex: 1;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 18px 20px;
+  }
+  .stat-number {
+    font-size: 25px;
+    font-weight: 700;
+    background: var(--gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    display: block;
+    margin-bottom: 3px;
+  }
+  .stat-title { font-size: 14.5px; font-weight: 700; display: block; margin-bottom: 3px; }
+  .stat-desc { font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; }
+  /* segmented toggle */
+  .segmented {
+    display: inline-flex;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px;
+    margin-bottom: 18px;
+    gap: 4px;
+  }
+  .segment {
+    padding: 9px 18px;
+    border-radius: 999px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: inherit;
+  }
+  .segment.active { background: var(--gradient); color: #fff; }
+  /* filter card */
+  .filter-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 22px;
+    display: flex;
+    gap: 28px;
+  }
+  .filter-group { flex: 1; }
+  .filter-group-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    color: var(--text-muted);
+    display: block;
+    margin-bottom: 10px;
+  }
+  .pill-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill {
+    padding: 8px 15px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .pill.active { background: var(--gradient); border-color: transparent; color: #fff; }
+  /* two column grid */
+  .grid-2 { display: grid; grid-template-columns: minmax(0,1fr) 296px; gap: 22px; align-items: start; }
+  /* radar card */
+  .radar-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 26px;
+    display: flex;
+    align-items: center;
+    gap: 26px;
+    margin-bottom: 18px;
+  }
+  .radar-visual { position: relative; width: 140px; height: 140px; flex-shrink: 0; }
+  .radar-ring { position: absolute; border: 1.5px solid rgba(255,79,126,0.3); border-radius: 50%; }
+  .radar-ring.r1 { inset: 0; }
+  .radar-ring.r2 { inset: 20px; }
+  .radar-ring.r3 { inset: 40px; }
+  .radar-pulse {
+    position: absolute; inset: 40px; border-radius: 50%;
+    border: 1.5px solid var(--pink);
+    animation: pulse 2.6s ease-out infinite;
+  }
+  .radar-pulse.delay { animation-delay: 1.3s; }
+  @keyframes pulse {
+    0% { transform: scale(1); opacity: .7; }
+    100% { transform: scale(1.8); opacity: 0; }
+  }
+  .radar-center {
+    position: absolute; inset: 40px; margin: auto;
+    width: 13px; height: 13px; border-radius: 50%;
+    background: var(--gradient);
+    box-shadow: 0 0 0 4px var(--bg-card);
+  }
+  .radar-dot {
+    position: absolute; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--gradient);
+    box-shadow: 0 0 0 3px var(--bg-card);
+  }
+  .dot-a { top: 6px; left: 54px; }
+  .dot-b { top: 62px; right: 0px; }
+  .dot-c { bottom: 10px; left: 16px; }
+  .radar-info h3 { font-size: 16.5px; font-weight: 700; margin: 0 0 8px; }
+  .radar-info p { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin: 0 0 16px; max-width: 340px; }
+  .btn-gradient {
+    background: var(--gradient);
+    color: #fff;
+    border: none;
+    padding: 12px 22px;
+    border-radius: 999px;
+    font-size: 13.5px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 10px 22px -10px rgba(255,79,126,0.55);
+  }
+  .btn-outline {
+    background: transparent;
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    padding: 11px 21px;
+    border-radius: 999px;
+    font-size: 13.5px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  /* privacy notes */
+  .notes-row { display: flex; gap: 14px; }
+  .note { flex: 1; display: flex; gap: 9px; font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+  .note i { color: var(--pink); margin-top: 2px; font-size: 13px; }
+  /* side cards */
+  .side-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 18px;
+  }
+  .side-card h4 { font-size: 14.5px; font-weight: 700; margin: 0 0 15px; }
+  .tip-item { display: flex; gap: 12px; margin-bottom: 15px; }
+  .tip-item:last-child { margin-bottom: 0; }
+  .icon-circle {
+    width: 33px; height: 33px; border-radius: 50%;
+    background: var(--tag-bg); color: var(--pink);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; font-size: 13.5px;
+  }
+  .tip-item strong { font-size: 13px; display: block; margin-bottom: 2px; }
+  .tip-item p { font-size: 12px; color: var(--text-secondary); margin: 0; line-height: 1.5; }
+  .gradient-card { background: var(--gradient); border-radius: 16px; padding: 22px; }
+  .gradient-card i { font-size: 17px; color: #fff; margin-bottom: 10px; display: block; }
+  .gradient-card h4 { font-size: 14.5px; font-weight: 700; margin: 0 0 8px; color: #fff; }
+  .gradient-card p { font-size: 12.5px; font-style: italic; color: rgba(255,255,255,0.92); line-height: 1.6; margin: 0; }
+  /* matching page */
+  .page-header-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; gap: 20px; }
+  .intro-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 26px;
+    margin-bottom: 18px;
+  }
+  .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .06em; color: var(--pink); display: block; margin-bottom: 12px; }
+  .intro-card h2 { font-size: 20px; font-weight: 700; margin: 0 0 10px; }
+  .intro-card p { font-size: 13.5px; color: var(--text-secondary); line-height: 1.6; margin: 0 0 20px; max-width: 460px; }
+  .intro-actions { display: flex; gap: 12px; }
+  .session-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 34px 28px;
+    text-align: center;
+  }
+  .session-icon {
+    width: 50px; height: 50px; border-radius: 50%;
+    background: var(--tag-bg); color: var(--pink);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 19px; margin: 0 auto 16px;
+  }
+  .session-card h3 { font-size: 15.5px; font-weight: 700; margin: 0 0 8px; }
+  .session-card p { font-size: 13px; color: var(--text-secondary); margin: 0 0 18px; max-width: 360px; margin-left: auto; margin-right: auto; line-height: 1.6; }
+  .invite-empty { text-align: center; padding: 6px 0; }
+  .invite-empty p { font-size: 13px; font-weight: 600; margin: 0 0 6px; }
+  .invite-empty span { font-size: 12px; color: var(--text-secondary); line-height: 1.5; display: block; }
+  .step { display: flex; gap: 12px; margin-bottom: 15px; }
+  .step:last-child { margin-bottom: 0; }
+  .step-num {
+    width: 25px; height: 25px; border-radius: 50%;
+    background: var(--gradient); color: #fff;
+    font-size: 11.5px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .step strong { font-size: 13px; display: block; margin-bottom: 2px; }
+  .step p { font-size: 12px; color: var(--text-secondary); margin: 0; line-height: 1.5; }
+  .mini-cta p { font-size: 12.5px; color: var(--text-secondary); line-height: 1.6; margin: 0 0 14px; }
+  .link-btn {
+    background: none; border: none; color: var(--pink);
+    font-size: 12.5px; font-weight: 700; cursor: pointer;
+    font-family: inherit; padding: 0; display: inline-flex; align-items: center; gap: 6px;
+  }
+</style>
+</head>
+<body>
+
+<p class="caption">Mockup tham khảo — theme lấy từ trang index, áp cho Quanh đây &amp; Ghép đôi. Bấm sidebar để chuyển trang.</p>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-dot"></span>Litmatch</div>
+    <nav class="nav">
+      <button class="nav-item"><i class="fa-solid fa-house"></i>Trang chủ</button>
+      <button class="nav-item active" data-page="discovery"><i class="fa-solid fa-location-dot"></i>Quanh đây</button>
+      <button class="nav-item" data-page="matching"><i class="fa-solid fa-heart"></i>Ghép đôi</button>
+      <button class="nav-item"><i class="fa-solid fa-video"></i>Video</button>
+      <button class="nav-item"><i class="fa-solid fa-users"></i>Party</button>
+      <button class="nav-item"><i class="fa-solid fa-newspaper"></i>Bảng tin</button>
+      <button class="nav-item"><i class="fa-solid fa-comment-dots"></i>Tin nhắn</button>
+      <button class="nav-item"><i class="fa-solid fa-circle-user"></i>Cá nhân</button>
+    </nav>
+    <div class="nav-spacer"></div>
+    <div class="user-chip">N</div>
+  </aside>
+
+  <main class="main">
+
+    <!-- QUANH ĐÂY -->
+    <section id="page-discovery" class="page active">
+      <span class="tag">HẸN HÒ CÓ CHỦ ĐÍCH</span>
+      <h1 class="page-heading">Gặp một người thật lòng, bắt đầu từ một lời chào tử tế.</h1>
+      <p class="lede">Tìm người phù hợp hoặc khám phá những kết nối ở gần bạn. Chọn cách mở lời bằng trò chuyện hay voice khi bạn thực sự muốn tìm hiểu.</p>
+
+      <div class="stat-row">
+        <div class="stat-card">
+          <span class="stat-number">02</span>
+          <span class="stat-desc">cách bắt đầu: trò chuyện hoặc voice</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-title">Bạn luôn chủ động</span>
+          <span class="stat-desc">Xem hồ sơ trước, chỉ gửi lời mời khi thấy phù hợp.</span>
+        </div>
+      </div>
+
+      <div class="segmented">
+        <button class="segment active"><i class="fa-solid fa-location-dot"></i>Quanh đây</button>
+        <button class="segment"><i class="fa-solid fa-compass"></i>Khám phá phù hợp</button>
+      </div>
+
+      <div class="filter-card">
+        <div class="filter-group">
+          <span class="filter-group-label">MUỐN LÀM QUEN VỚI</span>
+          <div class="pill-row">
+            <button class="pill active">Mọi người</button>
+            <button class="pill">Nữ</button>
+            <button class="pill">Nam</button>
+            <button class="pill">Khác</button>
+          </div>
+        </div>
+        <div class="filter-group">
+          <span class="filter-group-label">KHOẢNG TUỔI</span>
+          <div class="pill-row">
+            <button class="pill active">Tất cả</button>
+            <button class="pill">18-24</button>
+            <button class="pill">25-30</button>
+            <button class="pill">31-40</button>
+            <button class="pill">41+</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <div class="radar-card">
+            <div class="radar-visual">
+              <div class="radar-ring r1"></div>
+              <div class="radar-ring r2"></div>
+              <div class="radar-ring r3"></div>
+              <div class="radar-pulse"></div>
+              <div class="radar-pulse delay"></div>
+              <div class="radar-center"></div>
+              <div class="radar-dot dot-a"></div>
+              <div class="radar-dot dot-b"></div>
+              <div class="radar-dot dot-c"></div>
+            </div>
+            <div class="radar-info">
+              <h3>Tìm một kết nối ý nghĩa ở gần bạn</h3>
+              <p>Những hồ sơ cũng đang chủ động sẽ xuất hiện quanh bạn. Bạn chỉ thấy khoảng cách theo vùng, không thấy tọa độ hay khoảng cách chính xác.</p>
+              <button class="btn-gradient"><i class="fa-solid fa-location-dot"></i>Bật tìm quanh đây</button>
+            </div>
+          </div>
+          <div class="notes-row">
+            <div class="note"><i class="fa-solid fa-shield-halved"></i>Hệ thống chỉ lưu vị trí đủ làm gần đúng để bảo vệ riêng tư.</div>
+            <div class="note"><i class="fa-solid fa-arrow-right-arrow-left"></i>Cơ chế hai chiều: chỉ những người cùng bật mới có thể thấy nhau.</div>
+          </div>
+        </div>
+        <div>
+          <div class="side-card">
+            <h4>Bắt đầu theo nhịp của bạn</h4>
+            <div class="tip-item">
+              <div class="icon-circle"><i class="fa-solid fa-comment"></i></div>
+              <div><strong>Trò chuyện trước</strong><p>Dành thời gian tìm hiểu qua Soul Match.</p></div>
+            </div>
+            <div class="tip-item">
+              <div class="icon-circle"><i class="fa-solid fa-microphone"></i></div>
+              <div><strong>Nghe thấy sự đồng điệu</strong><p>Một cuộc Voice Match ngắn giúp câu chuyện tự nhiên hơn.</p></div>
+            </div>
+          </div>
+          <div class="gradient-card">
+            <i class="fa-solid fa-shield-heart"></i>
+            <h4>Hẹn hò an toàn, tôn trọng</h4>
+            <p>Hãy trò chuyện đủ lâu, tôn trọng ranh giới của nhau và chọn nơi công cộng nếu quyết định gặp mặt.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- GHÉP ĐÔI -->
+    <section id="page-matching" class="page">
+      <div class="page-header-row">
+        <div>
+          <span class="tag">KẾT NỐI CÓ CHỦ ĐÍCH</span>
+          <h1 class="page-heading" style="margin-top:12px; font-size:26px;">Ghép đôi</h1>
+        </div>
+        <button class="btn-gradient"><i class="fa-solid fa-location-dot"></i>Tìm quanh đây</button>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <div class="intro-card">
+            <span class="eyebrow">TÌM NGƯỜI YÊU · TÌM NGƯỜI ĐỒNG HÀNH</span>
+            <h2>Bắt đầu bằng một cuộc trò chuyện thật lòng.</h2>
+            <p>Litmatch giúp hai người làm quen qua câu chuyện hay giọng nói, trong một không gian tôn trọng, rõ ràng và không vội vàng.</p>
+            <div class="intro-actions">
+              <button class="btn-gradient"><i class="fa-solid fa-comment"></i>Nhắn tin ẩn danh</button>
+              <button class="btn-outline"><i class="fa-solid fa-microphone"></i>Kết nối bằng voice</button>
+            </div>
+          </div>
+
+          <div class="session-card">
+            <div class="session-icon"><i class="fa-solid fa-arrows-rotate"></i></div>
+            <h3>Không tải được phiên ghép đôi trước đó</h3>
+            <p>Đã có lỗi khi tải dữ liệu phiên của bạn. Thử lại, hoặc bắt đầu một phiên ghép đôi mới.</p>
+            <button class="btn-gradient" id="retry-btn"><i class="fa-solid fa-arrow-rotate-right"></i>Thử lại</button>
+          </div>
+        </div>
+
+        <div>
+          <div class="side-card">
+            <span class="filter-group-label" style="margin-bottom:12px;">KẾT NỐI TRỰC TIẾP</span>
+            <h4 style="margin-top:2px;">Lời mời dành cho bạn</h4>
+            <div class="invite-empty">
+              <div class="icon-circle" style="margin:0 auto 12px;"><i class="fa-solid fa-envelope-open"></i></div>
+              <p>Chưa có lời mời mới</p>
+              <span>Khi ai đó mời bạn Soul hoặc Voice, bạn sẽ chủ động quyết định có tham gia hay không.</span>
+            </div>
+          </div>
+
+          <div class="side-card">
+            <h4>Một kết nối an toàn hơn</h4>
+            <div class="step">
+              <div class="step-num">1</div>
+              <div><strong>Chọn cách bắt đầu</strong><p>Nhắn tin ẩn danh hoặc trò chuyện bằng giọng nói.</p></div>
+            </div>
+            <div class="step">
+              <div class="step-num">2</div>
+              <div><strong>Hai người cùng xác nhận</strong><p>Kết nối chỉ bắt đầu khi cả hai đều sẵn sàng.</p></div>
+            </div>
+            <div class="step">
+              <div class="step-num">3</div>
+              <div><strong>Bạn quyết định bước tiếp</strong><p>Tiếp tục khi thấy phù hợp, dừng lại bất cứ lúc nào.</p></div>
+            </div>
+          </div>
+
+          <div class="side-card mini-cta" style="margin-bottom:0;">
+            <span class="eyebrow">MUỐN CHỦ ĐỘNG HƠN?</span>
+            <h4 style="margin-top:2px;">Xem người phù hợp quanh đây</h4>
+            <p>Khám phá hồ sơ gợi ý quanh bạn hoặc bật Soul, Voice khi bạn thật sự sẵn sàng.</p>
+            <button class="link-btn" id="jump-discovery">Xem quanh đây <i class="fa-solid fa-arrow-right"></i></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  document.querySelectorAll('.nav-item[data-page]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.nav-item[data-page]').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
+      document.getElementById('page-' + btn.dataset.page).classList.add('active');
+    });
+  });
+
+  document.querySelectorAll('.segmented').forEach(function(group){
+    group.querySelectorAll('.segment').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        group.querySelectorAll('.segment').forEach(function(b){ b.classList.remove('active'); });
+        btn.classList.add('active');
+      });
+    });
+  });
+
+  document.querySelectorAll('.pill-row').forEach(function(row){
+    row.querySelectorAll('.pill').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        row.querySelectorAll('.pill').forEach(function(b){ b.classList.remove('active'); });
+        btn.classList.add('active');
+      });
+    });
+  });
+
+  var retryBtn = document.getElementById('retry-btn');
+  if (retryBtn) {
+    retryBtn.addEventListener('click', function(){
+      var original = retryBtn.innerHTML;
+      retryBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>Đang thử lại...';
+      setTimeout(function(){ retryBtn.innerHTML = original; }, 1200);
+    });
+  }
+
+  var jumpBtn = document.getElementById('jump-discovery');
+  if (jumpBtn) {
+    jumpBtn.addEventListener('click', function(){
+      document.querySelector('.nav-item[data-page="discovery"]').click();
+    });
+  }
+</script>
+</body>
+</html>

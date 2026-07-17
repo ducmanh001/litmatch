@@ -5,6 +5,7 @@ import {
   RealtimeEvents,
   buildCursorPage,
   decodeCursor,
+  isValidSeqCursor,
 } from '@litmatch/common-dtos';
 import { DomainException } from '@litmatch/common-exceptions';
 import { DataSource, Repository } from 'typeorm';
@@ -223,11 +224,7 @@ export class SoulMatchService {
     let afterSeq = '0';
     if (cursor) {
       const payload = decodeCursor<{ seq?: unknown }>(cursor);
-      if (
-        !payload ||
-        typeof payload.seq !== 'string' ||
-        !/^\d+$/.test(payload.seq)
-      ) {
+      if (!isValidSeqCursor(payload)) {
         throw new DomainException(
           SoulMatchErrors.CURSOR_INVALID,
           'Cursor không hợp lệ',

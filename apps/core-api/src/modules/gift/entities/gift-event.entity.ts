@@ -19,8 +19,15 @@ export class GiftEvent {
   @Column({ type: 'uuid' })
   giftId!: string;
 
-  @Column({ type: 'uuid' })
-  roomId!: string;
+  /**
+   * Context tặng — ĐÚNG 1 trong 2 (CHECK `chk_gift_events_context`): trong Party Room
+   * (`roomId`) hoặc cho tác giả video (`videoId`).
+   */
+  @Column({ type: 'uuid', nullable: true })
+  roomId!: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  videoId!: string | null;
 
   @Column({ type: 'uuid' })
   senderUserId!: string;

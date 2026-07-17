@@ -12,6 +12,10 @@ export enum NotificationType {
   GiftReceived = 'gift_received',
   PostLiked = 'post_liked',
   PostCommented = 'post_commented',
+  StreakMilestone = 'streak_milestone',
+  StreakAtRisk = 'streak_at_risk',
+  MatchInviteReceived = 'match_invite_received',
+  AdminBroadcast = 'admin_broadcast',
 }
 
 /**

@@ -56,6 +56,19 @@ export function decodeCursor<T extends Record<string, unknown>>(
 }
 
 /**
+ * Payload cursor dạng `{ seq }` hợp lệ — pattern keyset phổ biến nhất (Feed, Notification,
+ * Soul Match chat, Friend message: tất cả sort theo 1 cột `seq` tăng dần). Chỉ kiểm shape,
+ * không throw — caller tự quyết mã lỗi domain của mình (cùng triết lý `decodeCursor`).
+ */
+export function isValidSeqCursor(
+  payload: { seq?: unknown } | null,
+): payload is { seq: string } {
+  return (
+    !!payload && typeof payload.seq === 'string' && /^\d+$/.test(payload.seq)
+  );
+}
+
+/**
  * Helper chuẩn: query dư 1 row (limit + 1) rồi đưa vào đây — tự cắt về limit
  * và sinh nextCursor từ row cuối. `toCursorPayload` chọn field làm vị trí.
  */

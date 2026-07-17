@@ -10,8 +10,14 @@ export type {
   UserPage,
   UserBrowseFilter,
   UserBrowseCursorPosition,
+  AdminUserStats,
 } from './user.service';
-export { User, Gender, UserStatus } from './entities/user.entity';
+export {
+  User,
+  Gender,
+  SeekingGender,
+  UserStatus,
+} from './entities/user.entity';
 // Soul Match trả profile đối phương sau khi match (unlock) — dùng đúng DTO công khai của User,
 // không tự chế bản riêng (docs/services/soul-match-service.md § 2)
 export { PublicProfileDto } from './dto/user-profile.dto';

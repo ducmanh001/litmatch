@@ -20,6 +20,12 @@ export const updateProfileSchema = z.object({
       'Mã vùng gồm 2 chữ in hoa, ví dụ VN',
     )
     .optional(),
+  interests: z
+    .array(z.string().trim().min(1).max(32))
+    .max(5, 'Tối đa 5 sở thích'),
+  seekingGender: z.enum(['male', 'female', 'any']),
+  seekingAgeMin: z.number().int().min(18).max(99),
+  seekingAgeMax: z.number().int().min(18).max(99),
 });
 
 export type UpdateProfileForm = z.infer<typeof updateProfileSchema>;

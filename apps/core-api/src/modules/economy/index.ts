@@ -5,7 +5,13 @@
  */
 export { EconomyModule } from './economy.module';
 export { EconomyService } from './economy.service';
-export type { WalletView, TransactionView } from './economy.service';
+export type {
+  WalletView,
+  TransactionView,
+  IapProductCatalogView,
+  VipPlanCatalogView,
+  AdminEconomyAnalytics,
+} from './economy.service';
 export { VipTier } from './entities/wallet.entity';
 export { IapProvider } from './entities/iap.entities';
 export { TransactionType } from './entities/transaction.entity';

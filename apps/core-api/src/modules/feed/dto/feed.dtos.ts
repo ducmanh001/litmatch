@@ -1,9 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsUrl, MaxLength } from 'class-validator';
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUrl,
+  MaxLength,
+} from 'class-validator';
 import type { CursorPage } from '@litmatch/common-dtos';
 
 import { Comment } from '../entities/comment.entity';
-import { Post } from '../entities/post.entity';
+import { Post, PostAudience } from '../entities/post.entity';
 
 export class CreatePostDto {
   @ApiPropertyOptional()
@@ -16,6 +22,11 @@ export class CreatePostDto {
   @IsOptional()
   @IsUrl()
   imageUrl?: string;
+
+  @ApiPropertyOptional({ enum: PostAudience, default: PostAudience.Public })
+  @IsOptional()
+  @IsEnum(PostAudience)
+  audience?: PostAudience;
 }
 
 export class PostDto {
@@ -23,6 +34,7 @@ export class PostDto {
   @ApiProperty() authorUserId!: string;
   @ApiProperty({ nullable: true, type: String }) content!: string | null;
   @ApiProperty({ nullable: true, type: String }) imageUrl!: string | null;
+  @ApiProperty({ enum: PostAudience }) audience!: PostAudience;
   @ApiProperty() likeCount!: number;
   @ApiProperty() commentCount!: number;
   @ApiProperty() createdAt!: Date;
@@ -33,6 +45,7 @@ export class PostDto {
     dto.authorUserId = post.authorUserId;
     dto.content = post.content;
     dto.imageUrl = post.imageUrl;
+    dto.audience = post.audience;
     dto.likeCount = post.likeCount;
     dto.commentCount = post.commentCount;
     dto.createdAt = post.createdAt;

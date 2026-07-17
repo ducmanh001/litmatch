@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsUUID } from 'class-validator';
 
 import { Gift } from '../entities/gift.entity';
@@ -12,6 +12,13 @@ export class SendGiftDto {
   @ApiProperty()
   @IsUUID()
   receiverUserId!: string;
+}
+
+/** Quà cho tác giả video — người nhận suy từ video, client KHÔNG gửi receiverUserId. */
+export class SendVideoGiftDto {
+  @ApiProperty()
+  @IsUUID()
+  giftId!: string;
 }
 
 export class GiftDto {
@@ -34,7 +41,10 @@ export class GiftEventDto {
   @ApiProperty() id!: string;
   @ApiProperty() giftId!: string;
   @ApiProperty() giftCode!: string;
-  @ApiProperty() roomId!: string;
+  @ApiPropertyOptional({ nullable: true, type: String })
+  roomId!: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String })
+  videoId!: string | null;
   @ApiProperty() senderUserId!: string;
   @ApiProperty() receiverUserId!: string;
   @ApiProperty() priceDiamond!: number;
@@ -54,6 +64,7 @@ export class GiftEventDto {
     dto.giftId = event.giftId;
     dto.giftCode = giftCode;
     dto.roomId = event.roomId;
+    dto.videoId = event.videoId;
     dto.senderUserId = event.senderUserId;
     dto.receiverUserId = event.receiverUserId;
     dto.priceDiamond = event.priceDiamond;

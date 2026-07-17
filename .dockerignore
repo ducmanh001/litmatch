@@ -5,4 +5,5 @@
 !dist/apps/core-api/**
 !dist/apps/signaling-gateway/
 !dist/apps/signaling-gateway/**
-
+!docker/
+!docker/dev-entrypoint.sh

@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ghép đôi — Litmatch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Fraunces:ital,wght@0,500;0,600;1,500;1,600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#0c0a10;
+    --bg-elev:#17111c;
+    --bg-elev-2:#1f1824;
+    --border:rgba(255,255,255,.09);
+    --border-soft:rgba(255,255,255,.06);
+    --text:#f5eff3;
+    --text-dim:#ab9dae;
+    --text-mute:#716574;
+    --pink:#ef4868;
+    --pink-2:#ff7f97;
+    --orange:#f5a24a;
+    --purple:#9c7ef0;
+    --teal:#45c7a8;
+    --grad-warm:linear-gradient(135deg,#ef4868,#f5a24a);
+    --grad-cool:linear-gradient(135deg,#9c7ef0,#ef4868);
+    --grad-teal:linear-gradient(135deg,#45c7a8,#9c7ef0);
+    --shadow-card:0 14px 34px -14px rgba(0,0,0,.55);
+    --shadow-pink:0 10px 26px -8px rgba(239,72,104,.5);
+    --radius-lg:22px;
+  }
+  *{box-sizing:border-box;}
+  body,h1,h2,h3,h4,h5,p,ul{margin:0;padding:0;}
+  body{
+    font-family:'Be Vietnam Pro',sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  :focus-visible{outline:2px solid var(--pink-2);outline-offset:2px;}
+  .bg-decor{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;}
+  .glow{position:absolute;border-radius:50%;filter:blur(110px);}
+  .layout{position:relative;z-index:1;display:flex;min-height:100vh;}
+
+  /* SIDEBAR */
+  .sidebar{width:258px;flex-shrink:0;background:rgba(17,13,20,.55);border-right:1px solid var(--border-soft);padding:26px 16px;display:flex;flex-direction:column;gap:3px;backdrop-filter:blur(18px);}
+  .logo{display:flex;align-items:center;gap:10px;padding:6px 10px 26px;}
+  .logo-dot{width:26px;height:26px;border-radius:50%;background:var(--grad-warm);flex-shrink:0;box-shadow:var(--shadow-pink);}
+  .logo-text{font-family:'Fraunces',serif;font-style:italic;font-weight:600;font-size:21px;}
+  .nav-item{display:flex;align-items:center;gap:13px;padding:11px 13px;border-radius:12px;color:var(--text-dim);text-decoration:none;font-weight:600;font-size:14.5px;transition:.18s ease;}
+  .nav-item svg{width:19px;height:19px;flex-shrink:0;}
+  .nav-item:hover{background:rgba(255,255,255,.045);color:var(--text);}
+  .nav-item.active{background:linear-gradient(135deg,rgba(239,72,104,.2),rgba(245,162,74,.1));color:#fff;box-shadow:inset 0 0 0 1px rgba(239,72,104,.3);}
+
+  /* MAIN */
+  .main{flex:1;padding:34px 42px 60px;max-width:1360px;}
+  .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;margin-bottom:26px;}
+  .titleblock button.back{width:32px;height:32px;border-radius:9px;border:1px solid var(--border);background:var(--bg-elev);color:var(--text-dim);display:inline-flex;align-items:center;justify-content:center;margin-bottom:10px;cursor:pointer;}
+  .titleblock button.back svg{width:16px;height:16px;}
+  .eyebrow{font-size:12px;font-weight:700;letter-spacing:.09em;color:var(--pink-2);text-transform:uppercase;margin-bottom:6px;}
+  h1{font-family:'Fraunces',serif;font-weight:600;font-size:30px;color:#fff;}
+  .dots{display:flex;gap:7px;align-items:center;}
+  .dots span{width:11px;height:11px;border-radius:50%;display:inline-block;}
+  .topbar-right{display:flex;flex-direction:column;align-items:flex-end;gap:14px;}
+  .btn{border:none;cursor:pointer;font-family:inherit;font-weight:700;font-size:14px;border-radius:999px;display:inline-flex;align-items:center;gap:8px;transition:.18s ease;}
+  .btn svg{width:16px;height:16px;}
+  .btn-search{background:var(--grad-warm);color:#fff;padding:11px 20px;box-shadow:var(--shadow-pink);}
+  .btn-search:hover{transform:translateY(-2px);box-shadow:0 14px 30px -8px rgba(239,72,104,.6);}
+
+  /* HERO */
+  .hero-card{position:relative;overflow:hidden;background:var(--bg-elev);border:1px solid var(--border-soft);border-radius:var(--radius-lg);padding:34px 38px;display:flex;justify-content:space-between;align-items:center;gap:34px;margin-bottom:24px;box-shadow:var(--shadow-card);}
+  .hero-card::before{content:'';position:absolute;top:-90px;right:-70px;width:280px;height:280px;background:var(--grad-warm);filter:blur(70px);opacity:.35;border-radius:50%;}
+  .hero-left{position:relative;max-width:600px;}
+  .hero-left h2{font-family:'Fraunces',serif;font-weight:600;font-size:27px;line-height:1.3;color:#fff;margin-bottom:12px;}
+  .hero-left p{color:var(--text-dim);font-size:14.5px;max-width:520px;}
+  .hero-actions{position:relative;display:flex;flex-direction:column;gap:11px;flex-shrink:0;}
+  .btn-primary{background:var(--grad-warm);color:#fff;padding:13px 22px;box-shadow:var(--shadow-pink);white-space:nowrap;}
+  .btn-primary:hover{transform:translateY(-2px);}
+  .btn-outline{background:rgba(255,255,255,.03);color:var(--text);border:1px solid var(--border);padding:13px 22px;white-space:nowrap;}
+  .btn-outline:hover{border-color:var(--pink);color:#fff;background:rgba(239,72,104,.08);}
+  .btn-outline svg{color:var(--pink-2);}
+
+  /* GRID */
+  .grid-2col{display:grid;grid-template-columns:1.65fr 1fr;gap:22px;}
+  .card{background:var(--bg-elev);border:1px solid var(--border-soft);border-radius:var(--radius-lg);box-shadow:var(--shadow-card);}
+
+  /* SESSION / ERROR CARD */
+  .session-card{padding:70px 40px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;min-height:420px;justify-content:center;position:relative;overflow:hidden;}
+  .session-card::after{content:'';position:absolute;bottom:-100px;left:50%;transform:translateX(-50%);width:340px;height:200px;background:radial-gradient(ellipse,rgba(239,72,104,.16),transparent 70%);}
+  .error-badge{position:relative;width:64px;height:64px;border-radius:20px;background:linear-gradient(135deg,#ef4868,#a8294a);display:flex;align-items:center;justify-content:center;box-shadow:0 12px 28px -8px rgba(239,72,104,.55);margin-bottom:18px;}
+  .error-badge svg{width:28px;height:28px;color:#fff;}
+  .session-card h3{position:relative;font-size:19px;font-weight:700;margin-bottom:8px;}
+  .error-detail{position:relative;font-family:'SF Mono',ui-monospace,monospace;font-size:13px;color:var(--pink-2);background:rgba(239,72,104,.1);padding:6px 14px;border-radius:8px;margin-bottom:22px;}
+  .btn-retry{position:relative;background:var(--bg-elev-2);border:1px solid var(--border);color:var(--text);padding:12px 30px;}
+  .btn-retry:hover{border-color:var(--pink);color:#fff;}
+
+  /* SIDE COL */
+  .side-col{display:flex;flex-direction:column;gap:18px;}
+  .side-label{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--text-mute);text-transform:uppercase;margin-bottom:10px;}
+  .invite-card{padding:26px;text-align:center;display:flex;flex-direction:column;align-items:center;}
+  .badge-icon{width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;margin-bottom:14px;flex-shrink:0;}
+  .badge-icon svg{width:21px;height:21px;color:#fff;}
+  .badge-pink{background:var(--grad-warm);box-shadow:0 8px 20px -6px rgba(239,72,104,.5);}
+  .invite-card h4{font-size:15.5px;font-weight:700;margin-bottom:6px;}
+  .invite-card p{font-size:13px;color:var(--text-dim);}
+
+  .steps-card{padding:24px 26px 26px;}
+  .steps-card h4{font-size:15.5px;font-weight:700;margin-bottom:18px;}
+  .step{display:flex;gap:14px;position:relative;padding-bottom:22px;}
+  .step:last-child{padding-bottom:0;}
+  .step::before{content:'';position:absolute;left:16px;top:34px;bottom:0;width:1px;background:linear-gradient(to bottom,var(--border),transparent);}
+  .step:last-child::before{display:none;}
+  .step-num{width:33px;height:33px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13.5px;color:#fff;flex-shrink:0;}
+  .step-1{background:var(--grad-warm);box-shadow:0 6px 16px -6px rgba(239,72,104,.55);}
+  .step-2{background:var(--grad-cool);box-shadow:0 6px 16px -6px rgba(156,126,240,.5);}
+  .step-3{background:var(--grad-teal);box-shadow:0 6px 16px -6px rgba(69,199,168,.5);}
+  .step-body h5{font-size:14px;font-weight:700;margin-bottom:3px;}
+  .step-body p{font-size:12.8px;color:var(--text-dim);}
+
+  @media (prefers-reduced-motion: reduce){*{transition:none !important;}}
+  @media (max-width:900px){
+    .sidebar{width:74px;padding:22px 8px;}
+    .logo-text,.nav-label{display:none;}
+    .nav-item{justify-content:center;}
+    .logo{justify-content:center;padding:4px 0 22px;}
+  }
+  @media (max-width:780px){
+    .grid-2col{grid-template-columns:1fr;}
+    .hero-card{flex-direction:column;align-items:flex-start;}
+    .hero-actions{flex-direction:row;width:100%;}
+    .main{padding:26px 20px 48px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-decor">
+  <div class="glow" style="width:560px;height:560px;background:var(--pink);opacity:.16;top:-220px;left:-160px;"></div>
+  <div class="glow" style="width:480px;height:480px;background:var(--orange);opacity:.12;bottom:-180px;right:-120px;"></div>
+  <div class="glow" style="width:380px;height:380px;background:var(--purple);opacity:.10;top:45%;left:60%;"></div>
+</div>
+
+<svg style="display:none">
+  <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9a1 1 0 0 0 1 1H9a1 1 0 0 0 1-1v-4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v4a1 1 0 0 0 1 1h2.5a1 1 0 0 0 1-1v-9"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.4"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.8A2.8 2.8 0 0 1 6.8 3h10.4A2.8 2.8 0 0 1 20 5.8v7.4a2.8 2.8 0 0 1-2.8 2.8H10l-4.6 3.6v-3.6H6.8A2.8 2.8 0 0 1 4 13.2V5.8Z"/></symbol>
+  <symbol id="i-video" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2.6"/><path d="m21 8.5-5 3 5 3v-6Z"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3.4 20c0-3.3 2.5-5.4 5.6-5.4S14.6 16.7 14.6 20"/><circle cx="17.2" cy="9" r="2.3"/><path d="M15.9 14.3c2.3.35 4 2.2 4 5.2"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.3" width="6" height="6" rx="1.4"/><rect x="3.5" y="13.7" width="6" height="6" rx="1.4"/><path d="M12.7 6.3h7.8M12.7 9.7h7.8M12.7 15.7h7.8M12.7 19.1h7.8"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="2.4"/><path d="m4 7.2 8 5.8 8-5.8"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.2" r="3.6"/><path d="M4.5 20c0-4 3.4-6.6 7.5-6.6s7.5 2.6 7.5 6.6"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.6" cy="10.6" r="6.4"/><path d="m20 20-4.7-4.7"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.8 11a6.2 6.2 0 0 0 12.4 0"/><path d="M12 17.2v3.8M9 21h6"/></symbol>
+  <symbol id="i-chevron-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2 2.3 20h19.4L12 3.2Z"/><path d="M12 9.5v5M12 17.6h.01"/></symbol>
+</svg>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-dot"></span><span class="logo-text">Litmatch</span></div>
+    <a class="nav-item" href="#"><svg><use href="#i-home"/></svg><span class="nav-label">Trang chủ</span></a>
+    <a class="nav-item" href="#"><svg><use href="#i-pin"/></svg><span class="nav-label">Quanh đây</span></a>
+    <a class="nav-item active" href="#"><svg><use href="#i-chat"/></svg><span class="nav-label">Ghép đôi</span></a>
+    <a class="nav-item" href="#"><svg><use href="#i-video"/></svg><span class="nav-label">Video</span></a>
+    <a class="nav-item" href="#"><svg><use href="#i-users"/></svg><span class="nav-label">Party</span></a>
+    <a class="nav-item" href="#"><svg><use href="#i-list"/></svg><span class="nav-label">Bảng tin</span></a>
+    <a class="nav-item" href="#"><svg><use href="#i-mail"/></svg><span class="nav-label">Tin nhắn</span></a>
+    <a class="nav-item" href="#"><svg><use href="#i-user"/></svg><span class="nav-label">Cá nhân</span></a>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="titleblock">
+        <button class="back"><svg><use href="#i-chevron-left"/></svg></button>
+        <div class="eyebrow">Kết nối có chủ đích</div>
+        <h1>Ghép đôi</h1>
+      </div>
+      <div class="topbar-right">
+        <div class="dots"><span style="background:#ef4868"></span><span style="background:#f5a24a"></span><span style="background:#fff"></span></div>
+        <button class="btn btn-search"><svg><use href="#i-search"/></svg>Tìm quanh đây</button>
+      </div>
+    </div>
+
+    <div class="hero-card">
+      <div class="hero-left">
+        <div class="eyebrow">Tìm người yêu · Tìm người đồng hành</div>
+        <h2>Bắt đầu bằng một cuộc trò chuyện thật lòng.</h2>
+        <p>Litmatch giúp hai người làm quen qua câu chuyện và giọng nói, trong một không gian tôn trọng, rõ ràng và không vội vàng.</p>
+      </div>
+      <div class="hero-actions">
+        <button class="btn btn-primary"><svg><use href="#i-chat"/></svg>Nhắn tin ẩn danh</button>
+        <button class="btn btn-outline"><svg><use href="#i-mic"/></svg>Kết nối bằng voice</button>
+      </div>
+    </div>
+
+    <div class="grid-2col">
+      <div class="card session-card">
+        <div class="error-badge"><svg><use href="#i-alert"/></svg></div>
+        <h3>Chưa thể khôi phục phiên ghép đôi</h3>
+        <div class="error-detail">Validation failed (uuid is expected)</div>
+        <button class="btn btn-retry">Thử lại</button>
+      </div>
+
+      <div class="side-col">
+        <div>
+          <div class="side-label">Kết nối trực tiếp</div>
+          <div class="card invite-card">
+            <div class="badge-icon badge-pink"><svg><use href="#i-chat"/></svg></div>
+            <h4>Chưa có lời mời mới</h4>
+            <p>Khi ai đó mời bạn Soul hoặc Voice, bạn sẽ chủ động quyết định có tham gia hay không.</p>
+          </div>
+        </div>
+
+        <div class="card steps-card">
+          <h4>Một kết nối an toàn hơn</h4>
+          <div class="step">
+            <div class="step-num step-1">1</div>
+            <div class="step-body"><h5>Chọn cách bắt đầu</h5><p>Nhắn tin ẩn danh hoặc trò chuyện bằng giọng nói.</p></div>
+          </div>
+          <div class="step">
+            <div class="step-num step-2">2</div>
+            <div class="step-body"><h5>Hai người cùng xác nhận</h5><p>Kết nối chỉ bắt đầu khi cả hai đều sẵn sàng.</p></div>
+          </div>
+          <div class="step">
+            <div class="step-num step-3">3</div>
+            <div class="step-body"><h5>Bạn quyết định bước tiếp</h5><p>Tiếp tục khi thấy phù hợp, dừng lại bất cứ lúc nào.</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+document.querySelector('.btn-retry').addEventListener('click',function(){
+  var card=document.querySelector('.session-card');
+  card.style.transition='opacity .3s ease';
+  card.style.opacity='.45';
+  setTimeout(function(){card.style.opacity='1';},550);
+});
+</script>
+</body>
+</html>

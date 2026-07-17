@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="vi" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Litmatch — Tin nhắn</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        --ink: 27 20 32;
+        --surf: 36 27 41;
+        --surf2: 74 46 69;
+        --paper: 251 243 239;
+        --iris: 232 87 124;
+        --irisl: 232 87 124;
+        --aqua: 242 166 90;
+        --aqual: 242 166 90;
+        --diamond: 79 195 217;
+      }
+      html[data-theme='orange'] {
+        --ink: 16 11 9;
+        --surf: 29 22 19;
+        --surf2: 42 33 29;
+        --paper: 248 244 242;
+        --iris: 232 67 31;
+        --irisl: 255 90 54;
+        --aqua: 224 136 21;
+        --aqual: 245 164 40;
+      }
+      .theme-dot {
+        transition: transform 0.15s ease;
+      }
+      .theme-dot[data-active='true'] {
+        box-shadow:
+          0 0 0 2px rgb(var(--paper)),
+          0 0 0 3px rgb(var(--irisl));
+      }
+    </style>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              ink: 'rgb(var(--ink) / <alpha-value>)',
+              surf: 'rgb(var(--surf) / <alpha-value>)',
+              surf2: 'rgb(var(--surf2) / <alpha-value>)',
+              paper: 'rgb(var(--paper) / <alpha-value>)',
+              iris: 'rgb(var(--iris) / <alpha-value>)',
+              irisl: 'rgb(var(--irisl) / <alpha-value>)',
+              aqua: 'rgb(var(--aqua) / <alpha-value>)',
+              aqual: 'rgb(var(--aqual) / <alpha-value>)',
+              diamond: 'rgb(var(--diamond) / <alpha-value>)',
+            },
+            fontFamily: {
+              display: ['Fraunces', 'serif'],
+              body: ['"Be Vietnam Pro"', 'sans-serif'],
+              mono: ['"IBM Plex Mono"', 'monospace'],
+            },
+          },
+        },
+      };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;1,500;1,600&family=Be+Vietnam+Pro:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: 'Be Vietnam Pro', sans-serif;
+      }
+      .font-display {
+        font-family: 'Fraunces', serif;
+      }
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+    </style>
+  </head>
+  <body
+    class="bg-paper dark:bg-ink md:bg-slate-100 md:dark:bg-black text-slate-900 dark:text-slate-50 transition-colors duration-300"
+  >
+    <div class="md:flex md:max-w-[1440px] md:mx-auto">
+      <nav
+        class="hidden md:flex md:flex-col md:sticky md:top-0 md:h-screen md:w-20 lg:w-60 md:shrink-0 md:py-8 md:px-3 lg:px-4 md:border-r md:border-black/5 md:dark:border-white/5 md:bg-white/80 md:dark:bg-surf/60 md:backdrop-blur md:z-40 md:gap-1.5"
+      >
+        <div
+          class="hidden lg:flex items-center gap-2 font-display italic font-semibold text-lg px-3 mb-6"
+        >
+          <svg width="20" height="20" viewBox="0 0 28 28">
+            <circle
+              cx="11"
+              cy="14"
+              r="8"
+              fill="rgb(var(--irisl))"
+              opacity=".9"
+            />
+            <circle
+              cx="18"
+              cy="14"
+              r="8"
+              fill="rgb(var(--aqual))"
+              opacity=".75"
+            />
+          </svg>
+          Litmatch
+        </div>
+        <a
+          href="home.html"
+          class="flex items-center gap-3 px-3 py-3 rounded-xl justify-center lg:justify-start transition text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 font-semibold"
+          ><svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path
+              d="M12 3l9 8h-3v9h-5v-6H11v6H6v-9H3z"
+              stroke-linejoin="round"
+            /></svg
+          ><span class="hidden lg:inline text-sm">Trang chủ</span></a
+        >
+        <a
+          href="video.html"
+          class="flex items-center gap-3 px-3 py-3 rounded-xl justify-center lg:justify-start transition text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 font-semibold"
+          ><svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <rect x="3" y="4" width="18" height="16" rx="3" />
+            <path
+              d="M10 9.5l5 2.5-5 2.5z"
+              fill="currentColor"
+              stroke="none"
+            /></svg
+          ><span class="hidden lg:inline text-sm">Video</span></a
+        >
+        <a
+          href="party-list.html"
+          class="flex items-center gap-3 px-3 py-3 rounded-xl justify-center lg:justify-start transition text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 font-semibold"
+          ><svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <circle cx="9" cy="7" r="3" />
+            <circle cx="17" cy="8" r="2.5" />
+            <path
+              d="M2 21v-1a6 6 0 016-6h1a6 6 0 016 6v1M16 14a5 5 0 015 5v2"
+              stroke-linecap="round"
+            /></svg
+          ><span class="hidden lg:inline text-sm">Party</span></a
+        >
+        <a
+          href="feed.html"
+          class="flex items-center gap-3 px-3 py-3 rounded-xl justify-center lg:justify-start transition text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 font-semibold"
+          ><svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <rect x="3" y="3" width="18" height="18" rx="4" />
+            <path
+              d="M8 13l3 3 5-6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            /></svg
+          ><span class="hidden lg:inline text-sm">Bảng tin</span></a
+        >
+        <a
+          href="messages.html"
+          class="flex items-center gap-3 px-3 py-3 rounded-xl justify-center lg:justify-start transition bg-iris/10 text-irisl font-bold"
+          ><svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path
+              d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"
+              stroke-linejoin="round"
+            /></svg
+          ><span class="hidden lg:inline text-sm">Tin nhắn</span></a
+        >
+        <a
+          href="profile.html"
+          class="flex items-center gap-3 px-3 py-3 rounded-xl justify-center lg:justify-start transition text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 font-semibold"
+          ><svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <circle cx="12" cy="8" r="4" />
+            <path d="M4 21c0-4 4-6 8-6s8 2 8 6" stroke-linecap="round" /></svg
+          ><span class="hidden lg:inline text-sm">Cá nhân</span></a
+        >
+      </nav>
+
+      <div
+        data-lm-frame
+        class="max-w-[430px] md:max-w-2xl lg:max-w-[1200px] mx-auto md:mx-auto md:flex-1 min-h-screen relative pb-24 md:pb-10 md:my-6 md:rounded-[2rem] md:border md:border-black/10 md:dark:border-white/10 md:shadow-2xl md:shadow-black/10 md:overflow-hidden"
+      >
+        <div class="flex justify-end px-5 pt-3">
+          <div
+            class="flex items-center gap-1.5 bg-white dark:bg-surf border border-black/5 dark:border-white/10 rounded-full p-1.5"
+            role="group"
+            aria-label="Chọn giao diện màu"
+          >
+            <button
+              onclick="setTheme('pink')"
+              data-theme-btn="pink"
+              data-active="true"
+              class="theme-dot w-4 h-4 rounded-full"
+              style="background: #e8577c"
+              aria-label="Giao diện hồng"
+            ></button>
+            <button
+              onclick="setTheme('orange')"
+              data-theme-btn="orange"
+              data-active="false"
+              class="theme-dot w-4 h-4 rounded-full"
+              style="background: linear-gradient(135deg, #ff5a36, #e08815)"
+              aria-label="Giao diện cam"
+            ></button>
+            <button
+              onclick="setTheme('white')"
+              data-theme-btn="white"
+              data-active="false"
+              class="theme-dot w-4 h-4 rounded-full border border-black/10"
+              style="background: #fbf3ef"
+              aria-label="Giao diện trắng"
+            ></button>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between px-5 pt-6 pb-4">
+          <h1 class="font-display italic font-semibold text-2xl">Tin nhắn</h1>
+          <button
+            class="w-9 h-9 rounded-full bg-slate-100 dark:bg-surf2 flex items-center justify-center"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="M21 21l-4.3-4.3" stroke-linecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        <p
+          class="px-5 text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-3"
+        >
+          Match mới
+        </p>
+        <div class="flex gap-4 overflow-x-auto no-scrollbar px-5 pb-5">
+          <a href="chat.html" class="shrink-0 text-center w-16">
+            <div
+              class="relative w-16 h-16 rounded-full p-0.5 bg-gradient-to-br from-irisl to-aqual"
+            >
+              <img
+                src="https://api.dicebear.com/7.x/adventurer/svg?seed=Ngoc2"
+                class="w-full h-full rounded-full border-2 border-paper dark:border-ink bg-surf2"
+              />
+            </div>
+            <p class="text-[11px] font-semibold mt-1.5 truncate">Ngọc</p>
+          </a>
+          <a href="chat.html" class="shrink-0 text-center w-16">
+            <div
+              class="relative w-16 h-16 rounded-full p-0.5 bg-gradient-to-br from-irisl to-aqual"
+            >
+              <img
+                src="https://api.dicebear.com/7.x/adventurer/svg?seed=Bao2"
+                class="w-full h-full rounded-full border-2 border-paper dark:border-ink bg-surf2"
+              />
+            </div>
+            <p class="text-[11px] font-semibold mt-1.5 truncate">Bảo</p>
+          </a>
+          <a href="chat.html" class="shrink-0 text-center w-16">
+            <div
+              class="relative w-16 h-16 rounded-full p-0.5 bg-gradient-to-br from-irisl to-aqual"
+            >
+              <img
+                src="https://api.dicebear.com/7.x/adventurer/svg?seed=HaX2"
+                class="w-full h-full rounded-full border-2 border-paper dark:border-ink bg-surf2"
+              />
+            </div>
+            <p class="text-[11px] font-semibold mt-1.5 truncate">Hà</p>
+          </a>
+          <a href="chat.html" class="shrink-0 text-center w-16">
+            <div
+              class="relative w-16 h-16 rounded-full p-0.5 bg-gradient-to-br from-irisl to-aqual"
+            >
+              <img
+                src="https://api.dicebear.com/7.x/adventurer/svg?seed=Tuan2"
+                class="w-full h-full rounded-full border-2 border-paper dark:border-ink bg-surf2"
+              />
+            </div>
+            <p class="text-[11px] font-semibold mt-1.5 truncate">Tuấn</p>
+          </a>
+          <a href="chat.html" class="shrink-0 text-center w-16">
+            <div
+              class="relative w-16 h-16 rounded-full p-0.5 bg-gradient-to-br from-irisl to-aqual"
+            >
+              <img
+                src="https://api.dicebear.com/7.x/adventurer/svg?seed=Yen2"
+                class="w-full h-full rounded-full border-2 border-paper dark:border-ink bg-surf2"
+              />
+            </div>
+            <p class="text-[11px] font-semibold mt-1.5 truncate">Yến</p>
+          </a>
+        </div>
+
+        <div class="flex items-center gap-2 px-5 mb-3">
+          <p
+            class="text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500"
+          >
+            Hội thoại
+          </p>
+          <span
+            class="text-[10px] font-bold bg-iris/10 text-irisl px-2 py-0.5 rounded-full"
+            >3 chưa đọc</span
+          >
+        </div>
+
+        <div class="px-5 space-y-1">
+          <a href="chat.html" class="flex items-center gap-3 py-3">
+            <div class="relative shrink-0">
+              <img
+                src="https://api.dicebear.com/7.x/adventurer/svg?seed=Linh3"
+                class="w-[52px] h-[52px] rounded-full bg-surf2"
+              />
+              <span
+                class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-paper dark:border-ink"
+              ></span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="font-bold text-sm">Linh</p>
+              <p class="text-sm text-slate-500 dark:text-slate-400 truncate">
+                Voice Match hôm qua vui ghê, cảm ơn bạn 😄
+              </p>
+            </div>
+            <div class="text-right shrink-0">
+              <p class="text-xs text-slate-400">2 phút</p>
+              <span
+                class="inline-flex w-5 h-5 rounded-full bg-irisl text-white text-[10px] font-bold items-center justify-center mt-1"
+                >2</span
+              >
+            </div>
+          </a>
+          <a href="chat.html" class="flex items-center gap-3 py-3">
+            <div class="relative shrink-0">
+              <img
+                src="https://api.dicebear.com/7.x/adventurer/svg?seed=Khoi3"
+                class="w-[52px] h-[52px] rounded-full bg-surf2"
+              />
+              <span
+                class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-paper dark:border-ink"
+              ></span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="font-bold text-sm">Khôi</p>
+              <p class="text-sm text-slate-500 dark:text-slate-400 truncate">
+                Tối nay vào Party Room "Ca hát" không?
+              </p>
+            </div>
+            <div class="text-right shrink-0">
+              <p class="text-xs text-slate-400">15 phút</p>
+              <span
+                class="inline-flex w-5 h-5 rounded-full bg-irisl text-white text-[10px] font-bold items-center justify-center mt-1"
+                >1</span
+              >
+            </div>
+          </a>
+          <a href="chat.html" class="flex items-center gap-3 py-3">
+            <div class="relative shrink-0">
+              <img
+                src="https://api.dicebear.com/7.x/adventurer/svg?seed=Vy3"
+                class="w-[52px] h-[52px] rounded-full bg-surf2"
+              />
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="font-bold text-sm">Vy</p>
+              <p class="text-sm text-slate-500 dark:text-slate-400 truncate">
+                Bạn: Ừa hẹn cuối tuần nhé 🌿
+              </p>
+            </div>
+            <div class="text-right shrink-0">
+              <p class="text-xs text-slate-400">1 giờ</p>
+            </div>
+          </a>
+          <a href="chat.html" class="flex items-center gap-3 py-3">
+            <div class="relative shrink-0">
+              <img
+                src="https://api.dicebear.com/7.x/adventurer/svg?seed=Dat3"
+                class="w-[52px] h-[52px] rounded-full bg-surf2"
+              />
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="font-bold text-sm">Đạt</p>
+              <p class="text-sm text-slate-500 dark:text-slate-400 truncate">
+                Cảm ơn bạn đã tặng quà nha 🎁
+              </p>
+            </div>
+            <div class="text-right shrink-0">
+              <p class="text-xs text-slate-400">3 giờ</p>
+            </div>
+          </a>
+          <a href="chat.html" class="flex items-center gap-3 py-3">
+            <div class="relative shrink-0">
+              <img
+                src="https://api.dicebear.com/7.x/adventurer/svg?seed=Mai3"
+                class="w-[52px] h-[52px] rounded-full bg-surf2"
+              />
+              <span
+                class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-paper dark:border-ink"
+              ></span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="font-bold text-sm">Mai</p>
+              <p class="text-sm text-slate-500 dark:text-slate-400 truncate">
+                Soul Match xong mới biết cùng gu nhạc luôn 🎧
+              </p>
+            </div>
+            <div class="text-right shrink-0">
+              <p class="text-xs text-slate-400">Hôm qua</p>
+            </div>
+          </a>
+          <a href="chat.html" class="flex items-center gap-3 py-3">
+            <div class="relative shrink-0">
+              <img
+                src="https://api.dicebear.com/7.x/adventurer/svg?seed=Sonn3"
+                class="w-[52px] h-[52px] rounded-full bg-surf2"
+              />
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="font-bold text-sm">Sơn</p>
+              <p class="text-sm text-slate-500 dark:text-slate-400 truncate">
+                Hẹn gặp ở Đà Lạt nha, chúc đi vui vẻ!
+              </p>
+            </div>
+            <div class="text-right shrink-0">
+              <p class="text-xs text-slate-400">2 ngày</p>
+            </div>
+          </a>
+        </div>
+
+        <nav
+          class="md:hidden fixed bottom-0 inset-x-0 max-w-[430px] mx-auto bg-white/90 dark:bg-surf/90 backdrop-blur border-t border-black/5 dark:border-white/5 flex justify-around items-center h-16 px-2 z-40"
+        >
+          <a
+            href="home.html"
+            class="flex flex-col items-center gap-1 text-slate-400"
+            ><svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M12 3l9 8h-3v9h-5v-6H11v6H6v-9H3z"
+                stroke-linejoin="round"
+              /></svg
+            ><span class="text-[10px] font-semibold">Trang chủ</span></a
+          >
+          <a
+            href="video.html"
+            class="flex flex-col items-center gap-1 text-slate-400"
+            ><svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <rect x="3" y="4" width="18" height="16" rx="3" />
+              <path
+                d="M10 9.5l5 2.5-5 2.5z"
+                fill="currentColor"
+                stroke="none"
+              /></svg
+            ><span class="text-[10px] font-semibold">Video</span></a
+          >
+          <a
+            href="party-list.html"
+            class="flex flex-col items-center gap-1 text-slate-400"
+            ><svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <circle cx="9" cy="7" r="3" />
+              <circle cx="17" cy="8" r="2.5" />
+              <path
+                d="M2 21v-1a6 6 0 016-6h1a6 6 0 016 6v1M16 14a5 5 0 015 5v2"
+                stroke-linecap="round"
+              /></svg
+            ><span class="text-[10px] font-semibold">Party</span></a
+          >
+          <a
+            href="feed.html"
+            class="flex flex-col items-center gap-1 text-slate-400"
+            ><svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="4" />
+              <path
+                d="M8 13l3 3 5-6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              /></svg
+            ><span class="text-[10px] font-semibold">Bảng tin</span></a
+          >
+          <a
+            href="messages.html"
+            class="flex flex-col items-center gap-1 text-irisl"
+            ><svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
+              <path
+                d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"
+              /></svg
+            ><span class="text-[10px] font-bold">Tin nhắn</span></a
+          >
+          <a
+            href="profile.html"
+            class="flex flex-col items-center gap-1 text-slate-400"
+            ><svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 21c0-4 4-6 8-6s8 2 8 6" stroke-linecap="round" /></svg
+            ><span class="text-[10px] font-semibold">Cá nhân</span></a
+          >
+        </nav>
+      </div>
+    </div>
+
+    <script>
+      function setTheme(t) {
+        const html = document.documentElement;
+        if (t === 'white') {
+          html.classList.remove('dark');
+        } else {
+          html.classList.add('dark');
+          html.setAttribute('data-theme', t);
+        }
+        document.querySelectorAll('[data-theme-btn]').forEach((b) => {
+          b.dataset.active = b.dataset.themeBtn === t ? 'true' : 'false';
+        });
+      }
+    </script>
+
+    <!-- ===== Shared toast + confirm-sheet system (lm* helpers) ===== -->
+    <div
+      id="lmToastStack"
+      class="fixed bottom-24 md:bottom-8 inset-x-0 z-[300] flex flex-col items-center gap-2 px-4 pointer-events-none"
+    ></div>
+    <div id="lmConfirmOverlay" class="fixed inset-0 z-[310] hidden">
+      <div
+        class="absolute inset-0 bg-black/50"
+        onclick="lmCloseConfirm()"
+      ></div>
+      <div
+        id="lmConfirmPanel"
+        class="absolute bottom-0 inset-x-0 max-w-[430px] mx-auto bg-white dark:bg-surf rounded-t-3xl p-6 pb-8 translate-y-full transition-transform duration-300"
+      >
+        <div
+          class="w-10 h-1.5 rounded-full bg-slate-200 dark:bg-white/10 mx-auto mb-5"
+        ></div>
+        <p id="lmConfirmTitle" class="font-bold text-lg mb-1.5">Tiêu đề</p>
+        <p
+          id="lmConfirmMsg"
+          class="text-sm text-slate-500 dark:text-slate-400 mb-5 leading-relaxed"
+        >
+          Nội dung
+        </p>
+        <div id="lmConfirmExtra"></div>
+        <div class="flex gap-3">
+          <button
+            onclick="lmCloseConfirm()"
+            class="flex-1 py-3 rounded-2xl font-bold text-sm bg-slate-100 dark:bg-surf2"
+          >
+            Huỷ
+          </button>
+          <button
+            id="lmConfirmActionBtn"
+            class="flex-1 py-3 rounded-2xl font-bold text-sm text-white bg-gradient-to-br from-irisl to-irisl"
+          >
+            Xác nhận
+          </button>
+        </div>
+      </div>
+    </div>
+    <script>
+      // Scope the overlay/toast stack to the visible app-frame (if one exists on this page)
+      // instead of the full browser viewport -- otherwise on a wide PC screen the backdrop
+      // bleeds across the whole window instead of just the app card.
+      function lmSyncFrame() {
+        var frame = document.querySelector('[data-lm-frame]');
+        var overlay = document.getElementById('lmConfirmOverlay');
+        var stack = document.getElementById('lmToastStack');
+        if (!frame) {
+          overlay.style.cssText = '';
+          stack.style.cssText = '';
+          return;
+        }
+        var r = frame.getBoundingClientRect();
+        overlay.style.cssText =
+          'position:fixed;left:' +
+          r.left +
+          'px;top:' +
+          r.top +
+          'px;width:' +
+          r.width +
+          'px;height:' +
+          r.height +
+          'px;right:auto;bottom:auto;';
+        stack.style.cssText =
+          'position:fixed;left:' +
+          r.left +
+          'px;width:' +
+          r.width +
+          'px;bottom:' +
+          (window.innerHeight - r.bottom + 24) +
+          'px;top:auto;right:auto;';
+      }
+      window.addEventListener('resize', lmSyncFrame);
+      window.addEventListener('orientationchange', lmSyncFrame);
+
+      function lmToast(msg, opts) {
+        opts = opts || {};
+        lmSyncFrame();
+        var stack = document.getElementById('lmToastStack');
+        if (!stack) return;
+        var el = document.createElement('div');
+        el.className =
+          'pointer-events-auto max-w-[92%] flex items-center gap-2 px-4 py-3 rounded-2xl shadow-xl shadow-black/10 text-sm font-semibold ' +
+          (opts.tone === 'warn'
+            ? 'bg-rose-500 text-white'
+            : 'bg-ink text-white dark:bg-white dark:text-ink');
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(8px)';
+        el.style.transition = 'all .2s ease';
+        el.innerHTML =
+          '<span>' +
+          (opts.icon || (opts.tone === 'warn' ? '⚠️' : '✓')) +
+          '</span><span>' +
+          msg +
+          '</span>';
+        stack.appendChild(el);
+        requestAnimationFrame(function () {
+          el.style.opacity = '1';
+          el.style.transform = 'translateY(0)';
+        });
+        setTimeout(function () {
+          el.style.opacity = '0';
+          el.style.transform = 'translateY(8px)';
+          setTimeout(function () {
+            el.remove();
+          }, 200);
+        }, 2600);
+      }
+      var lmConfirmCallback = null;
+      function lmConfirm(title, msg, onConfirm, opts) {
+        opts = opts || {};
+        lmSyncFrame();
+        document.getElementById('lmConfirmTitle').textContent = title;
+        document.getElementById('lmConfirmMsg').textContent = msg;
+        document.getElementById('lmConfirmExtra').innerHTML =
+          opts.extraHtml || '';
+        var btn = document.getElementById('lmConfirmActionBtn');
+        btn.textContent = opts.actionLabel || 'Xác nhận';
+        btn.className =
+          'flex-1 py-3 rounded-2xl font-bold text-sm text-white ' +
+          (opts.tone === 'danger'
+            ? 'bg-rose-500'
+            : 'bg-gradient-to-br from-irisl to-irisl');
+        lmConfirmCallback = onConfirm || null;
+        document.getElementById('lmConfirmOverlay').classList.remove('hidden');
+        requestAnimationFrame(function () {
+          document
+            .getElementById('lmConfirmPanel')
+            .classList.remove('translate-y-full');
+        });
+      }
+      function lmCloseConfirm() {
+        var panel = document.getElementById('lmConfirmPanel');
+        panel.classList.add('translate-y-full');
+        setTimeout(function () {
+          document.getElementById('lmConfirmOverlay').classList.add('hidden');
+          document.getElementById('lmConfirmActionBtn').style.display = '';
+        }, 300);
+      }
+      document
+        .getElementById('lmConfirmActionBtn')
+        .addEventListener('click', function () {
+          var cb = lmConfirmCallback;
+          lmCloseConfirm();
+          if (cb) cb();
+        });
+    </script>
+  </body>
+</html>

@@ -1,41 +1,191 @@
 @import 'tailwindcss';
+@custom-variant warm (&:where(.theme-warm, .theme-warm *));
 
 /*
  * Design tokens của admin (docs/13 § 13.9) — 1 nơi duy nhất khai màu/radius có ngữ nghĩa.
- * Đổi theme = đổi biến ở :root, không sửa className rải rác.
+ * Đổi theme = đổi biến ở :root/.light/.theme-warm, không sửa className rải rác.
+ *
+ * Nguồn: layouts/admins/litmatch-admin-dashboard (2).html — 4 tổ hợp Cyan/Ấm x Tối/Sáng.
+ * `.light` và `.theme-warm` là 2 class độc lập đặt trên <html> (xem theme-slider.tsx),
+ * mặc định (không class nào) = Cyan Tối.
  */
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --page-bg: #05070d;
+  --background: #0a0f1d;
+  --card: #121b30;
+  --muted: #0e1526;
+  --border: rgb(255 255 255 / 7%);
+  --foreground: #e9eef7;
+  --muted-foreground: #8793a8;
+  --dimmer: #57657c;
+  --primary: #2be3e0;
+  --accent: #6b8cff;
+  --primary-soft: rgb(43 227 224 / 14%);
+  --success: #34d399;
+  --success-bg: rgb(52 211 153 / 14%);
+  --destructive: #ff4d5e;
+  --destructive-bg: rgb(255 77 94 / 14%);
+  /* Không đổi theo theme — mockup hardcode rgba này y hệt ở cả 4 tổ hợp (badge "VIP/gold"). */
+  --gold-bg: rgb(255 171 92 / 16%);
+  --brand-foreground: #06222a;
+  --avatar-foreground: #0b1220;
+  --radius: 1rem;
+  --shadow: 0 30px 70px -20px rgb(0 0 0 / 65%);
+  --glow: drop-shadow(0 0 9px rgb(43 227 224 / 55%));
+}
+
+.light {
+  --page-bg: #e6eaf0;
+  --background: #f4f6fa;
   --card: #ffffff;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --border: #e2e8f0;
-  --primary: #4f46e5;
-  --primary-foreground: #eef2ff;
-  --destructive: #dc2626;
-  --destructive-foreground: #fef2f2;
-  --ring: #6366f1;
-  --radius: 0.5rem;
+  --muted: #eef1f6;
+  --border: rgb(15 23 42 / 8%);
+  --foreground: #101828;
+  --muted-foreground: #66707f;
+  --dimmer: #98a2b3;
+  --primary: #0a94a1;
+  --accent: #4f6fee;
+  --primary-soft: rgb(10 148 161 / 10%);
+  --success: #0d9668;
+  --success-bg: rgb(16 185 129 / 12%);
+  --shadow: 0 18px 40px -16px rgb(15 23 42 / 18%);
+  --glow: none;
+}
+
+.theme-warm {
+  --page-bg: #07080a;
+  --background: #10121a;
+  --card: #1a1d27;
+  --muted: #141720;
+  --border: rgb(255 255 255 / 7%);
+  --foreground: #eef0f3;
+  --muted-foreground: #8f929c;
+  --dimmer: #585a66;
+  --primary: #ff8a5c;
+  --accent: #ffbe61;
+  --primary-soft: rgb(255 138 92 / 13%);
+  --success: #34d399;
+  --success-bg: rgb(52 211 153 / 14%);
+  --shadow: 0 30px 70px -20px rgb(0 0 0 / 65%);
+  --glow: drop-shadow(0 0 8px rgb(255 138 92 / 45%));
+  --brand-foreground: #2b0f06;
+  --avatar-foreground: #2b1608;
+}
+
+.theme-warm.light {
+  --page-bg: #eceef2;
+  --background: #f6f7fa;
+  --card: #ffffff;
+  --muted: #eef0f4;
+  --border: rgb(15 23 42 / 8%);
+  --foreground: #14161c;
+  --muted-foreground: #6b6e78;
+  --dimmer: #9b9ea8;
+  --primary: #dd5b2a;
+  --accent: #c07f16;
+  --primary-soft: rgb(221 91 42 / 10%);
+  --success: #0d9668;
+  --success-bg: rgb(16 185 129 / 12%);
+  --shadow: 0 18px 40px -16px rgb(15 23 42 / 16%);
+  --glow: none;
 }
 
 @theme inline {
+  --color-page: var(--page-bg);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-dimmer: var(--dimmer);
   --color-border: var(--border);
   --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-foreground: #ffffff;
+  --color-primary-soft: var(--primary-soft);
+  --color-accent: var(--accent);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
   --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-ring: var(--ring);
+  --color-destructive-bg: var(--destructive-bg);
+  --color-destructive-foreground: #ffffff;
+  --color-gold-bg: var(--gold-bg);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-avatar-foreground: var(--avatar-foreground);
+  --color-ring: var(--primary);
   --radius-md: var(--radius);
+  --font-body:
+    'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    sans-serif;
 }
 
 body {
-  background-color: var(--background);
+  background-color: var(--page-bg);
   color: var(--foreground);
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
+}
+
+/* Tooltip hover cho sidebar icon-rail (layouts/admins mockup .nav-item::after) */
+.nav-tip {
+  position: absolute;
+  left: 54px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  z-index: 30;
+  white-space: nowrap;
+}
+.nav-item-tip-trigger:hover .nav-tip,
+.nav-item-tip-trigger:focus-visible .nav-tip {
+  opacity: 1;
+}
+
+@keyframes live-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(255 77 94 / 50%);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgb(255 77 94 / 0%);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(255 77 94 / 0%);
+  }
+}
+.live-dot {
+  animation: live-pulse 1.8s infinite;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot {
+    animation: none;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+  }
 }

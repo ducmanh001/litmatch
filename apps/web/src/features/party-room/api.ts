@@ -13,6 +13,7 @@ import type { ApiSchema } from '@litmatch/api-client';
 export type PartyRoomDto = ApiSchema<'PartyRoomDto'>;
 export type PartyRoomMemberDto = ApiSchema<'PartyRoomMemberDto'>;
 export type PartyRole = PartyRoomMemberDto['role'];
+export type GiftDto = ApiSchema<'GiftDto'>;
 
 const ROOM_LIST_PAGE_LIMIT = 20;
 
@@ -27,12 +28,26 @@ export const partyRoomKeys = {
   profile: (userId: string) => ['party-room', 'profile', userId] as const,
 };
 
-export function useRoomList() {
+export function useRoomList(filters?: {
+  q?: string;
+  category?: PartyRoomDto['category'];
+}) {
   return useInfiniteQuery({
-    queryKey: partyRoomKeys.list,
+    queryKey: [
+      ...partyRoomKeys.list,
+      filters?.q ?? '',
+      filters?.category ?? 'all',
+    ],
     queryFn: async ({ pageParam }) => {
       const res = await apiClient.GET('/api/v1/party/rooms', {
-        params: { query: { limit: ROOM_LIST_PAGE_LIMIT, cursor: pageParam } },
+        params: {
+          query: {
+            limit: ROOM_LIST_PAGE_LIMIT,
+            cursor: pageParam,
+            q: filters?.q || undefined,
+            category: filters?.category,
+          },
+        },
       });
       return res.data;
     },
@@ -44,9 +59,12 @@ export function useRoomList() {
 export function useCreateRoom() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (title: string) => {
+    mutationFn: async (input: {
+      title: string;
+      category: PartyRoomDto['category'];
+    }) => {
       const res = await apiClient.POST('/api/v1/party/rooms', {
-        body: { title },
+        body: input,
       });
       return res.data?.data;
     },
@@ -118,6 +136,40 @@ export function useChangeRole(roomId: string) {
       void queryClient.invalidateQueries({
         queryKey: partyRoomKeys.detail(roomId),
       });
+    },
+  });
+}
+
+/** Catalog quà công khai — dùng chung cho mọi phòng, không phụ thuộc roomId. */
+export function useGiftCatalog() {
+  return useQuery({
+    queryKey: ['gifts', 'catalog'] as const,
+    queryFn: async () => {
+      const res = await apiClient.GET('/api/v1/gifts');
+      return res.data?.data ?? [];
+    },
+  });
+}
+
+/** Tặng quà trong phòng — trừ DIA người tặng, cần Idempotency-Key theo intent (docs/05 § 5.10). */
+export function useSendGift(roomId: string) {
+  return useMutation({
+    mutationFn: async (input: {
+      giftId: string;
+      receiverUserId: string;
+      idempotencyKey: string;
+    }) => {
+      const res = await apiClient.POST('/api/v1/party/rooms/{roomId}/gifts', {
+        params: {
+          path: { roomId },
+          header: { 'Idempotency-Key': input.idempotencyKey },
+        },
+        body: {
+          giftId: input.giftId,
+          receiverUserId: input.receiverUserId,
+        },
+      });
+      return res.data?.data;
     },
   });
 }

@@ -5,6 +5,7 @@ export const createPostSchema = z
   .object({
     content: z.string().trim().max(2000).optional(),
     imageUrl: z.union([z.literal(''), z.string().trim().url()]).optional(),
+    audience: z.enum(['public', 'friends', 'only_me']),
   })
   .refine(
     (value) =>
