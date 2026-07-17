@@ -39,10 +39,20 @@ export function FriendPicker({
   const createSession = useCreateSession();
   const videoUrl = form.watch('videoUrl');
   // Gợi ý mềm, không chặn submit — server là nơi validate whitelist domain thật.
-  const looksLikeYoutubeUrl =
-    videoUrl.length === 0 ||
-    videoUrl.includes('youtube.com') ||
-    videoUrl.includes('youtu.be');
+  const looksLikeYoutubeUrl = (() => {
+    if (videoUrl.length === 0) return true;
+    try {
+      const hostname = new URL(videoUrl).hostname.toLowerCase();
+      return (
+        hostname === 'youtube.com' ||
+        hostname.endsWith('.youtube.com') ||
+        hostname === 'youtu.be' ||
+        hostname.endsWith('.youtu.be')
+      );
+    } catch {
+      return false;
+    }
+  })();
 
   const message =
     form.formState.errors.friendUserId?.message ??
