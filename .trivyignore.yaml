@@ -5,3 +5,10 @@ misconfigurations:
   - id: KSV-0009
     paths:
       - k8s/base/media-server/deployment.yaml
+  - id: DS-0002
+    paths:
+      - Dockerfile.dev
+    # Lý do: image dev cố tình start bằng root để entrypoint script
+    # dùng su-exec chown bind-mounted volumes theo UID/GID của host user,
+    # rồi tự hạ quyền xuống non-root trước khi chạy dev server.
+    # Không áp dụng USER tĩnh vì sẽ phá vỡ cơ chế này.
