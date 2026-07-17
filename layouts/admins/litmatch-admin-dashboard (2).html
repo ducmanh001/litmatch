@@ -1197,7 +1197,7 @@
     if (!tbody) return;
     tbody.innerHTML = GIFTS.map(function(g){
       return '<tr>' +
-        '<td><span class="mono-id">' + g.code + '</span></td>' +
+        '<td><span class="mono-id">' + esc(g.code) + '</span></td>' +
         '<td>' + esc(g.name) + '</td>' +
         '<td><input class="filter-input" style="height:30px;width:100px;" value="' + g.price + '" data-price-input="' + g.id + '"></td>' +
         '<td>' + (g.active ? '<span class="pill pill-green">Đang bán</span>' : '<span class="pill pill-neutral">Đã tắt</span>') + '</td>' +
