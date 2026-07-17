@@ -1,0 +1,20 @@
+# Biến thể cho docker-compose.dev.yml: LiveKit dùng DNS nội bộ cùng Compose project, thay vì
+# host.docker.internal (không route được ở một số Docker daemon Linux).
+port: 7880
+prometheus_port: 6789
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50200
+  use_external_ip: false
+redis:
+  address: redis:6379
+keys:
+  devkey: devsecret_change_me_0123456789abcdef
+webhook:
+  api_key: devkey
+  urls:
+    - http://core-api:3000/api/v1/calling/webhooks/livekit
+    - http://core-api:3000/api/v1/party/webhooks/livekit
+logging:
+  level: info

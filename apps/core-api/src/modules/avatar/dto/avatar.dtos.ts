@@ -40,3 +40,8 @@ export class AvatarConfigDto {
   /** Sắp theo zIndex — client ghép layer theo đúng thứ tự này. */
   @ApiProperty({ type: [AvatarAssetDto] }) layers!: AvatarAssetDto[];
 }
+
+export class AvatarBuyResultDto {
+  /** true = retry cùng Idempotency-Key — không trừ diamond lần 2. */
+  @ApiProperty() replayed!: boolean;
+}

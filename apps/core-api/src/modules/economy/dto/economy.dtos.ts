@@ -49,6 +49,30 @@ export class IapProductDto {
   diamonds!: string;
 }
 
+export class VipPlanDto {
+  @ApiProperty({ example: 'vip-30d' })
+  id!: string;
+
+  @ApiProperty({ enum: VipTier })
+  tier!: VipTier;
+
+  @ApiProperty({ example: 30 })
+  days!: number;
+
+  @ApiProperty({
+    example: '500',
+    description: 'Giá gói bằng diamond (bigint dạng chuỗi)',
+  })
+  priceDiamond!: string;
+}
+
+export class VipPurchaseResultDto {
+  @ApiProperty() transactionId!: string;
+  @ApiProperty({ enum: VipTier }) tier!: VipTier;
+  @ApiProperty({ type: Date }) vipExpiresAt!: Date;
+  @ApiProperty() replayed!: boolean;
+}
+
 export class WalletDto {
   @ApiProperty({
     example: '1200',

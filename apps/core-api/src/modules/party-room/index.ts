@@ -5,8 +5,14 @@
  */
 export { PartyRoomModule } from './party-room.module';
 export { PartyRoomService } from './party-room.service';
+export type {
+  ClosePartyRoomResult,
+  PartyRoomSummary,
+  PartyRoomTransitionHook,
+} from './party-room.service';
 export {
   PartyRoom,
+  PartyRoomCategory,
   PartyRoomStatus,
   PartyRoomCloseReason,
 } from './entities/party-room.entity';

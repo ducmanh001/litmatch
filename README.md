@@ -51,10 +51,55 @@ Xem trạng thái chi tiết theo giai đoạn ở [`docs/07-roadmap.md`](./docs
 ## Bắt đầu
 
 1. Dùng Node.js 22 + pnpm 11.9, sau đó chạy `cp .env.example .env`.
-2. Chạy `pnpm bootstrap` để cài dependency, khởi động Postgres/Redis/Kafka, chạy migration và kiểm tra môi trường. Những lần sau dùng `pnpm infra:up` và `pnpm doctor`.
+2. Chọn cách chạy: dùng Compose development ở phần dưới (`pnpm dev:up`), hoặc dùng host-native
+   `pnpm bootstrap` để cài dependency, khởi động Postgres/Redis/Kafka, chạy migration và kiểm tra
+   môi trường. Với host-native, những lần sau dùng `pnpm infra:up` và `pnpm doctor`.
 3. Đọc [`docs/00-overview-and-index.md`](./docs/00-overview-and-index.md) — mục lục đầy đủ.
 4. Đọc [`docs/03-architecture.md`](./docs/03-architecture.md) — quyết định kiến trúc quan trọng nhất, đặc biệt § 3.8 (SFU, matching shard, ledger cho quy mô lớn).
 5. Agent làm việc theo [`AGENTS.md`](./AGENTS.md) và quy trình ở [`docs/08-working-with-agents.md`](./docs/08-working-with-agents.md).
+
+### Chạy toàn bộ local development bằng Docker
+
+Compose development chạy hạ tầng, migration, Core API, Signaling, Admin, Web và LiveKit cùng một
+network, ở chế độ hot reload. Browser vẫn dùng các địa chỉ local quen thuộc: Web `:4300`, Admin
+`:4200`, Core API `:3000/docs`, Signaling `:3001`, LiveKit `:7880`.
+
+#### Lần đầu trên máy mới
+
+```bash
+cp .env.example .env
+cp apps/admin/.env.example apps/admin/.env.local
+cp apps/web/.env.example apps/web/.env.local
+pnpm dev:up
+```
+
+Lần đầu Docker tạo dev image, named volume `node_modules` Linux và chạy migration; thời gian phụ
+thuộc tốc độ tải package. Không cần chạy `pnpm bootstrap` riêng nếu chỉ dùng luồng Compose này.
+
+#### Mỗi ngày / các lần sau
+
+```bash
+pnpm dev:up
+```
+
+Lệnh trả terminal sau khi các container đã được tạo. Xem tiến trình boot hoặc log runtime bằng
+`pnpm dev:logs`; kiểm tra container/health bằng `pnpm dev:ps`. `pnpm dev:down` dừng toàn bộ stack
+nhưng giữ volume Postgres/Redis/Kafka và dependency cache.
+
+#### Khi thay đổi dependency, Dockerfile hoặc hạ tầng
+
+| Thay đổi                                   | Lệnh cần chạy                                                                            |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| Thêm/nâng dependency đã cập nhật lockfile  | `pnpm dev:install && pnpm dev:up`                                                        |
+| Sửa `Dockerfile.dev`                       | `pnpm dev:rebuild`                                                                       |
+| Thêm/sửa service hoặc config trong Compose | `pnpm dev:up`                                                                            |
+| Thêm migration                             | `pnpm dev:up` — service `migrate` chạy trước Core API mỗi lần                            |
+| Thêm biến môi trường                       | Cập nhật `.env.example`, thêm key tương ứng vào `.env`, rồi `pnpm dev:up && pnpm doctor` |
+
+Compose dev dùng named volume cho `node_modules`, nên không ghi dependency do container tạo vào
+working tree host. Hạ tầng chỉ phục vụ local development thêm vào `docker-compose.dev.yml`; nếu
+thành phần đó là baseline deploy/runtime, phải cập nhật architecture/ADR, env example và deployment
+theo quy định trong `AGENTS.md`, không chỉ thêm local container.
 
 Các lệnh hạ tầng thường dùng:
 

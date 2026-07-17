@@ -2,12 +2,14 @@ import { DataSource } from 'typeorm';
 
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
 import { InitAuthUser1751900000000 } from '../../database/migrations/1751900000000-init-auth-user';
+import { UserProfilePreferences1755800000000 } from '../../database/migrations/1755800000000-user-profile-preferences';
 import { UserRole1753600000000 } from '../../database/migrations/1753600000000-user-role';
 import { MatchingCore1752200000000 } from '../../database/migrations/1752200000000-matching-core';
 import { MatchingGenderPreference1752300000000 } from '../../database/migrations/1752300000000-matching-gender-preference';
 import { SoulMatch1752400000000 } from '../../database/migrations/1752400000000-soul-match';
 import { FriendChat1752600000000 } from '../../database/migrations/1752600000000-friend-chat';
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
+import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
 import { MiniGame1753400000000 } from '../../database/migrations/1753400000000-mini-game';
 
 import { MiniGameErrors } from './mini-game.errors';
@@ -133,12 +135,14 @@ d('Mini Game integration (Postgres thật)', () => {
       ],
       migrations: [
         InitAuthUser1751900000000,
+        UserProfilePreferences1755800000000,
         UserRole1753600000000,
         MatchingCore1752200000000,
         MatchingGenderPreference1752300000000,
         SoulMatch1752400000000,
         FriendChat1752600000000,
         Safety1752800000000,
+        ReportTargetVideo1754900000000,
         MiniGame1753400000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
@@ -164,7 +168,13 @@ d('Mini Game integration (Postgres thật)', () => {
     );
     friend = new FriendService(
       ds.getRepository(Friendship),
+      // member state (read/mute) không dùng ở suite này — stub rỗng
+      { findOne: async () => null } as never,
       conversationService,
+      // stub — suite này chỉ dùng ensureFriendship/areFriends, không gọi sendMessage/streak
+      {
+        recordActivity: async () => ({ streak: {}, milestoneHit: null }),
+      } as never,
       safety,
       {
         create: async () => ({ id: 'notif-stub' }),

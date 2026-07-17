@@ -22,16 +22,23 @@ function renderList() {
 describe('FriendsList', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('empty — gợi ý tìm ghép đôi', async () => {
+  it('empty — hiển thị hướng dẫn thật, không có hội thoại giả', async () => {
     vi.spyOn(apiClient, 'GET').mockResolvedValue({
       data: { data: [] },
     } as never);
     renderList();
 
-    expect(await screen.findByText(/Chưa có bạn bè/)).toBeVisible();
-    expect(
-      screen.getByRole('link', { name: 'Tìm ghép đôi' }),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Bạn chưa có kết nối nào')).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Ghép đôi' })).toHaveAttribute(
+      'href',
+      '/matching',
+    );
+    expect(screen.getByRole('link', { name: 'Quanh đây' })).toHaveAttribute(
+      'href',
+      '/discovery',
+    );
+    expect(screen.getAllByRole('link')).toHaveLength(2);
+    expect(screen.queryByText(/Dữ liệu minh hoạ/)).not.toBeInTheDocument();
   });
 
   it('error — hiển thị message', async () => {
@@ -55,6 +62,9 @@ describe('FriendsList', () => {
         conversationId: 'conv-1',
         friendSince: new Date().toISOString(),
         lastMessageAt: new Date().toISOString(),
+        unreadCount: 3,
+        lastMessagePreview: 'Hẹn gặp cuối tuần nhé',
+        muted: false,
       },
     ];
     vi.spyOn(apiClient, 'GET').mockResolvedValue({
@@ -67,5 +77,36 @@ describe('FriendsList', () => {
       'href',
       '/chat/u2',
     );
+    expect(screen.queryByText('Dữ liệu minh hoạ')).not.toBeInTheDocument();
+    // Badge unread + preview từ server — không còn chỉ hiện timestamp
+    expect(screen.getByLabelText('3 tin nhắn chưa đọc')).toBeVisible();
+    expect(screen.getByText('Hẹn gặp cuối tuần nhé')).toBeVisible();
+  });
+
+  it('bạn chưa từng nhắn tin — xếp vào "Match mới", không lặp ở "Hội thoại"', async () => {
+    const friends: FriendDto[] = [
+      {
+        profile: {
+          id: 'u3',
+          nickname: 'Bạn Mới',
+          gender: 'unknown',
+          avatarId: 'a2',
+        },
+        conversationId: 'conv-2',
+        friendSince: new Date().toISOString(),
+        lastMessageAt: null,
+        unreadCount: 0,
+        lastMessagePreview: null,
+        muted: false,
+      },
+    ];
+    vi.spyOn(apiClient, 'GET').mockResolvedValue({
+      data: { data: friends },
+    } as never);
+    renderList();
+
+    expect(await screen.findByText('Match mới')).toBeVisible();
+    expect(await screen.findByText('Bạn Mới')).toBeVisible();
+    expect(screen.queryByText('Hội thoại')).not.toBeInTheDocument();
   });
 });

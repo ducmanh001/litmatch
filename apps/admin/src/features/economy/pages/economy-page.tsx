@@ -1,10 +1,12 @@
 import { isApiError } from '@litmatch/api-client';
 import { useState } from 'react';
 
+import { showToast } from '../../../shared/lib/toast-store';
 import { Button } from '../../../shared/ui/button';
 import { Card } from '../../../shared/ui/card';
 import { Field } from '../../../shared/ui/field';
 import { Input } from '../../../shared/ui/input';
+import { Pill } from '../../../shared/ui/pill';
 import {
   EmptyState,
   ErrorState,
@@ -17,6 +19,17 @@ import {
 } from '../api';
 
 import type { AdminTransactionDto } from '../api';
+
+const TXN_TYPE_LABEL: Record<string, string> = {
+  iap_purchase: 'Nạp Diamond (IAP)',
+  vip_purchase: 'Mua gói VIP',
+  matching_speedup: 'Tăng tốc ghép đôi',
+  calling_per_minute: 'Cước gọi thoại',
+  gift_send: 'Tặng quà',
+  avatar_purchase: 'Mua item avatar',
+  reversal: 'Hoàn tiền',
+  adjustment: 'Điều chỉnh',
+};
 
 export function EconomyPage() {
   const [userIdInput, setUserIdInput] = useState('');
@@ -35,19 +48,21 @@ export function EconomyPage() {
 
   return (
     <section className="space-y-4">
-      <h1 className="text-2xl font-semibold">Economy</h1>
-
-      <Card className="flex flex-wrap items-end gap-4">
-        <Field htmlFor="lookup-user-id" label="User ID">
+      <Card className="flex flex-wrap items-end gap-2.5">
+        <Field
+          htmlFor="lookup-user-id"
+          label="User ID"
+          className="min-w-[340px]"
+        >
           <Input
             id="lookup-user-id"
             value={userIdInput}
             onChange={(e) => setUserIdInput(e.target.value)}
             placeholder="uuid của user (lấy từ trang Người dùng)"
-            className="w-96"
           />
         </Field>
         <Button
+          className="h-9"
           onClick={() => setLookupUserId(userIdInput.trim() || null)}
           disabled={userIdInput.trim() === ''}
         >
@@ -64,20 +79,25 @@ export function EconomyPage() {
           {wallet.isPending && <LoadingState label="Đang tải ví…" />}
           {wallet.error !== null && <ErrorState error={wallet.error} />}
           {wallet.data !== undefined && (
-            <Card className="flex gap-8">
+            <Card className="flex flex-wrap gap-9">
+              <WalletStat label="Balance" value={`${wallet.data.balance} 💎`} />
+              <WalletStat
+                label="Earnings (PTS)"
+                value={String(wallet.data.earnings)}
+              />
               <div>
-                <p className="text-sm text-muted-foreground">Balance</p>
-                <p className="text-xl font-semibold">{wallet.data.balance}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Earnings (PTS)</p>
-                <p className="text-xl font-semibold">{wallet.data.earnings}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">VIP</p>
-                <p className="text-xl font-semibold">
-                  {wallet.data.vipTier ?? '—'}
-                </p>
+                <div className="mb-1.5 text-xs font-semibold text-muted-foreground">
+                  VIP
+                </div>
+                {wallet.data.vipTier !== null ? (
+                  <Pill variant="accent" className="uppercase tracking-wide">
+                    {wallet.data.vipTier}
+                  </Pill>
+                ) : (
+                  <div className="text-[21px] font-extrabold tracking-tight">
+                    —
+                  </div>
+                )}
               </div>
             </Card>
           )}
@@ -95,34 +115,52 @@ export function EconomyPage() {
 
           {transactions.data !== undefined &&
             transactions.data.items.length > 0 && (
-              <Card className="overflow-x-auto p-0">
-                <p className="px-4 pt-3 text-xs text-muted-foreground">
+              <Card className="overflow-hidden p-0">
+                <p className="px-[18px] pt-3.5 text-[11.5px] text-muted-foreground">
                   Chỉ hiện giao dịch user này chủ động thực hiện (nạp/mua/tặng)
                   — chưa gồm giao dịch chỉ là người nhận quà.
                 </p>
-                <table className="w-full text-left text-sm">
-                  <thead className="border-b border-border text-muted-foreground">
-                    <tr>
-                      <th className="px-4 py-2 font-medium">Loại</th>
-                      <th className="px-4 py-2 font-medium">Trạng thái</th>
-                      <th className="px-4 py-2 font-medium">Diamond delta</th>
-                      <th className="px-4 py-2 font-medium">Thời gian</th>
-                      <th className="px-4 py-2 font-medium" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {transactions.data.items.map((txn) => (
-                      <TransactionRow
-                        key={txn.id}
-                        txn={txn}
-                        refundPending={refund.isPending}
-                        onRefund={(reason) =>
-                          refund.mutate({ transactionId: txn.id, reason })
-                        }
-                      />
-                    ))}
-                  </tbody>
-                </table>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[640px] border-collapse text-[13px]">
+                    <thead className="border-b border-border">
+                      <tr>
+                        <th className="px-[18px] py-3 text-left text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
+                          Loại
+                        </th>
+                        <th className="px-[18px] py-3 text-left text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
+                          Trạng thái
+                        </th>
+                        <th className="px-[18px] py-3 text-left text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
+                          Diamond delta
+                        </th>
+                        <th className="px-[18px] py-3 text-left text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
+                          Thời gian
+                        </th>
+                        <th className="px-[18px] py-3" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {transactions.data.items.map((txn) => (
+                        <TransactionRow
+                          key={txn.id}
+                          txn={txn}
+                          refundPending={refund.isPending}
+                          onRefund={(reason) =>
+                            refund.mutate(
+                              { transactionId: txn.id, reason },
+                              {
+                                onSuccess: () =>
+                                  showToast(
+                                    `Đã hoàn tiền giao dịch #${txn.id}`,
+                                  ),
+                              },
+                            )
+                          }
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </Card>
             )}
 
@@ -137,6 +175,17 @@ export function EconomyPage() {
   );
 }
 
+function WalletStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="mb-1.5 text-xs font-semibold text-muted-foreground">
+        {label}
+      </div>
+      <div className="text-[21px] font-extrabold tracking-tight">{value}</div>
+    </div>
+  );
+}
+
 function TransactionRow({
   txn,
   onRefund,
@@ -147,13 +196,30 @@ function TransactionRow({
   refundPending: boolean;
 }) {
   const isReversal = txn.type === 'reversal';
+  const isPositive = txn.diamondDelta.trim().startsWith('+');
   return (
-    <tr className="border-b border-border last:border-0 align-top">
-      <td className="px-4 py-2">{txn.type}</td>
-      <td className="px-4 py-2">{txn.status}</td>
-      <td className="px-4 py-2">{txn.diamondDelta}</td>
-      <td className="px-4 py-2">{new Date(txn.createdAt).toLocaleString()}</td>
-      <td className="px-4 py-2 text-right">
+    <tr className="border-b border-border align-top last:border-0 hover:bg-muted">
+      <td className="px-[18px] py-[13px]">
+        {TXN_TYPE_LABEL[txn.type] ?? txn.type}
+      </td>
+      <td className="px-[18px] py-[13px]">
+        <Pill variant={txn.status === 'completed' ? 'green' : 'neutral'}>
+          {txn.status === 'completed' ? 'Hoàn tất' : 'Đã hoàn tiền'}
+        </Pill>
+      </td>
+      <td
+        className={
+          isPositive
+            ? 'px-[18px] py-[13px] font-extrabold text-success'
+            : 'px-[18px] py-[13px] font-bold'
+        }
+      >
+        {txn.diamondDelta}
+      </td>
+      <td className="px-[18px] py-[13px]">
+        {new Date(txn.createdAt).toLocaleString('vi-VN')}
+      </td>
+      <td className="px-[18px] py-[13px] text-right">
         {!isReversal && txn.status !== 'reversed' && (
           <RefundForm onSubmit={onRefund} disabled={refundPending} />
         )}
@@ -184,7 +250,7 @@ function RefundForm({
         value={reason}
         onChange={(e) => setReason(e.target.value)}
         placeholder="Lý do hoàn tiền"
-        className="h-8 w-48"
+        className="h-8 w-[150px]"
       />
       <Button
         type="submit"

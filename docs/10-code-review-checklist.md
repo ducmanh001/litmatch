@@ -135,6 +135,13 @@
 - **Ticket (yêu cầu ghép) không có state machine rõ ràng** (`queued → matched → confirmed → expired/cancelled`) → dễ xảy ra trạng thái mơ hồ khi 2 sự kiện đến gần như đồng thời (vd user vừa cancel vừa được match)
 - Ở quy mô lớn: 1 queue Redis duy nhất không shard theo region/tiêu chí → matcher trở thành hotspot, hoặc match ra 2 người cách nhau nửa vòng trái đất (latency cao khi call)
 - Speed-up (trả diamond để ưu tiên) trừ tiền xong nhưng không có gì đảm bảo user thực sự được ưu tiên (không có priority score/queue riêng thực thi) → mất tiền mà không có tác dụng, hoặc ngược lại: có thể trả tiền speed-up nhiều lần liên tiếp để luôn đứng đầu, chèn ép user thường bất công (cần giới hạn số lần/khung giờ)
+- **Client hard-code giá speed-up** — config server đổi nhưng UI vẫn báo giá cũ, user xác nhận một
+  giá rồi ledger trừ giá khác. Mọi `TicketDto` phải trả `speedupPriceDiamond` từ đúng config debit;
+  nested ticket của response speed-up cũng không được bỏ field này.
+- **Reload làm mất ticket đang active** — client chỉ nhớ ticketId trong state local rồi quay về
+  màn join mới, dễ gặp 409 "already queued" mà không có đường phục hồi. Phải có authenticated
+  read-path theo chính `userId` từ auth, chỉ lấy `queued|matched`; partial unique index bảo đảm tối
+  đa một row và response nullable thay vì dùng 404 như một nhánh điều khiển bình thường.
 
 **Soul Match / chat ẩn danh — giao điểm Matching + ẩn danh, dễ leak danh tính và sai race rating**
 
@@ -152,6 +159,28 @@
 - **Nhầm áp dụng che danh tính của Soul Match sang đây**: 2 bên đã unlock profile (đã là bạn) nên senderUserId lộ ra là ĐÚNG, không phải bug — nếu code cũng ẩn `senderRole me|partner` như Soul Match là thừa/sai ngữ cảnh
 - **Quên guard membership theo conversationId**: endpoint list/send message không check caller có phải 1 trong 2 user của conversation → IDOR đọc/gửi vào chat của người khác (docs/10 § 10.1.D); conversation không tồn tại và caller không phải thành viên phải trả **cùng 1 mã lỗi**, không làm oracle dò conversationId
 - **Coi block/report là guard bắt buộc trước khi Safety module tồn tại**: thêm 1 policy interface/bảng giả để "chừa chỗ" cho tính năng chưa có bảng dữ liệu thật là over-engineering (docs/11) — ghi rõ thành nợ kỹ thuật tường minh trong docs thay vì tự chế guard rỗng
+
+**Streak trò chuyện — race 2 bên gửi gần như đồng thời, dễ sai vì tưởng chỉ cần đếm ngày**
+
+- **Check-rồi-tăng không atomic**: đọc `lastActiveDate` 2 bên rồi mới UPDATE `currentStreak` ở
+  câu lệnh riêng → 2 request gần như đồng thời (2 bên cùng gửi tin lúc streak vừa đủ điều kiện
+  tăng) đọc cùng state cũ, tăng đôi hoặc mất lượt tăng. Phải khoá row `conversation_streaks` bằng
+  `SELECT ... FOR UPDATE` TRONG transaction rồi mới quyết định tăng/reset (test RACE thật bằng
+  `Promise.all` 2 `sendMessage` gần như đồng thời, không chỉ mock).
+- **Dùng timezone local của client để tính "ngày"** — phá bất biến docs/06; ngày luôn derive từ
+  giờ SERVER tại thời điểm xử lý request, không tin timezone/ngày client tự gửi lên.
+- **Cron tính/ghi `currentStreak`** thay vì chỉ on-write — cron chỉ được đọc + cảnh báo, ghi
+  `lastWarningSentAt`; bất kỳ chỗ nào khác ngoài `recordActivity` (on-write trong `sendMessage`)
+  mà ghi `currentStreak`/`longestStreak` là sai kiến trúc của tính năng này.
+- **Thiếu guard "cả 2 chiều"** — chỉ cần 1 bên nhắn liên tục nhiều tin trong ngày mà tăng streak
+  là bug; phải xác nhận CẢ 2 `lastActiveDate` đều là hôm nay trước khi tăng (chat rỗng 1 chiều
+  không được tính).
+- **Grace cho gap từ 2 ngày trở lên** hoặc **grace làm tăng streak nhiều hơn 1 lần cho cùng 1
+  khoảng trống** — grace chỉ áp dụng đúng `gapDays == 2` (lỡ đúng 1 ngày), gap lớn hơn luôn reset;
+  gọi lại `recordActivity` nhiều lần cùng ngày không được tăng thêm (guard
+  `lastConfirmedDate != today`).
+- **Milestone cộng thẳng diamond không qua ledger** — nếu sau này thưởng tiền theo mốc, bắt buộc
+  đi qua `LedgerEntry` double-entry (docs/03 § 3.8.C), không tự cộng field số dư.
 
 **Calling/Signaling/SFU — nơi dễ leak tài nguyên**
 
@@ -177,12 +206,55 @@
 - Xoá bài viết chỉ xoá ở DB chính nhưng không xoá khỏi cache/feed đã fanout cho follower → bài đã xoá vẫn hiện với người khác
 - Like/reaction đếm bằng cách tăng trực tiếp 1 cột counter không transaction → đếm sai khi nhiều request đồng thời (dùng bảng riêng lưu ai đã like + đếm bằng `COUNT` hoặc counter có transaction/atomic increment)
 - Block giữa 2 user không lọc bài/comment cũ đã hiển thị trước đó, chỉ chặn tương tác mới
+- **Audience per-post chỉ check ở 1 endpoint, không phải guard trung tâm** — thêm `friends`/
+  `only_me` mà chỉ lọc ở list feed, quên áp lại ở `getPostOrThrow` (dùng chung cho get/comment/
+  like/xoá) → đi thẳng URL `GET /posts/:id` bỏ qua hoàn toàn audience, biến field đó thành trang
+  trí không có tác dụng.
+- **Feed toàn cục trộn cả `friends`/`only_me`** — bắt buộc check quan hệ bạn cho TỪNG tác giả
+  trên 1 trang lớn (N+1 kiểu quan hệ), sai vị trí đặt cost; audience khác `public` chỉ nên lộ qua
+  truy vấn 1-tác-giả (profile timeline), không phải feed discovery nhiều tác giả.
+- **Story dùng chung bảng/soft-delete với `Post`** — Story ephemeral (hết hạn = filter lúc đọc),
+  KHÔNG cần audit trail như Post; nhét chung 1 bảng buộc phải thêm cột phân biệt + logic rẽ nhánh
+  không cần thiết, đúng dạng "tự chế lại 1 khái niệm đã khác nhau" (docs/11).
+- **Cron sweeper story bị coi là chốt correctness** — đọc "story hiện tại" mà không tự filter
+  `expiresAt` (chờ sweeper xoá) thì có khoảng hở hiện story đã hết hạn tới khi sweeper chạy;
+  sweeper chỉ dọn rác, read-path PHẢI tự filter độc lập.
+- **Seen-list (viewers) không lọc block hiện tại lúc đọc** — chỉ chặn tạo `StoryView` mới khi
+  đang block, không lọc lại danh sách cũ → viewer đã xem trước khi bị block vẫn lộ trong danh
+  sách nếu không re-check tại thời điểm ĐỌC (docs/10 § 10.0.C).
+- **Reply story → DM bỏ qua bất biến "chỉ bạn bè mới có Conversation"** — tự tạo Conversation/
+  gửi thẳng vào DB thay vì đi qua `FriendService.sendMessage`/`getConversationWithFriend` sẽ phá
+  bất biến "có Friendship ⟺ có Conversation" và bỏ lỡ toàn bộ pipeline
+  idempotency/block/realtime/notification đã có sẵn.
 
 **Gift — giao điểm Economy + Realtime, dễ nhân đôi giá trị**
 
 - Trừ diamond người tặng và cộng diamond/exp người nhận không nằm trong cùng 1 transaction/saga → có thể trừ mà không cộng (mất tiền vào hư không) hoặc cộng mà không trừ (sinh tiền từ hư không) nếu 1 bước fail giữa chừng
 - Animation/hiệu ứng tặng quà bắn ra ở client trước khi server xác nhận giao dịch tiền thành công → user thấy hiệu ứng nhưng giao dịch thực tế fail, gây hiểu lầm/khiếu nại
 - Catalog quà có giá đổi theo thời gian (khuyến mãi) nhưng client cache giá cũ và server không kiểm tra lại giá tại đúng thời điểm tặng
+
+**Video ngắn (short-video, W5) — dễ sai vì tưởng chỉ là CRUD content**
+
+- **Nhận body video trực tiếp qua NestJS thay vì presigned URL** — video là file lớn, đi qua
+  NestJS (buffer/stream trong process) tốn memory/CPU vô ích và không cần thiết; đúng thiết kế là
+  server chỉ issue URL, client upload thẳng lên storage.
+- **Chặn transition bằng `SELECT ... FOR UPDATE` như `MatchTicket`** — video không tranh chấp gay
+  gắt như ghép cặp, conditional UPDATE (`WHERE status = 'từ'`) đã đủ an toàn; thêm pessimistic
+  lock là phức tạp hoá không cần thiết (YAGNI).
+- **Insert Report/video-view rồi ĐỌC LẠI trong CÙNG 1 transaction Postgres khi bắt unique
+  violation** — Postgres abort toàn bộ transaction ngay khi 1 statement lỗi, câu đọc lại sau đó
+  luôn nhận `"current transaction is aborted"` chứ không phải dữ liệu; chỉ bọc transaction khi
+  thật sự có side-effect thứ 2 cần atomic cùng insert đó.
+- **Report video trừ luôn trust score như report user** — video không phải "chủ tài khoản", trừ
+  điểm sai đối tượng; report video chỉ nên đếm distinct reporter để tự quyết auto-hide, không
+  chạm `adjustTrustScore`.
+- **Đếm view mà không loại self-view hoặc không có unique (video, viewer)** — tác giả tự F5 video
+  của mình để tăng viewCount, hoặc 1 viewer F5 nhiều lần bị đếm nhiều lần.
+- **Cộng viewCount ở MỖI lần cập nhật watch-time thay vì chỉ đúng 1 lần lúc vượt ngưỡng qualified**
+  — user xem lại/tua video nhiều lần trong 1 session sẽ bị đếm view tăng liên tục thay vì 1 view.
+  cho phiên xem đó.
+- **Cho video lọt vào luồng reveal ẩn danh của Soul Match** — vi phạm bất biến "ẩn danh tới khi
+  unlock", cùng lớp lỗi với Mood status.
 
 **Avatar / Item / Inventory — nơi dễ bị duplicate item**
 
@@ -240,6 +312,78 @@
   không bao giờ thấy nhau qua Discovery nữa; chấp nhận được ở mức độ Discovery (không chặn được
   matching/chat, chỉ ảnh hưởng 1 tính năng duyệt), nhưng rate-limit/pattern-detect cho report vẫn
   phải nằm ở Safety module, không phải việc của Discovery.
+
+**Nearby (W4) — mở rộng Discovery bằng vị trí thật, rủi ro privacy cao hơn hẳn browse thường**
+
+- **Lưu toạ độ thô dù chỉ tạm thời** — quantize PHẢI xảy ra ở tầng service TRƯỚC khi entity chạm
+  DB, không phải "quantize lúc đọc" (khi đó bản ghi DB đã là toạ độ thật, backup/leak DB vẫn lộ vị
+  trí chính xác). Kiểm tra bằng cách hỏi: nếu dump thẳng bảng `user_locations` ra, có suy ra được
+  toạ độ thật hơn độ phân giải quantize không?
+- **API trả số km/toạ độ chính xác ở bất kỳ field nào** (kể cả field debug/internal) — chỉ được
+  phép trả `distanceBucket` dạng chuỗi. Field như `distanceKm: number` dù không hiển thị lên UI vẫn
+  là lỗi vì client có thể đọc trực tiếp response.
+- **Thiếu jitter, chỉ dựa vào quantize** — quantize alone vẫn cho phép trilateration nếu attacker
+  query từ nhiều vị trí giả lập rồi lấy giao 3 vòng tròn khoảng cách; jitter tất định theo
+  cặp-theo-ngày là lớp phòng thủ thứ 2 bắt buộc, không phải optional.
+- **Reciprocity 1 chiều** — chỉ check "target có opt-in không" mà quên check "chính người gọi API
+  có opt-in không" (hoặc ngược lại) → lộ vị trí người dùng chưa từng đồng ý hiển thị.
+- **Tắt `nearbyVisible` không xoá vị trí cũ** — dữ liệu vị trí "mồ côi" (owner đã tắt tính năng)
+  vẫn còn trong DB là rủi ro privacy/compliance âm thầm; tắt phải xoá `user_locations` CÙNG
+  transaction với việc set cờ tắt, không phải job dọn rác chạy sau.
+- **Rate limit ghi vị trí thiếu** — không giới hạn tần suất update vị trí cho phép suy ra **lộ
+  trình di chuyển** theo thời gian thực (rủi ro nghiêm trọng hơn nhiều so với 1 điểm vị trí tĩnh),
+  khác hẳn mức độ rủi ro của rate-limit thông thường.
+
+**Matching Invite (CTA "mời Voice/Soul Match", W4) — directed invite tái dùng pipeline matching, dễ sai vì tưởng chỉ là ghi thêm 1 bảng**
+
+- **Ghi transition trạng thái rồi throw lỗi trong CÙNG transaction** — nếu 1 nhánh cần "chuyển
+  invite sang trạng thái X rồi báo lỗi cho client", throw trong transaction đang ghi X sẽ ROLLBACK
+  luôn phần ghi đó (Postgres transaction semantics); phải tách 2 transaction, transaction ghi
+  trạng thái COMMIT xong mới throw ở tầng gọi. Lỗi này chỉ phát hiện được qua test thật (assert
+  trạng thái DB sau khi gọi API lỗi), không phải review đọc mắt.
+- **Tạo ticket trực tiếp bỏ qua invariant 1-user-1-queue** — accept invite tạo `MatchTicket` mới
+  không qua `joinQueue()` bình thường; nếu quên tái dùng ĐÚNG partial unique index
+  (`uq_match_tickets_active_user`) khi insert, 1 user có thể vừa nằm trong invite vừa nằm trong
+  hàng đợi auto-match cùng lúc — phá bất biến đã có từ Matching gốc.
+- **Không re-check `canPair`/block tại thời điểm accept** — chỉ check lúc TẠO invite là không đủ;
+  khoảng thời gian chờ invitee phản hồi có thể đủ để 1 bên block bên kia, phải verify lại đúng lúc
+  accept (§ 10.0.C), không tin trạng thái lúc tạo còn đúng.
+- **Rate-limit chống spam mời phân biệt cứng theo giới tính trong code** — dù mục tiêu là bảo vệ
+  nhóm dễ bị spam hơn, hard-code ngưỡng khác nhau theo giới tính là quyết định sản phẩm/pháp lý
+  nhạy cảm, không phải quyết định kỹ thuật tự ý; mặc định dùng ngưỡng đối xứng, theo dõi số liệu
+  rồi quyết định sau nếu cần siết thêm.
+- **Nhầm invite là friend-request** — không tự thêm bảng/flow "kết bạn" song song; invite chỉ là
+  lối vào có chủ đích cho `MatchTicket`/`MatchSession` đã có, Friendship vẫn chỉ tạo qua đúng 1
+  con đường hiện có (double-like sau Soul Match).
+- **Bắt invitee accept “mù” hoặc chữa bằng DTO lộ dữ liệu riêng tư** — incoming invite phải có
+  `PublicProfileDto` tối thiểu của inviter để informed consent, không thêm ngày sinh/tuổi chính
+  xác/region/trust/status. Inbox phải re-check hidden-set ở thời điểm đọc; accept vẫn re-check
+  `canPair` riêng, không coi việc đã render profile là chốt an toàn.
+
+**Mood status — append-only đơn giản nhưng dễ sai vì tưởng cần state machine**
+
+- **Update/xoá dòng `mood_status_events` thay vì insert dòng mới** — set/clear PHẢI append-only
+  (đúng tinh thần ledger/report); "mood hiện tại" derive từ dòng MỚI NHẤT khi đọc, không có cột
+  mutable nào đại diện trạng thái hiện tại.
+- **Cron dọn mood hết hạn thay vì derive-khi-đọc** — không có tài nguyên (SFU, ledger, resource
+  ngoài) cần dọn cho 1 dòng hết hạn; cron ở đây là over-engineering, chỉ cần so `expiresAt` với
+  giờ server tại thời điểm đọc.
+- **Thiếu unique constraint idempotency ở DB cho set/clear** — client retry (mất mạng) tạo 2 dòng
+  cho cùng 1 intent; đúng như Economy, check-rồi-insert ở code không đủ, phải là unique constraint
+  DB + catch unique-violation-rồi-đọc-lại.
+- **Thêm mood vào `PublicProfileDto` dùng chung** — DTO đó có bất biến ẩn danh dùng ở Soul Match
+  reveal + Friend list; mood phải là composition riêng (`getPublicMood`) do call site tự gộp, không
+  sửa DTO gốc.
+- **Wire `getPublicMood` vào card ẩn danh trước-match Soul Match** — phá invariant ẩn danh
+  (docs/06); đây là kỷ luật ở CALL SITE, không có cờ nào trong Mood service tự chặn được vì service
+  không biết ngữ cảnh gọi.
+- **Dùng nhầm `SafetyService.getHiddenUserIds` (bao gồm report) thay vì `getBlockedUserIds`** —
+  Mood chỉ ẩn theo block active (2 chiều), không xét report; nhầm hàm sẽ ẩn quá mức so với thiết
+  kế (khác Discovery, nơi report cũng ẩn vĩnh viễn — 2 tính năng có ngữ nghĩa khác nhau, không dùng
+  chung 1 hàm).
+- **Scaffold cột `status` (approve/pending) khi chưa ship free-text** — W1 chỉ preset (auto-approve
+  toàn bộ); thêm cột cho 1 tính năng (free-text + moderation) chưa có timeline là dựng abstraction
+  để dành (docs/11) — thêm bằng migration mới khi free-text thật sự ship.
 
 **Movie Match — phòng xem chung, dễ nhầm với Party Room/Calling nhưng KHÔNG có tiền/SFU**
 

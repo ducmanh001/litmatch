@@ -340,6 +340,35 @@
         "tags": ["economy"]
       }
     },
+    "/api/v1/economy/vip/plans": {
+      "get": {
+        "operationId": "EconomyController_listVipPlans",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/VipPlanDto" }
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Catalog gói VIP đang bán (active)",
+        "tags": ["economy"]
+      }
+    },
     "/api/v1/economy/iap/verify": {
       "post": {
         "operationId": "EconomyController_verifyIap",
@@ -378,7 +407,25 @@
             }
           }
         },
-        "responses": { "200": { "description": "" } },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/VipPurchaseResultDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
         "security": [{ "bearer": [] }],
         "summary": "Mua VIP bằng diamond — gia hạn cộng dồn nếu đang active",
         "tags": ["economy"]
@@ -448,6 +495,34 @@
         },
         "security": [{ "bearer": [] }],
         "summary": "Vào hàng đợi matching — 409 nếu đã có ticket đang chờ/đang ghép",
+        "tags": ["matching"]
+      }
+    },
+    "/api/v1/matching/tickets/current": {
+      "get": {
+        "operationId": "MatchingController_getCurrentTicket",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ActiveTicketResponseDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Ticket active (queued/matched) của chính mình — phục hồi queue sau reload",
         "tags": ["matching"]
       }
     },
@@ -585,6 +660,215 @@
         },
         "security": [{ "bearer": [] }],
         "summary": "Trả diamond để ưu tiên trong hàng đợi — rate limit theo giờ, chặn TRƯỚC khi trừ tiền",
+        "tags": ["matching"]
+      }
+    },
+    "/api/v1/matching/invites": {
+      "post": {
+        "operationId": "InviteController_createInvite",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateInviteDto" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/MatchInviteDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Mời Voice/Soul Match trực tiếp tới 1 user — 409 nếu đã có lời mời đang chờ tới đúng người này",
+        "tags": ["matching"]
+      },
+      "get": {
+        "operationId": "InviteController_listReceived",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MatchInvitesPageDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Danh sách lời mời ĐANG CHỜ phản hồi gửi tới chính mình",
+        "tags": ["matching"]
+      }
+    },
+    "/api/v1/matching/invites/{id}": {
+      "get": {
+        "operationId": "InviteController_getInvite",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/MatchInviteDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Chi tiết 1 lời mời — chỉ inviter/invitee xem được",
+        "tags": ["matching"]
+      }
+    },
+    "/api/v1/matching/invites/{id}/accept": {
+      "post": {
+        "operationId": "InviteController_accept",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MatchInviteAcceptedDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Chấp nhận lời mời — tạo trực tiếp ticket/session, gọi confirmTicket(inviteeTicketId) tiếp theo như auto-match",
+        "tags": ["matching"]
+      }
+    },
+    "/api/v1/matching/invites/{id}/decline": {
+      "post": {
+        "operationId": "InviteController_decline",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/MatchInviteDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Từ chối lời mời — chỉ invitee",
+        "tags": ["matching"]
+      }
+    },
+    "/api/v1/matching/invites/{id}/cancel": {
+      "post": {
+        "operationId": "InviteController_cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/MatchInviteDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Huỷ lời mời đã gửi — chỉ inviter, trước khi có phản hồi",
         "tags": ["matching"]
       }
     },
@@ -923,6 +1207,117 @@
         },
         "security": [{ "bearer": [] }],
         "summary": "Gửi message — chỉ 2 thành viên của conversation",
+        "tags": ["friends"]
+      }
+    },
+    "/api/v1/conversations/{id}/streak": {
+      "get": {
+        "operationId": "FriendController_getStreak",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/StreakDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Streak trò chuyện — derive khi đọc, chưa có streak nào trả current=0",
+        "tags": ["friends"]
+      }
+    },
+    "/api/v1/conversations/{id}/read": {
+      "post": {
+        "operationId": "FriendController_markRead",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ConversationMemberStateDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Đánh dấu đã đọc tới hiện tại — idempotent, chỉ 2 thành viên",
+        "tags": ["friends"]
+      }
+    },
+    "/api/v1/conversations/{id}/mute": {
+      "post": {
+        "operationId": "FriendController_setMuted",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/MuteConversationDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ConversationMemberStateDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Bật/tắt thông báo hội thoại — chỉ tắt kênh notification, message vẫn nhận",
         "tags": ["friends"]
       }
     },
@@ -1266,6 +1661,22 @@
         "operationId": "PartyRoomController_list",
         "parameters": [
           {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Tìm theo tên phòng",
+            "schema": { "maxLength": 100, "type": "string" }
+          },
+          {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["talk", "sing", "friend", "study", "other"]
+            }
+          },
+          {
             "name": "limit",
             "required": false,
             "in": "query",
@@ -1506,10 +1917,464 @@
         "tags": ["gift"]
       }
     },
+    "/api/v1/videos/{videoId}/gifts": {
+      "post": {
+        "operationId": "GiftController_sendVideoGift",
+        "parameters": [
+          {
+            "name": "videoId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SendVideoGiftDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/GiftEventDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Tặng quà cho tác giả video — người nhận suy từ video; cùng chốt tiền/idempotency với quà trong phòng",
+        "tags": ["gift"]
+      }
+    },
+    "/api/v1/videos/upload-intent": {
+      "post": {
+        "operationId": "ShortVideoController_createUploadIntent",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateUploadIntentDto" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/UploadIntentDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Xin URL upload presigned — body video KHÔNG gửi qua endpoint này, upload thẳng lên storage",
+        "tags": ["short-video"]
+      }
+    },
+    "/api/v1/videos/{id}/finalize": {
+      "post": {
+        "operationId": "ShortVideoController_finalizeUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/VideoDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Báo đã upload xong — chuyển sang processing rồi transcode",
+        "tags": ["short-video"]
+      }
+    },
+    "/api/v1/videos": {
+      "get": {
+        "operationId": "ShortVideoController_list",
+        "parameters": [
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "recent",
+              "type": "string",
+              "enum": ["recent", "ranked"]
+            }
+          },
+          {
+            "name": "feed",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "for_you",
+              "type": "string",
+              "enum": ["for_you", "following"]
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/VideosPageDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Danh sách video published — sort=recent (default) | ranked; feed=following chỉ video của bạn bè",
+        "tags": ["short-video"]
+      }
+    },
+    "/api/v1/videos/{id}": {
+      "get": {
+        "operationId": "ShortVideoController_getVideo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/VideoDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Chi tiết 1 video — tác giả xem được mọi status, người khác chỉ published",
+        "tags": ["short-video"]
+      }
+    },
+    "/api/v1/videos/{id}/report": {
+      "post": {
+        "operationId": "ShortVideoController_reportVideo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ReportVideoDto" }
+            }
+          }
+        },
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Report video — vượt ngưỡng distinct reporter thì tự động ẩn (không đụng trust score cá nhân)",
+        "tags": ["short-video"]
+      }
+    },
+    "/api/v1/videos/{id}/views": {
+      "post": {
+        "operationId": "ShortVideoController_recordView",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RecordViewDto" }
+            }
+          }
+        },
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Ghi nhận watch-time — self-view không đếm",
+        "tags": ["short-video"]
+      }
+    },
+    "/api/v1/videos/{id}/reactions": {
+      "post": {
+        "operationId": "ShortVideoController_like",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReactionStatusDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Thả tim video",
+        "tags": ["short-video"]
+      },
+      "delete": {
+        "operationId": "ShortVideoController_unlike",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReactionStatusDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Bỏ tim video",
+        "tags": ["short-video"]
+      }
+    },
+    "/api/v1/videos/{id}/comments": {
+      "post": {
+        "operationId": "ShortVideoController_createComment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateVideoCommentDto" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/VideoCommentDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Bình luận video",
+        "tags": ["short-video"]
+      },
+      "get": {
+        "operationId": "ShortVideoController_listComments",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/VideoCommentsPageDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Danh sách bình luận video",
+        "tags": ["short-video"]
+      }
+    },
+    "/api/v1/videos/{id}/comments/{commentId}": {
+      "delete": {
+        "operationId": "ShortVideoController_deleteComment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "commentId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Xoá bình luận — tác giả comment hoặc tác giả video",
+        "tags": ["short-video"]
+      }
+    },
     "/api/v1/feed/posts": {
       "post": {
         "operationId": "FeedController_createPost",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1536,7 +2401,7 @@
           }
         },
         "security": [{ "bearer": [] }],
-        "summary": "Đăng bài — guest bị chặn (docs/06)",
+        "summary": "Đăng bài — guest bị chặn (docs/06), audience mặc định public",
         "tags": ["feed"]
       },
       "get": {
@@ -1576,6 +2441,53 @@
         },
         "security": [{ "bearer": [] }],
         "summary": "Feed công khai toàn cục, mới nhất trước — loại tác giả đang block/bị block",
+        "tags": ["feed"]
+      }
+    },
+    "/api/v1/feed/users/{userId}/posts": {
+      "get": {
+        "operationId": "FeedController_listUserTimeline",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/PostsPageDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Timeline 1 tác giả — audience tự khớp quan hệ (mình/bạn/người lạ), docs/services/feed-service.md § 7",
         "tags": ["feed"]
       }
     },
@@ -1831,6 +2743,191 @@
         "tags": ["feed"]
       }
     },
+    "/api/v1/stories": {
+      "post": {
+        "operationId": "StoryController_createStory",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateStoryDto" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/StoryDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Đăng story — hết hạn sau STORY_TTL_HOURS, guest bị chặn",
+        "tags": ["stories"]
+      }
+    },
+    "/api/v1/stories/ring": {
+      "get": {
+        "operationId": "StoryController_getRing",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/StoryDto" }
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Story còn hạn của mình + bạn bè (Ring stories: chỉ bạn bè + mình)",
+        "tags": ["stories"]
+      }
+    },
+    "/api/v1/stories/{storyId}": {
+      "get": {
+        "operationId": "StoryController_viewStory",
+        "parameters": [
+          {
+            "name": "storyId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/StoryDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Xem 1 story — ghi seen-state (trừ tự xem mình), 404 nếu hết hạn/bị block/audience không cho phép",
+        "tags": ["stories"]
+      }
+    },
+    "/api/v1/stories/{storyId}/viewers": {
+      "get": {
+        "operationId": "StoryController_listViewers",
+        "parameters": [
+          {
+            "name": "storyId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/StoryViewersDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Danh sách người đã xem — chỉ tác giả, lọc block hiện tại lúc đọc",
+        "tags": ["stories"]
+      }
+    },
+    "/api/v1/stories/{storyId}/reply": {
+      "post": {
+        "operationId": "StoryController_replyToStory",
+        "parameters": [
+          {
+            "name": "storyId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ReplyToStoryDto" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/MessageDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Trả lời story → gửi DM cho tác giả (chỉ bạn bè), snapshot mediaUrl vào attachment",
+        "tags": ["stories"]
+      }
+    },
     "/api/v1/avatar/catalog": {
       "get": {
         "operationId": "AvatarController_listCatalog",
@@ -1924,7 +3021,25 @@
             "schema": { "type": "string" }
           }
         ],
-        "responses": { "200": { "description": "" } },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AvatarBuyResultDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
         "security": [{ "bearer": [] }],
         "summary": "Mua item trả phí — trừ diamond qua Economy",
         "tags": ["avatar"]
@@ -2164,6 +3279,329 @@
         "tags": ["movie-match"]
       }
     },
+    "/api/v1/movie-match/anon/queue": {
+      "post": {
+        "operationId": "MovieMatchController_joinAnonQueue",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MovieAnonStateDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Enqueue idempotent và thử ghép Movie Match ẩn danh",
+        "tags": ["movie-match"]
+      }
+    },
+    "/api/v1/movie-match/anon/current": {
+      "get": {
+        "operationId": "MovieMatchController_getAnonCurrent",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MovieAnonStateDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "State phục hồi/poll của queue/phiên ẩn danh",
+        "tags": ["movie-match"]
+      },
+      "delete": {
+        "operationId": "MovieMatchController_dismissAnonCurrent",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MovieAnonStateDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Huỷ queue/phiên ẩn danh hoặc dismiss kết quả terminal",
+        "tags": ["movie-match"]
+      }
+    },
+    "/api/v1/movie-match/anon/sessions/{id}/state": {
+      "patch": {
+        "operationId": "MovieMatchController_updateAnonState",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateMovieStateDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MovieAnonStateDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Playback update phiên ẩn danh — chỉ khi đang xem",
+        "tags": ["movie-match"]
+      }
+    },
+    "/api/v1/movie-match/anon/sessions/{id}/finish": {
+      "post": {
+        "operationId": "MovieMatchController_endAnonWatch",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MovieAnonStateDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "\"Kết thúc\" phần xem chung — mở phase rating cho cả hai, idempotent",
+        "tags": ["movie-match"]
+      }
+    },
+    "/api/v1/movie-match/anon/sessions/{id}/rating": {
+      "post": {
+        "operationId": "MovieMatchController_rateAnon",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RateMovieMatchDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MovieAnonStateDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Chốt like/boring/rude một lần; mutual-like mở Friendship",
+        "tags": ["movie-match"]
+      }
+    },
+    "/api/v1/movie-match/anon/sessions/{id}/messages": {
+      "post": {
+        "operationId": "MovieMatchController_sendAnonMessage",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SendMovieMessageDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/MovieMessageDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Chat ẩn danh trong phiên — sender là vai trò tương đối",
+        "tags": ["movie-match"]
+      },
+      "get": {
+        "operationId": "MovieMatchController_listAnonMessages",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MovieMessagesPageDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "List chat phiên ẩn danh (cursor theo seq)",
+        "tags": ["movie-match"]
+      }
+    },
+    "/api/v1/movie-match/anon/sessions/{id}/reactions": {
+      "post": {
+        "operationId": "MovieMatchController_sendAnonReaction",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ReactMovieDto" }
+            }
+          }
+        },
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Reaction emoji nổi trên video — realtime-only, không persist",
+        "tags": ["movie-match"]
+      }
+    },
     "/api/v1/palm-match/reading": {
       "get": {
         "operationId": "PalmMatchController_getReading",
@@ -2205,6 +3643,166 @@
         },
         "security": [{ "bearer": [] }],
         "summary": "Nội dung bói toán giải trí — deterministic theo user + category + ngày server (guest dùng được)",
+        "tags": ["palm-match"]
+      }
+    },
+    "/api/v1/palm-match/queue": {
+      "post": {
+        "operationId": "PalmMatchController_joinQueue",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PalmMatchStateDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Enqueue idempotent và thử ghép Palm Match ẩn danh",
+        "tags": ["palm-match"]
+      }
+    },
+    "/api/v1/palm-match/current": {
+      "get": {
+        "operationId": "PalmMatchController_getCurrent",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PalmMatchStateDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "State phục hồi/poll của queue hoặc session hiện tại",
+        "tags": ["palm-match"]
+      },
+      "delete": {
+        "operationId": "PalmMatchController_dismissCurrent",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PalmMatchStateDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Huỷ queue/session active hoặc dismiss kết quả terminal",
+        "tags": ["palm-match"]
+      }
+    },
+    "/api/v1/palm-match/sessions/{id}/flip": {
+      "post": {
+        "operationId": "PalmMatchController_flip",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PalmMatchStateDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Lật lá của chính caller — idempotent",
+        "tags": ["palm-match"]
+      }
+    },
+    "/api/v1/palm-match/sessions/{id}/rating": {
+      "post": {
+        "operationId": "PalmMatchController_rate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RatePalmMatchDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PalmMatchStateDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Chốt like/skip một lần; mutual-like mở Friendship",
         "tags": ["palm-match"]
       }
     },
@@ -2357,6 +3955,34 @@
         "security": [{ "bearer": [] }],
         "summary": "State hiện tại — poll fallback cho realtime; không lộ move đối phương trước khi resolved",
         "tags": ["mini-game"]
+      }
+    },
+    "/api/v1/admin/dashboard": {
+      "get": {
+        "operationId": "AdminController_getDashboard",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminDashboardDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Dashboard aggregate + audit activity từ dữ liệu thật",
+        "tags": ["admin"]
       }
     },
     "/api/v1/admin/users": {
@@ -2648,6 +4274,357 @@
         "tags": ["admin"]
       }
     },
+    "/api/v1/admin/videos/pending": {
+      "get": {
+        "operationId": "AdminController_listPendingVideos",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminVideosPageDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Video chờ duyệt trước khi public (VIDEO_MODERATION_MODE=pre) — cursor pagination",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/videos/published": {
+      "get": {
+        "operationId": "AdminController_listPublishedVideos",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminVideosPageDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Video đang published để moderator kiểm tra/gỡ — cursor pagination",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/videos/{id}/approve": {
+      "post": {
+        "operationId": "AdminController_approveVideo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AdminVideoDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Duyệt video pending_review → published — audit log",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/videos/{id}/reject": {
+      "post": {
+        "operationId": "AdminController_rejectVideo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AdminVideoDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Từ chối video pending_review → rejected — audit log",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/videos/{id}/remove": {
+      "post": {
+        "operationId": "AdminController_removeVideo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AdminVideoDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Gỡ thủ công video published → removed (bổ sung cho auto-hide theo ngưỡng report) — audit log",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/rooms/{id}/close": {
+      "post": {
+        "operationId": "AdminController_closeRoom",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminCloseRoomResultDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Kết thúc Party Room đang live — idempotent + audit log",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/rooms": {
+      "get": {
+        "operationId": "AdminController_listRooms",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AdminRoomsPageDto" }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Danh sách Party Room active + số member thực tế",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/support/tickets": {
+      "get": {
+        "operationId": "AdminController_listSupportTickets",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["open", "in_progress", "resolved", "closed"]
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminSupportTicketsPageDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Danh sách yêu cầu hỗ trợ để moderator xử lý",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/support/tickets/{id}": {
+      "patch": {
+        "operationId": "AdminController_updateSupportTicket",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminUpdateSupportTicketDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminSupportTicketDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Cập nhật trạng thái/phản hồi support — atomic audit log",
+        "tags": ["admin"]
+      }
+    },
     "/api/v1/admin/gifts": {
       "get": {
         "operationId": "AdminController_listGifts",
@@ -2873,6 +4850,372 @@
         "tags": ["admin"]
       }
     },
+    "/api/v1/admin/config/economy-catalog": {
+      "get": {
+        "operationId": "AdminController_getEconomyCatalog",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminEconomyCatalogDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Catalog IAP/VIP gồm cả item inactive — chỉ admin",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/config/iap-products/{productId}": {
+      "patch": {
+        "operationId": "AdminController_setIapProductActive",
+        "parameters": [
+          {
+            "name": "productId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SetCatalogActiveDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminIapProductDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Bật/tắt IAP product — chỉ admin, có audit",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/config/vip-plans/{id}": {
+      "patch": {
+        "operationId": "AdminController_setVipPlanActive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SetCatalogActiveDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AdminVipPlanDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Bật/tắt VIP plan — chỉ admin, có audit",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/notifications/broadcast": {
+      "post": {
+        "operationId": "AdminController_broadcastNotification",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BroadcastNotificationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BroadcastNotificationResultDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Gửi thông báo in-app + push best-effort theo audience — chỉ admin",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/permissions": {
+      "get": {
+        "operationId": "AdminController_getPermissionMatrix",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminPermissionMatrixDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Ma trận quyền role moderator/admin đang enforce thật",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/permissions/{role}/{permission}": {
+      "patch": {
+        "operationId": "AdminController_setRolePermission",
+        "parameters": [
+          {
+            "name": "role",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "permission",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SetRolePermissionDto" }
+            }
+          }
+        },
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Bật/tắt quyền của role — có audit",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/staff": {
+      "get": {
+        "operationId": "AdminController_listStaff",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/AdminStaffDto" }
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Danh sách user có role moderator/admin",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/staff/{id}/role": {
+      "patch": {
+        "operationId": "AdminController_setStaffRole",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SetStaffRoleDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AdminStaffDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Đổi/thu hồi role staff — có audit và chặn last-admin",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/support/tickets": {
+      "post": {
+        "operationId": "SupportController_create",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSupportTicketDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/SupportTicketDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Gửi phản hồi/yêu cầu hỗ trợ — idempotent",
+        "tags": ["support"]
+      }
+    },
+    "/api/v1/support/tickets/me": {
+      "get": {
+        "operationId": "SupportController_listMine",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SupportTicketsPageDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Theo dõi các yêu cầu hỗ trợ của chính mình",
+        "tags": ["support"]
+      }
+    },
     "/api/v1/discovery/browse": {
       "get": {
         "operationId": "DiscoveryController_browse",
@@ -2933,8 +5276,260 @@
           }
         },
         "security": [{ "bearer": [] }],
-        "summary": "Duyệt user theo tiêu chí gender/tuổi — loại block/report 2 chiều, chỉ xem profile (chưa có CTA khác). Filter khu vực thuộc về Nearby (W5), chưa có ở đây.",
+        "summary": "Duyệt user theo tiêu chí gender/tuổi — loại block/report 2 chiều, chỉ xem profile. Filter khu vực thuộc về Nearby.",
         "tags": ["discovery"]
+      }
+    },
+    "/api/v1/discovery/nearby/location": {
+      "put": {
+        "operationId": "DiscoveryController_setLocation",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SetLocationDto" }
+            }
+          }
+        },
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Ghi vị trí hiện tại — server tự quantize ~500m, không lưu/trả toạ độ thô.",
+        "tags": ["discovery"]
+      }
+    },
+    "/api/v1/discovery/nearby/visible": {
+      "put": {
+        "operationId": "DiscoveryController_setVisible",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SetNearbyVisibleDto" }
+            }
+          }
+        },
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Bật/tắt hiển thị Nearby (opt-in, mặc định tắt) — tắt sẽ xoá vị trí đã lưu.",
+        "tags": ["discovery"]
+      }
+    },
+    "/api/v1/discovery/nearby": {
+      "get": {
+        "operationId": "DiscoveryController_nearby",
+        "parameters": [
+          {
+            "name": "gender",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["unknown", "male", "female", "other"]
+            }
+          },
+          {
+            "name": "ageMin",
+            "required": false,
+            "in": "query",
+            "schema": { "minimum": 18, "maximum": 100, "type": "number" }
+          },
+          {
+            "name": "ageMax",
+            "required": false,
+            "in": "query",
+            "schema": { "minimum": 18, "maximum": 100, "type": "number" }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/NearbyCardsPageDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Duyệt user gần vị trí đã bật Nearby (reciprocity) — chỉ trả distance bucket, không bao giờ trả km/toạ độ chính xác.",
+        "tags": ["discovery"]
+      }
+    },
+    "/api/v1/mood/presets": {
+      "get": {
+        "operationId": "MoodController_listPresets",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/MoodPresetDto" }
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Catalog mood preset đang bật",
+        "tags": ["mood"]
+      }
+    },
+    "/api/v1/mood/status/me": {
+      "get": {
+        "operationId": "MoodController_getMyStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MoodStatusResponseDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Mood hiện tại của chính mình",
+        "tags": ["mood"]
+      }
+    },
+    "/api/v1/mood/status/{userId}": {
+      "get": {
+        "operationId": "MoodController_getStatus",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MoodStatusResponseDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Mood công khai của 1 user — ẩn nếu có block 2 chiều (docs/services/mood-service.md § 3)",
+        "tags": ["mood"]
+      }
+    },
+    "/api/v1/mood/status": {
+      "post": {
+        "operationId": "MoodController_setStatus",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SetMoodDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MoodStatusResponseDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Set mood theo preset — auto-approve (W1 preset-only)",
+        "tags": ["mood"]
+      },
+      "delete": {
+        "operationId": "MoodController_clearStatus",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Tắt mood hiện tại",
+        "tags": ["mood"]
       }
     }
   },
@@ -2963,7 +5558,19 @@
           "birthDate": { "type": "string", "nullable": true },
           "region": { "type": "string", "nullable": true },
           "avatarId": { "type": "string" },
-          "isGuest": { "type": "boolean" }
+          "isGuest": { "type": "boolean" },
+          "interests": {
+            "nullable": true,
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "seekingGender": {
+            "type": "string",
+            "enum": ["male", "female", "any"],
+            "nullable": true
+          },
+          "seekingAgeMin": { "type": "number", "nullable": true },
+          "seekingAgeMax": { "type": "number", "nullable": true }
         },
         "required": [
           "id",
@@ -2972,7 +5579,10 @@
           "birthDate",
           "region",
           "avatarId",
-          "isGuest"
+          "isGuest",
+          "interests",
+          "seekingAgeMin",
+          "seekingAgeMax"
         ]
       },
       "UpdateProfileDto": {
@@ -2992,7 +5602,19 @@
             "type": "string",
             "example": "VN",
             "description": "Mã region ISO 3166-1 alpha-2"
-          }
+          },
+          "interests": {
+            "example": ["Du lịch", "Cà phê"],
+            "description": "Sở thích công khai — tối đa 5 tag; gửi mảng rỗng để xoá hết",
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "seekingGender": {
+            "type": "string",
+            "enum": ["male", "female", "any"]
+          },
+          "seekingAgeMin": { "type": "number", "minimum": 18, "maximum": 99 },
+          "seekingAgeMax": { "type": "number", "minimum": 18, "maximum": 99 }
         }
       },
       "PublicProfileDto": {
@@ -3004,9 +5626,14 @@
             "type": "string",
             "enum": ["unknown", "male", "female", "other"]
           },
-          "avatarId": { "type": "string" }
+          "avatarId": { "type": "string" },
+          "interests": {
+            "nullable": true,
+            "type": "array",
+            "items": { "type": "string" }
+          }
         },
-        "required": ["id", "nickname", "gender", "avatarId"]
+        "required": ["id", "nickname", "gender", "avatarId", "interests"]
       },
       "GuestLoginDto": {
         "type": "object",
@@ -3122,6 +5749,20 @@
         },
         "required": ["productId", "provider", "diamonds"]
       },
+      "VipPlanDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "vip-30d" },
+          "tier": { "type": "string", "enum": ["vip", "svip"] },
+          "days": { "type": "number", "example": 30 },
+          "priceDiamond": {
+            "type": "string",
+            "example": "500",
+            "description": "Giá gói bằng diamond (bigint dạng chuỗi)"
+          }
+        },
+        "required": ["id", "tier", "days", "priceDiamond"]
+      },
       "VerifyIapDto": {
         "type": "object",
         "properties": {
@@ -3142,6 +5783,16 @@
         "type": "object",
         "properties": { "planId": { "type": "string", "example": "vip-30d" } },
         "required": ["planId"]
+      },
+      "VipPurchaseResultDto": {
+        "type": "object",
+        "properties": {
+          "transactionId": { "type": "string" },
+          "tier": { "type": "string", "enum": ["vip", "svip"] },
+          "vipExpiresAt": { "format": "date-time", "type": "string" },
+          "replayed": { "type": "boolean" }
+        },
+        "required": ["transactionId", "tier", "vipExpiresAt", "replayed"]
       },
       "JoinQueueDto": {
         "type": "object",
@@ -3169,6 +5820,11 @@
             "type": "string",
             "enum": ["queued", "matched", "confirmed", "expired", "cancelled"]
           },
+          "speedupPriceDiamond": {
+            "type": "number",
+            "minimum": 1,
+            "description": "Giá 1 lần speed-up do server cấu hình; client phải hiển thị giá này, không hard-code."
+          },
           "region": {
             "type": "string",
             "description": "Shard region server derive từ profile"
@@ -3189,6 +5845,7 @@
           "id",
           "matchType",
           "status",
+          "speedupPriceDiamond",
           "region",
           "ageBand",
           "genderPreference",
@@ -3196,6 +5853,17 @@
           "enqueuedAt",
           "createdAt"
         ]
+      },
+      "ActiveTicketResponseDto": {
+        "type": "object",
+        "properties": {
+          "ticket": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [{ "$ref": "#/components/schemas/TicketDto" }]
+          }
+        },
+        "required": ["ticket"]
       },
       "SpeedupResultDto": {
         "type": "object",
@@ -3211,6 +5879,78 @@
           "ticket": { "$ref": "#/components/schemas/TicketDto" }
         },
         "required": ["transactionId", "replayed", "ticket"]
+      },
+      "CreateInviteDto": {
+        "type": "object",
+        "properties": {
+          "inviteeUserId": {
+            "type": "string",
+            "description": "userId người được mời"
+          },
+          "matchType": {
+            "type": "string",
+            "enum": ["soul", "voice"],
+            "example": "voice"
+          }
+        },
+        "required": ["inviteeUserId", "matchType"]
+      },
+      "MatchInviteDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "inviterUserId": { "type": "string" },
+          "inviteeUserId": { "type": "string" },
+          "matchType": { "type": "string", "enum": ["soul", "voice"] },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "accepted", "declined", "expired", "cancelled"]
+          },
+          "expiresAt": { "format": "date-time", "type": "string" },
+          "sessionId": { "type": "string", "nullable": true },
+          "createdAt": { "format": "date-time", "type": "string" },
+          "inviterProfile": {
+            "description": "Profile công khai tối thiểu của người mời để người nhận quyết định có chủ đích.",
+            "allOf": [{ "$ref": "#/components/schemas/PublicProfileDto" }]
+          }
+        },
+        "required": [
+          "id",
+          "inviterUserId",
+          "inviteeUserId",
+          "matchType",
+          "status",
+          "expiresAt",
+          "sessionId",
+          "createdAt",
+          "inviterProfile"
+        ]
+      },
+      "MatchInvitesPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/MatchInviteDto" }
+          },
+          "nextCursor": { "type": "string", "nullable": true }
+        },
+        "required": ["items", "nextCursor"]
+      },
+      "MatchInviteAcceptedDto": {
+        "type": "object",
+        "properties": {
+          "invite": { "$ref": "#/components/schemas/MatchInviteDto" },
+          "sessionId": {
+            "type": "string",
+            "description": "sessionId — cùng khái niệm session của auto-match"
+          },
+          "inviteeTicketId": {
+            "type": "string",
+            "description": "ticketId CỦA CHÍNH NGƯỜI ACCEPT — gọi confirmTicket(ticketId) như auto-match"
+          }
+        },
+        "required": ["invite", "sessionId", "inviteeTicketId"]
       },
       "CreateReportDto": {
         "type": "object",
@@ -3265,7 +6005,11 @@
               "friend_message",
               "gift_received",
               "post_liked",
-              "post_commented"
+              "post_commented",
+              "streak_milestone",
+              "streak_at_risk",
+              "match_invite_received",
+              "admin_broadcast"
             ]
           },
           "payload": { "type": "object" },
@@ -3300,19 +6044,33 @@
             "format": "date-time",
             "type": "string",
             "nullable": true
-          }
+          },
+          "unreadCount": { "type": "number" },
+          "lastMessagePreview": { "type": "string", "nullable": true },
+          "muted": { "type": "boolean" }
         },
         "required": [
           "profile",
           "conversationId",
           "friendSince",
-          "lastMessageAt"
+          "lastMessageAt",
+          "unreadCount",
+          "lastMessagePreview",
+          "muted"
         ]
       },
       "ConversationDto": {
         "type": "object",
         "properties": { "id": { "type": "string" } },
         "required": ["id"]
+      },
+      "MessageAttachmentDto": {
+        "type": "object",
+        "properties": {
+          "kind": { "type": "string" },
+          "payload": { "type": "object", "additionalProperties": true }
+        },
+        "required": ["kind", "payload"]
       },
       "MessageDto": {
         "type": "object",
@@ -3321,6 +6079,11 @@
           "conversationId": { "type": "string" },
           "senderUserId": { "type": "string" },
           "content": { "type": "string" },
+          "attachment": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [{ "$ref": "#/components/schemas/MessageAttachmentDto" }]
+          },
           "sentAt": { "format": "date-time", "type": "string" }
         },
         "required": [
@@ -3347,10 +6110,43 @@
         },
         "required": ["items", "meta"]
       },
+      "StreakDto": {
+        "type": "object",
+        "properties": {
+          "current": { "type": "number" },
+          "longest": { "type": "number" },
+          "isActive": { "type": "boolean" }
+        },
+        "required": ["current", "longest", "isActive"]
+      },
+      "ConversationMemberStateDto": {
+        "type": "object",
+        "properties": {
+          "lastReadAt": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true
+          },
+          "muted": { "type": "boolean" }
+        },
+        "required": ["lastReadAt", "muted"]
+      },
+      "MuteConversationDto": {
+        "type": "object",
+        "properties": {
+          "muted": {
+            "type": "boolean",
+            "description": "true = tắt thông báo, false = bật lại"
+          }
+        },
+        "required": ["muted"]
+      },
       "SendFriendMessageDto": {
         "type": "object",
-        "properties": { "content": { "type": "string", "maxLength": 4000 } },
-        "required": ["content"]
+        "properties": {
+          "content": { "type": "string", "maxLength": 4000 },
+          "imageUrl": { "type": "string", "maxLength": 2048 }
+        }
       },
       "SoulSessionViewDto": {
         "type": "object",
@@ -3478,7 +6274,14 @@
       },
       "CreatePartyRoomDto": {
         "type": "object",
-        "properties": { "title": { "type": "string", "maxLength": 500 } },
+        "properties": {
+          "title": { "type": "string", "maxLength": 500 },
+          "category": {
+            "type": "string",
+            "enum": ["talk", "sing", "friend", "study", "other"],
+            "default": "talk"
+          }
+        },
         "required": ["title"]
       },
       "PartyRoomDto": {
@@ -3489,9 +6292,17 @@
           "title": { "type": "string" },
           "status": { "type": "string", "enum": ["active", "closed"] },
           "speakerLimit": { "type": "number" },
+          "category": {
+            "type": "string",
+            "enum": ["talk", "sing", "friend", "study", "other"]
+          },
+          "memberCount": {
+            "type": "number",
+            "description": "Số member active; có trong list/detail"
+          },
           "closeReason": {
             "type": "string",
-            "enum": ["host_left", "finished", "swept", "error"],
+            "enum": ["host_left", "finished", "swept", "error", "admin_closed"],
             "nullable": true
           },
           "createdAt": { "format": "date-time", "type": "string" },
@@ -3507,6 +6318,7 @@
           "title",
           "status",
           "speakerLimit",
+          "category",
           "closeReason",
           "createdAt",
           "hostDisconnectedAt"
@@ -3589,7 +6401,8 @@
           "id": { "type": "string" },
           "giftId": { "type": "string" },
           "giftCode": { "type": "string" },
-          "roomId": { "type": "string" },
+          "roomId": { "type": "string", "nullable": true },
+          "videoId": { "type": "string", "nullable": true },
           "senderUserId": { "type": "string" },
           "receiverUserId": { "type": "string" },
           "priceDiamond": { "type": "number" },
@@ -3604,7 +6417,6 @@
           "id",
           "giftId",
           "giftCode",
-          "roomId",
           "senderUserId",
           "receiverUserId",
           "priceDiamond",
@@ -3613,11 +6425,141 @@
           "replayed"
         ]
       },
+      "SendVideoGiftDto": {
+        "type": "object",
+        "properties": { "giftId": { "type": "string" } },
+        "required": ["giftId"]
+      },
+      "CreateUploadIntentDto": {
+        "type": "object",
+        "properties": { "caption": { "type": "string" } }
+      },
+      "UploadIntentDto": {
+        "type": "object",
+        "properties": {
+          "videoId": { "type": "string" },
+          "uploadUrl": { "type": "string" }
+        },
+        "required": ["videoId", "uploadUrl"]
+      },
+      "VideoDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "authorUserId": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": [
+              "uploading",
+              "processing",
+              "pending_review",
+              "published",
+              "removed",
+              "rejected",
+              "failed"
+            ]
+          },
+          "playbackUrl": { "type": "string", "nullable": true },
+          "thumbnailUrl": { "type": "string", "nullable": true },
+          "caption": { "type": "string", "nullable": true },
+          "durationSeconds": { "type": "number", "nullable": true },
+          "viewCount": { "type": "number" },
+          "likeCount": { "type": "number" },
+          "commentCount": { "type": "number" },
+          "createdAt": { "format": "date-time", "type": "string" }
+        },
+        "required": [
+          "id",
+          "authorUserId",
+          "status",
+          "playbackUrl",
+          "thumbnailUrl",
+          "caption",
+          "durationSeconds",
+          "viewCount",
+          "likeCount",
+          "commentCount",
+          "createdAt"
+        ]
+      },
+      "VideosPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/VideoDto" }
+          },
+          "nextCursor": { "type": "string", "nullable": true }
+        },
+        "required": ["items", "nextCursor"]
+      },
+      "ReportVideoDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "harassment",
+              "spam",
+              "underage",
+              "inappropriate_content",
+              "other"
+            ]
+          },
+          "description": { "type": "string" }
+        },
+        "required": ["reason"]
+      },
+      "RecordViewDto": {
+        "type": "object",
+        "properties": { "watchTimeMs": { "type": "number", "minimum": 0 } },
+        "required": ["watchTimeMs"]
+      },
+      "ReactionStatusDto": {
+        "type": "object",
+        "properties": {
+          "liked": { "type": "boolean" },
+          "likeCount": { "type": "number" }
+        },
+        "required": ["liked", "likeCount"]
+      },
+      "CreateVideoCommentDto": {
+        "type": "object",
+        "properties": { "content": { "type": "string" } },
+        "required": ["content"]
+      },
+      "VideoCommentDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "videoId": { "type": "string" },
+          "authorUserId": { "type": "string" },
+          "content": { "type": "string" },
+          "createdAt": { "format": "date-time", "type": "string" }
+        },
+        "required": ["id", "videoId", "authorUserId", "content", "createdAt"]
+      },
+      "VideoCommentsPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/VideoCommentDto" }
+          },
+          "nextCursor": { "type": "string", "nullable": true }
+        },
+        "required": ["items", "nextCursor"]
+      },
       "CreatePostDto": {
         "type": "object",
         "properties": {
           "content": { "type": "string" },
-          "imageUrl": { "type": "string" }
+          "imageUrl": { "type": "string" },
+          "audience": {
+            "type": "string",
+            "enum": ["public", "friends", "only_me"],
+            "default": "public"
+          }
         }
       },
       "PostDto": {
@@ -3627,6 +6569,10 @@
           "authorUserId": { "type": "string" },
           "content": { "type": "string", "nullable": true },
           "imageUrl": { "type": "string", "nullable": true },
+          "audience": {
+            "type": "string",
+            "enum": ["public", "friends", "only_me"]
+          },
           "likeCount": { "type": "number" },
           "commentCount": { "type": "number" },
           "createdAt": { "format": "date-time", "type": "string" }
@@ -3636,6 +6582,7 @@
           "authorUserId",
           "content",
           "imageUrl",
+          "audience",
           "likeCount",
           "commentCount",
           "createdAt"
@@ -3679,13 +6626,51 @@
         },
         "required": ["items", "nextCursor"]
       },
-      "ReactionStatusDto": {
+      "CreateStoryDto": {
         "type": "object",
         "properties": {
-          "liked": { "type": "boolean" },
-          "likeCount": { "type": "number" }
+          "mediaUrl": { "type": "string" },
+          "caption": { "type": "string" },
+          "audience": {
+            "type": "string",
+            "enum": ["public", "friends"],
+            "default": "friends"
+          }
         },
-        "required": ["liked", "likeCount"]
+        "required": ["mediaUrl"]
+      },
+      "StoryDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "authorUserId": { "type": "string" },
+          "mediaUrl": { "type": "string" },
+          "caption": { "type": "string", "nullable": true },
+          "audience": { "type": "string", "enum": ["public", "friends"] },
+          "expiresAt": { "format": "date-time", "type": "string" },
+          "createdAt": { "format": "date-time", "type": "string" }
+        },
+        "required": [
+          "id",
+          "authorUserId",
+          "mediaUrl",
+          "caption",
+          "audience",
+          "expiresAt",
+          "createdAt"
+        ]
+      },
+      "StoryViewersDto": {
+        "type": "object",
+        "properties": {
+          "viewerIds": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["viewerIds"]
+      },
+      "ReplyToStoryDto": {
+        "type": "object",
+        "properties": { "content": { "type": "string" } },
+        "required": ["content"]
       },
       "AvatarAssetDto": {
         "type": "object",
@@ -3710,6 +6695,11 @@
           "zIndex",
           "priceDiamond"
         ]
+      },
+      "AvatarBuyResultDto": {
+        "type": "object",
+        "properties": { "replayed": { "type": "boolean" } },
+        "required": ["replayed"]
       },
       "EquipAvatarItemDto": {
         "type": "object",
@@ -3787,6 +6777,78 @@
         },
         "required": ["positionSeconds", "isPlaying"]
       },
+      "MovieAnonStateDto": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": ["idle", "queued", "watching", "rating", "completed"]
+          },
+          "queuedAt": { "type": "string" },
+          "sessionId": { "type": "string" },
+          "videoUrl": { "type": "string" },
+          "positionSeconds": { "type": "number" },
+          "isPlaying": { "type": "boolean" },
+          "positionUpdatedAt": { "type": "string" },
+          "expiresAt": { "type": "string" },
+          "myRating": { "type": "string", "enum": ["like", "boring", "rude"] },
+          "opponentRated": { "type": "boolean" },
+          "outcome": {
+            "type": "string",
+            "enum": ["matched", "not_matched", "cancelled", "expired"]
+          },
+          "partnerUserId": {
+            "type": "string",
+            "description": "CHỈ có khi outcome=matched — trước đó 2 bên ẩn danh"
+          }
+        },
+        "required": ["state"]
+      },
+      "RateMovieMatchDto": {
+        "type": "object",
+        "properties": {
+          "rating": { "type": "string", "enum": ["like", "boring", "rude"] }
+        },
+        "required": ["rating"]
+      },
+      "SendMovieMessageDto": {
+        "type": "object",
+        "properties": { "content": { "type": "string", "maxLength": 2000 } },
+        "required": ["content"]
+      },
+      "MovieMessageDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "sender": { "type": "string", "enum": ["me", "partner"] },
+          "content": { "type": "string" },
+          "sentAt": { "format": "date-time", "type": "string" }
+        },
+        "required": ["id", "sender", "content", "sentAt"]
+      },
+      "MovieMessagesPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/MovieMessageDto" }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "nextCursor": { "type": "string", "nullable": true }
+            }
+          }
+        },
+        "required": ["items", "meta"]
+      },
+      "ReactMovieDto": {
+        "type": "object",
+        "properties": {
+          "emoji": { "type": "string", "enum": ["😂", "😍", "😱", "👏"] }
+        },
+        "required": ["emoji"]
+      },
       "PalmMatchReadingDto": {
         "type": "object",
         "properties": {
@@ -3801,6 +6863,54 @@
           }
         },
         "required": ["category", "content", "forDate"]
+      },
+      "PalmZodiacSignDto": {
+        "type": "object",
+        "properties": {
+          "key": { "type": "string" },
+          "symbol": { "type": "string" },
+          "name": { "type": "string" }
+        },
+        "required": ["key", "symbol", "name"]
+      },
+      "PalmMatchStateDto": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": ["idle", "queued", "active", "completed"]
+          },
+          "sessionId": { "type": "string", "format": "uuid" },
+          "queuedAt": { "type": "string", "format": "date-time" },
+          "expiresAt": { "type": "string", "format": "date-time" },
+          "myFlipped": { "type": "boolean" },
+          "opponentFlipped": { "type": "boolean" },
+          "mySign": { "$ref": "#/components/schemas/PalmZodiacSignDto" },
+          "opponentSign": { "$ref": "#/components/schemas/PalmZodiacSignDto" },
+          "compatibilityPercent": {
+            "type": "number",
+            "minimum": 60,
+            "maximum": 99
+          },
+          "fortune": { "type": "string" },
+          "myRating": { "type": "string", "enum": ["like", "skip"] },
+          "outcome": {
+            "type": "string",
+            "enum": ["matched", "not_matched", "expired", "cancelled"]
+          },
+          "partnerUserId": {
+            "type": "string",
+            "description": "Chỉ xuất hiện sau mutual-like"
+          }
+        },
+        "required": ["state"]
+      },
+      "RatePalmMatchDto": {
+        "type": "object",
+        "properties": {
+          "rating": { "type": "string", "enum": ["like", "skip"] }
+        },
+        "required": ["rating"]
       },
       "CreateMiniGameSessionDto": {
         "type": "object",
@@ -3855,6 +6965,75 @@
         },
         "required": ["move"]
       },
+      "AdminDailyDiamondDto": {
+        "type": "object",
+        "properties": {
+          "date": { "type": "string", "example": "2026-07-15" },
+          "amount": { "type": "string", "example": "1200" }
+        },
+        "required": ["date", "amount"]
+      },
+      "AdminUserTierDistributionDto": {
+        "type": "object",
+        "properties": {
+          "free": { "type": "number" },
+          "vip": { "type": "number" },
+          "svip": { "type": "number" }
+        },
+        "required": ["free", "vip", "svip"]
+      },
+      "AdminActivityDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "actorUserId": { "type": "string" },
+          "actorNickname": { "type": "string" },
+          "action": { "type": "string" },
+          "targetType": { "type": "string" },
+          "targetId": { "type": "string" },
+          "createdAt": { "format": "date-time", "type": "string" }
+        },
+        "required": [
+          "id",
+          "actorUserId",
+          "actorNickname",
+          "action",
+          "targetType",
+          "targetId",
+          "createdAt"
+        ]
+      },
+      "AdminDashboardDto": {
+        "type": "object",
+        "properties": {
+          "newUsersToday": { "type": "number" },
+          "newUsersPreviousDay": { "type": "number" },
+          "activeUsers": { "type": "number" },
+          "activeRoomCount": { "type": "number" },
+          "totalDiamondSpentSevenDays": { "type": "string" },
+          "dailyDiamondSpent": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AdminDailyDiamondDto" }
+          },
+          "userTiers": {
+            "$ref": "#/components/schemas/AdminUserTierDistributionDto"
+          },
+          "recentActivities": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AdminActivityDto" }
+          }
+        },
+        "required": [
+          "newUsersToday",
+          "newUsersPreviousDay",
+          "activeUsers",
+          "activeRoomCount",
+          "totalDiamondSpentSevenDays",
+          "dailyDiamondSpent",
+          "userTiers",
+          "recentActivities"
+        ]
+      },
       "Object": { "type": "object", "properties": {} },
       "AdminUserDto": {
         "type": "object",
@@ -3896,7 +7075,9 @@
         "properties": {
           "id": { "type": "string" },
           "reporterUserId": { "type": "string" },
-          "targetUserId": { "type": "string" },
+          "targetType": { "type": "string", "enum": ["user", "video"] },
+          "targetUserId": { "type": "string", "nullable": true },
+          "targetVideoId": { "type": "string", "nullable": true },
           "reason": {
             "type": "string",
             "enum": [
@@ -3918,7 +7099,9 @@
         "required": [
           "id",
           "reporterUserId",
+          "targetType",
           "targetUserId",
+          "targetVideoId",
           "reason",
           "description",
           "trustPenaltyApplied",
@@ -3936,6 +7119,190 @@
           "total": { "type": "number" }
         },
         "required": ["items", "total"]
+      },
+      "AdminVideoDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "authorUserId": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": [
+              "uploading",
+              "processing",
+              "pending_review",
+              "published",
+              "removed",
+              "rejected",
+              "failed"
+            ]
+          },
+          "playbackUrl": { "type": "string", "nullable": true },
+          "thumbnailUrl": { "type": "string", "nullable": true },
+          "caption": { "type": "string", "nullable": true },
+          "createdAt": { "format": "date-time", "type": "string" }
+        },
+        "required": [
+          "id",
+          "authorUserId",
+          "status",
+          "playbackUrl",
+          "thumbnailUrl",
+          "caption",
+          "createdAt"
+        ]
+      },
+      "AdminVideosPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AdminVideoDto" }
+          },
+          "nextCursor": { "type": "string", "nullable": true }
+        },
+        "required": ["items", "nextCursor"]
+      },
+      "AdminCloseRoomResultDto": {
+        "type": "object",
+        "properties": {
+          "closed": {
+            "type": "boolean",
+            "description": "false khi phòng đã đóng trước đó (idempotent)"
+          }
+        },
+        "required": ["closed"]
+      },
+      "AdminRoomDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "hostUserId": { "type": "string" },
+          "title": { "type": "string" },
+          "status": { "type": "string", "enum": ["active", "closed"] },
+          "speakerLimit": { "type": "number" },
+          "category": {
+            "type": "string",
+            "enum": ["talk", "sing", "friend", "study", "other"]
+          },
+          "memberCount": { "type": "number" },
+          "closeReason": {
+            "type": "string",
+            "enum": ["host_left", "finished", "swept", "error", "admin_closed"],
+            "nullable": true
+          },
+          "createdAt": { "format": "date-time", "type": "string" },
+          "hostDisconnectedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "hostUserId",
+          "title",
+          "status",
+          "speakerLimit",
+          "category",
+          "memberCount",
+          "closeReason",
+          "createdAt",
+          "hostDisconnectedAt"
+        ]
+      },
+      "AdminRoomsPageDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AdminRoomDto" }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "nextCursor": { "type": "string", "nullable": true }
+            }
+          }
+        },
+        "required": ["data", "meta"]
+      },
+      "SupportTicketDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "userId": { "type": "string" },
+          "category": { "type": "string", "enum": ["feedback", "bug", "idea"] },
+          "message": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["open", "in_progress", "resolved", "closed"]
+          },
+          "staffResponse": { "type": "string", "nullable": true },
+          "createdAt": { "format": "date-time", "type": "string" },
+          "updatedAt": { "format": "date-time", "type": "string" }
+        },
+        "required": [
+          "id",
+          "userId",
+          "category",
+          "message",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "AdminSupportTicketsPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/SupportTicketDto" }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "nextCursor": { "type": "string", "nullable": true }
+            }
+          }
+        },
+        "required": ["items", "meta"]
+      },
+      "AdminUpdateSupportTicketDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["open", "in_progress", "resolved", "closed"]
+          },
+          "staffResponse": { "type": "string", "maxLength": 2000 }
+        },
+        "required": ["status"]
+      },
+      "AdminSupportTicketDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "userId": { "type": "string" },
+          "category": { "type": "string", "enum": ["feedback", "bug", "idea"] },
+          "message": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["open", "in_progress", "resolved", "closed"]
+          },
+          "staffResponse": { "type": "string", "nullable": true },
+          "createdAt": { "format": "date-time", "type": "string" },
+          "updatedAt": { "format": "date-time", "type": "string" }
+        },
+        "required": [
+          "id",
+          "userId",
+          "category",
+          "message",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ]
       },
       "AdminGiftDto": {
         "type": "object",
@@ -4040,6 +7407,141 @@
         },
         "required": ["transactionId", "reversalTransactionId"]
       },
+      "AdminIapProductDto": {
+        "type": "object",
+        "properties": {
+          "productId": { "type": "string" },
+          "provider": { "type": "string", "enum": ["apple", "google"] },
+          "diamonds": { "type": "string" },
+          "active": { "type": "boolean" }
+        },
+        "required": ["productId", "provider", "diamonds", "active"]
+      },
+      "AdminVipPlanDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "tier": { "type": "string", "enum": ["vip", "svip"] },
+          "days": { "type": "number" },
+          "priceDiamond": { "type": "string" },
+          "active": { "type": "boolean" }
+        },
+        "required": ["id", "tier", "days", "priceDiamond", "active"]
+      },
+      "AdminEconomyCatalogDto": {
+        "type": "object",
+        "properties": {
+          "iapProducts": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AdminIapProductDto" }
+          },
+          "vipPlans": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AdminVipPlanDto" }
+          }
+        },
+        "required": ["iapProducts", "vipPlans"]
+      },
+      "SetCatalogActiveDto": {
+        "type": "object",
+        "properties": { "active": { "type": "boolean" } },
+        "required": ["active"]
+      },
+      "BroadcastNotificationDto": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "maxLength": 120 },
+          "body": { "type": "string", "maxLength": 500 },
+          "audience": { "type": "string", "enum": ["all", "vip", "free"] }
+        },
+        "required": ["title", "body", "audience"]
+      },
+      "BroadcastNotificationResultDto": {
+        "type": "object",
+        "properties": {
+          "broadcastId": { "type": "string" },
+          "recipientCount": { "type": "number" }
+        },
+        "required": ["broadcastId", "recipientCount"]
+      },
+      "AdminRolePermissionDto": {
+        "type": "object",
+        "properties": {
+          "permission": {
+            "type": "string",
+            "enum": [
+              "view_users",
+              "ban_users",
+              "resolve_reports",
+              "refund_transaction",
+              "manage_gifts",
+              "manage_config",
+              "manage_rooms",
+              "manage_permissions",
+              "manage_support"
+            ]
+          },
+          "label": { "type": "string" },
+          "moderator": { "type": "boolean" },
+          "admin": { "type": "boolean" }
+        },
+        "required": ["permission", "label", "moderator", "admin"]
+      },
+      "AdminPermissionMatrixDto": {
+        "type": "object",
+        "properties": {
+          "permissions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AdminRolePermissionDto" }
+          }
+        },
+        "required": ["permissions"]
+      },
+      "SetRolePermissionDto": {
+        "type": "object",
+        "properties": { "enabled": { "type": "boolean" } },
+        "required": ["enabled"]
+      },
+      "AdminStaffDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "nickname": { "type": "string" },
+          "role": { "type": "string", "enum": ["moderator", "admin"] }
+        },
+        "required": ["id", "nickname", "role"]
+      },
+      "SetStaffRoleDto": {
+        "type": "object",
+        "properties": {
+          "role": { "type": "string", "enum": ["user", "moderator", "admin"] }
+        },
+        "required": ["role"]
+      },
+      "CreateSupportTicketDto": {
+        "type": "object",
+        "properties": {
+          "category": { "type": "string", "enum": ["feedback", "bug", "idea"] },
+          "message": { "type": "string", "minLength": 5, "maxLength": 2000 }
+        },
+        "required": ["category", "message"]
+      },
+      "SupportTicketsPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/SupportTicketDto" }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "nextCursor": { "type": "string", "nullable": true }
+            }
+          }
+        },
+        "required": ["items", "meta"]
+      },
       "DiscoveryCardDto": {
         "type": "object",
         "properties": {
@@ -4058,6 +7560,73 @@
           "nextCursor": { "type": "string", "nullable": true }
         },
         "required": ["items", "nextCursor"]
+      },
+      "SetLocationDto": {
+        "type": "object",
+        "properties": {
+          "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+          "lon": { "type": "number", "minimum": -180, "maximum": 180 }
+        },
+        "required": ["lat", "lon"]
+      },
+      "SetNearbyVisibleDto": {
+        "type": "object",
+        "properties": { "visible": { "type": "boolean" } },
+        "required": ["visible"]
+      },
+      "NearbyCardDto": {
+        "type": "object",
+        "properties": {
+          "profile": { "$ref": "#/components/schemas/PublicProfileDto" },
+          "distanceBucket": { "type": "string" }
+        },
+        "required": ["profile", "distanceBucket"]
+      },
+      "NearbyCardsPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/NearbyCardDto" }
+          },
+          "nextCursor": { "type": "string", "nullable": true }
+        },
+        "required": ["items", "nextCursor"]
+      },
+      "MoodPresetDto": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "string" },
+          "label": { "type": "string" },
+          "emoji": { "type": "string" }
+        },
+        "required": ["code", "label", "emoji"]
+      },
+      "CurrentMoodDto": {
+        "type": "object",
+        "properties": {
+          "preset": { "$ref": "#/components/schemas/MoodPresetDto" },
+          "setAt": { "format": "date-time", "type": "string" },
+          "expiresAt": { "format": "date-time", "type": "string" }
+        },
+        "required": ["preset", "setAt", "expiresAt"]
+      },
+      "MoodStatusResponseDto": {
+        "type": "object",
+        "properties": {
+          "mood": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [{ "$ref": "#/components/schemas/CurrentMoodDto" }]
+          }
+        }
+      },
+      "SetMoodDto": {
+        "type": "object",
+        "properties": {
+          "presetCode": { "type": "string", "example": "happy" }
+        },
+        "required": ["presetCode"]
       }
     }
   }

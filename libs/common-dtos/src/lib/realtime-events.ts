@@ -44,6 +44,10 @@ export const RealtimeEvents = {
   CallEnded: 'call.ended',
   /** Message mới trong chat 1-1 lâu dài giữa 2 bạn (khác chat ẩn danh Soul Match). */
   FriendMessage: 'friend.message',
+  /** Streak vừa tăng và chạm mốc milestone (STREAK_MILESTONE_DAYS) — không bắn cho ngày thường. */
+  FriendStreakIncreased: 'friend.streak.increased',
+  /** Cron cảnh báo streak sắp mất (chưa nhắn hôm nay, qua mốc giờ cảnh báo) — không ghi streak. */
+  FriendStreakAtRisk: 'friend.streak.at_risk',
   /** Member vào/ra Party Room (fanout cho member active còn lại trong phòng). */
   PartyMemberJoined: 'party.member.joined',
   PartyMemberLeft: 'party.member.left',
@@ -67,6 +71,11 @@ export const RealtimeEvents = {
   MovieStateChanged: 'movie.state.changed',
   /** Movie Match: phiên xem chung kết thúc (chủ động rời — chưa có nhánh hết hạn tự động). */
   MovieSessionEnded: 'movie.session.ended',
+  /**
+   * Movie Match ẩn danh: reaction emoji nổi trên video — hiệu ứng ephemeral, KHÔNG persist,
+   * KHÔNG kèm userId (2 bên chưa lộ danh tính). Client miss event chỉ mất hiệu ứng.
+   */
+  MovieReactionSent: 'movie.reaction.sent',
   /** Mini Game: ván oẳn tù tì mới được tạo (docs/services/mini-game-service.md § 5). */
   MiniGameSessionStarted: 'minigame.session.started',
   /**
@@ -122,7 +131,18 @@ export interface FriendMessageEventData {
   /** KHÔNG ẩn danh (2 bên đã unlock profile khi thành bạn) — khác SoulMessageEventData. */
   senderUserId: string;
   content: string;
+  /** NULL cho message thường — set khi reply story/video share (docs/services/feed-service.md § 8). */
+  attachment: { kind: string; payload: Record<string, unknown> } | null;
   sentAt: string;
+}
+
+export interface FriendStreakIncreasedEventData {
+  conversationId: string;
+  currentStreak: number;
+}
+
+export interface FriendStreakAtRiskEventData {
+  conversationId: string;
 }
 
 export interface PartyMemberJoinedEventData {
@@ -189,6 +209,11 @@ export interface MovieSessionEndedEventData {
   sessionId: string;
   /** left | replaced (movie-match-service.md § 3, § 5). */
   reason: string;
+}
+
+export interface MovieReactionSentEventData {
+  sessionId: string;
+  emoji: string;
 }
 
 export interface MiniGameSessionStartedEventData {

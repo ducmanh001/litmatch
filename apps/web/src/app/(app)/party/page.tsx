@@ -1,14 +1,23 @@
 import { RoomList } from '../../../features/party-room/components/room-list';
+import { PartyIcon } from '../../../shared/ui/icons';
+import { PageHeader } from '../../../shared/ui/page-header';
 
 import type { Metadata } from 'next';
 
-export const metadata: Metadata = { title: 'Phòng nhóm' };
+export const metadata: Metadata = { title: 'Party Room' };
 
 export default function PartyPage() {
   return (
-    <section className="mx-auto max-w-md space-y-4">
-      <h1 className="text-2xl font-semibold">Phòng nhóm</h1>
-      <RoomList />
-    </section>
+    <div>
+      <div className="px-5">
+        <PageHeader
+          eyebrow="Trò chuyện nhóm"
+          eyebrowIcon={<PartyIcon width={16} height={16} />}
+        />
+      </div>
+      <div className="px-5">
+        <RoomList />
+      </div>
+    </div>
   );
 }

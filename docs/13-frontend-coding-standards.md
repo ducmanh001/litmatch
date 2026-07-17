@@ -172,6 +172,11 @@ feature sở hữu nó, mỗi store 1 concern — không store "app state" tổn
   không trộn.
 - A11y baseline không thương lượng: đúng element ngữ nghĩa (`button` cho hành động, không
   `div onClick`), mọi input có label, focus-visible không bị tắt, ảnh có `alt`.
+- Web (`apps/web`): 2 trục theme độc lập, cả hai đổi qua `ThemeSwitcher`
+  (`shared/ui/theme-switcher.tsx`) — sáng/tối bằng class `dark` trên `<html>`; mood màu
+  hồng/cam/trắng bằng `data-theme` (bỏ trống = hồng mặc định, `orange` = cam) đổi biến
+  `--iris/--irisl/--aqua/--aqual/--ink/--surf/--surf2` ở `global.css`, đúng 3 nút
+  `setTheme()` của mọi mockup `layouts/web/*.html`.
 
 ## 13.10 Env & config
 

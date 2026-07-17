@@ -31,10 +31,11 @@ export class ReportDto {
   @ApiProperty({ enum: ReportReason }) reason!: ReportReason;
   @ApiProperty() createdAt!: Date;
 
+  /** Chỉ dùng cho report user (`SafetyService.report`) — `targetUserId` luôn có giá trị ở nhánh đó. */
   static from(report: Report): ReportDto {
     const dto = new ReportDto();
     dto.id = report.id;
-    dto.targetUserId = report.targetUserId;
+    dto.targetUserId = report.targetUserId as string;
     dto.reason = report.reason;
     dto.createdAt = report.createdAt;
     return dto;

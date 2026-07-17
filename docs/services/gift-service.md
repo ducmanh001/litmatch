@@ -26,13 +26,21 @@ KHÔNG phải env config). Server **đọc lại giá tại đúng thời điể
 không bao giờ gửi giá ([10 § Gift](../10-code-review-checklist.md)). `code` là khoá ổn định cho
 client map asset/animation. `GET /gifts` chỉ trả quà `active`.
 
-## 3. Ngữ cảnh tặng (GĐ3)
+## 3. Ngữ cảnh tặng
+
+`gift_events` mang ĐÚNG 1 context/1 event (CHECK `chk_gift_events_context`): `room_id` hoặc
+`video_id`.
 
 - Tặng trong Party Room: `POST /party/rooms/:roomId/gifts` (header `Idempotency-Key` bắt buộc).
   Người tặng VÀ người nhận phải là member active của phòng active (qua
   `PartyRoomService.getActiveRoomMembers`) — check nghiệp vụ, KHÔNG phải chốt an toàn tiền: tiền
   đúng bất kể race rời-phòng nhờ transaction + idempotency ở Economy.
-- **Ngoài scope GĐ3** (mở khi nghiệp vụ cần, sửa spec này trước): tặng trong chat 1-1/call,
+- Tặng cho tác giả video (video.html "Tặng"): `POST /videos/:videoId/gifts` — người nhận **suy
+  từ video** (client không gửi `receiverUserId`, chống gửi lệch người nhận); video phải nhìn
+  thấy được với người tặng (`ShortVideoService.getVideoOrThrow`). Cùng chốt tiền/idempotency
+  với quà phòng; KHÔNG có fanout realtime phòng — người nhận biết qua notification
+  `gift_received` (payload mang `videoId`).
+- **Ngoài scope** (mở khi nghiệp vụ cần, sửa spec này trước): tặng trong chat 1-1/call,
   gift combo/lucky gift.
 
 ## 4. Guest & chống lạm dụng ([06-domain-rules.md](../06-domain-rules.md))

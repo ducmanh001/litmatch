@@ -16,13 +16,13 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle, minutes } from '@nestjs/throttler';
-import { CursorPageQueryDto } from '@litmatch/common-dtos';
 
 import { PartyRoomService } from './party-room.service';
 import {
   ChangePartyRoleDto,
   CreatePartyRoomDto,
   JoinPartyRoomDto,
+  ListPartyRoomsQueryDto,
   PartyRoomDetailDto,
   PartyRoomListDto,
   PartyRoomMemberDto,
@@ -49,7 +49,7 @@ export class PartyRoomController {
     @Body() body: CreatePartyRoomDto,
   ): Promise<JoinPartyRoomDto> {
     const { room, membership, token, livekitUrl } =
-      await this.partyRoomService.createRoom(user, body.title);
+      await this.partyRoomService.createRoom(user, body.title, body.category);
     return JoinPartyRoomDto.from(room, membership, token, livekitUrl);
   }
 
@@ -57,11 +57,15 @@ export class PartyRoomController {
   @ApiOperation({ summary: 'List phòng đang mở — cursor pagination' })
   @ApiCursorPageQuery()
   @ApiOkResponse({ type: PartyRoomListDto })
-  async list(@Query() query: CursorPageQueryDto): Promise<PartyRoomListDto> {
-    const { data, meta } = await this.partyRoomService.listRooms(
-      query.limit,
-      query.cursor,
-    );
+  async list(
+    @Query() query: ListPartyRoomsQueryDto,
+  ): Promise<PartyRoomListDto> {
+    const { data, meta } =
+      await this.partyRoomService.listRoomsWithMemberCounts(
+        query.limit,
+        query.cursor,
+        { q: query.q, category: query.category },
+      );
     return PartyRoomListDto.from(data, meta);
   }
 

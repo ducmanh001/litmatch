@@ -29,7 +29,7 @@ export class AdminAuditLog {
   targetType!: string;
 
   @Index('idx_admin_audit_logs_target')
-  @Column({ type: 'uuid' })
+  @Column({ type: 'varchar', length: 128 })
   targetId!: string;
 
   @Column({ type: 'jsonb', nullable: true })

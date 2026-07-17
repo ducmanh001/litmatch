@@ -6,8 +6,30 @@
     <base href="/" />
 
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/src/styles.css" />
+    <script>
+      // Chặn flash sai theme trước khi React mount (Vite không có head-injection point như Next).
+      // Đọc cùng key localStorage mà theme-slider.tsx dùng — xem shared/ui/theme-slider.tsx.
+      (function () {
+        try {
+          var raw = localStorage.getItem('litmatch-admin-theme');
+          var mode = raw ? raw.split('-') : ['cyan', 'dark'];
+          var root = document.documentElement;
+          if (mode[0] === 'warm') root.classList.add('theme-warm');
+          if (mode[1] === 'light') root.classList.add('light');
+        } catch (e) {
+          /* localStorage bị chặn (private mode...) — giữ mặc định Cyan Tối. */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

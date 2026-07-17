@@ -73,8 +73,9 @@ describe('EconomyPage', () => {
     renderPage();
     await lookupUser();
 
-    expect(await screen.findAllByText('1200')).toHaveLength(2); // balance + diamondDelta
-    expect(screen.getByText('iap_purchase')).toBeVisible();
+    expect(await screen.findByText('1200 💎')).toBeVisible(); // wallet balance
+    expect(screen.getByText('1200')).toBeVisible(); // diamondDelta
+    expect(screen.getByText('Nạp Diamond (IAP)')).toBeVisible();
   });
 
   it('error khi tải wallet — hiện message', async () => {
@@ -161,7 +162,7 @@ describe('EconomyPage', () => {
     renderPage();
     await lookupUser();
 
-    await screen.findByText('reversed');
+    await screen.findByText('Đã hoàn tiền');
     expect(screen.queryByPlaceholderText('Lý do hoàn tiền')).toBeNull();
   });
 });

@@ -107,4 +107,37 @@ describe('SoulChatPhaseView', () => {
 
     expect(await screen.findByText(/Không match lần này/)).toBeVisible();
   });
+
+  it('đã đánh giá "Thích" nhưng chưa matched — màn kết quả toàn màn hình báo đã gửi lượt thích', async () => {
+    mockGet(
+      sessionFixture({ phase: 'rating', myVerdict: 'like', matched: false }),
+    );
+    renderView();
+
+    expect(await screen.findByText('Đã gửi lượt thích!')).toBeVisible();
+    expect(
+      screen.getByRole('link', { name: 'Tìm người khác' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText('Nội dung tin nhắn'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('đã đánh giá "Nhạt nhẽo" — màn kết quả toàn màn hình báo đã bỏ qua', async () => {
+    mockGet(
+      sessionFixture({ phase: 'rating', myVerdict: 'boring', matched: false }),
+    );
+    renderView();
+
+    expect(await screen.findByText('Đã bỏ qua')).toBeVisible();
+  });
+
+  it('đã đánh giá và đã matched — màn kết quả báo đã trở thành bạn', async () => {
+    mockGet(
+      sessionFixture({ phase: 'closed', myVerdict: 'like', matched: true }),
+    );
+    renderView();
+
+    expect(await screen.findByText('Đã trở thành bạn!')).toBeVisible();
+  });
 });

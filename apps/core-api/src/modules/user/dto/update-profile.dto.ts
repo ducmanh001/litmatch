@@ -1,14 +1,26 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsEnum,
+  IsInt,
   IsISO8601,
   IsOptional,
   IsString,
   Length,
   Matches,
+  Max,
+  Min,
 } from 'class-validator';
 
-import { Gender } from '../entities/user.entity';
+import { Gender, SeekingGender } from '../entities/user.entity';
+
+/** "chọn tối đa 5" theo edit-profile.html — sanity cap transport, cùng vai trò MESSAGE_CONTENT_HARD_CAP. */
+export const PROFILE_INTERESTS_MAX = 5;
+const INTEREST_TAG_MAX_LENGTH = 32;
+/** Sanity cap transport cho khoảng tuổi tìm kiếm — ràng buộc nghiệp vụ (min ≤ max) check ở service. */
+const SEEKING_AGE_FLOOR = 18;
+const SEEKING_AGE_CEIL = 99;
 
 export class UpdateProfileDto {
   @ApiPropertyOptional({ example: 'Mưa Đêm' })
@@ -37,4 +49,41 @@ export class UpdateProfileDto {
   @IsOptional()
   @Matches(/^[A-Z]{2}$/)
   region?: string;
+
+  @ApiPropertyOptional({
+    type: [String],
+    example: ['Du lịch', 'Cà phê'],
+    description: `Sở thích công khai — tối đa ${PROFILE_INTERESTS_MAX} tag; gửi mảng rỗng để xoá hết`,
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(PROFILE_INTERESTS_MAX)
+  @IsString({ each: true })
+  @Length(1, INTEREST_TAG_MAX_LENGTH, { each: true })
+  interests?: string[];
+
+  @ApiPropertyOptional({ enum: SeekingGender })
+  @IsOptional()
+  @IsEnum(SeekingGender)
+  seekingGender?: SeekingGender;
+
+  @ApiPropertyOptional({
+    minimum: SEEKING_AGE_FLOOR,
+    maximum: SEEKING_AGE_CEIL,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(SEEKING_AGE_FLOOR)
+  @Max(SEEKING_AGE_CEIL)
+  seekingAgeMin?: number;
+
+  @ApiPropertyOptional({
+    minimum: SEEKING_AGE_FLOOR,
+    maximum: SEEKING_AGE_CEIL,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(SEEKING_AGE_FLOOR)
+  @Max(SEEKING_AGE_CEIL)
+  seekingAgeMax?: number;
 }

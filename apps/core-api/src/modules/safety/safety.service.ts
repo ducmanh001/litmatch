@@ -4,9 +4,15 @@ import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@litmatch/common-exceptions';
 import { DataSource, MoreThan, MoreThanOrEqual, Repository } from 'typeorm';
 
+import { isUniqueViolation } from '../../database/postgres-errors';
 import { SafetyErrors } from './safety.errors';
 import { Block, BlockAction } from './entities/block.entity';
-import { Report, ReportReason, ReportStatus } from './entities/report.entity';
+import {
+  Report,
+  ReportReason,
+  ReportStatus,
+  ReportTargetType,
+} from './entities/report.entity';
 import { UserService } from '../user';
 
 import type { EntityManager } from 'typeorm';
@@ -120,6 +126,57 @@ export class SafetyService {
       }
       return report;
     });
+  }
+
+  /**
+   * Report video (W5, docs/services/short-video-service.md § 5) — KHÔNG chạm trust score cá
+   * nhân (khác `report()` — video không có "chủ tài khoản" để trừ điểm cho việc bị report nội
+   * dung). `short-video` module tự validate video tồn tại TRƯỚC khi gọi (Safety trung lập,
+   * không biết bảng `videos`). Unique (reporter, video) chặn cùng người report lặp lại nhiều lần.
+   * Trả về số distinct reporter — caller (`short-video`) tự so với `VIDEO_REPORT_AUTOHIDE_THRESHOLD`
+   * để quyết định auto-hide, Safety không tự quyết thay module khác.
+   */
+  async reportVideo(
+    reporterUserId: string,
+    videoId: string,
+    reason: ReportReason,
+    description?: string,
+  ): Promise<{ report: Report; distinctReporterCount: number }> {
+    // KHÔNG bọc trong `dataSource.transaction` — không có ghi phụ nào cần atomic cùng INSERT này
+    // (khác `report()` — insert + trừ trust score cùng lúc). Insert unique-violation rồi ĐỌC LẠI
+    // trong CÙNG 1 transaction explicit sẽ lỗi "current transaction is aborted" (Postgres huỷ
+    // toàn bộ transaction ngay khi 1 statement lỗi) — bắt được qua test thật, không phải suy đoán.
+    let report: Report;
+    try {
+      report = await this.reportRepo.save(
+        this.reportRepo.create({
+          reporterUserId,
+          targetType: ReportTargetType.Video,
+          targetUserId: null,
+          targetVideoId: videoId,
+          reason,
+          description: description ?? null,
+          trustPenaltyApplied: 0,
+        }),
+      );
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      report = await this.reportRepo.findOneByOrFail({
+        targetType: ReportTargetType.Video,
+        targetVideoId: videoId,
+        reporterUserId,
+      });
+    }
+
+    const raw = await this.reportRepo
+      .createQueryBuilder('r')
+      .select('COUNT(DISTINCT r.reporterUserId)', 'count')
+      .where('r.targetType = :targetType', {
+        targetType: ReportTargetType.Video,
+      })
+      .andWhere('r.targetVideoId = :videoId', { videoId })
+      .getRawOne<{ count: string }>();
+    return { report, distinctReporterCount: Number(raw?.count ?? 0) };
   }
 
   /** Idempotent — block khi đã đang block là no-op, không ghi dòng trùng thừa. */

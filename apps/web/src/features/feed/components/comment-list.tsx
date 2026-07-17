@@ -11,7 +11,11 @@ export function CommentList({ postId }: { postId: string }) {
   const items = comments.data?.pages.flatMap((page) => page?.items ?? []) ?? [];
 
   if (comments.isPending) {
-    return <p className="text-sm text-muted-foreground">Đang tải bình luận…</p>;
+    return (
+      <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">
+        Đang tải bình luận…
+      </p>
+    );
   }
 
   if (comments.isError) {
@@ -19,7 +23,10 @@ export function CommentList({ postId }: { postId: string }) {
       ? comments.error.message
       : 'Có lỗi xảy ra, thử lại.';
     return (
-      <p role="alert" className="text-sm text-destructive">
+      <p
+        role="alert"
+        className="rounded-2xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+      >
         {message}
       </p>
     );
@@ -28,15 +35,22 @@ export function CommentList({ postId }: { postId: string }) {
   return (
     <div className="space-y-3">
       {items.length === 0 && (
-        <p className="text-sm text-muted-foreground">Chưa có bình luận nào.</p>
+        <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">
+          Chưa có bình luận nào.
+        </p>
       )}
 
       {items.length > 0 && (
         <ul className="space-y-2">
           {items.map((comment) => (
-            <li key={comment.id} className="rounded-md bg-card px-3 py-2">
-              <p className="text-sm">{comment.content}</p>
-              <p className="text-xs text-muted-foreground">
+            <li
+              key={comment.id}
+              className="rounded-2xl border border-black/5 bg-white px-3 py-2.5 dark:border-white/5 dark:bg-surf"
+            >
+              <p className="whitespace-pre-wrap text-sm [overflow-wrap:anywhere]">
+                {comment.content}
+              </p>
+              <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
                 {new Date(comment.createdAt).toLocaleString('vi-VN')}
               </p>
             </li>
@@ -47,7 +61,7 @@ export function CommentList({ postId }: { postId: string }) {
       {hasNextPage && (
         <button
           type="button"
-          className="h-8 w-full rounded-md border border-border text-sm hover:bg-card disabled:opacity-50"
+          className="h-9 w-full rounded-full border border-black/5 text-sm font-semibold hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/5"
           disabled={isFetchingNextPage}
           onClick={() => void fetchNextPage()}
         >

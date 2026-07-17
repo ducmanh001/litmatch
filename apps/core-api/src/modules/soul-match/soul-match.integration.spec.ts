@@ -2,6 +2,7 @@ import { DataSource } from 'typeorm';
 
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
 import { InitAuthUser1751900000000 } from '../../database/migrations/1751900000000-init-auth-user';
+import { UserProfilePreferences1755800000000 } from '../../database/migrations/1755800000000-user-profile-preferences';
 import { UserRole1753600000000 } from '../../database/migrations/1753600000000-user-role';
 import { EconomyLedger1752000000000 } from '../../database/migrations/1752000000000-economy-ledger';
 import { EconomyRefund1752100000000 } from '../../database/migrations/1752100000000-economy-refund';
@@ -10,6 +11,7 @@ import { MatchingGenderPreference1752300000000 } from '../../database/migrations
 import { SoulMatch1752400000000 } from '../../database/migrations/1752400000000-soul-match';
 import { FriendChat1752600000000 } from '../../database/migrations/1752600000000-friend-chat';
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
+import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
 
 import { SoulMatchService } from './soul-match.service';
 import { SoulMatchErrors } from './soul-match.errors';
@@ -185,6 +187,7 @@ d('Soul Match integration (Postgres thật)', () => {
       ],
       migrations: [
         InitAuthUser1751900000000,
+        UserProfilePreferences1755800000000,
         UserRole1753600000000,
         EconomyLedger1752000000000,
         EconomyRefund1752100000000,
@@ -193,6 +196,7 @@ d('Soul Match integration (Postgres thật)', () => {
         SoulMatch1752400000000,
         FriendChat1752600000000,
         Safety1752800000000,
+        ReportTargetVideo1754900000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -213,7 +217,13 @@ d('Soul Match integration (Postgres thật)', () => {
     };
     friendService = new FriendService(
       ds.getRepository(Friendship),
+      // member state (read/mute) không dùng ở suite này — stub rỗng
+      { findOne: async () => null } as never,
       conversationService,
+      // stub — suite này chỉ dùng ensureFriendship/areFriends, không gọi sendMessage/streak
+      {
+        recordActivity: async () => ({ streak: {}, milestoneHit: null }),
+      } as never,
       // stub — guard block test riêng ở suite friend.integration, suite này không chạm block
       { isBlocked: async () => false } as never,
       notificationStub as never,

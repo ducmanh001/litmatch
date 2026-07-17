@@ -4,5 +4,10 @@
 export { SafetyModule } from './safety.module';
 export { SafetyService } from './safety.service';
 export type { ReportPageFilter, ReportPage } from './safety.service';
-export { Report, ReportReason, ReportStatus } from './entities/report.entity';
+export {
+  Report,
+  ReportReason,
+  ReportStatus,
+  ReportTargetType,
+} from './entities/report.entity';
 export { Block, BlockAction } from './entities/block.entity';

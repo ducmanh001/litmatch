@@ -1,7 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
-import { Report, ReportReason, ReportStatus } from '../../safety';
+import {
+  Report,
+  ReportReason,
+  ReportStatus,
+  ReportTargetType,
+} from '../../safety';
 
 import type { ReportPage } from '../../safety';
 
@@ -31,7 +36,9 @@ export class ListReportsQueryDto {
 export class AdminReportDto {
   @ApiProperty() id!: string;
   @ApiProperty() reporterUserId!: string;
-  @ApiProperty() targetUserId!: string;
+  @ApiProperty({ enum: ReportTargetType }) targetType!: ReportTargetType;
+  @ApiProperty({ nullable: true, type: String }) targetUserId!: string | null;
+  @ApiProperty({ nullable: true, type: String }) targetVideoId!: string | null;
   @ApiProperty({ enum: ReportReason }) reason!: ReportReason;
   @ApiProperty({ nullable: true }) description!: string | null;
   @ApiProperty() trustPenaltyApplied!: number;
@@ -42,7 +49,9 @@ export class AdminReportDto {
     const dto = new AdminReportDto();
     dto.id = report.id;
     dto.reporterUserId = report.reporterUserId;
+    dto.targetType = report.targetType;
     dto.targetUserId = report.targetUserId;
+    dto.targetVideoId = report.targetVideoId;
     dto.reason = report.reason;
     dto.description = report.description;
     dto.trustPenaltyApplied = report.trustPenaltyApplied;
