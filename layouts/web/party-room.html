@@ -408,33 +408,44 @@
         btn.classList.toggle('dark:bg-surf2', !micOn);
         lmToast(micOn ? 'Đã bật mic' : 'Đã tắt mic');
       }
-      function appendRoomMessage(html) {
+      function appendRoomMessage(contentNode) {
         var log = document.getElementById('roomChatLog');
         var p = document.createElement('p');
         p.className = 'text-xs';
-        p.innerHTML = html;
+        p.appendChild(contentNode);
         log.appendChild(p);
         log.scrollTop = log.scrollHeight;
       }
       var roomChatInput = document.getElementById('roomChatInput');
       roomChatInput.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && roomChatInput.value.trim()) {
-          appendRoomMessage(
-            '<span class="font-bold">Bạn:</span> <span class="text-slate-500 dark:text-slate-400">' +
-              roomChatInput.value.trim() +
-              '</span>',
-          );
+          var wrapper = document.createElement('span');
+
+          var sender = document.createElement('span');
+          sender.className = 'font-bold';
+          sender.textContent = 'Bạn:';
+
+          var spacer = document.createTextNode(' ');
+
+          var message = document.createElement('span');
+          message.className = 'text-slate-500 dark:text-slate-400';
+          message.textContent = roomChatInput.value.trim();
+
+          wrapper.appendChild(sender);
+          wrapper.appendChild(spacer);
+          wrapper.appendChild(message);
+
+          appendRoomMessage(wrapper);
           roomChatInput.value = '';
         }
       });
       function sendGift(emoji, name, cost) {
-        appendRoomMessage(
-          '<span class="bg-diamond/10 text-sky-700 dark:text-diamond rounded-lg px-2 py-1 inline-block">' +
-            emoji +
-            ' Bạn đã tặng Mai 1 ' +
-            name +
-            '</span>',
-        );
+        var gift = document.createElement('span');
+        gift.className =
+          'bg-diamond/10 text-sky-700 dark:text-diamond rounded-lg px-2 py-1 inline-block';
+        gift.textContent = emoji + ' Bạn đã tặng Mai 1 ' + name;
+
+        appendRoomMessage(gift);
         toggleGift();
         lmToast('Đã tặng ' + name + ' — trừ ' + cost + ' 💎');
       }
