@@ -1156,10 +1156,26 @@
     }
     var refundBtn = e.target.closest('[data-refund]');
     if (refundBtn){
-      var actionCell = document.getElementById('txn-action-' + refundBtn.getAttribute('data-refund'));
+      var refundId = refundBtn.getAttribute('data-refund');
+      var actionCell = document.getElementById('txn-action-' + refundId);
       if (actionCell && !actionCell.querySelector('.filter-input')){
-        actionCell.innerHTML = '<input class="filter-input" style="height:30px;width:150px;" placeholder="Lý do hoàn tiền" id="refund-reason-' + refundBtn.getAttribute('data-refund') + '">' +
-          '<button class="btn btn-destructive" data-confirm-refund="' + refundBtn.getAttribute('data-refund') + '" style="margin-left:6px;">Xác nhận</button>';
+        actionCell.textContent = '';
+
+        var reasonInputEl = document.createElement('input');
+        reasonInputEl.className = 'filter-input';
+        reasonInputEl.style.height = '30px';
+        reasonInputEl.style.width = '150px';
+        reasonInputEl.placeholder = 'Lý do hoàn tiền';
+        reasonInputEl.id = 'refund-reason-' + refundId;
+
+        var confirmBtnEl = document.createElement('button');
+        confirmBtnEl.className = 'btn btn-destructive';
+        confirmBtnEl.setAttribute('data-confirm-refund', refundId);
+        confirmBtnEl.style.marginLeft = '6px';
+        confirmBtnEl.textContent = 'Xác nhận';
+
+        actionCell.appendChild(reasonInputEl);
+        actionCell.appendChild(confirmBtnEl);
       }
       return;
     }
