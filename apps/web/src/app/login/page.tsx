@@ -3,20 +3,16 @@ import Link from 'next/link';
 import { LoginForm } from '../../shared/auth/login-form';
 import { ConfirmSheet } from '../../shared/ui/confirm-sheet';
 import { LogoMark } from '../../shared/ui/icons';
-import { ThemeSwitcher } from '../../shared/ui/theme-switcher';
 import { ToastStack } from '../../shared/ui/toast-stack';
 
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = { title: 'Đăng nhập' };
 
-/** Đúng layouts/web/login.html: glow nền, ThemeSwitcher góc, thẻ 2 bước phone → OTP. */
+/** Đúng layouts/web/login.html: glow nền, thẻ 2 bước phone → OTP. */
 export default function LoginPage() {
   return (
     <div className="relative min-h-screen overflow-hidden">
-      <div className="fixed right-4 top-4 z-50">
-        <ThemeSwitcher className="bg-white/95 p-1.5 shadow-lg dark:bg-surf/95" />
-      </div>
       <div className="glow pointer-events-none absolute inset-0 overflow-hidden" />
 
       <main className="relative z-10 flex min-h-screen items-center justify-center px-6 py-12">

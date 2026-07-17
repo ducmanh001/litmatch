@@ -1,15 +1,16 @@
 @import 'tailwindcss';
 
 /* Tailwind v4 mặc định dark theo prefers-color-scheme — app này chuyển theme bằng class
-   `.dark` trên <html> (ThemeSwitcher, docs/13 § 13.9), nên phải khai lại variant. */
+   `.dark` trên <html> (ThemeToggleButton, docs/13 § 13.9), nên phải khai lại variant. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
  * Design tokens của web (docs/13 § 13.9) — 1 nơi duy nhất khai màu/radius có ngữ nghĩa.
  * Đổi theme = đổi biến ở :root/.dark, không sửa className rải rác.
- * Bảng màu + font lấy đúng từ layouts/web/*.html (bản dựng UI tham khảo). 3 mood màu (hồng mặc
- * định/cam/trắng, ThemeSwitcher) đổi bằng `[data-theme]` trên <html> — độc lập với sáng/tối
- * (class `dark`, chuyển bằng cùng ThemeSwitcher, xem khối --ink/--surf/--iris/--aqua bên dưới).
+ * Bảng màu + font lấy đúng từ layouts/web/*.html (bản dựng UI tham khảo). Mood tối mặc định là
+ * hồng, có thể là cam (mood tối gần nhất được nhớ lại) qua `[data-theme]` trên <html> — độc lập
+ * với sáng/tối (class `dark`, cùng chuyển bằng applyTheme(), xem khối --ink/--surf/--iris/--aqua
+ * bên dưới).
  */
 :root {
   --background: #fbf3ef; /* paper */

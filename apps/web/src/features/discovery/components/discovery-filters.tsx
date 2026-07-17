@@ -92,21 +92,24 @@ export function DiscoveryFilters({
   onModeChange: (mode: 'browse' | 'nearby') => void;
 }) {
   return (
-    <div className="flex flex-col gap-4">
+    <section
+      aria-label="Bộ lọc hồ sơ"
+      className="rounded-3xl border border-iris/15 bg-card p-4 shadow-sm shadow-iris/[0.04] dark:border-white/10 dark:bg-surf dark:shadow-none md:p-5"
+    >
       <div
         role="group"
         aria-label="Cách tìm người phù hợp"
-        className="inline-flex w-fit max-w-full gap-1 rounded-full border border-iris/15 bg-card p-1 shadow-sm shadow-iris/[0.04] dark:border-white/10 dark:bg-surf dark:shadow-none"
+        className="mb-4 flex gap-2"
       >
         <button
           type="button"
           aria-pressed={mode === 'nearby'}
           onClick={() => onModeChange('nearby')}
           className={cn(
-            'flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-bold transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+            'flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-2xl border px-3.5 py-2 text-xs font-bold transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:flex-1',
             mode === 'nearby'
-              ? 'bg-gradient-to-r from-aqua to-irisl text-white shadow-sm shadow-iris/15'
-              : 'text-muted-foreground hover:bg-muted hover:text-foreground dark:text-white/75 dark:hover:bg-white/[0.08] dark:hover:text-white',
+              ? 'border-transparent bg-gradient-to-r from-aqua to-irisl text-white shadow-sm shadow-iris/15'
+              : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground dark:border-white/10 dark:text-white/75 dark:hover:bg-white/[0.08] dark:hover:text-white',
           )}
         >
           <LocationIcon />
@@ -117,21 +120,18 @@ export function DiscoveryFilters({
           aria-pressed={mode === 'browse'}
           onClick={() => onModeChange('browse')}
           className={cn(
-            'flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-bold transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+            'flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-2xl border px-3.5 py-2 text-xs font-bold transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
             mode === 'browse'
-              ? 'bg-gradient-to-r from-aqua to-irisl text-white shadow-sm shadow-iris/15'
-              : 'text-muted-foreground hover:bg-muted hover:text-foreground dark:text-white/75 dark:hover:bg-white/[0.08] dark:hover:text-white',
+              ? 'border-transparent bg-gradient-to-r from-aqua to-irisl text-white shadow-sm shadow-iris/15'
+              : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground dark:border-white/10 dark:text-white/75 dark:hover:bg-white/[0.08] dark:hover:text-white',
           )}
         >
           <BrowseIcon />
-          Khám phá phù hợp
+          <span className="min-w-0 truncate">Khám phá phù hợp</span>
         </button>
       </div>
 
-      <section
-        aria-label="Bộ lọc hồ sơ"
-        className="grid gap-4 rounded-3xl border border-iris/15 bg-card p-4 shadow-sm shadow-iris/[0.04] dark:border-white/10 dark:bg-surf dark:shadow-none md:grid-cols-2 md:gap-6"
-      >
+      <div className="grid gap-4 md:grid-cols-2 md:gap-6">
         <fieldset className="min-w-0">
           <legend className="mb-2 text-xs font-extrabold tracking-wide text-rose-700 dark:text-white/85">
             MUỐN LÀM QUEN VỚI
@@ -179,7 +179,7 @@ export function DiscoveryFilters({
             ))}
           </div>
         </fieldset>
-      </section>
-    </div>
+      </div>
+    </section>
   );
 }

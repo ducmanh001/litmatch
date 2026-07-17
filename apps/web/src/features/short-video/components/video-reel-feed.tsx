@@ -6,7 +6,6 @@ import { useEffect, useRef, useState } from 'react';
 import { confirmAction } from '../../../shared/lib/confirm-store';
 import { showToast } from '../../../shared/lib/toast-store';
 import { ProfileIcon } from '../../../shared/ui/icons';
-import { ThemeSwitcher } from '../../../shared/ui/theme-switcher';
 import { useReportVideo, useVideoFeed } from '../api';
 import { VideoCommentsSheet } from './video-comments-sheet';
 import { VideoGiftSheet } from './video-gift-sheet';
@@ -50,9 +49,7 @@ function VideoFeedTabs({
 
   return (
     <div className="absolute inset-x-0 top-3 z-30 flex items-center justify-between px-4">
-      {/* Theme switcher đè mờ trên video, đúng video.html — không dùng hàng ThemeSwitcher dùng
-          chung của (app)/layout.tsx (route /video render full-bleed, không có hàng đó). */}
-      <ThemeSwitcher className="border-none bg-black/40 backdrop-blur" />
+      <div className="w-[76px]" aria-hidden />
       <div className="flex items-center gap-6 text-sm font-bold">
         {tab('following', 'Đang theo dõi')}
         {tab('for_you', 'Dành cho bạn')}

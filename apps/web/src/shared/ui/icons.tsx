@@ -203,7 +203,7 @@ export function ChevronDownIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-/** Toggle sáng/tối nhị phân ở header (docs/13 § 13.9) — độc lập với 3-mood ThemeSwitcher. */
+/** Toggle sáng/tối nhị phân ở header (docs/13 § 13.9). */
 export function MoonIcon(props: IconProps) {
   return (
     <svg {...base} aria-hidden {...props}>
@@ -217,6 +217,17 @@ export function SunIcon(props: IconProps) {
     <svg {...base} aria-hidden {...props}>
       <circle cx={12} cy={12} r={4.2} />
       <path d="M12 2.5v2.4M12 19.1v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7" />
+    </svg>
+  );
+}
+
+export function MoreIcon(props: IconProps) {
+  return (
+    <svg {...base} aria-hidden {...props}>
+      <rect x={4} y={4} width={7} height={7} rx={2} />
+      <rect x={13} y={4} width={7} height={7} rx={2} />
+      <rect x={4} y={13} width={7} height={7} rx={2} />
+      <rect x={13} y={13} width={7} height={7} rx={2} />
     </svg>
   );
 }

@@ -2,7 +2,6 @@ import Link from 'next/link';
 
 import { ConfirmSheet } from '../../shared/ui/confirm-sheet';
 import { LogoMark } from '../../shared/ui/icons';
-import { ThemeSwitcher } from '../../shared/ui/theme-switcher';
 import { ToastStack } from '../../shared/ui/toast-stack';
 
 import type { ReactNode } from 'react';
@@ -41,7 +40,6 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
             </Link>
           </nav>
           <div className="flex items-center gap-3">
-            <ThemeSwitcher className="hidden p-1 sm:flex" />
             <Link
               href="/login"
               className="hidden px-4 py-2 text-sm font-semibold text-slate-600 transition hover:text-iris sm:block dark:text-slate-300 dark:hover:text-irisl"

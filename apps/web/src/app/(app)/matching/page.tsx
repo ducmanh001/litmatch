@@ -2,12 +2,8 @@ import Link from 'next/link';
 
 import { IncomingInvites } from '../../../features/matching/components/incoming-invites';
 import { QueueStatusPanel } from '../../../features/matching/components/queue-status-panel';
-import {
-  ChevronLeftIcon,
-  DiscoveryIcon,
-  MatchIcon,
-  MicIcon,
-} from '../../../shared/ui/icons';
+import { MatchIcon, MicIcon } from '../../../shared/ui/icons';
+import { PageHeader } from '../../../shared/ui/page-header';
 
 import type { Metadata } from 'next';
 
@@ -31,33 +27,10 @@ const MATCHING_STEPS = [
 export default function MatchingPage() {
   return (
     <section className="mx-auto w-full max-w-[1040px] min-w-0 px-5 pb-8">
-      <header className="flex items-center justify-between gap-4 pb-5">
-        <div className="flex min-w-0 items-center gap-3">
-          <Link
-            href="/home"
-            aria-label="Về trang chủ"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-iris/15 bg-card transition hover:border-iris/30 hover:bg-iris/10 dark:border-white/10 dark:bg-surf dark:text-white dark:hover:border-rose-300/30 dark:hover:bg-surf2"
-          >
-            <ChevronLeftIcon />
-          </Link>
-          <div className="min-w-0">
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-rose-700 dark:text-rose-300">
-              Kết nối có chủ đích
-            </p>
-            <h1 className="text-xl font-extrabold dark:text-white sm:text-2xl">
-              Ghép đôi
-            </h1>
-          </div>
-        </div>
-        <Link
-          href="/discovery"
-          className="inline-flex shrink-0 items-center gap-2 rounded-full border border-transparent bg-gradient-to-r from-aqua to-irisl px-3 py-2 text-xs font-bold text-white shadow-sm shadow-iris/20 transition hover:brightness-105 sm:px-4 sm:text-sm"
-        >
-          <DiscoveryIcon width={17} height={17} />
-          <span className="hidden sm:inline">Tìm quanh đây</span>
-          <span className="sm:hidden">Quanh đây</span>
-        </Link>
-      </header>
+      <PageHeader
+        eyebrow="Kết nối có chủ đích"
+        eyebrowIcon={<MatchIcon width={16} height={16} />}
+      />
 
       <div className="relative mb-5 overflow-hidden rounded-[1.75rem] border border-iris/15 bg-gradient-to-br from-iris/10 via-card to-card p-5 dark:border-white/10 dark:bg-none dark:bg-surf sm:p-7">
         <div
@@ -68,23 +41,25 @@ export default function MatchingPage() {
           className="pointer-events-none absolute -bottom-24 right-52 h-48 w-48 rounded-full bg-iris/10 blur-3xl dark:bg-iris/6"
           aria-hidden
         />
-        <div className="relative max-w-2xl">
-          <p className="mb-2 text-xs font-extrabold uppercase tracking-[0.16em] text-rose-700 dark:text-white/85">
-            Tìm người yêu · tìm người đồng hành
-          </p>
-          <h2 className="max-w-xl text-2xl font-extrabold leading-tight dark:text-white sm:text-3xl">
-            Bắt đầu bằng một cuộc trò chuyện thật lòng.
-          </h2>
-          <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground dark:text-white/70">
-            Litmatch giúp hai người làm quen qua câu chuyện và giọng nói, trong
-            một không gian tôn trọng, rõ ràng và không vội vàng.
-          </p>
-          <div className="mt-5 flex flex-wrap gap-3">
-            <span className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-aqua to-irisl px-5 py-3 text-sm font-extrabold text-white shadow-md shadow-iris/20">
+        <div className="relative flex flex-col gap-5 md:flex-row md:items-center md:justify-between md:gap-8">
+          <div className="min-w-0 md:max-w-xl">
+            <p className="mb-2 text-xs font-extrabold uppercase tracking-[0.16em] text-rose-700 dark:text-white/85">
+              Tìm người yêu · tìm người đồng hành
+            </p>
+            <h2 className="text-2xl font-extrabold leading-tight dark:text-white sm:text-3xl">
+              Bắt đầu bằng một cuộc trò chuyện thật lòng.
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground dark:text-white/70">
+              Litmatch giúp hai người làm quen qua câu chuyện và giọng nói,
+              trong một không gian tôn trọng, rõ ràng và không vội vàng.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3 md:shrink-0 md:flex-col md:items-stretch">
+            <span className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-aqua to-irisl px-5 py-3 text-sm font-extrabold text-white shadow-md shadow-iris/20">
               <MatchIcon width={17} height={17} />
               Nhắn tin ẩn danh
             </span>
-            <span className="inline-flex items-center gap-2 rounded-full border border-iris/20 bg-card/70 px-5 py-3 text-sm font-extrabold backdrop-blur dark:border-white/15 dark:bg-white/[0.05] dark:text-white">
+            <span className="inline-flex items-center justify-center gap-2 rounded-full border border-iris/20 bg-card/70 px-5 py-3 text-sm font-extrabold backdrop-blur dark:border-white/15 dark:bg-white/[0.05] dark:text-white">
               <MicIcon width={17} height={17} />
               Kết nối bằng voice
             </span>

@@ -17,6 +17,7 @@ import {
 import { NearbyOptIn } from '../../../features/discovery/components/nearby-opt-in';
 import { useCreateInvite } from '../../../features/matching/invite-api';
 import { MicIcon } from '../../../shared/ui/icons';
+import { PageHeader } from '../../../shared/ui/page-header';
 
 import type {
   DiscoveryCardDto,
@@ -132,41 +133,44 @@ export default function DiscoveryPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-[1120px] px-5 pb-12 pt-4 md:px-8 md:pb-16 md:pt-6">
-      <section className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between md:gap-10">
-        <div className="max-w-2xl">
-          <p className="inline-flex items-center gap-2 rounded-full border border-iris/15 bg-iris/10 px-3 py-1.5 text-[11px] font-extrabold tracking-[0.12em] text-rose-700 dark:border-rose-300/25 dark:bg-rose-300/10 dark:text-rose-300">
-            <HeartLineIcon />
-            HẸN HÒ CÓ CHỦ ĐÍCH
-          </p>
-          <h1 className="mt-4 max-w-2xl font-display text-3xl font-semibold leading-tight dark:text-white md:text-4xl">
-            Gặp một người thật lòng, bắt đầu từ một lời chào tử tế.
-          </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground dark:text-white/80 md:text-base">
-            Tìm người phù hợp hoặc khám phá những kết nối ở gần bạn. Chọn cách
-            mở lời bằng trò chuyện hay voice khi bạn thực sự muốn tìm hiểu.
-          </p>
-        </div>
+    <div className="mx-auto w-full max-w-[1120px] px-5 pt-0 md:px-8 md:pb-16 md:pt-0">
+      <PageHeader
+        eyebrow="Hẹn hò có chủ đích"
+        eyebrowIcon={<HeartLineIcon />}
+      />
 
-        <div className="hidden shrink-0 gap-3 md:flex md:w-[270px] md:flex-col">
-          <div className="rounded-2xl border border-iris/15 bg-card p-4 dark:border-white/10 dark:bg-surf">
-            <p className="bg-gradient-to-r from-irisl to-aqual bg-clip-text text-2xl font-extrabold text-transparent">
-              02
-            </p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground dark:text-white/75">
-              cách bắt đầu: trò chuyện hoặc voice
+      <section className="rounded-3xl border border-iris/15 bg-card p-6 shadow-sm shadow-iris/[0.04] dark:border-white/10 dark:bg-gradient-to-br dark:from-surf dark:to-iris/[0.04] dark:shadow-none sm:p-8">
+        <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between md:gap-10">
+          <div className="max-w-2xl">
+            <h1 className="font-display max-w-2xl text-3xl font-semibold leading-tight dark:text-white md:text-4xl">
+              Gặp một người thật lòng, bắt đầu từ một lời chào tử tế.
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground dark:text-white/80 md:text-base">
+              Tìm người phù hợp hoặc khám phá những kết nối ở gần bạn. Chọn cách
+              mở lời bằng trò chuyện hay voice khi bạn thực sự muốn tìm hiểu.
             </p>
           </div>
-          <div className="rounded-2xl border border-iris/15 bg-card p-4 dark:border-white/10 dark:bg-surf">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-iris/10 text-irisl dark:bg-rose-300/15 dark:text-white">
-              <HeartLineIcon />
-            </span>
-            <p className="mt-2 text-sm font-extrabold dark:text-white">
-              Bạn luôn chủ động
-            </p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground dark:text-white/75">
-              Xem hồ sơ trước, chỉ gửi lời mời khi thấy phù hợp.
-            </p>
+
+          <div className="hidden shrink-0 gap-3 md:flex md:w-[270px] md:flex-col">
+            <div className="rounded-2xl border border-iris/15 bg-card p-4 dark:border-white/10 dark:bg-surf">
+              <p className="bg-gradient-to-r from-irisl to-aqual bg-clip-text text-2xl font-extrabold text-transparent">
+                02
+              </p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground dark:text-white/75">
+                cách bắt đầu: trò chuyện hoặc voice
+              </p>
+            </div>
+            <div className="rounded-2xl border border-iris/15 bg-card p-4 dark:border-white/10 dark:bg-surf">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-iris/10 text-irisl dark:bg-rose-300/15 dark:text-white">
+                <HeartLineIcon />
+              </span>
+              <p className="mt-2 text-sm font-extrabold dark:text-white">
+                Bạn luôn chủ động
+              </p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground dark:text-white/75">
+                Xem hồ sơ trước, chỉ gửi lời mời khi thấy phù hợp.
+              </p>
+            </div>
           </div>
         </div>
       </section>

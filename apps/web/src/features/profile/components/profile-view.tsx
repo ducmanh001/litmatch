@@ -4,6 +4,8 @@ import { isApiError } from '@litmatch/api-client';
 import Link from 'next/link';
 
 import { useCurrentUser } from '../../../shared/auth/use-current-user';
+import { ProfileIcon } from '../../../shared/ui/icons';
+import { PageHeader } from '../../../shared/ui/page-header';
 import { PlaceholderAvatar } from '../../../shared/ui/placeholder-avatar';
 import { useWallet } from '../../wallet/api';
 import { ProfileMenu } from './profile-menu';
@@ -46,30 +48,15 @@ export function ProfileView() {
   const vipTier = wallet.data?.vipTier ?? null;
 
   return (
-    <div className="-mt-4">
-      <div className="relative h-28 bg-gradient-to-br from-irisl to-irisl">
-        <Link
-          href="/home"
-          aria-label="Quay lại trang chủ"
-          className="absolute left-5 top-6 flex h-9 w-9 items-center justify-center rounded-full bg-white/20 backdrop-blur"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="white"
-            strokeWidth={2.5}
-            aria-hidden
-          >
-            <path
-              d="M15 18l-6-6 6-6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </Link>
+    <div>
+      <div className="px-5">
+        <PageHeader
+          eyebrow="Hồ sơ của bạn"
+          eyebrowIcon={<ProfileIcon width={16} height={16} />}
+        />
       </div>
+
+      <div className="h-28 bg-gradient-to-br from-irisl to-aqual" />
 
       <div className="relative -mt-10 px-5">
         <div className="relative mb-3 h-24 w-24">

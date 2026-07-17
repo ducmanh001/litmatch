@@ -13,9 +13,9 @@ import {
 const LAST_DARK_MOOD_KEY = 'litmatch-last-dark-mood';
 
 /**
- * Toggle sáng/tối nhị phân ở header — độc lập với 3-mood ThemeSwitcher (pink/orange/white).
- * Bật tối lại thì khôi phục đúng mood tối gần nhất (pink/orange) thay vì luôn mặc định pink.
- * Nghe THEME_CHANGE_EVENT để đồng bộ icon khi theme đổi từ ThemeSwitcher (hoặc ngược lại).
+ * Toggle sáng/tối nhị phân ở header. Bật tối lại thì khôi phục đúng mood tối gần nhất
+ * (pink/orange) thay vì luôn mặc định pink. Nghe THEME_CHANGE_EVENT để đồng bộ icon khi theme
+ * đổi từ nơi khác (vd nhiều tab cùng mở).
  */
 export function ThemeToggleButton({ className }: { className?: string }) {
   const [isDark, setIsDark] = useState(true);

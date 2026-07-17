@@ -4,7 +4,6 @@ import Link from 'next/link';
 
 import { useLogout } from '../../../shared/auth/use-logout';
 import { DiamondIcon, ProfileIcon } from '../../../shared/ui/icons';
-import { ThemeSwitcher } from '../../../shared/ui/theme-switcher';
 
 import type { SVGProps } from 'react';
 
@@ -124,21 +123,6 @@ export function ProfileMenu() {
           </span>
           <ChevronRightIcon />
         </Link>
-        <div className={rowClass}>
-          <span className={iconWrapClass}>
-            <svg
-              width={15}
-              height={15}
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              aria-hidden
-            >
-              <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
-            </svg>
-          </span>
-          <span className="flex-1 text-sm font-semibold">Giao diện màu</span>
-          <ThemeSwitcher />
-        </div>
         <Link href="/privacy" className={rowClass}>
           <span className={iconWrapClass}>
             <ShieldIcon />

@@ -1,4 +1,6 @@
 import { RoomList } from '../../../features/party-room/components/room-list';
+import { PartyIcon } from '../../../shared/ui/icons';
+import { PageHeader } from '../../../shared/ui/page-header';
 
 import type { Metadata } from 'next';
 
@@ -6,11 +8,12 @@ export const metadata: Metadata = { title: 'Party Room' };
 
 export default function PartyPage() {
   return (
-    <div className="space-y-5">
+    <div>
       <div className="px-5">
-        <h1 className="font-display text-2xl font-semibold italic">
-          Party Room
-        </h1>
+        <PageHeader
+          eyebrow="Trò chuyện nhóm"
+          eyebrowIcon={<PartyIcon width={16} height={16} />}
+        />
       </div>
       <div className="px-5">
         <RoomList />

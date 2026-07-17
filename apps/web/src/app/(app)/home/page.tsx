@@ -4,7 +4,6 @@ import Link from 'next/link';
 
 import { useCurrentUser } from '../../../shared/auth/use-current-user';
 import {
-  DiamondIcon,
   DiscoveryIcon,
   FeedIcon,
   FriendsIcon,
@@ -13,12 +12,9 @@ import {
   PartyIcon,
   VideoIcon,
 } from '../../../shared/ui/icons';
-import { LanguageSelector } from '../../../shared/ui/language-selector';
+import { PageHeader } from '../../../shared/ui/page-header';
 import { PlaceholderAvatar } from '../../../shared/ui/placeholder-avatar';
-import { ThemeToggleButton } from '../../../shared/ui/theme-toggle-button';
-import { NotificationBell } from '../../../features/notification/components/notification-bell';
 import { useRoomList } from '../../../features/party-room/api';
-import { useWallet } from '../../../features/wallet/api';
 
 import type { ComponentType, ReactNode, SVGProps } from 'react';
 
@@ -292,47 +288,31 @@ function SectionHeading({
 /** Dashboard sau đăng nhập: mọi block dùng chung rail với header, còn sidebar do app layout sở hữu. */
 export default function HomePage() {
   const { data: user } = useCurrentUser();
-  const { data: wallet } = useWallet();
 
   return (
     <div className="mx-auto w-full px-5 pb-4 dark:text-white">
-      <header className="mb-5 flex items-center justify-between gap-3">
-        <Link
-          href="/profile"
-          className="flex min-w-0 items-center gap-3 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <PlaceholderAvatar
-            seed={user?.id ?? 'me'}
-            size={46}
-            className="shrink-0 border-2 border-iris/30"
-          />
-          <div className="min-w-0">
-            <p className="text-xs text-muted-foreground dark:text-white/65">
-              Rất vui gặp lại 👋
-            </p>
-            <p className="truncate text-sm font-bold">
-              {user?.nickname ?? '…'}
-            </p>
-          </div>
-        </Link>
-
-        <div className="flex shrink-0 items-center gap-2">
+      <PageHeader
+        leading={
           <Link
-            href="/wallet"
-            className="flex shrink-0 items-center gap-2 rounded-full border border-diamond/20 bg-diamond/15 px-3 py-2 text-xs font-extrabold text-diamond-foreground transition hover:bg-diamond/20 dark:text-white"
-            aria-label={`Mở ví, số dư ${wallet?.balance ?? 0} diamond`}
+            href="/profile"
+            className="flex min-w-0 items-center gap-3 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <DiamondIcon />
-            <span>{wallet?.balance ?? 0}</span>
-            <span className="hidden font-semibold opacity-70 sm:inline">
-              diamond
-            </span>
+            <PlaceholderAvatar
+              seed={user?.id ?? 'me'}
+              size={46}
+              className="shrink-0 border-2 border-iris/30"
+            />
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground dark:text-white/65">
+                Rất vui gặp lại 👋
+              </p>
+              <p className="truncate text-sm font-bold">
+                {user?.nickname ?? '…'}
+              </p>
+            </div>
           </Link>
-          <ThemeToggleButton />
-          <LanguageSelector />
-          <NotificationBell />
-        </div>
-      </header>
+        }
+      />
 
       <section className="glow relative isolate overflow-hidden rounded-[2rem] border border-iris/15 bg-card px-6 py-8 shadow-xl shadow-iris/10 sm:px-9 sm:py-10 lg:px-12 xl:grid xl:min-h-[430px] xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-center xl:gap-10 dark:border-white/10 dark:bg-ink dark:shadow-black/20">
         <div className="pointer-events-none absolute -right-20 top-10 h-72 w-72 rounded-full border-[42px] border-white/25 dark:border-white/10" />
