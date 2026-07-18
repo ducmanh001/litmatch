@@ -38,3 +38,8 @@ out
 # TypeScript incremental build cache
 *.tsbuildinfo
 .dev-certs/*.key
+
+# trạng thái và backup release local trên production host
+deploy/production/.env
+deploy/production/.release-state.json
+deploy/production/backups/

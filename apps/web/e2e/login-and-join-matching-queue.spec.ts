@@ -34,7 +34,9 @@ test('đăng nhập OTP, session sống sót qua reload, vào hàng đợi ghép
   // refresh_token + csrfToken persisted ở localStorage sống sót (ADR 0007). AuthGate phải tự
   // restore qua /auth/refresh trước khi cho vào trang cần đăng nhập.
   await page.goto('/matching');
-  await expect(page.getByRole('heading', { name: 'Ghép đôi' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Kết nối có chủ đích' }),
+  ).toBeVisible();
 
   await page.getByRole('button', { name: 'Bắt đầu ghép đôi Tâm hồn' }).click();
 

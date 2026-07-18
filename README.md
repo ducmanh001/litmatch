@@ -101,6 +101,12 @@ working tree host. Hạ tầng chỉ phục vụ local development thêm vào `d
 thành phần đó là baseline deploy/runtime, phải cập nhật architecture/ADR, env example và deployment
 theo quy định trong `AGENTS.md`, không chỉ thêm local container.
 
+Root `.env` là nguồn cấu hình duy nhất của full Compose stack: credential PostgreSQL, host port,
+CORS, URL public của Admin/Web/LiveKit, tunnel origin và `DEV_LAN_IP` đều sửa tại đó. Không sửa
+trực tiếp `docker-compose*.yml`, `livekit*.yaml` hoặc `next.config.js` cho từng máy. Hai file
+`apps/*/.env.local` chỉ cần cho cách chạy từng frontend trực tiếp trên host; biến `environment`
+của Compose luôn lấy từ root `.env` và có độ ưu tiên cao hơn các file đó.
+
 Các lệnh hạ tầng thường dùng:
 
 | Lệnh                                 | Mục đích                                                                               |

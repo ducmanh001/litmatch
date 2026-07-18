@@ -1,0 +1,208 @@
+name: litmatch-production
+
+services:
+  postgres:
+    image: postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: ${POSTGRES_DB:?required}
+    ports:
+      - '127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    mem_limit: 1g
+
+  redis:
+    image: redis:7-alpine@sha256:bb186d083732f669da90be8b0f975a37812b15e913465bb14d845db72a4e3e08
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    mem_limit: 512m
+
+  kafka:
+    image: apache/kafka:3.9.0@sha256:fbc7d7c428e3755cf36518d4976596002477e4c052d1f80b5b9eafd06d0fff2f
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:19092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_HEAP_OPTS: -Xms512m -Xmx1g
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          '/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:19092 >/dev/null 2>&1',
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+    restart: unless-stopped
+    mem_limit: 2g
+
+  livekit:
+    image: livekit/livekit-server:v1.13.1@sha256:2c6869d2d5ff6c9c0166f47be1c92dad6928bfecfa5e4060a6ece48db8accfa3
+    command: --config /etc/livekit.yaml
+    environment:
+      NODE_IP: ${PUBLIC_IP:?required}
+      LIVEKIT_KEYS: '${LIVEKIT_API_KEY:?required}: ${LIVEKIT_API_SECRET:?required}'
+      LIVEKIT_WEBHOOK_API_KEY: ${LIVEKIT_API_KEY:?required}
+    ports:
+      - '7881:7881/tcp'
+      - '50000-50200:50000-50200/udp'
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 3g
+
+  core-api:
+    image: ${CORE_IMAGE:?required}
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      PORT: 3000
+      SWAGGER_ENABLED: 'false'
+      CORS_ORIGINS: https://app.${DOMAIN},https://admin.${DOMAIN}
+      DATABASE_URL: ${DATABASE_URL:?required}
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:19092
+      JWT_SECRET: ${JWT_SECRET:?required}
+      AUTH_OTP_PEPPER: ${AUTH_OTP_PEPPER:?required}
+      AUTH_PHONE_OTP_ENABLED: 'false'
+      AUTH_GOOGLE_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:?required}
+      AUTH_APPLE_CLIENT_ID: ''
+      AUTH_CROSS_ORIGIN_DEV: 'false'
+      ECONOMY_IAP_VERIFIER: disabled
+      ECONOMY_OUTBOX_RELAY_ENABLED: 'false'
+      ECONOMY_APPLE_WEBHOOK_VERIFIER: store
+      ECONOMY_GOOGLE_RTDN_VERIFIER: store
+      ECONOMY_REFUND_POLL_ENABLED: 'false'
+      NOTIFICATION_PUSH_PROVIDER: disabled
+      VIDEO_UPLOAD_ENABLED: 'false'
+      LIVEKIT_URL: wss://media.${DOMAIN}
+      LIVEKIT_API_URL: http://livekit:7880
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?required}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?required}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+    restart: unless-stopped
+    mem_limit: 1536m
+
+  signaling-gateway:
+    image: ${SIGNALING_IMAGE:?required}
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      SIGNALING_PORT: 3001
+      CORS_ORIGINS: https://app.${DOMAIN},https://admin.${DOMAIN}
+      JWT_SECRET: ${JWT_SECRET:?required}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+      core-api:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 512m
+
+  web:
+    image: ${WEB_IMAGE:?required}
+    depends_on:
+      core-api:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 512m
+
+  edge:
+    image: ${EDGE_IMAGE:?required}
+    environment:
+      DOMAIN: ${DOMAIN:?required}
+      ACME_EMAIL: ${ACME_EMAIL:?required}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      core-api:
+        condition: service_healthy
+      signaling-gateway:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 256m
+
+  alloy:
+    profiles: [monitoring]
+    image: grafana/alloy:v1.17.1@sha256:4f6ddc56ffdcf8a6316748fc5162972e20cb301523cac1bb4a31957df733ae9b
+    command:
+      [
+        'run',
+        '--server.http.listen-addr=0.0.0.0:12345',
+        '--storage.path=/var/lib/alloy/data',
+        '--disable-reporting',
+        '/etc/alloy/config.alloy',
+      ]
+    environment:
+      DEPLOY_ENVIRONMENT: production
+      GRAFANA_CLOUD_PROMETHEUS_URL: ${GRAFANA_CLOUD_PROMETHEUS_URL:-}
+      GRAFANA_CLOUD_PROMETHEUS_USER: ${GRAFANA_CLOUD_PROMETHEUS_USER:-}
+      GRAFANA_CLOUD_LOKI_URL: ${GRAFANA_CLOUD_LOKI_URL:-}
+      GRAFANA_CLOUD_LOKI_USER: ${GRAFANA_CLOUD_LOKI_USER:-}
+      GRAFANA_CLOUD_API_TOKEN: ${GRAFANA_CLOUD_API_TOKEN:-}
+    volumes:
+      - ../../observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    ports:
+      - '127.0.0.1:12345:12345'
+    depends_on:
+      core-api:
+        condition: service_healthy
+      signaling-gateway:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+    restart: unless-stopped
+    mem_limit: 512m
+
+volumes:
+  postgres_data:
+  redis_data:
+  kafka_data:
+  caddy_data:
+  caddy_config:
+  alloy_data:
