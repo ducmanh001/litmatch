@@ -1,4 +1,4 @@
-import { startIsolatedNodeServer } from '../../../../libs/e2e-support/src';
+import { startIsolatedNodeServer } from '@litmatch/e2e-support';
 import { resolve } from 'node:path';
 
 module.exports = async function () {

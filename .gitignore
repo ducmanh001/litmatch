@@ -43,3 +43,6 @@ out
 deploy/production/.env
 deploy/production/.release-state.json
 deploy/production/backups/
+
+# pnpm
+.pnpm-store/

@@ -27,8 +27,8 @@ export function MatchingScanner({
         className="absolute left-1/2 h-40 w-40 -translate-x-1/2 rounded-full border border-iris/10 bg-gradient-to-br from-iris/[0.08] to-transparent"
         style={{ top: '-1rem' }}
       />
-      <span className="pulsering absolute left-1/2 top-7 h-32 w-32 -translate-x-1/2 rounded-full border border-iris/35" />
-      <span className="pulsering2 absolute left-1/2 top-7 h-32 w-32 -translate-x-1/2 rounded-full border border-iris/35" />
+      <span className="pulsering absolute left-1/2 h-32 w-32 -translate-x-1/2 rounded-full border border-iris/35" />
+      <span className="pulsering2 absolute left-1/2 h-32 w-32 -translate-x-1/2 rounded-full border border-iris/35" />
       <span className="absolute left-1/2 top-2 h-28 w-28 -translate-x-1/2 rounded-full border border-dashed border-iris/25" />
 
       <span className="absolute left-1/2 top-4 z-10 flex h-24 w-24 -translate-x-1/2 items-center justify-center rounded-[2rem] bg-irisl text-white shadow-xl shadow-iris/25">
