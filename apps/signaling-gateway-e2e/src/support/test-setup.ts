@@ -1,4 +1,4 @@
-import { readIsolatedNodeServerState } from '@litmatch/e2e-support';
+import { readIsolatedNodeServerState } from './isolated-node-server';
 import axios from 'axios';
 
 module.exports = async function () {

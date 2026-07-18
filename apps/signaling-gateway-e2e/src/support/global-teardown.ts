@@ -1,4 +1,4 @@
-import { stopIsolatedNodeServer } from '@litmatch/e2e-support';
+import { stopIsolatedNodeServer } from './isolated-node-server';
 
 module.exports = async function () {
   stopIsolatedNodeServer('signaling-gateway');
