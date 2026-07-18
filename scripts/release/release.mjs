@@ -25,7 +25,7 @@ function fail(message) {
 }
 
 function run(command, args, options = {}) {
-  console.log(`[release] ${command} ${args.join(' ')}`);
+  console.log(`[release] ${command} (args: ${args.length}, redacted)`);
   const result = spawnSync(command, args, {
     cwd: root,
     env: runtimeEnv,
