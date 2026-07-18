@@ -1,0 +1,105 @@
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+prometheus.scrape "litmatch_apps" {
+  targets = [
+    {
+      "__address__"      = "core-api:3000",
+      "__metrics_path__" = "/metrics",
+      "job"              = "core-api",
+    },
+    {
+      "__address__"      = "signaling-gateway:3001",
+      "__metrics_path__" = "/metrics",
+      "job"              = "signaling-gateway",
+    },
+    {
+      "__address__"      = "livekit:6789",
+      "__metrics_path__" = "/metrics",
+      "job"              = "media-server",
+    },
+  ]
+
+  scrape_interval = "15s"
+  forward_to      = [prometheus.relabel.litmatch_metrics.receiver]
+}
+
+// Giữ label môi trường ở collector; app/service không được tự gắn ID/cardinality cao.
+prometheus.relabel "litmatch_metrics" {
+  forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+
+  rule {
+    target_label = "environment"
+    replacement  = sys.env("DEPLOY_ENVIRONMENT")
+  }
+}
+
+prometheus.remote_write "grafana_cloud" {
+  endpoint {
+    url = sys.env("GRAFANA_CLOUD_PROMETHEUS_URL")
+
+    basic_auth {
+      username = sys.env("GRAFANA_CLOUD_PROMETHEUS_USER")
+      password = sys.env("GRAFANA_CLOUD_API_TOKEN")
+    }
+  }
+}
+
+// Docker socket chỉ mount khi operator chủ động bật overlay observability.
+discovery.docker "litmatch_containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "10s"
+}
+
+discovery.relabel "litmatch_container_logs" {
+  targets = discovery.docker.litmatch_containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex         = "(core-api|signaling-gateway|livekit|postgres|redis|kafka|web|admin|edge)"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+}
+
+loki.source.docker "litmatch" {
+  host             = "unix:///var/run/docker.sock"
+  targets          = discovery.relabel.litmatch_container_logs.output
+  labels           = { "environment" = sys.env("DEPLOY_ENVIRONMENT") }
+  refresh_interval = "10s"
+  forward_to       = [loki.process.structured.receiver]
+}
+
+loki.process "structured" {
+  // Pino là JSON; service không phải Node vẫn đi tiếp với log raw và không có label level.
+  stage.json {
+    expressions = {
+      level = "level",
+    }
+  }
+
+  stage.labels {
+    values = {
+      level = "",
+    }
+  }
+
+  forward_to = [loki.write.grafana_cloud.receiver]
+}
+
+loki.write "grafana_cloud" {
+  endpoint {
+    url = sys.env("GRAFANA_CLOUD_LOKI_URL")
+
+    basic_auth {
+      username = sys.env("GRAFANA_CLOUD_LOKI_USER")
+      password = sys.env("GRAFANA_CLOUD_API_TOKEN")
+    }
+  }
+}
