@@ -94,7 +94,7 @@ export class InviteController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Chấp nhận lời mời — tạo trực tiếp ticket/session, gọi confirmTicket(inviteeTicketId) tiếp theo như auto-match',
+      'Chấp nhận lời mời — tạo trực tiếp ticket/session đã confirmed và vào phòng ngay',
   })
   @ApiOkResponse({ type: MatchInviteAcceptedDto })
   async accept(

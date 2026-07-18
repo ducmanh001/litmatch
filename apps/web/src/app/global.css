@@ -197,6 +197,33 @@ body {
   animation: pulsering 2.6s cubic-bezier(0.2, 0.6, 0.4, 1) 0.9s infinite;
 }
 
+/* Dải avatar placeholder của màn tìm ghép đôi. Chỉ là tín hiệu UI ẩn danh, không biểu diễn
+   người thật hay vị trí thật; track lặp đôi để chuyển động slide liền mạch trên biểu tượng mic. */
+@keyframes matchingavatarslide {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-50% - 0.75rem));
+  }
+}
+.matching-avatar-track {
+  animation: matchingavatarslide 9s linear infinite;
+}
+
+/* Đĩa nhạc trên side rail Video — bám đúng nút âm thanh gốc trong video.html. */
+@keyframes discrotate {
+  from {
+    transform: rotate(0);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.disc-spin {
+  animation: discrotate 4s linear infinite;
+}
+
 @keyframes floatslow {
   0%,
   100% {

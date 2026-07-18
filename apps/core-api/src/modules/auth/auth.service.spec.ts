@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
 
 import { Gender, User, UserService, UserStatus } from '../user';
@@ -36,6 +37,13 @@ describe('AuthService', () => {
   };
   const otpService = { requestOtp: jest.fn(), verifyOtp: jest.fn() };
   const socialVerifier = { verify: jest.fn() };
+  let phoneOtpEnabled = true;
+  const config = {
+    getOrThrow: (key: string) => {
+      if (key === 'AUTH_PHONE_OTP_ENABLED') return phoneOtpEnabled;
+      throw new Error(`missing config ${key}`);
+    },
+  };
   let service: AuthService;
 
   const user = (over: Partial<User> = {}): User =>
@@ -50,6 +58,7 @@ describe('AuthService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    phoneOtpEnabled = true;
     const moduleRef = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -59,6 +68,7 @@ describe('AuthService', () => {
         { provide: TokenService, useValue: tokenService },
         { provide: OtpService, useValue: otpService },
         { provide: SocialVerifierService, useValue: socialVerifier },
+        { provide: ConfigService, useValue: config },
       ],
     }).compile();
     service = moduleRef.get(AuthService);
@@ -131,5 +141,17 @@ describe('AuthService', () => {
       provider: AuthProvider.Google,
       providerUid: 'google-sub-1',
     });
+  });
+
+  it('phone OTP disabled → chặn trước OtpService, không tạo/verify OTP', async () => {
+    phoneOtpEnabled = false;
+    await expect(service.requestOtp('+84912345678')).rejects.toMatchObject({
+      code: AuthErrors.PHONE_OTP_DISABLED,
+    });
+    await expect(
+      service.verifyOtpAndLogin('+84912345678', '123456'),
+    ).rejects.toMatchObject({ code: AuthErrors.PHONE_OTP_DISABLED });
+    expect(otpService.requestOtp).not.toHaveBeenCalled();
+    expect(otpService.verifyOtp).not.toHaveBeenCalled();
   });
 });

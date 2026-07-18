@@ -4,12 +4,11 @@ import { IsEnum, IsString, Length } from 'class-validator';
 import { ApiCursorPageMeta } from '../../../common/decorators/cursor-page-query.decorator';
 import { MESSAGE_CONTENT_HARD_CAP } from '../soul-match.constants';
 import { SoulMatchVerdict } from '../entities/soul-match-rating.entity';
-
-import { SoulRoomPhase } from '../soul-match.service';
+import { SoulRoomPhase } from '../soul-match.types';
 
 import type { CursorPageMeta } from '@litmatch/common-dtos';
 import type { SoulChatMessage } from '../entities/soul-chat-message.entity';
-import type { SoulRoomView } from '../soul-match.service';
+import type { SoulRoomView } from '../soul-match.types';
 
 /** Vai người gửi TƯƠNG ĐỐI với người xem — không bao giờ lộ userId đối phương (spec § 2). */
 export enum SoulSenderRole {

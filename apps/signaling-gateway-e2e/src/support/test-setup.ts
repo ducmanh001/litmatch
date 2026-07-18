@@ -1,8 +1,7 @@
+import { readIsolatedNodeServerState } from '../../../../libs/e2e-support/src';
 import axios from 'axios';
 
 module.exports = async function () {
-  // Configure axios for tests to use.
-  const host = process.env.HOST ?? 'localhost';
-  const port = process.env.SIGNALING_PORT ?? '3001';
-  axios.defaults.baseURL = `http://${host}:${port}`;
+  const state = readIsolatedNodeServerState('signaling-gateway');
+  axios.defaults.baseURL = `http://${state.host}:${state.port}`;
 };

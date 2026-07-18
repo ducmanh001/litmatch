@@ -26,11 +26,12 @@ export function PublicProfileView({ userId }: { userId: string }) {
       </p>
     );
   }
-  if (profile.data === undefined) return null;
+  const profileData = profile.data;
+  if (profileData === undefined) return null;
 
   const invite = (matchType: 'voice' | 'soul') => {
     createInvite.mutate(
-      { inviteeUserId: profile.data!.id, matchType },
+      { inviteeUserId: profileData.id, matchType },
       {
         onSuccess: () =>
           showToast(
@@ -58,20 +59,20 @@ export function PublicProfileView({ userId }: { userId: string }) {
       </div>
       <div className="relative -mt-10 px-5">
         <PlaceholderAvatar
-          seed={profile.data.id}
-          alt={profile.data.nickname}
+          seed={profileData.id}
+          alt={profileData.nickname}
           size={96}
           className="border-paper dark:border-ink border-4"
         />
         <h1 className="font-display mt-3 text-xl font-semibold italic">
-          {profile.data.nickname}
+          {profileData.nickname}
         </h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          {genderLabel(profile.data.gender)}
+          {genderLabel(profileData.gender)}
         </p>
-        {(profile.data.interests?.length ?? 0) > 0 && (
+        {(profileData.interests?.length ?? 0) > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
-            {profile.data.interests?.map((tag) => (
+            {profileData.interests?.map((tag) => (
               <span
                 key={tag}
                 className="rounded-full bg-iris/10 px-2.5 py-1 text-[11px] font-semibold text-irisl dark:bg-white/10 dark:text-white/85"

@@ -38,8 +38,8 @@ nghiệp vụ như Notification — docs/10 § Distributed).
 
 | Nơi publish                                          | Event             | Người nhận                   |
 | ---------------------------------------------------- | ----------------- | ---------------------------- |
-| matcher-worker `tryPair` thành công (sau commit)     | `match.matched`   | cả 2 user của cặp            |
-| `confirmTicket` chốt đủ 2 confirm (sau commit)       | `match.confirmed` | cả 2 user                    |
+| matcher-worker `tryPair` thành công (sau commit)     | `match.confirmed` | cả 2 user của cặp            |
+| `confirmTicket` chốt session legacy (sau commit)     | `match.confirmed` | cả 2 user                    |
 | `soul-match` gửi message MỚI (sau persist)           | `soul.message`    | cả 2 (payload per-recipient) |
 | `soul-match` mutual like TẠO friendship (sau commit) | `soul.matched`    | cả 2                         |
 | `calling` end call ở MỌI nhánh (sau commit)          | `call.ended`      | cả 2 user của call           |

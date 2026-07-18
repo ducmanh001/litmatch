@@ -298,6 +298,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
       redis,
       policyStub,
       metrics,
+      notificationStub as never,
     );
     workerB = new MatcherWorkerService(
       ds,
@@ -306,6 +307,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
       redis,
       policyStub,
       metrics,
+      notificationStub as never,
     );
     sweeper = new TicketSweeperService(ds, configStub, schedulerStub, redis);
     invite = new InviteService(
@@ -398,14 +400,14 @@ d('Matching integration (Postgres + Redis thật)', () => {
 
     const sessions = await ds.getRepository(MatchSession).find();
     expect(sessions.length).toBe(1);
-    expect(sessions[0].status).toBe(MatchSessionStatus.PendingConfirm);
+    expect(sessions[0].status).toBe(MatchSessionStatus.Confirmed);
     expect([sessions[0].ticketAId, sessions[0].ticketBId].sort()).toEqual(
       [t1.id, t2.id].sort(),
     );
 
     for (const id of [t1.id, t2.id]) {
       const fresh = await ds.getRepository(MatchTicket).findOneByOrFail({ id });
-      expect(fresh.status).toBe(MatchTicketStatus.Matched);
+      expect(fresh.status).toBe(MatchTicketStatus.Confirmed);
       expect(fresh.sessionId).toBe(sessions[0].id);
     }
     // queue đã rỗng — tick tiếp không ghép thêm gì
@@ -584,7 +586,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
     ).toBe(MatchTicketStatus.Queued);
   });
 
-  it('confirm 2 chiều: cả 2 confirm → session + 2 ticket confirmed; confirm ticket người khác → 403', async () => {
+  it('auto-confirm khi matcher chọn được cặp; endpoint confirm vẫn bảo vệ session legacy', async () => {
     const u1 = await createUser('confirm-1');
     const u2 = await createUser('confirm-2');
     const t1 = await matching.joinQueue(
@@ -598,6 +600,21 @@ d('Matching integration (Postgres + Redis thật)', () => {
       'k',
     );
     expect(await worker.runOnce()).toBe(1);
+
+    const sessionId = (
+      await ds.getRepository(MatchTicket).findOneByOrFail({ id: t1.id })
+    ).sessionId as string;
+    // Dữ liệu được tạo trước khi đổi flow vẫn được confirm theo hai phía và vẫn giữ chốt IDOR.
+    await ds.query(
+      `UPDATE match_sessions
+         SET status = 'pending_confirm', confirmed_a_at = NULL, confirmed_b_at = NULL
+       WHERE id = $1`,
+      [sessionId],
+    );
+    await ds.query(
+      `UPDATE match_tickets SET status = 'matched' WHERE session_id = $1`,
+      [sessionId],
+    );
 
     // IDOR: u2 confirm hộ ticket của u1 → 403
     await expect(
@@ -774,10 +791,20 @@ d('Matching integration (Postgres + Redis thật)', () => {
       'k',
     );
     expect(await worker.runOnce()).toBe(1);
-    await matching.confirmTicket(auth(u2.id), t2.id);
     const sessionId = (
       await ds.getRepository(MatchTicket).findOneByOrFail({ id: t2.id })
     ).sessionId as string;
+    await ds.query(
+      `UPDATE match_sessions
+         SET status = 'pending_confirm', confirmed_a_at = NULL, confirmed_b_at = NULL
+       WHERE id = $1`,
+      [sessionId],
+    );
+    await ds.query(
+      `UPDATE match_tickets SET status = 'matched' WHERE session_id = $1`,
+      [sessionId],
+    );
+    await matching.confirmTicket(auth(u2.id), t2.id);
     // chỉ backdate đúng session này — các test trước có thể còn session pending khác trong cùng DB
     await ds.query(
       `UPDATE match_sessions SET created_at = now() - interval '2 hours' WHERE id = $1`,
@@ -930,7 +957,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
     const session = await ds.getRepository(MatchSession).findOneByOrFail({
       ticketAId: In([t1.id, t2.id]),
     });
-    expect(session.status).toBe(MatchSessionStatus.PendingConfirm);
+    expect(session.status).toBe(MatchSessionStatus.Confirmed);
 
     // Poll fallback THẬT (GET /matching/tickets/:id → MatchingService.getTicket): cả 2 user
     // tự khám phá được match + sessionId mà không cần realtime push
@@ -939,18 +966,11 @@ d('Matching integration (Postgres + Redis thật)', () => {
       [u2, t2],
     ] as const) {
       const polled = await matching.getTicket(auth(u.id), t.id);
-      expect(polled.status).toBe(MatchTicketStatus.Matched);
+      expect(polled.status).toBe(MatchTicketStatus.Confirmed);
       expect(polled.sessionId).toBe(session.id);
     }
 
-    // Luồng tiếp theo không kẹt: cả 2 confirm bình thường từ thông tin poll được
-    await matching.confirmTicket(auth(u1.id), t1.id);
-    const afterSecond = await matching.confirmTicket(auth(u2.id), t2.id);
-    expect(afterSecond.status).toBe(MatchTicketStatus.Confirmed);
-    expect(
-      (await ds.getRepository(MatchSession).findOneByOrFail({ id: session.id }))
-        .status,
-    ).toBe(MatchSessionStatus.Confirmed);
+    // Poll fallback vẫn đưa được client vào session đã sẵn sàng, dù realtime bị lỡ.
   });
 
   it('chaos: sweeper chết SAU commit requeue, TRƯỚC/GIỮA Redis zadd → chạy lại không tạo ticket đôi; key requeue được unique constraint DB chặn thật; zombie DB-only được chính sweeper dọn', async () => {
@@ -963,10 +983,20 @@ d('Matching integration (Postgres + Redis thật)', () => {
     );
     await matching.joinQueue(auth(u2.id), { matchType: MatchType.Voice }, 'k');
     expect(await worker.runOnce()).toBe(1);
-    await matching.confirmTicket(auth(u1.id), t1.id);
     const sessionId = (
       await ds.getRepository(MatchTicket).findOneByOrFail({ id: t1.id })
     ).sessionId as string;
+    await ds.query(
+      `UPDATE match_sessions
+         SET status = 'pending_confirm', confirmed_a_at = NULL, confirmed_b_at = NULL
+       WHERE id = $1`,
+      [sessionId],
+    );
+    await ds.query(
+      `UPDATE match_tickets SET status = 'matched' WHERE session_id = $1`,
+      [sessionId],
+    );
+    await matching.confirmTicket(auth(u1.id), t1.id);
     await ds.query(
       `UPDATE match_sessions SET created_at = now() - interval '2 hours' WHERE id = $1`,
       [sessionId],
@@ -1040,7 +1070,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
   });
 
   describe('Invite — CTA mời Voice/Soul Match (W4)', () => {
-    it('create → notification cho invitee; accept tạo trực tiếp ticket Matched + session PendingConfirm, bỏ qua hàng đợi', async () => {
+    it('create → notification cho invitee; accept tạo trực tiếp ticket/session confirmed, bỏ qua hàng đợi', async () => {
       const [a, b] = await Promise.all([
         createUser('invite-a'),
         createUser('invite-b'),
@@ -1063,14 +1093,14 @@ d('Matching integration (Postgres + Redis thật)', () => {
         inviteeTicketId,
       } = await invite.acceptInvite(auth(b.id), created.id);
       expect(accepted.status).toBe(MatchInviteStatus.Accepted);
-      expect(session.status).toBe(MatchSessionStatus.PendingConfirm);
+      expect(session.status).toBe(MatchSessionStatus.Confirmed);
 
       const tickets = await ds
         .getRepository(MatchTicket)
         .findBy({ userId: In([a.id, b.id]) });
       expect(tickets).toHaveLength(2);
       for (const t of tickets) {
-        expect(t.status).toBe(MatchTicketStatus.Matched);
+        expect(t.status).toBe(MatchTicketStatus.Confirmed);
         expect(t.sessionId).toBe(session.id);
       }
       const inviteeTicket = tickets.find((t) => t.userId === b.id);
@@ -1084,14 +1114,13 @@ d('Matching integration (Postgres + Redis thật)', () => {
       );
       expect(await redis.zcard(shard)).toBe(0);
 
-      // Từ đây luồng y hệt auto-match: cả 2 confirmTicket() → Confirmed
-      const ticketA = tickets.find((t) => t.userId === a.id);
-      await matching.confirmTicket(auth(a.id), (ticketA as MatchTicket).id);
-      const confirmedB = await matching.confirmTicket(
-        auth(b.id),
-        inviteeTicketId,
-      );
-      expect(confirmedB.status).toBe(MatchTicketStatus.Confirmed);
+      expect(
+        (
+          await ds
+            .getRepository(MatchTicket)
+            .findOneByOrFail({ id: inviteeTicketId })
+        ).status,
+      ).toBe(MatchTicketStatus.Confirmed);
     });
 
     it('mời người đang trong hidden-set (block/report) → INVITE_TARGET_UNAVAILABLE, không tạo invite', async () => {

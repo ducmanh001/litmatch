@@ -9,6 +9,7 @@ import { SchedulerRegistry } from '@nestjs/schedule';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
+import { ManagedInterval } from '../../../common/scheduling/managed-interval';
 import { VideoStatus } from '../entities/video.entity';
 
 import type { CoreApiEnv } from '../../../config/env.validation';
@@ -25,7 +26,7 @@ export class VideoSweeperService
   implements OnApplicationBootstrap, OnApplicationShutdown
 {
   private readonly logger = new Logger(VideoSweeperService.name);
-  private running = false;
+  private readonly job = new ManagedInterval();
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
@@ -34,27 +35,24 @@ export class VideoSweeperService
   ) {}
 
   onApplicationBootstrap(): void {
-    const interval = setInterval(
-      () =>
-        void this.runOnce().catch((err) =>
-          this.logger.error({ err: `${err}` }, 'Video sweeper lỗi'),
-        ),
-      this.config.getOrThrow('VIDEO_SWEEPER_INTERVAL_MS', { infer: true }),
-    );
-    this.scheduler.addInterval(VIDEO_SWEEPER_JOB, interval);
+    this.job.start(this.scheduler, {
+      jobName: VIDEO_SWEEPER_JOB,
+      intervalMs: this.config.getOrThrow('VIDEO_SWEEPER_INTERVAL_MS', {
+        infer: true,
+      }),
+      task: () => this.runOnce(),
+      logger: this.logger,
+      errorMessage: 'Video sweeper lỗi',
+    });
   }
 
   onApplicationShutdown(): void {
-    if (this.scheduler.doesExist('interval', VIDEO_SWEEPER_JOB)) {
-      this.scheduler.deleteInterval(VIDEO_SWEEPER_JOB);
-    }
+    this.job.stop();
   }
 
   /** 1 tick — public để test/chạy tay. */
   async runOnce(): Promise<number> {
-    if (this.running) return 0;
-    this.running = true;
-    try {
+    return this.job.runExclusive(async () => {
       const timeoutSeconds = this.config.getOrThrow(
         'VIDEO_UPLOAD_TIMEOUT_SECONDS',
         { infer: true },
@@ -66,8 +64,6 @@ export class VideoSweeperService
         [VideoStatus.Failed, VideoStatus.Uploading, timeoutSeconds],
       )) as [unknown, number];
       return count;
-    } finally {
-      this.running = false;
-    }
+    }, 0);
   }
 }

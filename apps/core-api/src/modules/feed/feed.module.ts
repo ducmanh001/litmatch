@@ -14,6 +14,7 @@ import { StoryService } from './services/story.service';
 import { FriendModule } from '../friend';
 import { NotificationModule } from '../notification';
 import { SafetyModule } from '../safety';
+import { UserModule } from '../user';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { SafetyModule } from '../safety';
     SafetyModule, // block cắt điểm chạm — docs/services/feed-service.md § 3
     FriendModule, // areFriends()/listFriendIds() cho audience=friends + Stories reply→DM
     NotificationModule, // in-app notification post_liked/post_commented (notification-service.md § 3)
+    UserModule, // compose public author một batch, không để client N+1 GET /users/:id
   ],
   controllers: [FeedController, StoryController],
   providers: [FeedService, StoryService, StorySweeperService],

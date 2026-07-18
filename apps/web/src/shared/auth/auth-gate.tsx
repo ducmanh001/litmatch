@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { apiClient } from '../api/client';
+import { useTranslation } from '../i18n/messages';
 import { useSessionStatus } from './use-session';
 
 import type { ReactNode } from 'react';
@@ -16,6 +17,7 @@ import type { ReactNode } from 'react';
 export function AuthGate({ children }: { children: ReactNode }) {
   const status = useSessionStatus();
   const router = useRouter();
+  const t = useTranslation();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
@@ -31,7 +33,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   if (!mounted || status !== 'authenticated') {
     return (
       <div className="flex min-h-screen items-center justify-center text-muted-foreground">
-        Đang kiểm tra phiên đăng nhập…
+        {t('auth.checkingSession')}
       </div>
     );
   }

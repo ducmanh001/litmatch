@@ -13,7 +13,6 @@ import type { ApiSchema } from '@litmatch/api-client';
 export type PartyRoomDto = ApiSchema<'PartyRoomDto'>;
 export type PartyRoomMemberDto = ApiSchema<'PartyRoomMemberDto'>;
 export type PartyRole = PartyRoomMemberDto['role'];
-export type GiftDto = ApiSchema<'GiftDto'>;
 
 const ROOM_LIST_PAGE_LIMIT = 20;
 

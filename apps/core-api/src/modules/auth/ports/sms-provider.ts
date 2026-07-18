@@ -24,7 +24,10 @@ export class DevSmsProvider
   }
 
   onApplicationBootstrap(): void {
-    if (this.config.get('NODE_ENV', { infer: true }) === 'production') {
+    if (
+      this.config.get('NODE_ENV', { infer: true }) === 'production' &&
+      this.config.getOrThrow('AUTH_PHONE_OTP_ENABLED', { infer: true })
+    ) {
       throw new Error(
         'DevSmsProvider không được dùng ở production — cấu hình SmsProvider thật trước khi deploy',
       );
@@ -32,6 +35,9 @@ export class DevSmsProvider
   }
 
   async send(phone: string, message: string): Promise<void> {
+    if (this.config.get('NODE_ENV', { infer: true }) === 'production') {
+      throw new Error('DevSmsProvider không bao giờ gửi SMS trong production');
+    }
     const masked = phone.slice(0, 4) + '****' + phone.slice(-2);
     this.logger.warn(`[DEV-ONLY SMS] tới ${masked}: ${message}`);
   }

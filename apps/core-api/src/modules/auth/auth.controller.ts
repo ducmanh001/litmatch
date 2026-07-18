@@ -135,6 +135,7 @@ export class AuthController {
     clearAuthCookies(
       res,
       this.config.get('NODE_ENV', { infer: true }) === 'production',
+      this.config.get('AUTH_CROSS_ORIGIN_DEV', { infer: true }) === true,
     );
   }
 
@@ -148,9 +149,9 @@ export class AuthController {
       csrfToken: session.csrfToken,
       isProduction:
         this.config.get('NODE_ENV', { infer: true }) === 'production',
-      ttlDays: this.config.getOrThrow('AUTH_REFRESH_TTL_DAYS', {
-        infer: true,
-      }),
+      crossOriginDev:
+        this.config.get('AUTH_CROSS_ORIGIN_DEV', { infer: true }) === true,
+      ttlDays: this.config.getOrThrow('AUTH_REFRESH_TTL_DAYS', { infer: true }),
     });
     return {
       accessToken: session.accessToken,

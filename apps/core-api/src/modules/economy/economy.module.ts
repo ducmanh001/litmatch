@@ -15,6 +15,7 @@ import { Wallet } from './entities/wallet.entity';
 import { IapProduct, IapReceipt } from './entities/iap.entities';
 import { VipPlan } from './entities/vip-plan.entity';
 import {
+  DisabledIapVerifier,
   DevIapVerifier,
   IapVerifier,
   StoreIapVerifier,
@@ -56,18 +57,29 @@ import { EconomyWebhooksController } from './webhooks/economy-webhooks.controlle
     ReconciliationService,
     IapRefundPollService,
     DevIapVerifier,
+    DisabledIapVerifier,
     StoreIapVerifier,
     {
       provide: IapVerifier,
-      inject: [ConfigService, DevIapVerifier, StoreIapVerifier],
+      inject: [
+        ConfigService,
+        DevIapVerifier,
+        StoreIapVerifier,
+        DisabledIapVerifier,
+      ],
       useFactory: (
         config: ConfigService<CoreApiEnv, true>,
         dev: DevIapVerifier,
         store: StoreIapVerifier,
-      ) =>
-        config.getOrThrow('ECONOMY_IAP_VERIFIER', { infer: true }) === 'store'
-          ? store
-          : dev,
+        disabled: DisabledIapVerifier,
+      ) => {
+        const provider = config.getOrThrow('ECONOMY_IAP_VERIFIER', {
+          infer: true,
+        });
+        if (provider === 'store') return store;
+        if (provider === 'disabled') return disabled;
+        return dev;
+      },
     },
     DevAppleNotificationVerifier,
     StoreAppleNotificationVerifier,

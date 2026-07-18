@@ -1,13 +1,16 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 
 import { AuthGate } from '../../shared/auth/auth-gate';
+import { useTranslation } from '../../shared/i18n/messages';
 import {
   connectRealtime,
   disconnectRealtime,
+  onReconnected,
 } from '../../shared/realtime/socket';
 import { ConfirmSheet } from '../../shared/ui/confirm-sheet';
 import {
@@ -23,6 +26,7 @@ import {
 } from '../../shared/ui/icons';
 import { ToastStack } from '../../shared/ui/toast-stack';
 
+import type { MessageKey } from '../../shared/i18n/messages';
 import type { ReactNode } from 'react';
 import type { ComponentType, SVGProps } from 'react';
 
@@ -34,22 +38,37 @@ import type { ComponentType, SVGProps } from 'react';
  * các mục tài khoản/hỗ trợ gom vào `/more` để nhãn không va nhau trên máy nhỏ.
  */
 const NAV_ITEMS = [
-  { href: '/home', label: 'Trang chủ', Icon: HomeIcon, mobile: true },
+  { href: '/home', labelKey: 'nav.home', Icon: HomeIcon, mobile: true },
   {
     href: '/discovery',
-    label: 'Quanh đây',
+    labelKey: 'nav.discovery',
     Icon: DiscoveryIcon,
     mobile: true,
   },
-  { href: '/matching', label: 'Ghép đôi', Icon: MatchIcon, mobile: true },
-  { href: '/video', label: 'Video', Icon: VideoIcon, mobile: false },
-  { href: '/party', label: 'Party', Icon: PartyIcon, mobile: false },
-  { href: '/feed', label: 'Bảng tin', Icon: FeedIcon, mobile: false },
-  { href: '/friends', label: 'Tin nhắn', Icon: FriendsIcon, mobile: true },
-  { href: '/profile', label: 'Cá nhân', Icon: ProfileIcon, mobile: false },
+  {
+    href: '/matching',
+    labelKey: 'nav.matching',
+    Icon: MatchIcon,
+    mobile: true,
+  },
+  { href: '/video', labelKey: 'nav.video', Icon: VideoIcon, mobile: false },
+  { href: '/party', labelKey: 'nav.party', Icon: PartyIcon, mobile: false },
+  { href: '/feed', labelKey: 'nav.feed', Icon: FeedIcon, mobile: false },
+  {
+    href: '/friends',
+    labelKey: 'nav.friends',
+    Icon: FriendsIcon,
+    mobile: true,
+  },
+  {
+    href: '/profile',
+    labelKey: 'nav.profile',
+    Icon: ProfileIcon,
+    mobile: false,
+  },
 ] satisfies ReadonlyArray<{
   href: string;
-  label: string;
+  labelKey: MessageKey;
   Icon: ComponentType<SVGProps<SVGSVGElement>>;
   mobile: boolean;
 }>;
@@ -58,11 +77,11 @@ const NAV_ITEMS = [
  * không cần trang gom này. */
 const MORE_NAV_ITEM = {
   href: '/more',
-  label: 'Thêm',
+  labelKey: 'nav.more',
   Icon: MoreIcon,
 } satisfies {
   href: string;
-  label: string;
+  labelKey: MessageKey;
   Icon: ComponentType<SVGProps<SVGSVGElement>>;
 };
 
@@ -96,12 +115,20 @@ function ImmersiveSessionChrome({ children }: { children: ReactNode }) {
 
 function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const queryClient = useQueryClient();
+  const t = useTranslation();
 
   // Vùng (app) là vùng realtime: connect khi vào, disconnect khi rời hẳn (logout)
   useEffect(() => {
     connectRealtime();
-    return disconnectRealtime;
-  }, []);
+    const unsubscribeReconnect = onReconnected(() => {
+      void queryClient.invalidateQueries();
+    });
+    return () => {
+      unsubscribeReconnect();
+      disconnectRealtime();
+    };
+  }, [queryClient]);
 
   const isActive = (href: string): boolean =>
     pathname === href || pathname.startsWith(`${href}/`);
@@ -117,7 +144,7 @@ function AppChrome({ children }: { children: ReactNode }) {
       <div className="md:grid md:min-h-screen md:grid-cols-[5rem_minmax(0,1fr)] lg:grid-cols-[15rem_minmax(0,1fr)]">
         <nav
           className="hidden md:sticky md:top-0 md:z-40 md:flex md:h-screen md:w-full md:flex-col md:gap-1.5 md:overflow-y-auto md:border-r md:border-black/5 md:bg-white/80 md:px-3 md:py-8 md:backdrop-blur lg:px-4 dark:md:border-white/5 dark:md:bg-[#110d14]/55"
-          aria-label="Điều hướng chính"
+          aria-label={t('nav.primary')}
         >
           <Link
             href="/home"
@@ -138,7 +165,9 @@ function AppChrome({ children }: { children: ReactNode }) {
               }`}
             >
               <item.Icon width={20} height={20} />
-              <span className="hidden text-sm lg:inline">{item.label}</span>
+              <span className="hidden text-sm lg:inline">
+                {t(item.labelKey)}
+              </span>
             </Link>
           ))}
         </nav>
@@ -154,7 +183,7 @@ function AppChrome({ children }: { children: ReactNode }) {
 
           <nav
             className="fixed inset-x-0 bottom-0 z-40 mx-auto flex h-16 max-w-[430px] items-center justify-around border-t border-black/5 bg-white/90 px-2 backdrop-blur md:hidden dark:border-white/5 dark:bg-surf/90"
-            aria-label="Điều hướng chính (di động)"
+            aria-label={t('nav.mobile')}
           >
             {[...NAV_ITEMS.filter((item) => item.mobile), MORE_NAV_ITEM].map(
               (item) => (
@@ -162,14 +191,16 @@ function AppChrome({ children }: { children: ReactNode }) {
                   key={item.href}
                   href={item.href}
                   aria-current={isActive(item.href) ? 'page' : undefined}
-                  className={`flex flex-col items-center gap-1 ${
+                  className={`flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 transition ${
                     isActive(item.href)
-                      ? 'text-iris dark:text-irisl'
-                      : 'text-muted-foreground'
+                      ? 'bg-gradient-to-r from-aqua/15 via-iris/10 to-irisl/20 text-irisl dark:text-irisl'
+                      : 'text-muted-foreground hover:bg-iris/[0.06] hover:text-irisl'
                   }`}
                 >
                   <item.Icon width={20} height={20} />
-                  <span className="text-[10px] font-bold">{item.label}</span>
+                  <span className="truncate text-[10px] font-bold">
+                    {t(item.labelKey)}
+                  </span>
                 </Link>
               ),
             )}

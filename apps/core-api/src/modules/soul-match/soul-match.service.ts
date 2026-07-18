@@ -15,6 +15,7 @@ import { publishRealtimeEvent } from '../../common/realtime/publish-realtime';
 import { messageIdempotencyKey } from './soul-match.constants';
 import { SOUL_MATCH_REDIS } from './redis/soul-match-redis.provider';
 import { SoulMatchErrors } from './soul-match.errors';
+import { SoulRoomPhase } from './soul-match.types';
 import { SoulChatMessage } from './entities/soul-chat-message.entity';
 import {
   SoulMatchRating,
@@ -39,25 +40,9 @@ import type Redis from 'ioredis';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import type { CoreApiEnv } from '../../config/env.validation';
 import type { RateSessionDto, SendSoulMessageDto } from './dto/soul-match.dtos';
+import type { SoulRoomView } from './soul-match.types';
 
-/** Phase phòng chat — derive từ timestamp DB + giờ server (docs/services/soul-match-service.md § 1). */
-export enum SoulRoomPhase {
-  Chatting = 'chatting',
-  Rating = 'rating',
-  Closed = 'closed',
-}
-
-/**
- * View dẫn xuất của phòng chat ẩn danh — KHÔNG có entity/cột state riêng: phase derive
- * từ `MatchSession.confirmed*At` + config tại thời điểm đọc, timer enforce ở server
- * (docs/services/soul-match-service.md § 1; docs/10 § Soul Match: không tin timer client).
- */
-export interface SoulRoomView {
-  session: MatchSession;
-  chatEndsAt: Date;
-  ratingEndsAt: Date;
-  phase: SoulRoomPhase;
-}
+export { SoulRoomPhase } from './soul-match.types';
 
 export interface RateResult {
   verdict: SoulMatchVerdict;

@@ -7,7 +7,9 @@ import { useCurrentUser } from '../../../shared/auth/use-current-user';
 import { confirmAction } from '../../../shared/lib/confirm-store';
 import { formatRelativeTime } from '../../../shared/lib/format-relative-time';
 import { showToast } from '../../../shared/lib/toast-store';
-import { useDeletePost, usePostAuthor } from '../api';
+import { getUserDisplayName } from '../../../shared/lib/user-display-name';
+import { useLocale } from '../../../shared/i18n/locale-store';
+import { useDeletePost } from '../api';
 import { LikeButton } from './like-button';
 import { PostAuthorAvatar } from './post-author-avatar';
 
@@ -224,10 +226,16 @@ export function PostCard({
   commentHref?: string;
 }) {
   const { data: currentUser } = useCurrentUser();
-  const author = usePostAuthor(post.authorUserId);
+  const locale = useLocale();
+  // Web deploy trước core-api hoặc dev server chưa reload vẫn có thể nhận DTO cũ chỉ có
+  // authorUserId. Giữ feed render được trong thời gian chuyển contract.
+  const author = post.author ?? {
+    id: post.authorUserId,
+    nickname: getUserDisplayName(post.author, locale),
+    avatarId: post.imageUrl,
+  };
   const [contentExpanded, setContentExpanded] = useState(false);
   const contentRef = useRef<HTMLParagraphElement>(null);
-  const authorNickname = author.data?.nickname ?? 'Thành viên Litmatch';
   const contentLikelyOverflows =
     post.content !== null &&
     (post.content.length > POST_CONTENT_PREVIEW_CHARACTERS ||
@@ -281,14 +289,19 @@ export function PostCard({
   return (
     <article className="overflow-hidden rounded-2xl border border-black/5 bg-white px-4 pt-4 pb-1 shadow-sm shadow-black/[0.02] transition hover:border-black/10 dark:border-white/5 dark:bg-surf dark:shadow-black/20 dark:hover:border-white/10">
       <div className="mb-3.5 flex items-center gap-3">
-        <PostAuthorAvatar seed={post.authorUserId} nickname={authorNickname} />
+        <Link
+          href={`/users/${author.id}`}
+          aria-label={`Xem hồ sơ ${author.nickname}`}
+        >
+          <PostAuthorAvatar seed={author.avatarId} nickname={author.nickname} />
+        </Link>
         <div className="min-w-0 flex-1">
-          <p
-            className="truncate text-sm font-bold"
-            aria-busy={author.isPending}
+          <Link
+            href={`/users/${author.id}`}
+            className="block truncate text-sm font-bold hover:underline"
           >
-            {authorNickname}
-          </p>
+            {author.nickname}
+          </Link>
           <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
             <time dateTime={post.createdAt}>
               {formatRelativeTime(post.createdAt)}

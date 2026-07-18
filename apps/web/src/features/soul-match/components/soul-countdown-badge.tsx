@@ -2,14 +2,8 @@
 
 import { useEffect, useState } from 'react';
 
+import { formatMinutesSeconds } from '../../../shared/lib/format-minutes-seconds';
 import { useSoulSession } from '../api';
-
-function formatRemaining(ms: number): string {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
-}
 
 /** Badge đếm ngược của top bar (soul-match.html `#timerBadge`) — dùng thật `chatEndsAt`/
  * `ratingEndsAt` từ SoulSessionViewDto, không tự bịa deadline. Ẩn (chỉ giữ chỗ) khi phase
@@ -40,7 +34,7 @@ export function SoulCountdownBadge({ sessionId }: { sessionId: string }) {
 
   return (
     <span className="rounded-full bg-iris/15 px-3 py-1.5 text-xs font-extrabold text-irisl">
-      {formatRemaining(remainingMs)}
+      {formatMinutesSeconds(remainingMs / 1000)}
     </span>
   );
 }

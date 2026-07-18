@@ -9,6 +9,7 @@ import { SchedulerRegistry } from '@nestjs/schedule';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
+import { ManagedInterval } from '../../../common/scheduling/managed-interval';
 import { MatchInviteStatus } from '../entities/match-invite.entity';
 
 import type { CoreApiEnv } from '../../../config/env.validation';
@@ -26,7 +27,7 @@ export class InviteSweeperService
   implements OnApplicationBootstrap, OnApplicationShutdown
 {
   private readonly logger = new Logger(InviteSweeperService.name);
-  private running = false;
+  private readonly job = new ManagedInterval();
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
@@ -35,29 +36,27 @@ export class InviteSweeperService
   ) {}
 
   onApplicationBootstrap(): void {
-    const interval = setInterval(
-      () =>
-        void this.runOnce().catch((err) =>
-          this.logger.error({ err: `${err}` }, 'Invite sweeper lỗi'),
-        ),
-      this.config.getOrThrow('MATCHING_INVITE_SWEEPER_INTERVAL_MS', {
-        infer: true,
-      }),
-    );
-    this.scheduler.addInterval(INVITE_SWEEPER_JOB, interval);
+    this.job.start(this.scheduler, {
+      jobName: INVITE_SWEEPER_JOB,
+      intervalMs: this.config.getOrThrow(
+        'MATCHING_INVITE_SWEEPER_INTERVAL_MS',
+        {
+          infer: true,
+        },
+      ),
+      task: () => this.runOnce(),
+      logger: this.logger,
+      errorMessage: 'Invite sweeper lỗi',
+    });
   }
 
   onApplicationShutdown(): void {
-    if (this.scheduler.doesExist('interval', INVITE_SWEEPER_JOB)) {
-      this.scheduler.deleteInterval(INVITE_SWEEPER_JOB);
-    }
+    this.job.stop();
   }
 
   /** 1 tick — public để test/chạy tay. */
   async runOnce(): Promise<number> {
-    if (this.running) return 0;
-    this.running = true;
-    try {
+    return this.job.runExclusive(async () => {
       const [, count] = (await this.dataSource.query(
         `UPDATE match_invites
             SET status = $1, updated_at = now()
@@ -65,8 +64,6 @@ export class InviteSweeperService
         [MatchInviteStatus.Expired, MatchInviteStatus.Pending],
       )) as [unknown, number];
       return count;
-    } finally {
-      this.running = false;
-    }
+    }, 0);
   }
 }

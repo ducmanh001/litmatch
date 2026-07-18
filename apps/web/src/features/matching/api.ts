@@ -13,7 +13,8 @@ export const matchingKeys = {
   ticket: (id: string) => ['matching', 'ticket', id] as const,
 };
 
-/** Trạng thái còn "sống" — poll tiếp; `matched`/`expired`/`cancelled`/`confirmed` là chốt/chuyển màn. */
+/** Trạng thái còn chờ ghép. Session được server xác nhận ngay khi có cặp, nên `confirmed`
+ * là điểm chuyển màn; giữ `matched` để client cũ vẫn tự hoàn tất được session legacy. */
 export function isPollingStatus(
   status: TicketDto['status'] | undefined,
 ): boolean {

@@ -2,6 +2,8 @@ allowBuilds:
   '@parcel/watcher': true
   '@scarf/scarf': false
   '@swc/core': true
+  # PostHog transitive polyfill chỉ chạy banner tài trợ; app không cần postinstall này.
+  core-js: false
   less: true
   nx: true
   protobufjs: true

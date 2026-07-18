@@ -28,7 +28,8 @@ export interface VerifiedPurchase {
 
 /**
  * Verify receipt/purchase token Ở SERVER (docs/10 § Economy — không tin client).
- * Chọn implementation qua env ECONOMY_IAP_VERIFIER: 'dev' (local/test) | 'store' (sandbox/production).
+ * Chọn implementation qua env ECONOMY_IAP_VERIFIER: 'dev' (local/test) | 'store' (sandbox/
+ * production đủ credential) | 'disabled' (production subset, fail-closed).
  */
 export abstract class IapVerifier {
   abstract verify(
@@ -36,6 +37,25 @@ export abstract class IapVerifier {
     payload: Record<string, unknown>,
     productId: string,
   ): Promise<VerifiedPurchase>;
+}
+
+/** Production subset không có store credential: từ chối trước mọi ledger side effect. */
+@Injectable()
+export class DisabledIapVerifier extends IapVerifier {
+  async verify(
+    provider: IapProvider,
+    payload: Record<string, unknown>,
+    productId: string,
+  ): Promise<VerifiedPurchase> {
+    void provider;
+    void payload;
+    void productId;
+    throw new DomainException(
+      EconomyErrors.IAP_DISABLED,
+      'Nạp kim cương qua cửa hàng chưa khả dụng trên môi trường này',
+      HttpStatus.FORBIDDEN,
+    );
+  }
 }
 
 /** Dev/test: nhận devTransactionId giả — chặn cứng ở production, giống DevSmsProvider. */
@@ -51,9 +71,12 @@ export class DevIapVerifier
   }
 
   onApplicationBootstrap(): void {
-    if (this.config.get('NODE_ENV', { infer: true }) === 'production') {
+    if (
+      this.config.get('NODE_ENV', { infer: true }) === 'production' &&
+      this.config.getOrThrow('ECONOMY_IAP_VERIFIER', { infer: true }) === 'dev'
+    ) {
       throw new Error(
-        'DevIapVerifier không được dùng ở production — set ECONOMY_IAP_VERIFIER=store',
+        'DevIapVerifier không được dùng ở production — set ECONOMY_IAP_VERIFIER=store hoặc disabled',
       );
     }
   }

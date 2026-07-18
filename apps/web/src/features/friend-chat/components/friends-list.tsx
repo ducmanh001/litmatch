@@ -4,6 +4,8 @@ import { isApiError } from '@litmatch/api-client';
 import Link from 'next/link';
 import { useState } from 'react';
 
+import { SearchIcon } from '../../../shared/ui/icons';
+import { formatRelativeTime } from '../../../shared/lib/format-relative-time';
 import { useFriends } from '../api';
 import { FriendAvatar } from './friend-avatar';
 
@@ -12,17 +14,58 @@ import type { FriendDto } from '../api';
 export function FriendsList() {
   const friends = useFriends();
   const [search, setSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  const header = (
+    <header className="flex items-center justify-between gap-4 pb-1 pt-2">
+      <h1 className="font-display text-2xl font-semibold italic">Tin nhắn</h1>
+      {searchOpen ? (
+        <label className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full bg-slate-100 px-3 dark:bg-surf2">
+          <SearchIcon width={16} height={16} className="shrink-0" />
+          <input
+            type="search"
+            aria-label="Tìm kiếm bạn bè"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            onBlur={() => {
+              if (search === '') setSearchOpen(false);
+            }}
+            placeholder="Tìm theo tên…"
+            autoFocus
+            className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400"
+          />
+        </label>
+      ) : (
+        <button
+          type="button"
+          aria-label="Tìm kiếm bạn bè"
+          onClick={() => setSearchOpen(true)}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-iris/15 hover:text-irisl dark:bg-surf2 dark:text-white"
+        >
+          <SearchIcon width={16} height={16} />
+        </button>
+      )}
+    </header>
+  );
 
   if (friends.isPending) {
-    return <p className="text-sm text-slate-500">Đang tải danh sách bạn bè…</p>;
+    return (
+      <div className="space-y-5">
+        {header}
+        <p className="text-sm text-slate-500">Đang tải danh sách bạn bè…</p>
+      </div>
+    );
   }
   if (friends.isError) {
     return (
-      <p role="alert" className="text-sm text-destructive">
-        {isApiError(friends.error)
-          ? friends.error.message
-          : 'Có lỗi xảy ra, thử lại.'}
-      </p>
+      <div className="space-y-5">
+        {header}
+        <p role="alert" className="text-sm text-destructive">
+          {isApiError(friends.error)
+            ? friends.error.message
+            : 'Có lỗi xảy ra, thử lại.'}
+        </p>
+      </div>
     );
   }
 
@@ -33,22 +76,18 @@ export function FriendsList() {
       .toLocaleLowerCase('vi-VN')
       .includes(normalizedSearch),
   );
-  const newMatches = list.filter((friend) => friend.lastMessageAt === null);
   const conversations = list.filter(
     (friend): friend is FriendDto & { lastMessageAt: string } =>
       friend.lastMessageAt !== null,
   );
+  const unreadCount = conversations.reduce(
+    (total, friend) => total + friend.unreadCount,
+    0,
+  );
 
   return (
-    <div className="space-y-5">
-      <input
-        type="search"
-        aria-label="Tìm kiếm bạn bè"
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-        placeholder="Tìm theo tên…"
-        className="h-11 w-full rounded-full border border-black/5 bg-white px-4 text-sm outline-none focus:ring-2 focus:ring-iris dark:border-white/10 dark:bg-surf"
-      />
+    <div className="space-y-6 pb-3">
+      {header}
 
       {allFriends.length === 0 && (
         <div className="rounded-2xl border border-dashed border-black/10 px-5 py-10 text-center dark:border-white/10">
@@ -79,24 +118,28 @@ export function FriendsList() {
         </p>
       )}
 
-      {newMatches.length > 0 && (
-        <section>
-          <h2 className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-400">
-            Match mới
-          </h2>
-          <div className="no-scrollbar flex gap-4 overflow-x-auto pb-1">
-            {newMatches.map((friend) => (
+      {list.length > 0 && (
+        <section aria-label="Bạn bè">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-xs font-bold uppercase tracking-wide text-slate-400">
+              Bạn bè
+            </h2>
+          </div>
+          <div className="no-scrollbar flex gap-4 overflow-x-auto pb-2">
+            {list.map((friend) => (
               <Link
                 key={friend.conversationId}
                 href={`/chat/${friend.profile.id}`}
                 className="w-16 shrink-0 text-center"
               >
-                <FriendAvatar
-                  userId={friend.profile.id}
-                  nickname={friend.profile.nickname}
-                  size={64}
-                  className="border-paper dark:border-ink border-2"
-                />
+                <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-irisl to-aqual p-0.5">
+                  <FriendAvatar
+                    userId={friend.profile.id}
+                    nickname={friend.profile.nickname}
+                    size={60}
+                    className="border-paper dark:border-ink border-2"
+                  />
+                </span>
                 <p className="mt-1.5 truncate text-[11px] font-semibold">
                   {friend.profile.nickname}
                 </p>
@@ -107,19 +150,23 @@ export function FriendsList() {
       )}
 
       {conversations.length > 0 && (
-        <section>
-          <h2 className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-400">
-            Hội thoại
-          </h2>
-          <ul className="overflow-hidden rounded-2xl border border-border bg-card px-2 dark:border-white/15 dark:bg-surf2/45">
-            {conversations.map((friend, index) => (
-              <li
-                key={friend.conversationId}
-                className={index === 0 ? '' : 'border-t border-border'}
-              >
+        <section aria-label="Hội thoại">
+          <div className="mb-2 flex items-center gap-2">
+            <h2 className="text-xs font-bold uppercase tracking-wide text-slate-400">
+              Hội thoại
+            </h2>
+            {unreadCount > 0 && (
+              <span className="rounded-full bg-iris/10 px-2 py-0.5 text-[10px] font-bold text-irisl">
+                {unreadCount} chưa đọc
+              </span>
+            )}
+          </div>
+          <ul className="space-y-1">
+            {conversations.map((friend) => (
+              <li key={friend.conversationId}>
                 <Link
                   href={`/chat/${friend.profile.id}`}
-                  className="flex items-center gap-3 rounded-xl px-2 py-3 hover:bg-muted/70"
+                  className="flex items-center gap-3 rounded-2xl px-2 py-3 transition hover:bg-black/[0.03] dark:hover:bg-white/[0.05]"
                 >
                   <FriendAvatar
                     userId={friend.profile.id}
@@ -140,7 +187,7 @@ export function FriendsList() {
                       )}
                     </p>
                     <p
-                      className={`truncate text-xs ${
+                      className={`truncate text-sm ${
                         friend.unreadCount > 0
                           ? 'font-semibold text-slate-700 dark:text-white/85'
                           : 'text-slate-500'
@@ -171,17 +218,4 @@ export function FriendsList() {
       )}
     </div>
   );
-}
-
-function formatRelativeTime(iso: string): string {
-  const minutes = Math.max(
-    0,
-    Math.floor((Date.now() - new Date(iso).getTime()) / 60_000),
-  );
-  if (minutes < 1) return 'Vừa xong';
-  if (minutes < 60) return `${minutes} phút`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} giờ`;
-  const days = Math.floor(hours / 24);
-  return days === 1 ? 'Hôm qua' : `${days} ngày`;
 }

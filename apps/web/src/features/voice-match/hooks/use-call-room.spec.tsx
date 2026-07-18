@@ -79,8 +79,38 @@ describe('useCallRoom', () => {
     act(() => result.current.connect());
     await waitFor(() => expect(result.current.error).toBe(deniedError));
     expect(result.current.room).toBeNull();
+    // Room đã join nhưng không publish được mic phải được đóng ngay, nếu không webhook vẫn thấy
+    // participant và call bị treo ở pending tới ticker timeout.
+    expect(livekit.disconnectMediaRoom).toHaveBeenCalledWith(room);
 
     unmount();
+  });
+
+  it('response join đến sau unmount không được kết nối lại room', async () => {
+    let resolveJoin: ((value: unknown) => void) | undefined;
+    vi.spyOn(apiClient, 'POST').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveJoin = resolve;
+        }) as never,
+    );
+    const connectSpy = vi.spyOn(livekit, 'connectMediaRoom');
+
+    const { result, unmount } = renderHook(() => useCallRoom('session-1'), {
+      wrapper,
+    });
+    act(() => result.current.connect());
+    unmount();
+
+    resolveJoin?.({
+      data: {
+        data: { call: { id: 'call-1' }, token: 'tok', livekitUrl: 'ws://x' },
+      },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(connectSpy).not.toHaveBeenCalled();
   });
 
   it('connect() gọi lại được nhiều lần (re-join)', async () => {

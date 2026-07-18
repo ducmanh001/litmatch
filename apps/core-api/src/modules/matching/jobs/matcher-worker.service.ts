@@ -13,6 +13,7 @@ import { withSpan } from '@litmatch/observability';
 import { DataSource, In } from 'typeorm';
 
 import { publishRealtimeEvent } from '../../../common/realtime/publish-realtime';
+import { ManagedInterval } from '../../../common/scheduling/managed-interval';
 import {
   MatchTicket,
   MatchTicketStatus,
@@ -29,11 +30,13 @@ import {
   MATCHING_REDIS,
 } from '../redis/matching-redis.provider';
 import { User, UserStatus } from '../../user';
+import { NotificationService, NotificationType } from '../../notification';
 
 import type {
-  MatchMatchedEventData,
+  MatchConfirmedEventData,
   RealtimeEnvelope,
 } from '@litmatch/common-dtos';
+import type { Notification } from '../../notification';
 import type Redis from 'ioredis';
 import type { CoreApiEnv } from '../../../config/env.validation';
 import type { MatchInteractionPolicy } from '../ports/interaction-policy';
@@ -64,7 +67,7 @@ export class MatcherWorkerService
   implements OnApplicationBootstrap, OnApplicationShutdown
 {
   private readonly logger = new Logger(MatcherWorkerService.name);
-  private running = false;
+  private readonly job = new ManagedInterval();
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
@@ -74,34 +77,33 @@ export class MatcherWorkerService
     @Inject(MATCH_INTERACTION_POLICY)
     private readonly interactionPolicy: MatchInteractionPolicy,
     private readonly metrics: MatchingMetrics,
+    private readonly notificationService: NotificationService,
   ) {}
 
   onApplicationBootstrap(): void {
-    const interval = setInterval(
-      () =>
-        void this.runOnce().catch((err) =>
-          this.logger.error({ err: `${err}` }, 'Matcher tick lỗi'),
-        ),
-      this.config.getOrThrow('MATCHING_MATCHER_INTERVAL_MS', { infer: true }),
-    );
-    this.scheduler.addInterval(MATCHER_JOB, interval);
+    this.job.start(this.scheduler, {
+      jobName: MATCHER_JOB,
+      intervalMs: this.config.getOrThrow('MATCHING_MATCHER_INTERVAL_MS', {
+        infer: true,
+      }),
+      task: () => this.runOnce(),
+      logger: this.logger,
+      errorMessage: 'Matcher tick lỗi',
+    });
   }
 
   onApplicationShutdown(): void {
-    if (this.scheduler.doesExist('interval', MATCHER_JOB))
-      this.scheduler.deleteInterval(MATCHER_JOB);
+    this.job.stop();
   }
 
   /** 1 tick — public để test/chạy tay. Trả về số cặp ghép được. */
   async runOnce(): Promise<number> {
-    if (this.running) return 0; // tick trước chưa xong thì bỏ qua, không chồng
-    this.running = true;
-    try {
+    return this.job.runExclusive(async () => {
       // Tick chạy ngoài context 1 HTTP request nên không có parent span tự nhiên — bọc thủ công
       // để DB/Redis bên trong (drainShard/tryPair) trở thành child span trong CÙNG 1 trace
       // (docs/07 GĐ6 — distributed tracing Matching → Calling → Economy, xem
       // libs/observability/src/lib/traced.ts).
-      return await withSpan(
+      return withSpan(
         'litmatch.matching',
         'matching.matcher.tick',
         async (span) => {
@@ -115,9 +117,7 @@ export class MatcherWorkerService
           return matched;
         },
       );
-    } finally {
-      this.running = false;
-    }
+    }, 0);
   }
 
   private async drainShard(shard: string): Promise<number> {
@@ -152,7 +152,7 @@ export class MatcherWorkerService
   }
 
   /**
-   * Verify + transition queued→matched + tạo MatchSession trong 1 transaction Postgres,
+   * Verify + transition queued→confirmed + tạo MatchSession đã sẵn sàng trong 1 transaction Postgres,
    * SELECT FOR UPDATE trên cả 2 ticket (spec § 2).
    */
   private async tryPair(
@@ -206,6 +206,7 @@ export class MatcherWorkerService
         genderOk &&
         (await this.interactionPolicy.canPair(ta.userId, tb.userId))
       ) {
+        const confirmedAt = new Date();
         const session = await manager.save(
           manager.create(MatchSession, {
             matchType: ta.matchType,
@@ -213,14 +214,25 @@ export class MatcherWorkerService
             userBId: tb.userId,
             ticketAId: ta.id,
             ticketBId: tb.id,
-            status: MatchSessionStatus.PendingConfirm,
+            status: MatchSessionStatus.Confirmed,
+            confirmedAAt: confirmedAt,
+            confirmedBAt: confirmedAt,
           }),
         );
-        ta.status = MatchTicketStatus.Matched;
-        tb.status = MatchTicketStatus.Matched;
+        ta.status = MatchTicketStatus.Confirmed;
+        tb.status = MatchTicketStatus.Confirmed;
         ta.sessionId = session.id;
         tb.sessionId = session.id;
         await manager.save([ta, tb]);
+        const matchNotifications = await Promise.all(
+          [ta, tb].map((ticket) =>
+            this.notificationService.createWithManager(manager, {
+              userId: ticket.userId,
+              type: NotificationType.MatchConfirmed,
+              payload: { sessionId: session.id, matchType: ticket.matchType },
+            }),
+          ),
+        );
         const matchedAt = Date.now();
         return {
           kind: 'matched' as const,
@@ -241,6 +253,7 @@ export class MatcherWorkerService
               waitSeconds: (matchedAt - tb.enqueuedAt.getTime()) / 1000,
             },
           ],
+          matchNotifications,
         };
       }
 
@@ -268,6 +281,7 @@ export class MatcherWorkerService
             : ('dropped' as const),
         requeue,
         matchedPair: undefined,
+        matchNotifications: [] as Notification[],
       };
     });
 
@@ -283,11 +297,11 @@ export class MatcherWorkerService
       for (const { matchType, waitSeconds } of result.matchedPair) {
         this.metrics.observeMatched(matchType, waitSeconds);
       }
-      // Realtime SAU commit — best-effort, client vẫn còn GET /matching/tickets/:id poll fallback
+      // Realtime SAU commit — best-effort, client vẫn còn GET /matching/tickets/:id poll fallback.
       await Promise.all(
         result.matchedPair.map(({ userId, ticketId, sessionId }) => {
-          const envelope: RealtimeEnvelope<MatchMatchedEventData> = {
-            event: RealtimeEvents.MatchMatched,
+          const envelope: RealtimeEnvelope<MatchConfirmedEventData> = {
+            event: RealtimeEvents.MatchConfirmed,
             data: { ticketId, sessionId },
           };
           return publishRealtimeEvent(
@@ -297,6 +311,11 @@ export class MatcherWorkerService
             envelope,
           );
         }),
+      );
+      await Promise.all(
+        result.matchNotifications.map((n) =>
+          this.notificationService.sendPush(n),
+        ),
       );
     }
     return result.kind;

@@ -9,7 +9,7 @@
         "{workspaceRoot}/coverage/{e2eProjectRoot}",
         "{workspaceRoot}/coverage/signaling-gateway-e2e"
       ],
-      "dependsOn": ["signaling-gateway:build", "signaling-gateway:serve"]
+      "dependsOn": ["signaling-gateway:build"]
     }
   }
 }

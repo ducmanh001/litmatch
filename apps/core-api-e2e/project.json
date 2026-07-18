@@ -9,11 +9,7 @@
         "{workspaceRoot}/coverage/{e2eProjectRoot}",
         "{workspaceRoot}/coverage/core-api-e2e"
       ],
-      "dependsOn": [
-        "core-api:migration-run",
-        "core-api:build",
-        "core-api:serve"
-      ]
+      "dependsOn": ["core-api:migration-run", "core-api:build"]
     }
   }
 }

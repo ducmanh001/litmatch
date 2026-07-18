@@ -1,11 +1,13 @@
 'use client';
 
 import { isApiError } from '@litmatch/api-client';
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
 import { confirmAction } from '../../../shared/lib/confirm-store';
 import { showToast } from '../../../shared/lib/toast-store';
-import { ProfileIcon } from '../../../shared/ui/icons';
+import { FlagIcon } from '../../../shared/ui/icons';
+import { PlaceholderAvatar } from '../../../shared/ui/placeholder-avatar';
 import { useReportVideo, useVideoFeed } from '../api';
 import { VideoCommentsSheet } from './video-comments-sheet';
 import { VideoGiftSheet } from './video-gift-sheet';
@@ -94,21 +96,38 @@ function GiftIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-function FlagIcon(props: SVGProps<SVGSVGElement>) {
+function VideoReportButton({ videoId }: { videoId: string }) {
+  const report = useReportVideo(videoId);
+
+  const onReport = async () => {
+    const confirmed = await confirmAction({
+      title: 'Báo cáo video?',
+      message:
+        'Video sẽ được gửi tới đội ngũ kiểm duyệt với lý do nội dung không phù hợp.',
+      actionLabel: 'Gửi báo cáo',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+    report.mutate(
+      { reason: 'inappropriate_content' },
+      {
+        onSuccess: () => showToast('Đã gửi báo cáo. Cảm ơn bạn.'),
+        onError: () => showToast('Không thể gửi báo cáo, thử lại.', 'warn'),
+      },
+    );
+  };
+
   return (
-    <svg
-      width={20}
-      height={20}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      aria-hidden
-      {...props}
+    <button
+      type="button"
+      disabled={report.isPending}
+      onClick={() => void onReport()}
+      aria-label="Báo cáo video có nội dung không phù hợp"
+      className="flex flex-col items-center gap-1 text-white transition-transform active:scale-90 disabled:opacity-50"
     >
-      <path d="M5 3v18" strokeLinecap="round" />
-      <path d="M5 4h11l-2 4 2 4H5z" strokeLinejoin="round" />
-    </svg>
+      <FlagIcon />
+      <span className="text-xs font-bold">Báo cáo</span>
+    </button>
   );
 }
 
@@ -125,8 +144,8 @@ function VideoActionRail({
   onOpenGifts,
   reaction,
   onReactionChange,
-  reported,
-  onReported,
+  soundMuted,
+  onToggleSound,
   className,
 }: {
   video: VideoDto;
@@ -134,40 +153,22 @@ function VideoActionRail({
   onOpenGifts: () => void;
   reaction: ReactionStatusDto;
   onReactionChange: (reaction: ReactionStatusDto) => void;
-  reported: boolean;
-  onReported: () => void;
+  soundMuted: boolean;
+  onToggleSound: () => void;
   className: string;
 }) {
-  const reportVideo = useReportVideo(video.id);
-
-  const onReport = async () => {
-    if (reported || reportVideo.isPending) return;
-    const confirmed = await confirmAction({
-      title: 'Báo cáo video',
-      message: 'Bạn có chắc muốn báo cáo video này vì nội dung không phù hợp?',
-      actionLabel: 'Báo cáo',
-      tone: 'danger',
-    });
-    if (!confirmed) return;
-    reportVideo.mutate(
-      { reason: 'inappropriate_content' },
-      {
-        onSuccess: () => {
-          onReported();
-          showToast('Đã gửi báo cáo, cảm ơn bạn');
-        },
-        onError: () => {
-          showToast('Không thể gửi báo cáo, thử lại.', 'warn');
-        },
-      },
-    );
-  };
-
   return (
     <div className={className}>
-      <span className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-white bg-surf2">
-        <ProfileIcon width={20} height={20} className="text-white" />
-      </span>
+      <Link
+        href={`/users/${video.authorUserId}`}
+        aria-label="Xem hồ sơ tác giả video"
+        className="relative flex h-11 w-11 items-center justify-center rounded-full border-2 border-white bg-surf2"
+      >
+        <PlaceholderAvatar seed={video.authorUserId} alt="" size={40} />
+        <span className="absolute -bottom-2 left-1/2 flex h-5 w-5 -translate-x-1/2 items-center justify-center rounded-full bg-irisl text-xs font-bold text-white">
+          +
+        </span>
+      </Link>
 
       <VideoLikeButton
         video={video}
@@ -194,17 +195,21 @@ function VideoActionRail({
         <span className="text-xs font-bold">Tặng</span>
       </button>
 
+      <VideoReportButton videoId={video.id} />
+
       <button
         type="button"
-        onClick={() => void onReport()}
-        disabled={reported || reportVideo.isPending}
-        aria-label={reported ? 'Đã báo cáo video này' : 'Báo cáo video'}
-        className="flex flex-col items-center gap-1 text-white/70 transition-transform active:scale-90 disabled:opacity-50"
+        disabled={video.playbackUrl === null}
+        onClick={onToggleSound}
+        aria-label={
+          soundMuted
+            ? 'Bật âm thanh gốc của video'
+            : 'Tắt âm thanh gốc của video'
+        }
+        title="Âm thanh gốc"
+        className="disc-spin mt-1 flex h-9 w-9 items-center justify-center rounded-full border-2 border-black/20 bg-gradient-to-br from-irisl to-aqual transition-transform active:scale-90 disabled:animate-none disabled:opacity-50"
       >
-        <FlagIcon />
-        <span className="text-[10px] font-semibold">
-          {reported ? 'Đã báo cáo' : 'Báo cáo'}
-        </span>
+        <span className="h-3 w-3 rounded-full bg-black/60" />
       </button>
     </div>
   );
@@ -221,8 +226,8 @@ export function VideoReelFeed() {
   const [reactionByVideoId, setReactionByVideoId] = useState<
     Record<string, ReactionStatusDto>
   >({});
-  const [reportedVideoIds, setReportedVideoIds] = useState<ReadonlySet<string>>(
-    () => new Set(),
+  const [mutedByVideoId, setMutedByVideoId] = useState<Record<string, boolean>>(
+    {},
   );
 
   const videos = feed.data?.pages.flatMap((page) => page?.items ?? []) ?? [];
@@ -287,6 +292,13 @@ export function VideoReelFeed() {
                 key={video.id}
                 video={video}
                 onActiveChange={(v) => setActiveVideoId(v.id)}
+                muted={mutedByVideoId[video.id] ?? true}
+                onMutedChange={(muted) =>
+                  setMutedByVideoId((current) => ({
+                    ...current,
+                    [video.id]: muted,
+                  }))
+                }
               />
             ))}
 
@@ -322,13 +334,12 @@ export function VideoReelFeed() {
                 [activeVideo.id]: reaction,
               }))
             }
-            reported={reportedVideoIds.has(activeVideo.id)}
-            onReported={() =>
-              setReportedVideoIds((current) => {
-                const next = new Set(current);
-                next.add(activeVideo.id);
-                return next;
-              })
+            soundMuted={mutedByVideoId[activeVideo.id] ?? true}
+            onToggleSound={() =>
+              setMutedByVideoId((current) => ({
+                ...current,
+                [activeVideo.id]: !(current[activeVideo.id] ?? true),
+              }))
             }
             className="absolute bottom-28 right-3 z-20 flex flex-col items-center gap-5 md:static md:flex-col md:justify-end md:gap-5 md:self-stretch md:pb-10 md:pl-4"
           />
