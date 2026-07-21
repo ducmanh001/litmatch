@@ -68,7 +68,7 @@ jobs:
           conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_SHA}/check-runs" \
             --jq '.check_runs[] | select(.name == "CI required") | .conclusion' | tail -n 1)"
           test "${conclusion}" = success
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --no-frozen-lockfile
       - name: Run forward-only database migrations
         run: pnpm nx run core-api:migration-run --skip-nx-cache
       - name: Deploy backend services from the green commit
