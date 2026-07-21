@@ -42,7 +42,9 @@ try {
   console.log(
     '- Đọc AGENTS.md; chạy pnpm agent:context <scope> trước khi sửa.',
   );
-  console.log('- Module mới: new-module. Plan/verify: review-module.');
+  console.log(
+    '- Task không tầm thường: adaptive-orchestration. Module mới: new-module. Plan/verify: review-module.',
+  );
   console.log('- Guard chung: pnpm agent:check; eval: pnpm agent:test.');
 } catch {
   // Session context không được làm hỏng phiên nếu roadmap tạm thời không đọc được.

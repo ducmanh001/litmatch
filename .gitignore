@@ -46,3 +46,7 @@ deploy/production/backups/
 
 # pnpm
 .pnpm-store/
+
+.nx/polygraph
+.claude/worktrees
+.claude/settings.local.json
