@@ -259,6 +259,7 @@ function validateMarkdownLinks() {
 }
 
 validateContextMap();
+validateSkill('.agents/skills/adaptive-orchestration/SKILL.md');
 validateSkill('.agents/skills/new-module/SKILL.md');
 validateSkill('.agents/skills/review-module/SKILL.md');
 validateEslintToolchainDeps();
