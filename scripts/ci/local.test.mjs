@@ -1,10 +1,17 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const script = 'scripts/ci/local.mjs';
+const runtimeDockerfiles = [
+  'apps/core-api/Dockerfile',
+  'apps/signaling-gateway/Dockerfile',
+  'deploy/hosted/Dockerfile.core-api',
+  'deploy/hosted/Dockerfile.signaling-gateway',
+];
 
 function dryRun(profile) {
   return spawnSync(process.execPath, [script, profile, '--dry-run'], {
@@ -18,8 +25,32 @@ test('quick local CI profile resets Nx and runs the quality gate', () => {
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Reset Nx daemon and project-graph cache/u);
-  assert.match(result.stdout, /Validate GitHub Actions workflows/u);
+  assert.match(result.stdout, /Validate every GitHub Actions workflow/u);
   assert.match(result.stdout, /Lint every Nx project/u);
+});
+
+test('pre-push runs the complete CI preflight instead of a partial quality gate', () => {
+  const hook = readFileSync('.husky/pre-push', 'utf8');
+
+  assert.match(hook, /^pnpm ci:preflight\s*$/u);
+  assert.doesNotMatch(hook, /ci:local:clean/u);
+});
+
+test('backend runtime images install with the canonical pnpm settings', () => {
+  for (const dockerfilePath of runtimeDockerfiles) {
+    const dockerfile = readFileSync(dockerfilePath, 'utf8');
+
+    assert.match(
+      dockerfile,
+      /COPY .*pnpm-workspace\.yaml \.\//u,
+      dockerfilePath,
+    );
+    assert.match(
+      dockerfile,
+      /pnpm install --prod --frozen-lockfile/u,
+      dockerfilePath,
+    );
+  }
 });
 
 test('clean local CI profile uses an empty node_modules volume in Node 22 Linux', () => {

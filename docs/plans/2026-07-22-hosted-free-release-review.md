@@ -22,6 +22,10 @@ backend thứ tư.
 | 8   | Release fail-closed khi provider hoặc public endpoint lỗi            | API provider trả build failed, timeout hoặc endpoint chưa sẵn sàng | `scripts/release/northflank-deploy.mjs:66` kiểm tra terminal status; `.github/workflows/hosted-release.yml:79` retry smoke rồi fail job                                                                                         | ✅ chặn đúng |
 | 9   | Không commit credential thật                                         | Người cấu hình thay placeholder trong Git                          | `deploy/hosted/core-api.env.example:6`, `deploy/hosted/signaling-gateway.env.example:6` chỉ chứa placeholder; credential thật đi qua GitHub Secrets theo `docs/runbooks/hosted-free-release.md:25`; repository secret scan PASS | ✅ chặn đúng |
 | 10  | Hết free quota không được hiểu là SLA production                     | Traffic, inactivity policy hoặc provider đổi quota                 | `docs/adr/0009-hosted-free-alpha-release-profile.md:12` giới hạn profile ở alpha/demo và runbook yêu cầu theo dõi quota; không có cam kết always-available                                                                      | ✅ chặn đúng |
+| 11  | Dependency production không có lỗ hổng high/critical đã biết         | Lockfile giữ phiên bản transitively vulnerable                     | `pnpm-workspace.yaml:15` pin các bản vá; `pnpm audit --audit-level high` và full preflight đều PASS                                                                                                                             | ✅ chặn đúng |
+| 12  | Pre-push local kiểm tra cùng full gate dùng để bảo vệ GitHub         | Local chỉ chạy quick check rồi CI mới phát hiện test/image lỗi     | `.husky/pre-push:1` gọi `pnpm ci:preflight`; `scripts/ci/local.mjs:482` kiểm tra toàn bộ workflow; test contract tại `scripts/ci/local.test.mjs`                                                                                | ✅ chặn đúng |
+| 13  | Runtime image tái lập được và không chạy bằng root                   | Pnpm bỏ qua override hoặc edge process có quyền root               | Backend image copy `pnpm-workspace.yaml` trước frozen install; `deploy/production/Dockerfile.edge:6` chạy `nobody`; image build, Trivy và smoke PASS                                                                            | ✅ chặn đúng |
+| 14  | Core integration test không race trên schema/Redis dùng chung        | Jest worker reset chung tài nguyên trong lúc suite khác đang chạy  | `apps/core-api/jest.config.cts:9` giới hạn `maxWorkers: 1`; hai lần chạy liên tiếp đều PASS 65 suite/716 test                                                                                                                   | ✅ chặn đúng |
 
 ### 3. Checklist áp dụng
 
@@ -35,6 +39,8 @@ backend thứ tư.
 | Retry/idempotency               | PASS    | Release khóa concurrency, deploy exact SHA; smoke và provider polling có timeout                      |
 | Failure isolation/observability | PASS    | Provider/build/smoke lỗi làm job đỏ; profile alpha ghi rõ giới hạn quota và chức năng tắt             |
 | Docs/ADR/runbook                | PASS    | Architecture, tech stack, frontend auth, ADR index và runbook đã đồng bộ                              |
+| CI/local parity                 | PASS    | Pre-push chạy full preflight; actionlint quét mọi workflow; contract test khóa hành vi                |
+| Supply chain/runtime hardening  | PASS    | Audit không còn high/critical; install frozen; image runtime non-root và Trivy sạch                   |
 
 ### 4. Test đã chạy
 
@@ -49,6 +55,9 @@ backend thứ tư.
 - `docker build -f deploy/hosted/Dockerfile.signaling-gateway -t litmatch/signaling-gateway:hosted-test .` → PASS.
 - `pnpm agent:test` → 51/51 PASS, gồm ba test release Northflank.
 - `pnpm ci:local:quick` → PASS; actionlint, format và lint toàn bộ 14 Nx project PASS.
+- `pnpm audit --audit-level high` → PASS; còn 1 low và 2 moderate, không có high/critical.
+- Core API test chạy hai lần liên tiếp → mỗi lần 65/65 suite và 716/716 test PASS với PostgreSQL/Redis thật.
+- `pnpm ci:preflight` → PASS toàn bộ clean Node 22 gate: 53 infrastructure/CI test, format, lint, Gitleaks, audit, Trivy filesystem, 1.041 frontend/backend test, build, 15 E2E test, frozen-lockfile image build, runtime Trivy và smoke.
 
 ### 5. Kết luận: PASS
 

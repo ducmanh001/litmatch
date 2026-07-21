@@ -1,4 +1,5 @@
 **
+!pnpm-workspace.yaml
 !dist/
 !dist/apps/
 !dist/apps/core-api/

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -473,10 +473,15 @@ function provisionSecurityTool(toolName) {
 function runWorkflowLint() {
   const shellcheck = provisionSecurityTool('shellcheck');
   const actionlint = provisionSecurityTool('actionlint');
-  run('Validate GitHub Actions workflows', actionlint, [
+  const workflowDirectory = join(root, '.github', 'workflows');
+  const workflowFiles = readdirSync(workflowDirectory)
+    .filter((fileName) => /\.ya?ml$/u.test(fileName))
+    .sort()
+    .map((fileName) => join(workflowDirectory, fileName));
+
+  run('Validate every GitHub Actions workflow', actionlint, [
     `-shellcheck=${shellcheck}`,
-    '.github/workflows/ci.yml',
-    '.github/workflows/security.yml',
+    ...workflowFiles,
   ]);
 }
 
