@@ -9,7 +9,8 @@
   },
   "pnpm": {
     "overrides": {
-      "brace-expansion": "^2.0.1"
+      "brace-expansion": "^2.0.1",
+      "svgo": ">=4.0.2"
     }
   },
   "scripts": {
