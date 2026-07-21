@@ -303,6 +303,7 @@ function removeSmokeContainers() {
       '--force',
       'litmatch-core-smoke-local',
       'litmatch-signaling-smoke-local',
+      'litmatch-web-smoke-local',
     ],
     { allowFailure: true },
   );
@@ -320,7 +321,12 @@ function waitForHealthEndpoints() {
       '--silent',
       'http://127.0.0.1:3001/health/ready',
     ]);
-    if (coreReady && signalingReady) return;
+    const webReady = commandSucceeds('curl', [
+      '--fail',
+      '--silent',
+      'http://127.0.0.1:4300/',
+    ]);
+    if (coreReady && signalingReady && webReady) return;
     if (!dryRun) spawnSync('sleep', ['1'], { stdio: 'ignore' });
   }
 
@@ -334,6 +340,12 @@ function waitForHealthEndpoints() {
     'Signaling smoke-container logs',
     'docker',
     ['logs', 'litmatch-signaling-smoke-local'],
+    { allowFailure: true },
+  );
+  run(
+    'Web smoke-container logs',
+    'docker',
+    ['logs', 'litmatch-web-smoke-local'],
     { allowFailure: true },
   );
   throw new Error(
@@ -366,6 +378,8 @@ function runContainerSmoke() {
   const tag = imageTag();
   const coreImage = `litmatch/core-api:${tag}`;
   const signalingImage = `litmatch/signaling-gateway:${tag}`;
+  const webImage = `litmatch/web:${tag}`;
+  const edgeImage = `litmatch/edge:${tag}`;
   run('Build Core API image', 'docker', [
     'build',
     '--file',
@@ -380,6 +394,22 @@ function runContainerSmoke() {
     'apps/signaling-gateway/Dockerfile',
     '--tag',
     signalingImage,
+    '.',
+  ]);
+  run('Build Web image', 'docker', [
+    'build',
+    '--file',
+    'apps/web/Dockerfile',
+    '--tag',
+    webImage,
+    '.',
+  ]);
+  run('Build Edge image', 'docker', [
+    'build',
+    '--file',
+    'deploy/production/Dockerfile.edge',
+    '--tag',
+    edgeImage,
     '.',
   ]);
   const trivy = provisionSecurityTool('trivy');
@@ -400,6 +430,8 @@ function runContainerSmoke() {
     ...imageScanArgs,
     signalingImage,
   ]);
+  run('Scan Web runtime image', trivy, [...imageScanArgs, webImage]);
+  run('Scan Edge runtime image', trivy, [...imageScanArgs, edgeImage]);
 
   removeSmokeContainers();
   try {
@@ -411,7 +443,7 @@ function runContainerSmoke() {
       '--network',
       'host',
       '--env',
-      'NODE_ENV=test',
+      'NODE_ENV=production',
       '--env',
       `DATABASE_URL=${environment.DATABASE_URL}`,
       '--env',
@@ -420,6 +452,30 @@ function runContainerSmoke() {
       `JWT_SECRET=${environment.JWT_SECRET}`,
       '--env',
       `AUTH_OTP_PEPPER=${environment.AUTH_OTP_PEPPER}`,
+      '--env',
+      'AUTH_PHONE_OTP_ENABLED=false',
+      '--env',
+      'VIDEO_UPLOAD_ENABLED=false',
+      '--env',
+      'NOTIFICATION_PUSH_PROVIDER=disabled',
+      '--env',
+      'ECONOMY_IAP_VERIFIER=disabled',
+      '--env',
+      'ECONOMY_APPLE_WEBHOOK_VERIFIER=store',
+      '--env',
+      'ECONOMY_GOOGLE_RTDN_VERIFIER=store',
+      '--env',
+      'ECONOMY_OUTBOX_RELAY_ENABLED=false',
+      '--env',
+      'ECONOMY_REFUND_POLL_ENABLED=false',
+      '--env',
+      'LIVEKIT_URL=wss://media.example.com',
+      '--env',
+      'LIVEKIT_API_URL=http://127.0.0.1:7880',
+      '--env',
+      'LIVEKIT_API_KEY=ci-livekit-key',
+      '--env',
+      'LIVEKIT_API_SECRET=ci-livekit-secret-0123456789abcdef',
       coreImage,
     ]);
     run('Start Signaling Gateway smoke container', 'docker', [
@@ -436,6 +492,31 @@ function runContainerSmoke() {
       '--env',
       `REDIS_URL=${environment.REDIS_URL}`,
       signalingImage,
+    ]);
+    run('Start Web smoke container', 'docker', [
+      'run',
+      '--detach',
+      '--name',
+      'litmatch-web-smoke-local',
+      '--network',
+      'host',
+      '--env',
+      'PORT=4300',
+      webImage,
+    ]);
+    run('Validate Edge configuration', 'docker', [
+      'run',
+      '--rm',
+      '--env',
+      'DOMAIN=example.com',
+      '--env',
+      'ACME_EMAIL=ci@example.com',
+      '--entrypoint',
+      'caddy',
+      edgeImage,
+      'validate',
+      '--config',
+      '/etc/caddy/Caddyfile',
     ]);
     waitForHealthEndpoints();
     console.log('\n[ci-local] Container runtime smoke: PASS');

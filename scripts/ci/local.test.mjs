@@ -53,6 +53,14 @@ test('backend runtime images install with the canonical pnpm settings', () => {
   }
 });
 
+test('web runtime image removes package-manager toolchains', () => {
+  const dockerfile = readFileSync('apps/web/Dockerfile', 'utf8');
+
+  assert.match(dockerfile, /rm -rf .*node_modules\/npm/u);
+  assert.match(dockerfile, /node_modules\/corepack/u);
+  assert.match(dockerfile, /\/opt\/yarn-v1\.22\.22/u);
+});
+
 test('clean local CI profile uses an empty node_modules volume in Node 22 Linux', () => {
   const result = dryRun('clean');
 
@@ -74,7 +82,13 @@ test('all local CI profile plans quality, security, test, and Docker smoke stage
   assert.match(result.stdout, /Start local PostgreSQL and Redis/u);
   assert.match(result.stdout, /End-to-end smoke tests/u);
   assert.match(result.stdout, /Build Core API image/u);
+  assert.match(result.stdout, /Build Web image/u);
+  assert.match(result.stdout, /Build Edge image/u);
   assert.match(result.stdout, /Scan Core API runtime image/u);
+  assert.match(result.stdout, /Scan Web runtime image/u);
+  assert.match(result.stdout, /Scan Edge runtime image/u);
+  assert.match(result.stdout, /Start Web smoke container/u);
+  assert.match(result.stdout, /Validate Edge configuration/u);
   assert.match(result.stdout, /\[ci-local\] \$ pnpm \[args hidden\]/u);
   assert.match(result.stdout, /\[ci-local\] \$ docker \[args hidden\]/u);
   assert.doesNotMatch(result.stdout, /local-ci-jwt-0123456789abcdef-xyz/u);
