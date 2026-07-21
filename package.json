@@ -7,11 +7,9 @@
   "engines": {
     "node": ">=22 <23"
   },
-  "pnpm": {
-    "overrides": {
-      "brace-expansion": "^2.0.1",
-      "svgo": ">=4.0.2"
-    }
+  "overrides": {
+    "brace-expansion": "^2.0.1",
+    "svgo": ">=4.0.2"
   },
   "scripts": {
     "bootstrap": "pnpm install --frozen-lockfile && pnpm infra:up && pnpm db:migrate && pnpm doctor",
