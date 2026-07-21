@@ -58,7 +58,7 @@ một bên và không dùng file scope để lách invariant toàn repo.
 2. Nạp context đúng scope, đọc `AGENTS.md` gần nhất trong cây thư mục nếu có.
 3. Với module/luồng nghiệp vụ mới, dùng `review-module plan` trước khi code.
 4. Viết test song song với thay đổi. Schema chỉ đổi bằng migration mới.
-5. Chạy `pnpm agent:check`, test áp dụng, lint và build.
+5. Chạy `pnpm agent:check`, unit test file/target bị ảnh hưởng, lint và build target áp dụng.
 6. Chạy `review-module verify`; bàn giao file thay đổi, lệnh đã chạy, kết quả và quyết định còn mở.
 7. Nếu phát hiện docs sai/thiếu, sửa nguồn docs tương ứng trong cùng thay đổi.
 
@@ -73,12 +73,39 @@ một bên và không dùng file scope để lách invariant toàn repo.
 
 ## Skills dùng chung
 
+- Tự chọn model/effort và điều phối sub-agent cho task không tầm thường: đọc và làm theo
+  `.agents/skills/adaptive-orchestration/SKILL.md`; task simple/standard phải giữ direct để tránh
+  overhead, không fan-out theo mặc định.
 - Tạo module: đọc và làm theo `.agents/skills/new-module/SKILL.md`.
 - Plan/review module: đọc và làm theo `.agents/skills/review-module/SKILL.md`.
 
 Skill là quy trình dùng chung, không phụ thuộc model, IDE hay nhà cung cấp.
 
+## Giới hạn thực thi và token
+
+- Không polling loop, `sleep` hoặc lặp status. Sau khi trigger push/job thì dừng; nếu buộc phải chờ
+  theo yêu cầu người dùng, dùng tối đa một native blocking wait/watch.
+- Không gửi progress filler. Chỉ báo kết quả có ý nghĩa, blocker cần input hoặc update mà runtime
+  bắt buộc.
+- Search bằng `rg` có scope và loại build/vendor dirs; đọc bounded range. Log đưa vào context mặc
+  định tối đa 20 dòng liên quan; không đọc toàn lockfile, minified bundle hay build artifact.
+- Cùng một failure chỉ được sửa và retry tối đa hai lần; vẫn lỗi thì dừng, tóm tắt và xin hướng dẫn.
+- Chỉ chạy unit test file/target bị ảnh hưởng; full test suite chỉ khi người dùng yêu cầu rõ. Domain
+  nhạy cảm vẫn phải chạy gate bắt buộc được ghi riêng trong repo.
+- Không chạy server/process dài ở foreground. Batch lệnh ngắn liên quan bằng `&&`.
+- Sub-agent cap mặc định là hai; chỉ task critical được tối đa ba gồm reviewer. Dừng agent khi đủ
+  evidence; không truyền toàn bộ prompt, hội thoại hoặc raw log sang agent khác.
+- Nếu runtime không hỗ trợ hạ cấp model cho sub-agent, cấm tạo sub-agent để tránh nhân bản chi phí từ model chính.
+- Sub-agent chỉ nhận task payload rút gọn và file path liên quan, không inherit toàn bộ chat history.
+- Tranh luận/Review giữa các sub-agent tối đa 1 lượt (1 round); nếu vẫn reject thì dừng và hỏi User.
+- Giới hạn đọc file tối đa 200 dòng/lần; không nạp file > 100KB hoặc unformatted JSON/lockfile vào context.
+- Tất cả lệnh CLI nguy cơ lâu/treo phải bọc hard timeout ở cấp OS (ví dụ: `timeout 45s <command>`).
+
 ## Lệnh kiểm chứng
+
+Đây là catalog lệnh, không phải danh sách phải chạy toàn bộ cho mọi task. `agent:test`, `test` và
+verify full chỉ chạy khi người dùng yêu cầu rõ hoặc trong CI; agent tương tác ưu tiên file/target bị
+ảnh hưởng theo giới hạn phía trên.
 
 ```bash
 pnpm doctor
@@ -103,3 +130,27 @@ INTEGRATION_DB_URL=postgresql://litmatch:litmatch_local@localhost:5432/litmatch_
 
 Rule engine trung lập nằm tại `scripts/agent/guard-core.mjs`; adapter tương tác và CI cùng gọi
 chung engine này. Bị guard chặn thì sửa cách làm hoặc xin quyết định mới, không tìm cách lách.
+
+<!-- nx configuration start-->
+<!-- Leave the start & end comments to automatically receive updates. -->
+
+## General Guidelines for working with Nx
+
+- For navigating/exploring the workspace, invoke the `nx-workspace` skill first - it has patterns for querying projects, targets, and dependencies
+- When running tasks (for example build, lint, test, e2e, etc.), always prefer running the task through `nx` (i.e. `nx run`, `nx run-many`, `nx affected`) instead of using the underlying tooling directly
+- Prefix nx commands with the workspace's package manager (e.g., `pnpm nx build`, `npm exec nx test`) - avoids using globally installed CLI
+- You have access to the Nx MCP server and its tools, use them to help the user
+- For Nx plugin best practices, check `node_modules/@nx/<plugin>/PLUGIN.md`. Not all plugins have this file - proceed without it if unavailable.
+- NEVER guess CLI flags - always check nx_docs or `--help` first when unsure
+
+## Scaffolding & Generators
+
+- For scaffolding tasks (creating apps, libs, project structure, setup), ALWAYS invoke the `nx-generate` skill FIRST before exploring or calling MCP tools
+
+## When to use nx_docs
+
+- USE for: advanced config options, unfamiliar flags, migration guides, plugin configuration, edge cases
+- DON'T USE for: basic generator syntax (`nx g @nx/react:app`), standard commands, things you already know
+- The `nx-generate` skill handles generator discovery internally - don't call nx_docs just to look up generator syntax
+
+<!-- nx configuration end-->

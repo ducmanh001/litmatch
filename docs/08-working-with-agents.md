@@ -31,11 +31,26 @@ Scope chuẩn: `core`, `economy`, `matching`, `calling`, `signaling`, `media`, `
 
 ## 8.3 Skills dùng chung
 
+- Task code, review, điều tra hoặc thiết kế không tầm thường: dùng
+  `.agents/skills/adaptive-orchestration/SKILL.md` để route theo complexity/risk. Router ưu tiên
+  direct cho task nhỏ, model cost-balanced cho workstream độc lập và chỉ nâng model mạnh cho
+  critical review/conflict.
 - Bắt đầu module/domain mới: `.agents/skills/new-module/SKILL.md`.
 - Plan trước code và verify trước bàn giao: `.agents/skills/review-module/SKILL.md`.
 
 Môi trường có cơ chế gọi skill riêng có thể expose shortcut, nhưng canonical instruction luôn
 nằm trong `.agents/skills/`.
+
+Trong repo này, người dùng chỉ cần gửi yêu cầu bình thường; `AGENTS.md` yêu cầu agent tự route mọi
+task không tầm thường. Khi muốn ép routing tường minh hoặc dùng skill ngoài repo, dùng một prompt:
+
+```text
+Dùng $adaptive-orchestration xử lý yêu cầu sau: <yêu cầu>. Tự đánh giá complexity, chọn model và
+sub-agent phù hợp; ưu tiên giảm token nhưng giữ nguyên acceptance criteria và quality gates của repo.
+```
+
+Model cụ thể phụ thuộc runtime. Agent không được đoán model ID hoặc tuyên bố đã đổi model của lượt
+đang chạy; nếu runtime không hỗ trợ override thì dùng model kế thừa và vẫn giữ các quality gate.
 
 ## 8.4 Guard độc lập công cụ
 
@@ -55,7 +70,7 @@ liệt kê trong [14-rule-enforcement-matrix.md](./14-rule-enforcement-matrix.md
 2. Chạy `pnpm agent:context <scope>`.
 3. Với luồng nghiệp vụ mới, chạy `review-module plan`.
 4. Viết test song song, thay đổi từng lát nhỏ.
-5. Chạy `pnpm agent:check`, test áp dụng, lint, build.
+5. Chạy `pnpm agent:check`, unit test file/target bị ảnh hưởng, lint/build target áp dụng.
 6. Trước khi push/cập nhật PR, chạy một local gate bằng `pnpm ci:preflight`; hook `pre-push`
    luôn chạy thêm clean quality gate trong Node 22 Linux với dependency cài từ lockfile mới.
 7. Chạy `review-module verify`; FAIL thì sửa và verify lại.
@@ -101,6 +116,14 @@ Prompt, contract, context map, guard và skill được coi là code:
   quý) để phát hiện review chất lượng có tụt theo thời gian không. Không tự động hoá thành cron
   mặc định — chi phí token định kỳ là quyết định người dùng phải bật rõ ràng (skill `/schedule`),
   không phải hạ tầng agent tự ý bật.
+
+## 8.9 Execution budget
+
+Mọi agent tuân theo giới hạn ở `AGENTS.md` và `adaptive-orchestration`: không polling/sleep loop,
+không progress filler, log/context theo bounded range, tối đa hai retry cho cùng failure và unit
+test theo file/target bị ảnh hưởng. Full test suite chỉ chạy khi người dùng yêu cầu rõ; gate riêng
+của domain nhạy cảm vẫn bắt buộc. Sub-agent cap hai theo mặc định, critical cap ba gồm reviewer;
+agent phải dừng delegate khi đã đủ evidence thay vì để chạy nền không cần thiết.
 
 ---
 

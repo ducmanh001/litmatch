@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Adaptive Orchestration'
+  short_description: 'Route tasks by complexity and quality risk'
+  default_prompt: 'Dùng $adaptive-orchestration để hoàn thành task bằng model rẻ nhất vẫn đạt quality gate và chỉ tạo sub-agent khi có lợi.'
