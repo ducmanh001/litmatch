@@ -9,6 +9,7 @@ import { SchedulerRegistry } from '@nestjs/schedule';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
+import { ManagedInterval } from '../../../common/scheduling/managed-interval';
 import type { CoreApiEnv } from '../../../config/env.validation';
 import { EconomyMetrics } from '../economy.metrics';
 import { LedgerCurrency } from '../entities/ledger-account.entity';
@@ -20,13 +21,13 @@ const JOB_DEEP = 'economy-reconciliation-deep';
 /** Số ví lấy mẫu đối chiếu snapshot↔ledger mỗi run — ngưỡng vận hành nội bộ, không phải rule nghiệp vụ. */
 const WALLET_SAMPLE_SIZE = 100;
 
-export interface FastReconciliationReport {
+interface FastReconciliationReport {
   currencyImbalances: Array<{ currency: string; imbalance: string }>;
   receiptsWithoutTransaction: number;
   ok: boolean;
 }
 
-export interface DeepReconciliationReport {
+interface DeepReconciliationReport {
   walletMismatches: Array<{
     userId: string;
     snapshot: string;
@@ -35,7 +36,7 @@ export interface DeepReconciliationReport {
   ok: boolean;
 }
 
-export interface ReconciliationReport {
+interface ReconciliationReport {
   currencyImbalances: Array<{ currency: string; imbalance: string }>;
   receiptsWithoutTransaction: number;
   walletMismatches: Array<{
@@ -65,6 +66,8 @@ export class ReconciliationService
   implements OnApplicationBootstrap, OnApplicationShutdown
 {
   private readonly logger = new Logger(ReconciliationService.name);
+  private readonly fastJob = new ManagedInterval();
+  private readonly deepJob = new ManagedInterval();
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
@@ -79,30 +82,30 @@ export class ReconciliationService
       !this.config.getOrThrow('ECONOMY_RECONCILIATION_ENABLED', { infer: true })
     )
       return;
-    this.scheduler.addInterval(
-      JOB_FAST,
-      setInterval(
-        () => void this.scheduledRun('fast', () => this.runFast()),
-        this.config.getOrThrow('ECONOMY_RECONCILIATION_FAST_INTERVAL_MS', {
-          infer: true,
-        }),
+    this.fastJob.start(this.scheduler, {
+      jobName: JOB_FAST,
+      intervalMs: this.config.getOrThrow(
+        'ECONOMY_RECONCILIATION_FAST_INTERVAL_MS',
+        { infer: true },
       ),
-    );
-    this.scheduler.addInterval(
-      JOB_DEEP,
-      setInterval(
-        () => void this.scheduledRun('deep', () => this.runDeep()),
-        this.config.getOrThrow('ECONOMY_RECONCILIATION_INTERVAL_MS', {
-          infer: true,
-        }),
-      ),
-    );
+      task: () => this.scheduledRun('fast', () => this.runFast()),
+      logger: this.logger,
+      errorMessage: 'Reconciliation fast timer lỗi ngoài boundary',
+    });
+    this.deepJob.start(this.scheduler, {
+      jobName: JOB_DEEP,
+      intervalMs: this.config.getOrThrow('ECONOMY_RECONCILIATION_INTERVAL_MS', {
+        infer: true,
+      }),
+      task: () => this.scheduledRun('deep', () => this.runDeep()),
+      logger: this.logger,
+      errorMessage: 'Reconciliation deep timer lỗi ngoài boundary',
+    });
   }
 
   onApplicationShutdown(): void {
-    for (const job of [JOB_FAST, JOB_DEEP])
-      if (this.scheduler.doesExist('interval', job))
-        this.scheduler.deleteInterval(job);
+    this.fastJob.stop();
+    this.deepJob.stop();
   }
 
   /** Run theo lịch: nuốt lỗi để interval sống tiếp, nhưng gauge tier = 0 để alert thấy job chết. */

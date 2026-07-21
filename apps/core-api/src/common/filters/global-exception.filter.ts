@@ -8,6 +8,11 @@ import {
 } from '@nestjs/common';
 import { CommonErrors, DomainException } from '@litmatch/common-exceptions';
 
+import {
+  localizeErrorMessage,
+  resolveApiLocale,
+} from '../i18n/error-message.localizer';
+
 import type { ApiErrorBody } from '@litmatch/common-dtos';
 import type { Request, Response } from 'express';
 
@@ -26,6 +31,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const res = ctx.getResponse<Response>();
     const req = ctx.getRequest<Request & { id?: string }>();
     const traceId = req.id ?? 'unknown';
+    const locale = resolveApiLocale(req.headers['accept-language']);
 
     let status: number;
     let code: string;
@@ -68,7 +74,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     const payload: ApiErrorBody = {
-      error: { code, message, traceId, ...(details ? { details } : {}) },
+      error: {
+        code,
+        message: localizeErrorMessage(code, locale, message),
+        traceId,
+        ...(details ? { details } : {}),
+      },
     };
     res.status(status).json(payload);
   }

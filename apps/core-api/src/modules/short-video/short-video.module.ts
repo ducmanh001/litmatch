@@ -19,6 +19,7 @@ import {
 } from './ports/video-transcode.port';
 import { FriendModule } from '../friend';
 import { SafetyModule } from '../safety';
+import { UserModule } from '../user';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { SafetyModule } from '../safety';
     // Graph bạn bè cho feed "Đang theo dõi" (video.html) — nguồn follow duy nhất hiện có.
     FriendModule,
     SafetyModule,
+    UserModule, // compose public author một batch cho video/comment
   ],
   controllers: [ShortVideoController],
   providers: [

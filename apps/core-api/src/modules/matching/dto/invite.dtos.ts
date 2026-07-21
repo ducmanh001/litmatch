@@ -90,7 +90,7 @@ export class MatchInviteAcceptedDto {
   sessionId!: string;
   @ApiProperty({
     description:
-      'ticketId CỦA CHÍNH NGƯỜI ACCEPT — gọi confirmTicket(ticketId) như auto-match',
+      'ticketId CỦA CHÍNH NGƯỜI ACCEPT — giữ để tương thích client cũ; session đã sẵn sàng ngay',
   })
   inviteeTicketId!: string;
 

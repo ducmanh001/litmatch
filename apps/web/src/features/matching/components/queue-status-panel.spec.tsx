@@ -10,9 +10,13 @@ import { apiClient } from '../../../shared/api/client';
 
 import type { TicketDto } from '../api';
 
-const { routerReplace } = vi.hoisted(() => ({ routerReplace: vi.fn() }));
+const { routerReplace, searchParams } = vi.hoisted(() => ({
+  routerReplace: vi.fn(),
+  searchParams: new URLSearchParams(),
+}));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: routerReplace }),
+  useSearchParams: () => searchParams,
 }));
 
 const { realtimeHandlers } = vi.hoisted(() => ({
@@ -90,6 +94,8 @@ describe('QueueStatusPanel', () => {
     vi.restoreAllMocks();
     routerReplace.mockClear();
     realtimeHandlers.clear();
+    searchParams.delete('match');
+    searchParams.delete('start');
   });
 
   it('chưa có ticket — hiển thị form chọn kiểu ghép đôi', async () => {
@@ -148,12 +154,15 @@ describe('QueueStatusPanel', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('status matched — hiển thị nút xác nhận', async () => {
+  it('status matched legacy — tự hoàn tất, không hiện nút xác nhận', async () => {
     await joinQueueAndReachTicket(ticketFixture({ status: 'matched' }));
 
     expect(
-      await screen.findByRole('button', { name: 'Xác nhận kết nối' }),
+      await screen.findByText('Đang mở phòng trò chuyện cho hai bạn…'),
     ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Xác nhận kết nối' }),
+    ).not.toBeInTheDocument();
   });
 
   it('status confirmed — điều hướng theo matchType', async () => {
@@ -205,46 +214,82 @@ describe('QueueStatusPanel', () => {
     );
   });
 
-  it('xác nhận ticket lỗi — hiển thị lỗi để người dùng có thể thử lại', async () => {
-    await joinQueueAndReachTicket(ticketFixture({ status: 'matched' }));
-    vi.mocked(apiClient.POST).mockRejectedValue(
+  it('session legacy lỗi khi tự hoàn tất — hiển thị lỗi mà không dựng CTA xác nhận', async () => {
+    vi.spyOn(apiClient, 'POST').mockRejectedValue(
       new ApiError(409, {
         code: 'MATCHING_TICKET_EXPIRED',
         message: 'Phiên ghép đôi đã hết hạn.',
         traceId: 'trace-confirm',
       }),
     );
-
-    await userEvent.click(
-      await screen.findByRole('button', { name: 'Xác nhận kết nối' }),
-    );
+    const legacyTicket = ticketFixture({ status: 'matched' });
+    renderPanel({ currentTicket: legacyTicket, ticketById: legacyTicket });
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Phiên ghép đôi đã hết hạn.',
     );
+    expect(
+      screen.queryByRole('button', { name: 'Xác nhận kết nối' }),
+    ).not.toBeInTheDocument();
   });
 
-  it('chưa có ticket — nhận match.matched của lời mời mình gửi (Discovery/Invite) qua realtime, không cần tự vào hàng đợi', async () => {
+  it('chỉ vào hàng đợi sau khi mobile CTA đã được xác nhận', async () => {
+    searchParams.set('match', 'voice');
+    searchParams.set('start', '1');
+    const post = vi.spyOn(apiClient, 'POST').mockResolvedValue({
+      data: { data: ticketFixture({ matchType: 'voice' }) },
+    } as never);
+    renderPanel({ ticketById: ticketFixture({ matchType: 'voice' }) });
+
+    expect(await screen.findByText(/Đang tìm người ghép đôi/)).toBeVisible();
+    expect(post).toHaveBeenCalledWith(
+      '/api/v1/matching/tickets',
+      expect.objectContaining({
+        body: { matchType: 'voice', genderPreference: 'any' },
+      }),
+    );
+  });
+
+  it('đổi loại khi đang quét — huỷ ticket cũ trước', async () => {
+    searchParams.set('match', 'voice');
+    const activeTicket = ticketFixture({ matchType: 'soul' });
+    const remove = vi.spyOn(apiClient, 'DELETE').mockResolvedValue({
+      data: { data: { ...activeTicket, status: 'cancelled' } },
+    } as never);
+
+    renderPanel({ currentTicket: activeTicket, ticketById: activeTicket });
+
+    await waitFor(() =>
+      expect(remove).toHaveBeenCalledWith(
+        '/api/v1/matching/tickets/{id}',
+        expect.objectContaining({ params: { path: { id: activeTicket.id } } }),
+      ),
+    );
+  });
+
+  it('chưa có ticket — nhận match.confirmed từ lời mời và chuyển vào phòng ngay', async () => {
     const invitedTicket = ticketFixture({
       id: 'ticket-from-invite',
-      status: 'matched',
+      status: 'confirmed',
+      sessionId: 'session-from-invite',
     });
     renderPanel({ ticketById: invitedTicket });
 
-    // Chưa từng bấm "Tìm ghép đôi" — ticketId nội bộ vẫn null, nhưng backend publish
-    // match.matched cho CẢ inviter lẫn invitee khi 1 lời mời được accept (invite.service.ts).
+    // Chưa từng bấm "Tìm ghép đôi" — invite vừa được accept sẽ publish match.confirmed.
     expect(
       await screen.findByRole('button', {
         name: 'Bắt đầu ghép đôi Tâm hồn',
       }),
     ).toBeInTheDocument();
-    realtimeHandlers.get(RealtimeEvents.MatchMatched)?.({
+    realtimeHandlers.get(RealtimeEvents.MatchConfirmed)?.({
       ticketId: 'ticket-from-invite',
       sessionId: 'session-from-invite',
     });
 
-    expect(
-      await screen.findByRole('button', { name: 'Xác nhận kết nối' }),
-    ).toBeVisible();
+    await waitFor(() =>
+      expect(routerReplace).toHaveBeenCalledWith(
+        '/matching/soul/session-from-invite',
+      ),
+    );
   });
 });

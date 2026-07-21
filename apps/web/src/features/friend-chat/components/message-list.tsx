@@ -24,7 +24,6 @@ function MessageAttachmentView({
   );
   if (url !== undefined) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element -- URL ảnh ngoài domain, không qua next/image optimizer
       <img
         src={url}
         alt="Ảnh đính kèm"

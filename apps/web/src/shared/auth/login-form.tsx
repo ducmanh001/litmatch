@@ -252,45 +252,53 @@ export function LoginForm() {
         onSubmit={phoneForm.handleSubmit((v) => requestOtp.mutate(v.phone))}
         noValidate
       >
-        <label
-          htmlFor="phone"
-          className="mb-2 block text-xs font-bold uppercase text-slate-500 dark:text-slate-400"
-        >
-          Số điện thoại
-        </label>
-        <div className="mb-4 flex gap-2">
-          <span
-            aria-hidden
-            className="flex h-12 w-14 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-sm font-semibold dark:bg-surf2"
-          >
-            {VN_COUNTRY_CODE}
-          </span>
-          <input
-            id="phone"
-            type="tel"
-            autoComplete="tel"
-            autoFocus
-            placeholder="912 345 678"
-            className={inputClass}
-            {...phoneForm.register('phone')}
-          />
-        </div>
-        {message !== undefined && (
-          <p role="alert" className="-mt-2 mb-4 text-sm text-destructive">
-            {message}
-          </p>
+        {env.NEXT_PUBLIC_PHONE_OTP_ENABLED && (
+          <>
+            <label
+              htmlFor="phone"
+              className="mb-2 block text-xs font-bold uppercase text-slate-500 dark:text-slate-400"
+            >
+              Số điện thoại
+            </label>
+            <div className="mb-4 flex gap-2">
+              <span
+                aria-hidden
+                className="flex h-12 w-14 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-sm font-semibold dark:bg-surf2"
+              >
+                {VN_COUNTRY_CODE}
+              </span>
+              <input
+                id="phone"
+                type="tel"
+                autoComplete="tel"
+                autoFocus
+                placeholder="912 345 678"
+                className={inputClass}
+                {...phoneForm.register('phone')}
+              />
+            </div>
+            {message !== undefined && (
+              <p role="alert" className="-mt-2 mb-4 text-sm text-destructive">
+                {message}
+              </p>
+            )}
+            <button
+              type="submit"
+              className={`${buttonClass} mb-5`}
+              disabled={requestOtp.isPending}
+            >
+              {requestOtp.isPending ? 'Đang gửi…' : 'Gửi mã OTP'}
+            </button>
+          </>
         )}
-        <button
-          type="submit"
-          className={`${buttonClass} mb-5`}
-          disabled={requestOtp.isPending}
-        >
-          {requestOtp.isPending ? 'Đang gửi…' : 'Gửi mã OTP'}
-        </button>
 
         <div className="mb-5 flex items-center gap-3">
           <div className="h-px flex-1 bg-black/10 dark:bg-white/10" />
-          <span className="text-xs text-slate-400">hoặc tiếp tục với</span>
+          <span className="text-xs text-slate-400">
+            {env.NEXT_PUBLIC_PHONE_OTP_ENABLED
+              ? 'hoặc tiếp tục với'
+              : 'Đăng nhập với'}
+          </span>
           <div className="h-px flex-1 bg-black/10 dark:bg-white/10" />
         </div>
         <div className="grid grid-cols-3 gap-3">

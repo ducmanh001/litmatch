@@ -13,6 +13,15 @@ export abstract class PushPort {
   abstract send(notification: Notification): Promise<void>;
 }
 
+/** In-app notification vẫn persist; chỉ bỏ external push side effect. */
+@Injectable()
+export class DisabledPushProvider extends PushPort {
+  async send(notification: Notification): Promise<void> {
+    void notification;
+    return;
+  }
+}
+
 /**
  * Dev/test: log, không gửi gì thật — chặn cứng ở production, giống `DevIapVerifier`
  * (economy-service.md). CHƯA có implementation FCM/APNs thật ở GĐ4 (chưa có credential, xem
@@ -31,9 +40,13 @@ export class DevPushProvider
   }
 
   onApplicationBootstrap(): void {
-    if (this.config.get('NODE_ENV', { infer: true }) === 'production') {
+    if (
+      this.config.get('NODE_ENV', { infer: true }) === 'production' &&
+      this.config.getOrThrow('NOTIFICATION_PUSH_PROVIDER', { infer: true }) ===
+        'dev'
+    ) {
       throw new Error(
-        'DevPushProvider không được dùng ở production — set NOTIFICATION_PUSH_PROVIDER=fcm',
+        'DevPushProvider không được dùng ở production — set NOTIFICATION_PUSH_PROVIDER=fcm hoặc disabled',
       );
     }
   }

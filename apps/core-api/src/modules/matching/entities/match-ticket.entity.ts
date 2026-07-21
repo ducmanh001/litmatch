@@ -45,6 +45,7 @@ export const MATCH_TICKET_TRANSITIONS: Readonly<
 > = {
   [MatchTicketStatus.Queued]: [
     MatchTicketStatus.Matched,
+    MatchTicketStatus.Confirmed,
     MatchTicketStatus.Expired,
     MatchTicketStatus.Cancelled,
   ],

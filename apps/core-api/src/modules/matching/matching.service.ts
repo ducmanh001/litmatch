@@ -25,6 +25,7 @@ import {
   MATCH_TICKET_TRANSITIONS,
   MatchTicket,
   MatchTicketStatus,
+  MatchType,
 } from './entities/match-ticket.entity';
 import {
   MatchSession,
@@ -452,6 +453,85 @@ export class MatchingService {
     return this.dataSource
       .getRepository(MatchSession)
       .findOneBy({ id: sessionId });
+  }
+
+  /**
+   * Đóng Voice Match cho cả cặp. Đây là chốt cleanup durable, không dựa vào cache/browser:
+   * sau khi một bên rời thì session không thể bị join lại và cả hai có thể bắt đầu lượt mới.
+   * Calling chỉ điều phối lifecycle call và gọi vào public API này; Matching vẫn là owner ghi
+   * `MatchSession` (boundary docs/03).
+   */
+  async endVoiceSession(
+    user: AuthenticatedUser,
+    sessionId: string,
+  ): Promise<MatchSession> {
+    return this.dataSource.transaction(async (manager) => {
+      const session = await manager.findOne(MatchSession, {
+        where: { id: sessionId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (
+        !session ||
+        (session.userAId !== user.userId && session.userBId !== user.userId)
+      ) {
+        throw new DomainException(
+          MatchingErrors.SESSION_NOT_FOUND,
+          'Không tìm thấy session',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+      if (session.matchType !== MatchType.Voice) {
+        throw new DomainException(
+          MatchingErrors.SESSION_NOT_CALLABLE,
+          'Chỉ có thể kết thúc Voice Match',
+          HttpStatus.CONFLICT,
+        );
+      }
+      if (session.status === MatchSessionStatus.Ended) return session;
+      if (session.status !== MatchSessionStatus.Confirmed) {
+        throw new DomainException(
+          MatchingErrors.SESSION_NOT_PENDING,
+          'Session không ở trạng thái có thể kết thúc',
+          HttpStatus.CONFLICT,
+        );
+      }
+      session.status = MatchSessionStatus.Ended;
+      session.endedAt = new Date();
+      return manager.save(session);
+    });
+  }
+
+  /** Calling gọi sau khi terminal call; kiểm tra đúng cặp call trước khi chốt session. */
+  async endVoiceSessionForCall(
+    sessionId: string,
+    userAId: string,
+    userBId: string,
+  ): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      const session = await manager.findOne(MatchSession, {
+        where: { id: sessionId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (
+        !session ||
+        session.matchType !== MatchType.Voice ||
+        session.status === MatchSessionStatus.Ended
+      ) {
+        return;
+      }
+      const samePair =
+        (session.userAId === userAId && session.userBId === userBId) ||
+        (session.userAId === userBId && session.userBId === userAId);
+      if (!samePair) {
+        throw new Error(
+          `Call members không khớp Voice Match session ${sessionId} — dữ liệu hỏng`,
+        );
+      }
+      if (session.status !== MatchSessionStatus.Confirmed) return;
+      session.status = MatchSessionStatus.Ended;
+      session.endedAt = new Date();
+      await manager.save(session);
+    });
   }
 
   /** ZADD NX (không đè score đã boost) + SADD shard active — dùng chung cho join/replay. */

@@ -74,10 +74,11 @@
   logic. Inbox re-check hidden-set ở mỗi lần đọc và DTO chỉ compose `PublicProfileDto` tối thiểu
   của inviter để invitee có đủ thông tin đồng ý; không lộ ngày sinh/region/trust/status. Chi tiết:
   [services/matching-service.md § 9](./services/matching-service.md#invite).
-- **Voice Match KHÔNG tạo Friendship** — chỉ Soul Match có cơ chế like/reveal 2 chiều dẫn tới
-  Friendship; mời Voice Match (kể cả qua CTA invite) chỉ vào cuộc gọi tính phí theo phút, không
-  có đường nào khác tạo Friendship từ Voice. Chi tiết:
-  [services/matching-service.md § 9.3](./services/matching-service.md#invite).
+- **Voice Match có thể tạo Friendship bằng "Yêu thích" ngay trong hoặc sau cuộc gọi**: mỗi bên có
+  đúng một lượt immutable; chỉ khi **cả hai** đã thích thì server tạo `Friendship` và
+  `Conversation` trong cùng transaction. Danh tính chỉ được reveal qua chat sau mutual like; khi
+  user kết thúc call, client mở thẳng conversation bền vững. Invite Voice dùng đúng quy tắc này. Chi tiết:
+  [services/calling-service.md § 5](./services/calling-service.md).
 - **Video ngắn (W5) — conditional UPDATE thay vì SELECT FOR UPDATE cho state machine**: mọi
   transition `Video.status` thi hành bằng 1 câu `UPDATE ... WHERE status = 'từ'` (thua race = no-op),
   không pessimistic lock như `MatchTicket` — video không tranh chấp gay gắt như ghép cặp. Report

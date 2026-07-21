@@ -72,18 +72,19 @@ describe('FriendsList', () => {
     } as never);
     renderList();
 
-    expect(await screen.findByText('Bạn B')).toBeVisible();
-    expect(screen.getByRole('link', { name: /Bạn B/ })).toHaveAttribute(
-      'href',
-      '/chat/u2',
-    );
+    expect(await screen.findAllByText('Bạn B')).toHaveLength(2);
+    const friendLinks = screen.getAllByRole('link', { name: /Bạn B/ });
+    expect(friendLinks).toHaveLength(2);
+    for (const link of friendLinks) {
+      expect(link).toHaveAttribute('href', '/chat/u2');
+    }
     expect(screen.queryByText('Dữ liệu minh hoạ')).not.toBeInTheDocument();
     // Badge unread + preview từ server — không còn chỉ hiện timestamp
     expect(screen.getByLabelText('3 tin nhắn chưa đọc')).toBeVisible();
     expect(screen.getByText('Hẹn gặp cuối tuần nhé')).toBeVisible();
   });
 
-  it('bạn chưa từng nhắn tin — xếp vào "Match mới", không lặp ở "Hội thoại"', async () => {
+  it('bạn chưa từng nhắn tin — hiện ở avatar list "Bạn bè", không có hội thoại', async () => {
     const friends: FriendDto[] = [
       {
         profile: {
@@ -105,7 +106,7 @@ describe('FriendsList', () => {
     } as never);
     renderList();
 
-    expect(await screen.findByText('Match mới')).toBeVisible();
+    expect(await screen.findByText('Bạn bè')).toBeVisible();
     expect(await screen.findByText('Bạn Mới')).toBeVisible();
     expect(screen.queryByText('Hội thoại')).not.toBeInTheDocument();
   });

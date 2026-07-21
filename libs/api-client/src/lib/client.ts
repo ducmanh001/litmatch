@@ -27,6 +27,8 @@ export interface ApiClientOptions {
   tokenStore: TokenStore;
   /** Refresh rotation thất bại → app đưa user về login (docs/13 § 13.7). */
   onSessionExpired?: () => void;
+  /** Locale UI hiện hành, gửi tới core-api để localize error envelope. */
+  getLocale?: () => 'vi' | 'en';
   /** Test injection; mặc định fetch toàn cục. */
   fetch?: typeof globalThis.fetch;
 }
@@ -60,7 +62,7 @@ function isAuthTokensBody(
  *   gửi `refreshToken` trong body.
  */
 export function createApiClient(options: ApiClientOptions): CoreApiClient {
-  const { baseUrl, tokenStore, onSessionExpired } = options;
+  const { baseUrl, tokenStore, onSessionExpired, getLocale } = options;
   const baseFetch = options.fetch ?? globalThis.fetch;
   const refreshLockName = `litmatch-api-refresh:${new URL(baseUrl).origin}`;
 
@@ -93,8 +95,12 @@ export function createApiClient(options: ApiClientOptions): CoreApiClient {
       return work();
     }
     // Rotation nhiều tab không được race trên CÙNG cookie refresh token (2 request cùng giá trị
-    // cũ → server coi là reuse, revoke cả family) — browser thiếu Web Locks thì fail closed.
-    if (navigator.locks === undefined) return false;
+    // cũ → server coi là reuse, revoke cả family). Safari/iOS chưa hỗ trợ Web Locks: vẫn phải
+    // refresh được trong chính tab đó (single-flight phía trên đã chặn race trong tab), không
+    // được đá người dùng về login chỉ vì browser thiếu API này.
+    if (typeof navigator === 'undefined' || navigator.locks === undefined) {
+      return work();
+    }
     return navigator.locks.request(refreshLockName, work);
   };
 
@@ -109,7 +115,10 @@ export function createApiClient(options: ApiClientOptions): CoreApiClient {
         const response = await safeFetch(`${baseUrl}${AUTH_REFRESH_PATH}`, {
           method: 'POST',
           credentials: 'include', // gắn kèm cookie refresh_token/csrf_token httpOnly
-          headers: csrfToken !== null ? { [CSRF_HEADER_NAME]: csrfToken } : {},
+          headers: {
+            ...(csrfToken !== null ? { [CSRF_HEADER_NAME]: csrfToken } : {}),
+            'accept-language': getLocale?.() ?? 'vi',
+          },
           signal: controller.signal,
         });
         if (!response.ok) return false;
@@ -142,6 +151,7 @@ export function createApiClient(options: ApiClientOptions): CoreApiClient {
 
   const authMiddleware: Middleware = {
     onRequest({ request }) {
+      request.headers.set('accept-language', getLocale?.() ?? 'vi');
       const accessToken = tokenStore.getAccessToken();
       if (accessToken !== null) {
         request.headers.set('authorization', `Bearer ${accessToken}`);

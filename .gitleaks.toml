@@ -1,0 +1,17 @@
+title = "litmatch gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Allow documented placeholder secrets in the production example env file"
+condition = "AND"
+regexTarget = "match"
+paths = [
+  '''^deploy/production/\.env\.example$''',
+]
+regexes = [
+  '''^JWT_SECRET=''',
+  '''^AUTH_OTP_PEPPER=''',
+  '''^LIVEKIT_API_SECRET=''',
+]

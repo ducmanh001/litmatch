@@ -9,10 +9,8 @@ rtc:
   use_external_ip: false
 redis:
   address: redis:6379
-keys:
-  devkey: devsecret_change_me_0123456789abcdef
 webhook:
-  api_key: devkey
+  # api_key được inject bằng LIVEKIT_WEBHOOK_API_KEY; key/secret bằng LIVEKIT_KEYS từ .env.
   urls:
     - http://core-api:3000/api/v1/calling/webhooks/livekit
     - http://core-api:3000/api/v1/party/webhooks/livekit

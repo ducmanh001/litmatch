@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 import { useRealtimeEvent } from '../../../shared/realtime/use-realtime-event';
+import { formatMinutesSeconds } from '../../../shared/lib/format-minutes-seconds';
 import { Button } from '../../../shared/ui/button';
 import {
   movieMatchKeys,
@@ -31,13 +32,6 @@ function interpolatePositionSeconds(
   if (!isPlaying) return positionSeconds;
   const elapsed = (nowMs - new Date(positionUpdatedAt).getTime()) / 1000;
   return positionSeconds + Math.max(elapsed, 0);
-}
-
-function formatTimer(totalSeconds: number): string {
-  const clamped = Math.max(0, Math.floor(totalSeconds));
-  const minutes = Math.floor(clamped / 60);
-  const seconds = clamped % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
 export function MovieSessionView({ sessionId }: { sessionId: string }) {
@@ -152,7 +146,7 @@ export function MovieSessionView({ sessionId }: { sessionId: string }) {
         />
         <div className="mt-2 flex items-center justify-between">
           <span className="font-mono text-xs text-slate-500 dark:text-slate-400">
-            {formatTimer(displayPosition)}
+            {formatMinutesSeconds(displayPosition)}
           </span>
           <Button
             type="button"

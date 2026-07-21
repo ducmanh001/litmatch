@@ -32,6 +32,8 @@ export default defineConfig(() => ({
     setupFiles: ['./src/test-setup.ts'],
     env: {
       VITE_API_URL: 'http://localhost:3000',
+      VITE_AUTH_GOOGLE_CLIENT_ID: 'test-google-client-id',
+      VITE_PHONE_OTP_ENABLED: 'true',
     },
     include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     reporters: ['default'],

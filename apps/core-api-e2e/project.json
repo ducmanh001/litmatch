@@ -2,6 +2,7 @@
   "name": "core-api-e2e",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "projectType": "application",
+  "tags": ["type:app", "scope:e2e"],
   "implicitDependencies": ["core-api"],
   "targets": {
     "e2e": {
@@ -9,11 +10,7 @@
         "{workspaceRoot}/coverage/{e2eProjectRoot}",
         "{workspaceRoot}/coverage/core-api-e2e"
       ],
-      "dependsOn": [
-        "core-api:migration-run",
-        "core-api:build",
-        "core-api:serve"
-      ]
+      "dependsOn": ["core-api:migration-run", "core-api:build"]
     }
   }
 }

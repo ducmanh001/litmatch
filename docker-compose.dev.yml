@@ -12,20 +12,21 @@ x-node-workspace: &node-workspace
     - litmatch_pnpm_store:/pnpm/store
 
 x-backend-env: &backend-env
-  NODE_ENV: development
-  DATABASE_URL: postgresql://litmatch:litmatch_local@postgres:5432/litmatch
+  NODE_ENV: ${NODE_ENV:-development}
+  DATABASE_URL: postgresql://${POSTGRES_USER:-litmatch}:${POSTGRES_PASSWORD:-litmatch_local}@postgres:5432/${POSTGRES_DB:-litmatch}
   REDIS_URL: redis://redis:6379
   KAFKA_BROKERS: kafka:19092
-  CORS_ORIGINS: http://localhost:4200,http://localhost:4300
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:4200,http://localhost:4300}
   # .:/workspace bind-mount dùng chung cho mọi service node-workspace, nên mặc định
   # .nx/workspace-data (kể cả DB chống vòng lặp task theo PID) bị các container chia sẻ.
   # Container khác nhau có PID namespace riêng nhưng hay trùng PID thấp -> Nx nhận nhầm
   # là "task tự gọi lại chính nó" và core-api/signaling-gateway thoát ngay khi start.
   # Trỏ workspace-data ra /tmp (không phải volume nào) để mỗi container có state Nx riêng.
   NX_WORKSPACE_DATA_DIRECTORY: /tmp/nx-workspace-data
-  # URL trả cho browser phải là public host URL; RoomServiceClient của core gọi qua DNS nội bộ.
-  LIVEKIT_URL: ws://localhost:7880
-  LIVEKIT_API_URL: http://livekit:7880
+  # LIVEKIT_URL trả cho browser và có thể là URL tunnel; RoomServiceClient luôn dùng endpoint
+  # nội bộ riêng để không phụ thuộc tunnel/proxy của client.
+  LIVEKIT_URL: ${LIVEKIT_URL:-ws://localhost:7880}
+  LIVEKIT_API_URL: ${LIVEKIT_API_URL:-http://livekit:7880}
 
 services:
   deps:
@@ -49,11 +50,17 @@ services:
   livekit:
     image: livekit/livekit-server:v1.13.1@sha256:2c6869d2d5ff6c9c0166f47be1c92dad6928bfecfa5e4060a6ece48db8accfa3
     command: --config /etc/livekit.yaml
+    environment:
+      # LiveKit hỗ trợ NODE_IP native; để trống thì tự phát hiện. Khi test điện thoại qua LAN,
+      # chỉ cần set DEV_LAN_IP trong .env thay vì sửa file YAML tracked.
+      NODE_IP: ${DEV_LAN_IP:-}
+      LIVEKIT_KEYS: '${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-devsecret_change_me_0123456789abcdef}'
+      LIVEKIT_WEBHOOK_API_KEY: ${LIVEKIT_API_KEY:-devkey}
     ports:
-      - '7880:7880'
-      - '7881:7881'
-      - '50000-50200:50000-50200/udp'
-      - '6789:6789'
+      - '${LIVEKIT_HTTP_HOST_PORT:-7880}:7880'
+      - '${LIVEKIT_TCP_HOST_PORT:-7881}:7881'
+      - '${LIVEKIT_RTC_UDP_HOST_RANGE:-50000-50200}:50000-50200/udp'
+      - '${LIVEKIT_PROMETHEUS_HOST_PORT:-6789}:6789'
     volumes:
       - ./apps/media-server/livekit.compose.yaml:/etc/livekit.yaml:ro
     depends_on:
@@ -65,10 +72,13 @@ services:
     env_file: .env
     environment:
       <<: *backend-env
+      # Cổng nội bộ là contract giữa các container; chỉ host port được cấu hình phía ngoài.
+      PORT: 3000
       WATCHPACK_POLLING: 'true'
+      AUTH_CROSS_ORIGIN_DEV: ${AUTH_CROSS_ORIGIN_DEV:-false}
     command: ['pnpm', 'nx', 'serve', 'core-api']
     ports:
-      - '3000:3000'
+      - '${CORE_API_HOST_PORT:-3000}:3000'
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -90,10 +100,11 @@ services:
     env_file: .env
     environment:
       <<: *backend-env
+      SIGNALING_PORT: 3001
       WATCHPACK_POLLING: 'true'
     command: ['pnpm', 'nx', 'serve', 'signaling-gateway']
     ports:
-      - '3001:3001'
+      - '${SIGNALING_HOST_PORT:-3001}:3001'
     depends_on:
       deps:
         condition: service_completed_successfully
@@ -114,7 +125,7 @@ services:
     <<: *node-workspace
     environment:
       CHOKIDAR_USEPOLLING: 'true'
-      VITE_API_URL: http://localhost:3000
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
     command:
       [
         'pnpm',
@@ -125,16 +136,19 @@ services:
         '--host',
         '0.0.0.0',
         '--port',
-        '4200',
+        '${ADMIN_PORT:-4200}',
       ]
     ports:
-      - '4200:4200'
+      - '${ADMIN_HOST_PORT:-4200}:${ADMIN_PORT:-4200}'
     depends_on:
       deps:
         condition: service_completed_successfully
     healthcheck:
       test:
-        ['CMD-SHELL', 'wget -qO- http://127.0.0.1:4200/ >/dev/null || exit 1']
+        [
+          'CMD-SHELL',
+          'wget -qO- http://127.0.0.1:$${ADMIN_PORT:-4200}/ >/dev/null || exit 1',
+        ]
       interval: 5s
       timeout: 3s
       retries: 12
@@ -143,9 +157,16 @@ services:
   web:
     <<: *node-workspace
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:3000
-      NEXT_PUBLIC_SOCKET_URL: http://localhost:3001
-      NEXT_PUBLIC_LIVEKIT_URL: ws://localhost:7880
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+      NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL:-http://localhost:3001}
+      NEXT_PUBLIC_LIVEKIT_URL: ${NEXT_PUBLIC_LIVEKIT_URL:-ws://localhost:7880}
+      NEXT_PUBLIC_ENABLE_ERUDA: ${NEXT_PUBLIC_ENABLE_ERUDA:-false}
+      NEXT_PUBLIC_AUTH_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_AUTH_GOOGLE_CLIENT_ID:-}
+      NEXT_PUBLIC_AUTH_APPLE_CLIENT_ID: ${NEXT_PUBLIC_AUTH_APPLE_CLIENT_ID:-}
+      NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN: ${NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN:-}
+      NEXT_PUBLIC_POSTHOG_HOST: ${NEXT_PUBLIC_POSTHOG_HOST:-}
+      DEV_LAN_IP: ${DEV_LAN_IP:-}
+      DEV_ALLOWED_ORIGINS: ${DEV_ALLOWED_ORIGINS:-}
       NEXT_TELEMETRY_DISABLED: '1'
       WATCHPACK_POLLING: 'true'
     command:
@@ -159,16 +180,19 @@ services:
         '--hostname',
         '0.0.0.0',
         '--port',
-        '4300',
+        '${WEB_PORT:-4300}',
       ]
     ports:
-      - '4300:4300'
+      - '${WEB_HOST_PORT:-4300}:${WEB_PORT:-4300}'
     depends_on:
       deps:
         condition: service_completed_successfully
     healthcheck:
       test:
-        ['CMD-SHELL', 'wget -qO- http://127.0.0.1:4300/ >/dev/null || exit 1']
+        [
+          'CMD-SHELL',
+          'wget -qO- http://127.0.0.1:$${WEB_PORT:-4300}/ >/dev/null || exit 1',
+        ]
       interval: 5s
       timeout: 3s
       retries: 12

@@ -1,4 +1,5 @@
-import { StoreIapVerifier } from './iap-verifier';
+import { DisabledIapVerifier, StoreIapVerifier } from './iap-verifier';
+import { EconomyErrors } from '../economy.errors';
 import { IapProvider } from '../entities/iap.entities';
 
 import type { ConfigService } from '@nestjs/config';
@@ -56,5 +57,17 @@ describe('StoreIapVerifier Apple boundary', () => {
         'diamonds-100',
       ),
     ).rejects.toThrow('Apple store API lỗi 503');
+  });
+});
+
+describe('DisabledIapVerifier', () => {
+  it('từ chối trước khi có thể tạo ledger side effect', async () => {
+    await expect(
+      new DisabledIapVerifier().verify(
+        IapProvider.Google,
+        { purchaseToken: 'must-not-be-used' },
+        'diamonds-100',
+      ),
+    ).rejects.toMatchObject({ code: EconomyErrors.IAP_DISABLED });
   });
 });

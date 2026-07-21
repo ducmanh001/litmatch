@@ -10,6 +10,7 @@ import { SchedulerRegistry } from '@nestjs/schedule';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
+import { ManagedInterval } from '../../../common/scheduling/managed-interval';
 import type { CoreApiEnv } from '../../../config/env.validation';
 import {
   ANDROID_PUBLISHER_API_BASE,
@@ -34,7 +35,7 @@ const REFUND_POLL_BATCH = 200;
 /** maxResults tối đa của Google Voided Purchases API. */
 const VOIDED_PURCHASES_PAGE_SIZE = 1000;
 
-export interface RefundPollReport {
+interface RefundPollReport {
   checked: number;
   refunded: number;
 }
@@ -58,6 +59,7 @@ export class IapRefundPollService
   implements OnApplicationBootstrap, OnApplicationShutdown
 {
   private readonly logger = new Logger(IapRefundPollService.name);
+  private readonly job = new ManagedInterval();
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
@@ -69,21 +71,19 @@ export class IapRefundPollService
   onApplicationBootstrap(): void {
     if (!this.config.getOrThrow('ECONOMY_REFUND_POLL_ENABLED', { infer: true }))
       return;
-    const interval = setInterval(
-      () =>
-        void this.runOnce().catch((err) =>
-          this.logger.error({ err: `${err}` }, 'Refund poll job lỗi'),
-        ),
-      this.config.getOrThrow('ECONOMY_REFUND_POLL_INTERVAL_MS', {
+    this.job.start(this.scheduler, {
+      jobName: JOB,
+      intervalMs: this.config.getOrThrow('ECONOMY_REFUND_POLL_INTERVAL_MS', {
         infer: true,
       }),
-    );
-    this.scheduler.addInterval(JOB, interval);
+      task: () => this.runOnce(),
+      logger: this.logger,
+      errorMessage: 'Refund poll job lỗi',
+    });
   }
 
   onApplicationShutdown(): void {
-    if (this.scheduler.doesExist('interval', JOB))
-      this.scheduler.deleteInterval(JOB);
+    this.job.stop();
   }
 
   async runOnce(batchSize = REFUND_POLL_BATCH): Promise<RefundPollReport> {

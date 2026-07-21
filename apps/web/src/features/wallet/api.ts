@@ -6,7 +6,6 @@ import type { ApiSchema } from '@litmatch/api-client';
 
 export type WalletDto = ApiSchema<'WalletDto'>;
 export type IapProductDto = ApiSchema<'IapProductDto'>;
-export type VipPlanDto = ApiSchema<'VipPlanDto'>;
 
 export const walletKeys = {
   wallet: ['wallet', 'me'] as const,

@@ -7,13 +7,13 @@ import { MatchType } from './match-ticket.entity';
 export enum MatchSessionStatus {
   PendingConfirm = 'pending_confirm',
   Confirmed = 'confirmed',
+  Ended = 'ended',
   Expired = 'expired',
 }
 
 /**
- * 1 cặp đã được matcher ghép, chờ 2 bên confirm (docs/services/matching-service.md § 5).
- * Quá MATCHING_CONFIRM_TIMEOUT_SECONDS mà chưa đủ 2 confirm → sweeper expire session:
- * bên ĐÃ confirm được requeue bằng ticket MỚI, bên chưa confirm bị expire.
+ * Flow mới tạo session đã confirmed ngay khi matcher tìm được cặp. `PendingConfirm` được giữ để
+ * sweeper/confirm endpoint hoàn tất an toàn các session sinh ra từ phiên bản cũ.
  */
 @Entity({ name: 'match_sessions' })
 @Index('idx_match_sessions_status_created', ['status', 'createdAt'])

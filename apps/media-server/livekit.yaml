@@ -12,18 +12,14 @@ rtc:
   # Không set thì LiveKit tự lấy IP nội bộ của container (Docker bridge network) làm ICE
   # candidate — thiết bị ngoài máy dev (điện thoại test qua LAN) không bao giờ route tới được,
   # dù WebSocket signaling vẫn "connect" bình thường (audio câm, không phải lỗi kết nối rõ ràng).
-  # Cần test qua LAN: thêm `node_ip: <IP LAN của máy bạn>` ở đây CỤC BỘ, KHÔNG commit dòng đó —
-  # IP LAN khác nhau theo máy/mạng của từng người, hardcode vào file chung sẽ gãy dev của người
-  # khác (`git status` sẽ thấy file này bị sửa — nhớ không add/commit khi xong việc test LAN).
+  # Cần test qua LAN: set DEV_LAN_IP trong .env; Compose truyền giá trị qua NODE_IP native.
 redis:
   address: host.docker.internal:6379
-keys:
-  # DEV ONLY — sinh key thật bằng `livekit-server generate-keys` khi deploy
-  devkey: devsecret_change_me_0123456789abcdef
+# Key/secret được inject bằng LIVEKIT_KEYS từ .env, không lưu trong YAML tracked.
 # Webhook về core-api — mỗi module lọc theo prefix room của mình (call-* / party-*),
 # chữ ký JWT ký bằng api_key được verify ở controller trước khi tin (docs/10 § Calling/Party Room)
 webhook:
-  api_key: devkey
+  # Key ký webhook được inject bằng LIVEKIT_WEBHOOK_API_KEY từ cùng LIVEKIT_API_KEY.
   urls:
     # PHẢI khớp API_GLOBAL_PREFIX ('api/v1', core-api/src/app/openapi.ts) — thiếu prefix này
     # khiến LiveKit POST 404 âm thầm, call không bao giờ chuyển active/startedAt (phát hiện qua

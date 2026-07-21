@@ -44,7 +44,7 @@ import type Redis from 'ioredis';
 import type {
   CursorPage,
   CursorPageQueryDto,
-  MatchMatchedEventData,
+  MatchConfirmedEventData,
   RealtimeEnvelope,
 } from '@litmatch/common-dtos';
 import type { EntityManager } from 'typeorm';
@@ -61,10 +61,10 @@ function inviteRateLimitKey(userId: string): string {
 
 /**
  * CTA "mời Voice/Soul Match" (W4, docs/services/matching-service.md § Invite). Accept tạo trực
- * tiếp `MatchTicket`(status=Matched)/`MatchSession`(PendingConfirm) — bỏ qua hàng đợi shard,
+ * tiếp `MatchTicket`/`MatchSession` đã confirmed — bỏ qua hàng đợi shard,
  * tái dùng NGUYÊN các bước validate của `MatcherWorkerService.tryPair` (canPair, invariant
  * 1-user-1-queue qua `uq_match_tickets_active_user`) — từ đó luồng y hệt auto-match
- * (`confirmTicket` → Soul Match/Calling không đổi gì). KHÔNG check gender preference lúc accept
+ * (Soul Match/Calling vào phòng ngay). KHÔNG check gender preference lúc accept
  * — đây là consent trực tiếp (invitee chủ động chấp nhận ĐÚNG người này), khác auto-match nặc
  * danh cần lọc trước khi biết đối phương là ai.
  */
@@ -268,7 +268,7 @@ export class InviteService {
   }
 
   /**
-   * Accept — tạo trực tiếp `MatchTicket`(Matched)/`MatchSession`(PendingConfirm), bỏ qua hàng
+   * Accept — tạo trực tiếp ticket/session đã confirmed, bỏ qua hàng
    * đợi shard. Idempotent qua `inviteAcceptIdempotencyKey` — accept lặp lại (retry mạng) đọc lại
    * đúng kết quả cũ thay vì lỗi (docs/05 § 5.10).
    */
@@ -355,6 +355,7 @@ export class InviteService {
         invitee,
       );
 
+      const confirmedAt = new Date();
       const session = await manager.save(
         manager.create(MatchSession, {
           matchType: invite.matchType,
@@ -362,11 +363,15 @@ export class InviteService {
           userBId: invite.inviteeUserId,
           ticketAId: ticketInviter.id,
           ticketBId: ticketInvitee.id,
-          status: MatchSessionStatus.PendingConfirm,
+          status: MatchSessionStatus.Confirmed,
+          confirmedAAt: confirmedAt,
+          confirmedBAt: confirmedAt,
         }),
       );
       ticketInviter.sessionId = session.id;
       ticketInvitee.sessionId = session.id;
+      ticketInviter.status = MatchTicketStatus.Confirmed;
+      ticketInvitee.status = MatchTicketStatus.Confirmed;
       await manager.save([ticketInviter, ticketInvitee]);
 
       invite.status = MatchInviteStatus.Accepted;
@@ -390,8 +395,7 @@ export class InviteService {
     });
 
     if (matchedPair) {
-      // Publish CÙNG event auto-match dùng (`match.matched`) — client không cần logic riêng cho
-      // luồng invite, cùng 1 chỗ lắng nghe rồi gọi confirmTicket() như bình thường.
+      // Publish cùng event auto-match dùng; client refetch rồi vào phòng ngay.
       const pair = matchedPair as Array<{
         userId: string;
         ticketId: string;
@@ -399,8 +403,8 @@ export class InviteService {
       }>;
       await Promise.all(
         pair.map(({ userId, ticketId, sessionId }) => {
-          const envelope: RealtimeEnvelope<MatchMatchedEventData> = {
-            event: RealtimeEvents.MatchMatched,
+          const envelope: RealtimeEnvelope<MatchConfirmedEventData> = {
+            event: RealtimeEvents.MatchConfirmed,
             data: { ticketId, sessionId },
           };
           return publishRealtimeEvent(

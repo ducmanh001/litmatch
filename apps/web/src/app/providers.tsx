@@ -3,6 +3,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
+import {
+  ProductAnalyticsConsentBanner,
+  ProductAnalyticsIdentity,
+} from '../shared/analytics/product-analytics-components';
+import { resetProductAnalyticsUser } from '../shared/analytics/product-analytics';
 import { tokenStore } from '../shared/api/client';
 
 import type { ReactNode } from 'react';
@@ -25,11 +30,18 @@ export function Providers({ children }: { children: ReactNode }) {
   useEffect(
     () =>
       tokenStore.subscribe(() => {
-        if (tokenStore.getStatus() === 'unauthenticated') queryClient.clear();
+        if (tokenStore.getStatus() === 'unauthenticated') {
+          queryClient.clear();
+          resetProductAnalyticsUser();
+        }
       }),
     [queryClient],
   );
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <ProductAnalyticsIdentity />
+      {children}
+      <ProductAnalyticsConsentBanner />
+    </QueryClientProvider>
   );
 }

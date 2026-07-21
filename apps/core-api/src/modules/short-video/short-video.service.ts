@@ -60,6 +60,7 @@ export class ShortVideoService {
     dto: CreateUploadIntentDto,
     idempotencyKey: string,
   ): Promise<{ video: Video; uploadUrl: string }> {
+    this.assertUploadEnabled();
     const captionMaxLength = this.config.getOrThrow(
       'VIDEO_CAPTION_MAX_LENGTH',
       { infer: true },
@@ -112,6 +113,7 @@ export class ShortVideoService {
     user: AuthenticatedUser,
     videoId: string,
   ): Promise<Video> {
+    this.assertUploadEnabled();
     const video = await this.getOwnedOrThrow(user, videoId);
     const toProcessing = await this.transition(
       videoId,
@@ -172,6 +174,15 @@ export class ShortVideoService {
       );
     }
     return video;
+  }
+
+  private assertUploadEnabled(): void {
+    if (this.config.getOrThrow('VIDEO_UPLOAD_ENABLED', { infer: true })) return;
+    throw new DomainException(
+      ShortVideoErrors.VIDEO_UPLOAD_DISABLED,
+      'Upload video chưa khả dụng trên môi trường này',
+      HttpStatus.FORBIDDEN,
+    );
   }
 
   async listPublished(

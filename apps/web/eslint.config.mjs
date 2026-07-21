@@ -13,7 +13,7 @@ export default [
   ...fixupConfigRules(nx.configs['flat/react-typescript']),
   ...baseConfig,
   {
-    ignores: ['.next/**/*'],
+    ignores: ['.next/**/*', '.open-next/**/*'],
   },
   {
     files: ['**/*.ts', '**/*.js'],

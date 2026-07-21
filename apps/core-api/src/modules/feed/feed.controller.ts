@@ -35,6 +35,7 @@ import {
   ApiIdempotencyKeyHeader,
   IdempotencyKey,
 } from '../../common/decorators/idempotency-key.decorator';
+import { PublicProfileDto, UserService } from '../user';
 
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 
@@ -42,7 +43,10 @@ import type { AuthenticatedUser } from '../../common/decorators/current-user.dec
 @ApiBearerAuth()
 @Controller('feed')
 export class FeedController {
-  constructor(private readonly feedService: FeedService) {}
+  constructor(
+    private readonly feedService: FeedService,
+    private readonly userService: UserService,
+  ) {}
 
   @HttpPost('posts')
   @ApiIdempotencyKeyHeader()
@@ -55,9 +59,8 @@ export class FeedController {
     @Body() dto: CreatePostDto,
     @IdempotencyKey() idempotencyKey: string,
   ): Promise<PostDto> {
-    return PostDto.from(
-      await this.feedService.createPost(user, dto, idempotencyKey),
-    );
+    const post = await this.feedService.createPost(user, dto, idempotencyKey);
+    return PostDto.from(post, await this.getAuthor(post.authorUserId));
   }
 
   @Get('posts')
@@ -71,7 +74,8 @@ export class FeedController {
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: CursorPageQueryDto,
   ): Promise<PostsPageDto> {
-    return PostsPageDto.from(await this.feedService.listFeed(user, query));
+    const page = await this.feedService.listFeed(user, query);
+    return PostsPageDto.from(page, await this.getAuthors(page.items));
   }
 
   @Get('users/:userId/posts')
@@ -86,9 +90,8 @@ export class FeedController {
     @Param('userId', ParseUUIDPipe) userId: string,
     @Query() query: CursorPageQueryDto,
   ): Promise<PostsPageDto> {
-    return PostsPageDto.from(
-      await this.feedService.listUserTimeline(user, userId, query),
-    );
+    const page = await this.feedService.listUserTimeline(user, userId, query);
+    return PostsPageDto.from(page, await this.getAuthors(page.items));
   }
 
   @Get('posts/:postId')
@@ -100,7 +103,8 @@ export class FeedController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('postId', ParseUUIDPipe) postId: string,
   ): Promise<PostDto> {
-    return PostDto.from(await this.feedService.getPostOrThrow(user, postId));
+    const post = await this.feedService.getPostOrThrow(user, postId);
+    return PostDto.from(post, await this.getAuthor(post.authorUserId));
   }
 
   @Delete('posts/:postId')
@@ -123,9 +127,8 @@ export class FeedController {
     @Param('postId', ParseUUIDPipe) postId: string,
     @Body() dto: CreateCommentDto,
   ): Promise<CommentDto> {
-    return CommentDto.from(
-      await this.feedService.createComment(user, postId, dto),
-    );
+    const comment = await this.feedService.createComment(user, postId, dto);
+    return CommentDto.from(comment, await this.getAuthor(comment.authorUserId));
   }
 
   @Get('posts/:postId/comments')
@@ -137,9 +140,8 @@ export class FeedController {
     @Param('postId', ParseUUIDPipe) postId: string,
     @Query() query: CursorPageQueryDto,
   ): Promise<CommentsPageDto> {
-    return CommentsPageDto.from(
-      await this.feedService.listComments(user, postId, query),
-    );
+    const page = await this.feedService.listComments(user, postId, query);
+    return CommentsPageDto.from(page, await this.getAuthors(page.items));
   }
 
   @Delete('comments/:commentId')
@@ -182,5 +184,21 @@ export class FeedController {
     @Param('postId', ParseUUIDPipe) postId: string,
   ): Promise<ReactionStatusDto> {
     return this.feedService.reactionStatus(user, postId);
+  }
+
+  private async getAuthor(userId: string): Promise<PublicProfileDto> {
+    return PublicProfileDto.from(await this.userService.getByIdOrThrow(userId));
+  }
+
+  /** Batch load dùng chung cho một page để không sinh N request author ở client/server. */
+  private async getAuthors(
+    items: ReadonlyArray<{ authorUserId: string }>,
+  ): Promise<Map<string, PublicProfileDto>> {
+    const users = await this.userService.findByIds(
+      items.map((item) => item.authorUserId),
+    );
+    return new Map(
+      users.map((author) => [author.id, PublicProfileDto.from(author)]),
+    );
   }
 }

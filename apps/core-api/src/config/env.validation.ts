@@ -29,11 +29,14 @@ export interface CoreApiEnv {
   AUTH_OTP_MAX_ATTEMPTS: number;
   AUTH_OTP_REQUESTS_PER_HOUR: number;
   AUTH_OTP_PEPPER: string;
+  AUTH_PHONE_OTP_ENABLED: boolean;
   AUTH_MIN_AGE: number;
   AUTH_GOOGLE_CLIENT_ID: string;
   AUTH_APPLE_CLIENT_ID: string;
+  AUTH_CROSS_ORIGIN_DEV: boolean;
+  AUTH_COOKIE_SAME_SITE: 'strict' | 'none';
   USER_DEFAULT_AVATAR_ID: string;
-  ECONOMY_IAP_VERIFIER: 'dev' | 'store';
+  ECONOMY_IAP_VERIFIER: 'dev' | 'store' | 'disabled';
   ECONOMY_APPLE_SHARED_SECRET: string;
   ECONOMY_GOOGLE_PACKAGE_NAME: string;
   ECONOMY_GOOGLE_SA_EMAIL: string;
@@ -100,7 +103,7 @@ export interface CoreApiEnv {
   SAFETY_TRUST_PENALTY_PER_REPORT: number;
   SAFETY_TRUST_PENALTY_DAILY_CAP: number;
   SAFETY_TRUST_SCORE_FLOOR: number;
-  NOTIFICATION_PUSH_PROVIDER: 'dev' | 'fcm';
+  NOTIFICATION_PUSH_PROVIDER: 'dev' | 'fcm' | 'disabled';
   MOVIE_MATCH_URL_MAX_LENGTH: number;
   MOVIE_MATCH_ALLOWED_VIDEO_HOSTS: string;
   MOVIE_MATCH_ANON_VIDEO_URLS: string;
@@ -126,6 +129,7 @@ export interface CoreApiEnv {
   STORY_TTL_HOURS: number;
   STORY_SWEEPER_INTERVAL_MS: number;
   VIDEO_CAPTION_MAX_LENGTH: number;
+  VIDEO_UPLOAD_ENABLED: boolean;
   VIDEO_MODERATION_MODE: 'pre' | 'post';
   VIDEO_QUALIFIED_VIEW_MIN_MS: number;
   VIDEO_UPLOAD_TIMEOUT_SECONDS: number;
@@ -161,7 +165,7 @@ export const coreApiEnvSchema = Joi.object({
     .uri({ scheme: ['postgres', 'postgresql'] })
     .required(),
   REDIS_URL: Joi.string()
-    .uri({ scheme: ['redis'] })
+    .uri({ scheme: ['redis', 'rediss'] })
     .default('redis://localhost:6379'),
   KAFKA_BROKERS: Joi.string().default('localhost:9092'),
 
@@ -173,13 +177,18 @@ export const coreApiEnvSchema = Joi.object({
   AUTH_OTP_MAX_ATTEMPTS: Joi.number().integer().min(1).default(5),
   AUTH_OTP_REQUESTS_PER_HOUR: Joi.number().integer().min(1).default(5),
   AUTH_OTP_PEPPER: Joi.string().min(16).required(),
+  AUTH_PHONE_OTP_ENABLED: Joi.boolean().default(true),
   AUTH_MIN_AGE: Joi.number().integer().min(13).default(18),
   AUTH_GOOGLE_CLIENT_ID: Joi.string().allow('').default(''),
   AUTH_APPLE_CLIENT_ID: Joi.string().allow('').default(''),
+  AUTH_CROSS_ORIGIN_DEV: Joi.boolean().default(false),
+  AUTH_COOKIE_SAME_SITE: Joi.string().valid('strict', 'none').default('strict'),
 
   USER_DEFAULT_AVATAR_ID: Joi.string().default('default-01'),
 
-  ECONOMY_IAP_VERIFIER: Joi.string().valid('dev', 'store').default('dev'),
+  ECONOMY_IAP_VERIFIER: Joi.string()
+    .valid('dev', 'store', 'disabled')
+    .default('dev'),
   ECONOMY_APPLE_SHARED_SECRET: Joi.string().allow('').default(''),
   ECONOMY_GOOGLE_PACKAGE_NAME: Joi.string().allow('').default(''),
   ECONOMY_GOOGLE_SA_EMAIL: Joi.string().allow('').default(''),
@@ -354,7 +363,9 @@ export const coreApiEnvSchema = Joi.object({
 
   // Notification — Giai đoạn 4 (docs/services/notification-service.md § 4)
   // 'dev' (no-op, chặn cứng ở production) — chưa có FCM/APNs thật, giống ECONOMY_IAP_VERIFIER
-  NOTIFICATION_PUSH_PROVIDER: Joi.string().valid('dev', 'fcm').default('dev'),
+  NOTIFICATION_PUSH_PROVIDER: Joi.string()
+    .valid('dev', 'fcm', 'disabled')
+    .default('dev'),
 
   // Movie Match — Giai đoạn 5 (docs/services/movie-match-service.md § 8)
   MOVIE_MATCH_URL_MAX_LENGTH: Joi.number().integer().min(1).default(2048),
@@ -445,6 +456,7 @@ export const coreApiEnvSchema = Joi.object({
 
   // Video ngắn — W5, hướng Momo (docs/services/short-video-service.md)
   VIDEO_CAPTION_MAX_LENGTH: Joi.number().integer().min(1).default(500),
+  VIDEO_UPLOAD_ENABLED: Joi.boolean().default(true),
   // pre = duyệt trước khi public (dating app VN, mặc định an toàn); post = public ngay, duyệt sau
   VIDEO_MODERATION_MODE: Joi.string().valid('pre', 'post').default('pre'),
   // Watch-time tối thiểu để tính 1 view "qualified" — cộng Video.viewCount đúng 1 lần khi vượt ngưỡng

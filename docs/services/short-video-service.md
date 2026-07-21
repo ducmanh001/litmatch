@@ -40,9 +40,11 @@ thừa; conditional UPDATE đủ an toàn và đơn giản hơn nhiều — cùn
   `VIDEO_MODERATION_MODE`. Dev port đồng bộ (trả kết quả ngay) nên toàn bộ chuỗi chạy trong 1 lần
   gọi — vendor thật (Cloudflare Stream/Mux, ADR sau) là bất đồng bộ (webhook), sẽ tách bước
   transcode thành handler webhook riêng mà KHÔNG đổi state machine.
-- 2 port `VideoStoragePort`/`VideoTranscodePort` + `Dev*Provider` chặn cứng production
-  (`OnApplicationBootstrap` throw nếu `NODE_ENV=production`) — cùng pattern `DevSmsProvider`/
-  `DevIapVerifier`. Vendor thật là quyết định ADR riêng (đã hỏi lại người dùng 2026-07-14: ưu
+- 2 port `VideoStoragePort`/`VideoTranscodePort` + `Dev*Provider`. Khi
+  `VIDEO_UPLOAD_ENABLED=false`, service chặn create/finalize trước DB/storage side effect và
+  production được boot với capability tắt. Nếu flag bật dưới `NODE_ENV=production`, dev provider
+  fail-fast lúc bootstrap; mỗi method port cũng tự chặn phòng bypass — cùng pattern
+  `DevSmsProvider`/`DevIapVerifier`. Vendor thật là quyết định ADR riêng (đã hỏi lại người dùng 2026-07-14: ưu
   tiên vendor gộp Cloudflare Stream/Mux hơn tự ráp S3+transcoder).
 
 ## 3. View counting — chống đếm đôi, self-view không tính
@@ -60,6 +62,13 @@ giờ ghi `VideoView`.
 follow riêng). Chưa có bạn nào → trang rỗng ngay, không query videos. Mặc định
 `feed=for_you` = mọi video published (hành vi cũ, không đổi). Tặng quà cho tác giả video: xem
 [gift-service.md § 3](./gift-service.md).
+
+## 3c. Tác giả trong response video/comment
+
+Mỗi `VideoDto` và `VideoCommentDto` trả thêm `author: PublicProfileDto` (`id`, nickname, avatar,
+gender, interests) bên cạnh `authorUserId`. Controller batch-load tác giả theo một trang qua User
+module để web không gọi riêng `GET /users/:id` cho từng video/comment. DTO chỉ dùng dữ liệu profile
+đã công khai, không lộ ngày sinh, region, seeking preference, status hay trust score.
 
 ## 4. Ranking v1 — derived, có fallback
 

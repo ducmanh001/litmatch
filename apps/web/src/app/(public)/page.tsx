@@ -1,5 +1,8 @@
+'use client';
+
 import Link from 'next/link';
 
+import { useTranslation } from '../../shared/i18n/messages';
 import { FeedIcon, MatchIcon, MicIcon, PartyIcon } from '../../shared/ui/icons';
 
 import type { SVGProps } from 'react';
@@ -61,24 +64,6 @@ const FEATURES = [
   },
 ] as const;
 
-const STEPS = [
-  {
-    title: 'Ghép ngẫu nhiên',
-    description:
-      'Vào hàng chờ, hệ thống ghép bạn với một người lạ ẩn danh theo bộ lọc tuổi/giới tính bạn chọn.',
-  },
-  {
-    title: 'Trò chuyện thử',
-    description:
-      'Chat hoặc gọi thoại trong thời gian giới hạn — đủ để cảm nhận trước khi quyết định.',
-  },
-  {
-    title: 'Cả hai cùng thích',
-    description:
-      'Nếu cả hai chọn "Thích", hồ sơ thật được mở khoá và các bạn chính thức thành bạn bè.',
-  },
-] as const;
-
 const STATS = [
   { value: '200k+', label: 'lượt ghép mỗi ngày' },
   { value: '500k+', label: 'người dùng' },
@@ -88,6 +73,34 @@ const STATS = [
 
 /** Landing SSR — vùng công khai duy nhất cần SEO ở V1 (docs/12 § 12.5), đúng layouts/web/index.html. */
 export default function LandingPage() {
+  const t = useTranslation();
+  const featureDescriptions = [
+    t('landing.featureSoul'),
+    t('landing.featureVoice'),
+    t('landing.featureParty'),
+    t('landing.featureFeed'),
+    t('landing.featureVip'),
+  ];
+  const steps = [
+    {
+      title: t('landing.stepOneTitle'),
+      description: t('landing.stepOneDescription'),
+    },
+    {
+      title: t('landing.stepTwoTitle'),
+      description: t('landing.stepTwoDescription'),
+    },
+    {
+      title: t('landing.stepThreeTitle'),
+      description: t('landing.stepThreeDescription'),
+    },
+  ];
+  const statLabels = [
+    t('landing.statMatches'),
+    t('landing.statUsers'),
+    t('landing.statRatings'),
+    t('landing.statLocations'),
+  ];
   return (
     <div className="relative">
       <div className="glow pointer-events-none absolute inset-x-0 top-0 h-[500px] overflow-hidden" />
@@ -95,36 +108,34 @@ export default function LandingPage() {
       <section className="relative z-10 mx-auto grid max-w-6xl grid-cols-1 items-center gap-14 px-6 pb-16 pt-14 md:grid-cols-2 md:pb-24 md:pt-20">
         <div>
           <span className="mb-6 inline-block rounded-full border border-iris/20 bg-iris/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-irisl">
-            Ra mắt 2026
+            {t('landing.badge')}
           </span>
           <h1 className="font-display mb-6 text-4xl font-semibold leading-[1.12] tracking-tight md:text-6xl">
-            Ẩn danh trước,
+            {t('landing.titleBefore')}
             <br />
             <em className="bg-gradient-to-br from-irisl to-aqual bg-clip-text font-medium not-italic text-transparent">
-              chân thật sau.
+              {t('landing.titleAfter')}
             </em>
           </h1>
           <p className="mb-8 max-w-md text-lg leading-relaxed text-slate-600 dark:text-slate-400">
-            Trò chuyện, gọi thoại, hay lên mic trong phòng voice cùng người lạ
-            thú vị quanh bạn — không cần ảnh thật, không áp lực ngoại hình. Hợp
-            nhau rồi mới mở khoá kết bạn thật.
+            {t('landing.intro')}
           </p>
           <div className="mb-7 flex flex-wrap gap-4">
             <Link
               href="/login"
               className="rounded-full bg-irisl px-7 py-3.5 font-bold text-white shadow-xl shadow-iris/30 transition hover:-translate-y-0.5"
             >
-              Bắt đầu miễn phí
+              {t('landing.start')}
             </Link>
             <a
               href="#how"
               className="rounded-full border border-black/10 px-7 py-3.5 font-bold transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
             >
-              Xem cách hoạt động
+              {t('landing.viewHow')}
             </a>
           </div>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Hơn 200.000 lượt ghép ẩn danh diễn ra mỗi ngày.
+            {t('landing.dailyMatches')}
           </p>
         </div>
 
@@ -149,16 +160,16 @@ export default function LandingPage() {
               </span>
               <span className="absolute bottom-4 left-4 flex items-center gap-1.5 rounded-full bg-black/35 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur">
                 <MicIcon width={14} height={14} />
-                Voice Match khả dụng
+                {t('landing.voiceAvailable')}
               </span>
             </div>
             <div className="p-5">
               <h3 className="text-lg font-bold">Linh, 26</h3>
               <p className="font-mono mt-1 text-xs text-slate-500 dark:text-slate-400">
-                3 km · đang hoạt động
+                3 km · {t('landing.active')}
               </p>
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                Yêu du lịch, mê cà phê sáng sớm.
+                {t('landing.profileBio')}
               </p>
               <div className="mt-3 flex gap-2">
                 {['Du lịch', 'Cà phê', 'Indie'].map((tag) => (
@@ -181,14 +192,14 @@ export default function LandingPage() {
       >
         <div className="mb-12 max-w-xl">
           <span className="text-xs font-bold uppercase tracking-widest text-irisl">
-            Tính năng
+            {t('public.features')}
           </span>
           <h2 className="font-display mt-3 text-3xl font-semibold md:text-4xl">
-            Nhiều cách để tìm đúng người
+            {t('landing.featureHeading')}
           </h2>
         </div>
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {FEATURES.map(({ title, description, Icon, tint }) => (
+          {FEATURES.map(({ title, Icon, tint }, index) => (
             <div
               key={title}
               className="rounded-2xl border border-black/5 bg-white p-6 transition hover:border-iris/40 dark:border-white/10 dark:bg-surf dark:hover:border-irisl/40"
@@ -200,17 +211,16 @@ export default function LandingPage() {
               </div>
               <h3 className="mb-2 text-base font-bold">{title}</h3>
               <p className="text-sm leading-relaxed text-slate-500 dark:text-slate-400">
-                {description}
+                {featureDescriptions[index]}
               </p>
             </div>
           ))}
           <div className="flex flex-col justify-center rounded-2xl bg-irisl p-6 text-white">
             <h3 className="font-display mb-2 text-lg font-semibold italic">
-              Ẩn danh không có nghĩa là không an toàn.
+              {t('landing.safetyTitle')}
             </h3>
             <p className="text-sm leading-relaxed text-white/85">
-              Báo cáo, chặn, và bộ lọc tuổi/giới tính đi kèm mọi hình thức ghép
-              đôi.
+              {t('landing.safetyDescription')}
             </p>
           </div>
         </div>
@@ -222,14 +232,14 @@ export default function LandingPage() {
       >
         <div className="mx-auto mb-12 max-w-xl text-center">
           <span className="text-xs font-bold uppercase tracking-widest text-irisl">
-            Cách hoạt động
+            {t('public.howItWorks')}
           </span>
           <h2 className="font-display mt-3 text-3xl font-semibold md:text-4xl">
-            Ba bước đơn giản
+            {t('landing.howHeading')}
           </h2>
         </div>
         <div className="grid gap-10 md:grid-cols-3">
-          {STEPS.map((step, index) => (
+          {steps.map((step, index) => (
             <div key={step.title} className="text-center">
               <div className="font-display mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-full border border-black/5 bg-white text-lg italic text-irisl dark:border-white/10 dark:bg-surf">
                 {index + 1}
@@ -245,13 +255,13 @@ export default function LandingPage() {
 
       <section className="relative z-10 border-t border-black/5 bg-white/50 dark:border-white/5 dark:bg-surf/30">
         <div className="mx-auto grid max-w-6xl grid-cols-2 gap-8 px-6 py-12 text-center md:grid-cols-4">
-          {STATS.map((stat) => (
+          {STATS.map((stat, index) => (
             <div key={stat.label}>
               <p className="font-display text-3xl font-semibold text-irisl">
                 {stat.value}
               </p>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                {stat.label}
+                {statLabels[index]}
               </p>
             </div>
           ))}
@@ -260,16 +270,16 @@ export default function LandingPage() {
 
       <section className="relative z-10 mx-auto max-w-4xl px-6 py-16 text-center md:py-24">
         <h2 className="font-display mb-5 text-3xl font-semibold md:text-4xl">
-          Sẵn sàng ẩn danh làm quen?
+          {t('landing.ctaTitle')}
         </h2>
         <p className="mb-8 text-slate-500 dark:text-slate-400">
-          Miễn phí tạo hồ sơ. Không cần thẻ thanh toán.
+          {t('landing.ctaDescription')}
         </p>
         <Link
           href="/login"
           className="inline-block rounded-full bg-irisl px-8 py-4 font-bold text-white shadow-xl shadow-iris/30 transition hover:-translate-y-0.5"
         >
-          Đăng ký miễn phí
+          {t('public.signUp')}
         </Link>
       </section>
     </div>

@@ -7,6 +7,9 @@ export const MatchingErrors = {
   TICKET_FORBIDDEN: 'MATCHING_TICKET_FORBIDDEN',
   /** Cùng Idempotency-Key nhưng nội dung request khác (docs/05 § 5.10). */
   TICKET_IDEMPOTENCY_CONFLICT: 'MATCHING_TICKET_IDEMPOTENCY_CONFLICT',
+  /** Session không tồn tại hoặc caller không phải một trong hai thành viên (gộp, chống oracle). */
+  SESSION_NOT_FOUND: 'MATCHING_SESSION_NOT_FOUND',
+  SESSION_NOT_CALLABLE: 'MATCHING_SESSION_NOT_CALLABLE',
   SESSION_NOT_PENDING: 'MATCHING_SESSION_NOT_PENDING',
   SPEEDUP_RATE_LIMITED: 'MATCHING_SPEEDUP_RATE_LIMITED',
   /** User bị ban không được vào hàng đợi (re-verify lại lần nữa tại thời điểm ghép). */

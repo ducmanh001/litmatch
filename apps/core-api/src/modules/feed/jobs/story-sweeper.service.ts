@@ -9,6 +9,7 @@ import { SchedulerRegistry } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { LessThanOrEqual, Repository } from 'typeorm';
 
+import { ManagedInterval } from '../../../common/scheduling/managed-interval';
 import { Story } from '../entities/story.entity';
 
 import type { CoreApiEnv } from '../../../config/env.validation';
@@ -26,7 +27,7 @@ export class StorySweeperService
   implements OnApplicationBootstrap, OnApplicationShutdown
 {
   private readonly logger = new Logger(StorySweeperService.name);
-  private running = false;
+  private readonly job = new ManagedInterval();
 
   constructor(
     @InjectRepository(Story) private readonly storyRepo: Repository<Story>,
@@ -35,30 +36,25 @@ export class StorySweeperService
   ) {}
 
   onApplicationBootstrap(): void {
-    const interval = setInterval(
-      () =>
-        void this.runOnce().catch((err) =>
-          this.logger.error({ err: `${err}` }, 'Story sweeper lỗi'),
-        ),
-      this.config.getOrThrow('STORY_SWEEPER_INTERVAL_MS', { infer: true }),
-    );
-    this.scheduler.addInterval(STORY_SWEEPER_JOB, interval);
+    this.job.start(this.scheduler, {
+      jobName: STORY_SWEEPER_JOB,
+      intervalMs: this.config.getOrThrow('STORY_SWEEPER_INTERVAL_MS', {
+        infer: true,
+      }),
+      task: () => this.runOnce(),
+      logger: this.logger,
+      errorMessage: 'Story sweeper lỗi',
+    });
   }
 
   onApplicationShutdown(): void {
-    if (this.scheduler.doesExist('interval', STORY_SWEEPER_JOB)) {
-      this.scheduler.deleteInterval(STORY_SWEEPER_JOB);
-    }
+    this.job.stop();
   }
 
   /** 1 tick — public để test/chạy tay. */
   async runOnce(): Promise<void> {
-    if (this.running) return;
-    this.running = true;
-    try {
+    await this.job.runExclusive(async () => {
       await this.storyRepo.delete({ expiresAt: LessThanOrEqual(new Date()) });
-    } finally {
-      this.running = false;
-    }
+    }, undefined);
   }
 }

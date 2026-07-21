@@ -27,6 +27,13 @@ describe('PostDetail', () => {
             data: {
               id: 'post-1',
               authorUserId: 'user-1',
+              author: {
+                id: 'user-1',
+                nickname: 'Mây Nhỏ',
+                gender: 'unknown',
+                avatarId: 'avatar-1',
+                interests: null,
+              },
               content: 'Muốn tìm một người cùng đi xem triển lãm cuối tuần.',
               imageUrl: null,
               audience: 'public',
@@ -37,24 +44,32 @@ describe('PostDetail', () => {
           },
         } as never;
       }
-      if (path === '/api/v1/users/{id}') {
-        return {
-          data: {
-            data: {
-              id: 'user-1',
-              nickname: 'Mây Nhỏ',
-              gender: 'unknown',
-              avatarId: null,
-            },
-          },
-        } as never;
-      }
       if (path === '/api/v1/feed/posts/{postId}/reactions') {
         return { data: { data: { liked: false, likeCount: 4 } } } as never;
       }
       if (path === '/api/v1/feed/posts/{postId}/comments') {
         return {
-          data: { data: { items: [], nextCursor: null } },
+          data: {
+            data: {
+              items: [
+                {
+                  id: 'comment-1',
+                  postId: 'post-1',
+                  authorUserId: 'user-2',
+                  author: {
+                    id: 'user-2',
+                    nickname: 'Nắng',
+                    gender: 'unknown',
+                    avatarId: 'avatar-2',
+                    interests: null,
+                  },
+                  content: 'Mình cũng muốn đi!',
+                  createdAt: new Date().toISOString(),
+                },
+              ],
+              nextCursor: null,
+            },
+          },
         } as never;
       }
       throw new Error(`unexpected GET ${path}`);
@@ -63,6 +78,11 @@ describe('PostDetail', () => {
     renderDetail();
 
     expect(await screen.findByText('Mây Nhỏ')).toBeVisible();
+    expect(await screen.findByText('Nắng')).toBeVisible();
+    expect(screen.getByText('Nắng').closest('a')).toHaveAttribute(
+      'href',
+      '/users/user-2',
+    );
     expect(screen.getByText('Công khai')).toBeVisible();
     expect(
       screen.getByRole('link', {

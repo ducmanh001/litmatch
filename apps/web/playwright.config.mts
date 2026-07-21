@@ -60,7 +60,11 @@ export default defineConfig({
       reuseExistingServer: true,
       cwd: `${workspaceRoot}/apps/web`,
       timeout: 60_000,
-      env: { NEXT_PUBLIC_API_URL: `http://localhost:${E2E_CORE_API_PORT}` },
+      env: {
+        NEXT_PUBLIC_API_URL: `http://localhost:${E2E_CORE_API_PORT}`,
+        // Máy dev/CI có thể có quota inotify thấp; polling giữ E2E độc lập với host limit.
+        WATCHPACK_POLLING: 'true',
+      },
     },
   ],
   // Dùng Google Chrome cài sẵn trên máy (channel: 'chrome') — Playwright tự quản lý Chromium

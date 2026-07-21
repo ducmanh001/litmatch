@@ -1,6 +1,7 @@
 import { randomInt } from 'node:crypto';
 
 import { HttpStatus, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@litmatch/common-exceptions';
 import { DataSource, Repository } from 'typeorm';
@@ -15,6 +16,8 @@ import { AuthIdentity, AuthProvider } from './entities/auth-identity.entity';
 import { OtpService } from './services/otp.service';
 import { SocialVerifierService } from './services/social-verifier';
 import { TokenService } from './services/token.service';
+
+import type { CoreApiEnv } from '../../config/env.validation';
 
 /**
  * Kết quả nội bộ giữa Service ↔ Controller (ADR 0007) — có `refreshToken` plain vì Controller
@@ -40,6 +43,7 @@ export class AuthService {
     private readonly tokenService: TokenService,
     private readonly otpService: OtpService,
     private readonly socialVerifier: SocialVerifierService,
+    private readonly config: ConfigService<CoreApiEnv, true>,
   ) {}
 
   async guestLogin(deviceId: string): Promise<IssuedSession> {
@@ -51,10 +55,12 @@ export class AuthService {
   }
 
   async requestOtp(phone: string): Promise<{ ttlSeconds: number }> {
+    this.assertPhoneOtpEnabled();
     return this.otpService.requestOtp(phone);
   }
 
   async verifyOtpAndLogin(phone: string, code: string): Promise<IssuedSession> {
+    this.assertPhoneOtpEnabled();
     await this.otpService.verifyOtp(phone, code);
     const user = await this.findOrCreateUser(AuthProvider.Phone, phone, {
       isGuest: false,
@@ -155,6 +161,16 @@ export class AuthService {
       );
     }
     return user;
+  }
+
+  private assertPhoneOtpEnabled(): void {
+    if (this.config.getOrThrow('AUTH_PHONE_OTP_ENABLED', { infer: true }))
+      return;
+    throw new DomainException(
+      AuthErrors.PHONE_OTP_DISABLED,
+      'Đăng nhập bằng số điện thoại chưa khả dụng trên môi trường này',
+      HttpStatus.FORBIDDEN,
+    );
   }
 
   private async issue(user: User): Promise<IssuedSession> {

@@ -12,4 +12,19 @@ describe('coreApiEnvSchema invariants', () => {
     expect(schema.validate(undefined).value).toBe(10_000);
     expect(schema.validate(99).error).toBeDefined();
   });
+
+  it('chấp nhận Redis TLS managed và từ chối protocol không phải Redis', () => {
+    const schema = coreApiEnvSchema.extract('REDIS_URL');
+    expect(
+      schema.validate('rediss://default:secret@redis.example:6379').error,
+    ).toBeUndefined();
+    expect(schema.validate('https://redis.example').error).toBeDefined();
+  });
+
+  it('cookie production chỉ nhận policy SameSite đã review', () => {
+    const schema = coreApiEnvSchema.extract('AUTH_COOKIE_SAME_SITE');
+    expect(schema.validate(undefined).value).toBe('strict');
+    expect(schema.validate('none').error).toBeUndefined();
+    expect(schema.validate('lax').error).toBeDefined();
+  });
 });

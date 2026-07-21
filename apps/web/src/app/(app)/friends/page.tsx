@@ -1,5 +1,3 @@
-import { FriendsIcon } from '../../../shared/ui/icons';
-import { PageHeader } from '../../../shared/ui/page-header';
 import { FriendsList } from '../../../features/friend-chat/components/friends-list';
 
 import type { Metadata } from 'next';
@@ -10,11 +8,7 @@ export const metadata: Metadata = { title: 'Tin nhắn' };
 
 export default function FriendsPage() {
   return (
-    <section className="mx-auto w-full max-w-2xl min-w-0 space-y-1 px-5 dark:text-white">
-      <PageHeader
-        eyebrow="Trò chuyện riêng tư"
-        eyebrowIcon={<FriendsIcon width={16} height={16} />}
-      />
+    <section className="mx-auto w-full max-w-2xl min-w-0 px-5 dark:text-white">
       <FriendsList />
     </section>
   );

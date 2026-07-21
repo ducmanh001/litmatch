@@ -57,6 +57,13 @@ describe('PostList', () => {
     const post: PostDto = {
       id: 'post-1',
       authorUserId: 'u1',
+      author: {
+        id: 'u1',
+        nickname: 'Mây Nhỏ',
+        gender: 'unknown',
+        avatarId: 'avatar-1',
+        interests: null,
+      },
       content: 'Xin chào mọi người',
       imageUrl: null,
       audience: 'public',
@@ -76,18 +83,6 @@ describe('PostList', () => {
         if (path === '/api/v1/feed/posts/{postId}/reactions') {
           return { data: { data: reaction } } as never;
         }
-        if (path === '/api/v1/users/{id}') {
-          return {
-            data: {
-              data: {
-                id: 'u1',
-                nickname: 'Mây Nhỏ',
-                gender: 'unknown',
-                avatarId: 'avatar-1',
-              },
-            },
-          } as never;
-        }
         throw new Error(`unexpected GET ${path}`);
       });
 
@@ -96,14 +91,44 @@ describe('PostList', () => {
     expect(await screen.findByText('Xin chào mọi người')).toBeVisible();
     expect(await screen.findByText('Mây Nhỏ')).toBeVisible();
     expect(screen.getByText('Công khai')).toBeVisible();
-    expect(getSpy).toHaveBeenCalledWith('/api/v1/users/{id}', {
-      params: { path: { id: 'u1' } },
-    });
+    expect(getSpy).not.toHaveBeenCalledWith(
+      '/api/v1/users/{id}',
+      expect.anything(),
+    );
     expect(
       screen.getByRole('link', {
         name: 'Bình luận bài viết, 2 bình luận',
       }),
     ).toHaveAttribute('href', '/feed/post-1');
+  });
+
+  it('response API cũ chưa có author vẫn render được trong lúc core-api reload', async () => {
+    const legacyPost = {
+      id: 'post-legacy',
+      authorUserId: 'u-legacy',
+      content: 'Bài viết từ API cũ',
+      imageUrl: null,
+      audience: 'public',
+      likeCount: 0,
+      commentCount: 0,
+      createdAt: new Date().toISOString(),
+    };
+    vi.spyOn(apiClient, 'GET').mockImplementation(async (path: string) => {
+      if (path === '/api/v1/feed/posts') {
+        return {
+          data: { data: { items: [legacyPost], nextCursor: null } },
+        } as never;
+      }
+      if (path === '/api/v1/feed/posts/{postId}/reactions') {
+        return { data: { data: { liked: false, likeCount: 0 } } } as never;
+      }
+      throw new Error(`unexpected GET ${path}`);
+    });
+
+    renderList();
+
+    expect(await screen.findByText('Bài viết từ API cũ')).toBeVisible();
+    expect(screen.getByText('Người dùng')).toBeVisible();
   });
 
   it('nội dung dài — clamp mặc định và cho xem thêm/thu gọn', async () => {
@@ -112,6 +137,13 @@ describe('PostList', () => {
     const post: PostDto = {
       id: 'post-long',
       authorUserId: 'u-long',
+      author: {
+        id: 'u-long',
+        nickname: 'Người kể chuyện',
+        gender: 'unknown',
+        avatarId: 'avatar-long',
+        interests: null,
+      },
       content: longContent,
       imageUrl: null,
       audience: 'public',
@@ -127,18 +159,6 @@ describe('PostList', () => {
       if (path === '/api/v1/feed/posts/{postId}/reactions') {
         return {
           data: { data: { liked: false, likeCount: 0 } },
-        } as never;
-      }
-      if (path === '/api/v1/users/{id}') {
-        return {
-          data: {
-            data: {
-              id: 'u-long',
-              nickname: 'Người kể chuyện',
-              gender: 'unknown',
-              avatarId: 'avatar-long',
-            },
-          },
         } as never;
       }
       throw new Error(`unexpected GET ${path}`);
@@ -163,6 +183,13 @@ describe('PostList', () => {
     const post: PostDto = {
       id: 'post-owner',
       authorUserId: 'me',
+      author: {
+        id: 'me',
+        nickname: 'Tôi',
+        gender: 'unknown',
+        avatarId: 'avatar-me',
+        interests: null,
+      },
       content: 'Bài viết của tôi',
       imageUrl: null,
       audience: 'friends',
@@ -176,18 +203,6 @@ describe('PostList', () => {
       }
       if (path === '/api/v1/feed/posts/{postId}/reactions') {
         return { data: { data: { liked: false, likeCount: 0 } } } as never;
-      }
-      if (path === '/api/v1/users/{id}') {
-        return {
-          data: {
-            data: {
-              id: 'me',
-              nickname: 'Tôi',
-              gender: 'unknown',
-              avatarId: null,
-            },
-          },
-        } as never;
       }
       throw new Error(`unexpected GET ${path}`);
     });

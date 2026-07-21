@@ -18,6 +18,7 @@ export default defineConfig({
       NEXT_PUBLIC_API_URL: 'http://localhost:3000',
       NEXT_PUBLIC_SOCKET_URL: 'http://localhost:3001',
       NEXT_PUBLIC_LIVEKIT_URL: 'ws://localhost:7880',
+      NEXT_PUBLIC_PHONE_OTP_ENABLED: 'true',
     },
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     // Gate coverage ratchet (docs/07 roadmap, cùng cơ chế chỉ-nâng-không-hạ như core-api).

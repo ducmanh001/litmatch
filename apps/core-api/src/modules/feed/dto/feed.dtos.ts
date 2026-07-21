@@ -10,6 +10,7 @@ import type { CursorPage } from '@litmatch/common-dtos';
 
 import { Comment } from '../entities/comment.entity';
 import { Post, PostAudience } from '../entities/post.entity';
+import { PublicProfileDto } from '../../user';
 
 export class CreatePostDto {
   @ApiPropertyOptional()
@@ -32,6 +33,7 @@ export class CreatePostDto {
 export class PostDto {
   @ApiProperty() id!: string;
   @ApiProperty() authorUserId!: string;
+  @ApiProperty({ type: () => PublicProfileDto }) author!: PublicProfileDto;
   @ApiProperty({ nullable: true, type: String }) content!: string | null;
   @ApiProperty({ nullable: true, type: String }) imageUrl!: string | null;
   @ApiProperty({ enum: PostAudience }) audience!: PostAudience;
@@ -39,10 +41,11 @@ export class PostDto {
   @ApiProperty() commentCount!: number;
   @ApiProperty() createdAt!: Date;
 
-  static from(post: Post): PostDto {
+  static from(post: Post, author: PublicProfileDto): PostDto {
     const dto = new PostDto();
     dto.id = post.id;
     dto.authorUserId = post.authorUserId;
+    dto.author = author;
     dto.content = post.content;
     dto.imageUrl = post.imageUrl;
     dto.audience = post.audience;
@@ -57,9 +60,14 @@ export class PostsPageDto {
   @ApiProperty({ type: [PostDto] }) items!: PostDto[];
   @ApiProperty({ nullable: true, type: String }) nextCursor!: string | null;
 
-  static from(page: CursorPage<Post>): PostsPageDto {
+  static from(
+    page: CursorPage<Post>,
+    authors: ReadonlyMap<string, PublicProfileDto>,
+  ): PostsPageDto {
     const dto = new PostsPageDto();
-    dto.items = page.items.map(PostDto.from);
+    dto.items = page.items.map((post) =>
+      PostDto.from(post, authorFor(authors, post.authorUserId)),
+    );
     dto.nextCursor = page.meta.nextCursor;
     return dto;
   }
@@ -76,14 +84,16 @@ export class CommentDto {
   @ApiProperty() id!: string;
   @ApiProperty() postId!: string;
   @ApiProperty() authorUserId!: string;
+  @ApiProperty({ type: () => PublicProfileDto }) author!: PublicProfileDto;
   @ApiProperty() content!: string;
   @ApiProperty() createdAt!: Date;
 
-  static from(comment: Comment): CommentDto {
+  static from(comment: Comment, author: PublicProfileDto): CommentDto {
     const dto = new CommentDto();
     dto.id = comment.id;
     dto.postId = comment.postId;
     dto.authorUserId = comment.authorUserId;
+    dto.author = author;
     dto.content = comment.content;
     dto.createdAt = comment.createdAt;
     return dto;
@@ -94,12 +104,27 @@ export class CommentsPageDto {
   @ApiProperty({ type: [CommentDto] }) items!: CommentDto[];
   @ApiProperty({ nullable: true, type: String }) nextCursor!: string | null;
 
-  static from(page: CursorPage<Comment>): CommentsPageDto {
+  static from(
+    page: CursorPage<Comment>,
+    authors: ReadonlyMap<string, PublicProfileDto>,
+  ): CommentsPageDto {
     const dto = new CommentsPageDto();
-    dto.items = page.items.map(CommentDto.from);
+    dto.items = page.items.map((comment) =>
+      CommentDto.from(comment, authorFor(authors, comment.authorUserId)),
+    );
     dto.nextCursor = page.meta.nextCursor;
     return dto;
   }
+}
+
+/** FK tới users bảo đảm luôn có tác giả; thiếu bản ghi là corruption, không được trả DTO nửa vời. */
+function authorFor(
+  authors: ReadonlyMap<string, PublicProfileDto>,
+  userId: string,
+): PublicProfileDto {
+  const author = authors.get(userId);
+  if (!author) throw new Error(`Không tìm thấy tác giả ${userId}`);
+  return author;
 }
 
 export class ReactionStatusDto {

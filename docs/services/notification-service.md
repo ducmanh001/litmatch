@@ -13,7 +13,7 @@ cần Kafka. Quyết định này user đã chọn tường minh (so với xây 
 đúng 1 consumer, chưa cần thiết ở GĐ4). Đổi sang Outbox+Kafka sau NẾU thật sự tách Notification
 thành consumer độc lập/nhiều consumer.
 
-- Có transaction sẵn (Matching `confirmTicket`, Gift `sendGift` qua `withinTransaction`, Feed
+- Có transaction sẵn (Matching matcher/`confirmTicket` legacy, Gift `sendGift` qua `withinTransaction`, Feed
   `like`/`createComment`): gọi `NotificationService.createWithManager(manager, input)` — ghi
   Notification atomic cùng hành động gốc.
 - Không có transaction chia sẻ được (Friend `sendMessage` — message tự commit riêng, xem
@@ -32,24 +32,26 @@ thành consumer độc lập/nhiều consumer.
 
 | Type              | Nơi gọi                                                                   | Payload                                            | Lưu ý                                                                                                                                                                      |
 | ----------------- | ------------------------------------------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `match_confirmed` | `MatchingService.confirmTicket` khi cả 2 bên confirm                      | `{ sessionId, matchType }`                         | **KHÔNG bao giờ có partnerId/nickname** — Soul Match ẩn danh tới khi unlock (docs/06); lộ danh tính qua notification phá toàn bộ giá trị ẩn danh, xem docs/10 § Soul Match |
+| `match_confirmed` | Matcher chốt cặp (hoặc `MatchingService.confirmTicket` legacy)            | `{ sessionId, matchType }`                         | **KHÔNG bao giờ có partnerId/nickname** — Soul Match ẩn danh tới khi unlock (docs/06); lộ danh tính qua notification phá toàn bộ giá trị ẩn danh, xem docs/10 § Soul Match |
 | `friend_message`  | `FriendService.sendMessage` sau khi message persist                       | `{ conversationId, senderUserId, preview }`        | Friend Chat KHÔNG ẩn danh (đã unlock) nên lộ senderUserId là ĐÚNG, không phải bug (khác Soul Match)                                                                        |
 | `gift_received`   | `GiftService.sendGift` trong `withinTransaction` (economy-service.md § 6) | `{ roomId, senderUserId, giftCode, priceDiamond }` | Party Room không ẩn danh — sender lộ là đúng                                                                                                                               |
 | `post_liked`      | `FeedService.like`                                                        | `{ postId, actorUserId }`                          | Bỏ qua nếu actor = author (không tự notify chính mình)                                                                                                                     |
 | `post_commented`  | `FeedService.createComment`                                               | `{ postId, commentId, actorUserId }`               | Tương tự — bỏ qua tự comment lên bài mình                                                                                                                                  |
 
-## 4. Push — DevPushProvider, chưa có FCM/APNs thật
+## 4. Push — dev/disabled, chưa có FCM/APNs thật
 
-`PushPort` (abstract, `ports/push-provider.ts`) — `DevPushProvider` (log + no-op, chặn cứng ở
-production giống `DevIapVerifier` — [economy-service.md](./economy-service.md)) là implementation
-DUY NHẤT ở GĐ4. **Chưa viết `StoreFcmPushProvider`/APNs thật** (khác với Economy's
+`PushPort` (abstract, `ports/push-provider.ts`) có `DevPushProvider` (log + no-op cho local/test,
+chặn cứng nếu bị chọn trong production) và `DisabledPushProvider` (no-op tường minh cho production
+subset; in-app notification vẫn persist). **Chưa viết `StoreFcmPushProvider`/APNs thật** (khác với Economy's
 `StoreIapVerifier` đã viết đủ dù chưa chạy sandbox) — quyết định phạm vi: viết code chưa test được
 với credential thật (Firebase service account, APNs cert) không tạo giá trị ngay bây giờ, việc
 thật của module này ở GĐ4 là in-app notification (đã hoạt động đầy đủ). Nợ kỹ thuật ghi rõ, làm khi
 có credential thật + quyết định provider (FCM cho Android, APNs cho iOS, hay 1 lớp trung gian như
 OneSignal).
 
-Config: `NOTIFICATION_PUSH_PROVIDER` (`dev` | `fcm`, default `dev`).
+Config: `NOTIFICATION_PUSH_PROVIDER` (`dev` | `fcm` | `disabled`, default `dev`). Chọn `fcm` khi
+chưa có adapter thật làm app fail-fast; production không có credential phải chọn `disabled`, không
+fallback về `dev`.
 
 ## 5. API
 

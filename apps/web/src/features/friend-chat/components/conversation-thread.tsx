@@ -262,8 +262,8 @@ export function ConversationThread({ friendUserId }: { friendUserId: string }) {
   };
 
   return (
-    <div className="flex flex-col">
-      <div className="bg-paper dark:bg-ink sticky top-0 z-10 flex items-center gap-3 border-b border-black/5 px-5 pb-4 pt-2 dark:border-white/10">
+    <div className="flex min-h-[calc(100dvh-8rem)] flex-col bg-card/40 dark:bg-surf/20">
+      <div className="bg-paper/90 dark:bg-ink/90 sticky top-0 z-10 flex items-center gap-3 border-b border-black/5 px-5 pb-3 pt-2 backdrop-blur dark:border-white/10">
         <Link
           href="/friends"
           aria-label="Quay lại danh sách bạn bè"
@@ -289,15 +289,20 @@ export function ConversationThread({ friendUserId }: { friendUserId: string }) {
           userId={partner.data.id}
           nickname={partner.data.nickname}
         />
-        <h1 className="min-w-0 flex-1 truncate text-sm font-bold">
-          {partner.data.nickname}
-        </h1>
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-sm font-bold">
+            {partner.data.nickname}
+          </h1>
+          <p className="truncate text-xs font-medium text-muted-foreground dark:text-white/60">
+            Bạn bè trên Litmatch
+          </p>
+        </div>
         <button
           type="button"
           disabled={createInvite.isPending}
           onClick={handleVoiceInvite}
           aria-label="Mời Voice Match"
-          className="bg-iris/10 text-irisl flex h-9 w-9 shrink-0 items-center justify-center rounded-full disabled:opacity-50"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-aqua/20 via-iris/15 to-irisl/25 text-irisl transition hover:brightness-110 disabled:opacity-50"
         >
           <MicIcon width={16} height={16} />
         </button>
@@ -322,10 +327,10 @@ export function ConversationThread({ friendUserId }: { friendUserId: string }) {
           </svg>
         </button>
       </div>
-      <div className="px-5 py-4">
+      <div className="flex-1 px-5 py-4">
         <MessageList conversationId={conversation.data.id} />
       </div>
-      <div className="bg-paper dark:bg-ink sticky bottom-16 z-10 border-t border-black/5 px-5 py-3 md:bottom-0 dark:border-white/10">
+      <div className="bg-paper/90 dark:bg-ink/90 sticky bottom-16 z-10 border-t border-black/5 px-5 py-3 backdrop-blur md:bottom-0 dark:border-white/10">
         <MessageComposer conversationId={conversation.data.id} />
       </div>
     </div>

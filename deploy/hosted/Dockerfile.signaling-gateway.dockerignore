@@ -1,0 +1,16 @@
+.git
+.github
+.nx
+.codex
+.claude
+.opencode
+node_modules
+dist
+coverage
+tmp
+out-tsc
+.env
+.env.*
+!.env.example
+*.log
+*.tsbuildinfo

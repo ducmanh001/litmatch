@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 import { IncomingInvites } from '../../../features/matching/components/incoming-invites';
+import { MobileMatchActions } from '../../../features/matching/components/mobile-match-actions';
 import { QueueStatusPanel } from '../../../features/matching/components/queue-status-panel';
 import { MatchIcon, MicIcon } from '../../../shared/ui/icons';
 import { PageHeader } from '../../../shared/ui/page-header';
@@ -15,8 +16,8 @@ const MATCHING_STEPS = [
     description: 'Nhắn tin ẩn danh hoặc trò chuyện bằng giọng nói.',
   },
   {
-    title: 'Hai người cùng xác nhận',
-    description: 'Kết nối chỉ bắt đầu khi cả hai đều sẵn sàng.',
+    title: 'Ghép được là trò chuyện',
+    description: 'Cả hai đã đồng ý khi chủ động bắt đầu tìm kiếm.',
   },
   {
     title: 'Bạn quyết định bước tiếp',
@@ -54,7 +55,8 @@ export default function MatchingPage() {
               trong một không gian tôn trọng, rõ ràng và không vội vàng.
             </p>
           </div>
-          <div className="flex flex-wrap gap-3 md:shrink-0 md:flex-col md:items-stretch">
+          <MobileMatchActions />
+          <div className="hidden flex-wrap gap-3 md:flex md:shrink-0 md:flex-col md:items-stretch">
             <span className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-aqua to-irisl px-5 py-3 text-sm font-extrabold text-white shadow-md shadow-iris/20">
               <MatchIcon width={17} height={17} />
               Nhắn tin ẩn danh

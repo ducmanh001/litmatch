@@ -7,6 +7,8 @@ export const CallingErrors = {
   SESSION_NOT_CALLABLE: 'CALLING_SESSION_NOT_CALLABLE',
   /** Call đã kết thúc — không mint token/join lại được. */
   CALL_ENDED: 'CALLING_CALL_ENDED',
+  /** Like chỉ hợp lệ sau khi call đã terminal; tránh lộ danh tính trong lúc đang nói. */
+  CALL_NOT_ENDED: 'CALLING_CALL_NOT_ENDED',
   /** Webhook LiveKit không verify được chữ ký. */
   WEBHOOK_INVALID: 'CALLING_WEBHOOK_INVALID',
 } as const;

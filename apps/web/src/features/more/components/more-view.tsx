@@ -3,120 +3,25 @@
 import Link from 'next/link';
 
 import { useCurrentUser } from '../../../shared/auth/use-current-user';
+import { useTranslation } from '../../../shared/i18n/messages';
 import { useLogout } from '../../../shared/auth/use-logout';
 import { showToast } from '../../../shared/lib/toast-store';
 import {
+  ChevronRightIcon,
+  CrownIcon,
   DiscoveryIcon,
   FeedIcon,
+  HelpCircleIcon,
   PartyIcon,
   ProfileIcon,
+  ShareIcon,
+  ShieldIcon,
   VideoIcon,
 } from '../../../shared/ui/icons';
 import { LanguageSelector } from '../../../shared/ui/language-selector';
 import { BrandMark, PageHeader } from '../../../shared/ui/page-header';
 import { PlaceholderAvatar } from '../../../shared/ui/placeholder-avatar';
 import { ThemeToggleButton } from '../../../shared/ui/theme-toggle-button';
-
-import type { SVGProps } from 'react';
-
-function ChevronRightIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      width={16}
-      height={16}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      {...props}
-    >
-      <path d="M9 18l6-6-6-6" />
-    </svg>
-  );
-}
-
-function CrownIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      width={22}
-      height={22}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      {...props}
-    >
-      <path d="M3 8l4 3 5-6 5 6 4-3-2 11H5z" />
-    </svg>
-  );
-}
-
-function ShieldIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      width={15}
-      height={15}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      {...props}
-    >
-      <path d="M12 2l8 4v6c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10V6z" />
-    </svg>
-  );
-}
-
-function HelpCircleIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      width={15}
-      height={15}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      {...props}
-    >
-      <circle cx={12} cy={12} r={9} />
-      <path d="M9.5 9a2.5 2.5 0 015 .5c0 1.5-2 1.5-2 3.5M12 17h.01" />
-    </svg>
-  );
-}
-
-function ShareIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      width={15}
-      height={15}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      {...props}
-    >
-      <circle cx={18} cy={5} r={3} />
-      <circle cx={6} cy={12} r={3} />
-      <circle cx={18} cy={19} r={3} />
-      <path d="M8.6 10.6l6.8-3.9M8.6 13.4l6.8 3.9" />
-    </svg>
-  );
-}
 
 const EXPLORE_ITEMS = [
   {
@@ -181,6 +86,7 @@ function inviteFriends(): void {
 export function MoreView() {
   const { data: user } = useCurrentUser();
   const logout = useLogout();
+  const t = useTranslation();
 
   return (
     <div className="px-5 pb-4 dark:text-white">
@@ -192,7 +98,9 @@ export function MoreView() {
       >
         <PlaceholderAvatar seed={user?.id ?? 'me'} size={48} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-bold">{user?.nickname ?? '…'}</p>
+          <p className="truncate text-sm font-bold">
+            {user?.nickname?.trim() || t('user.fallback')}
+          </p>
           <p className="text-xs text-muted-foreground dark:text-white/60">
             Xem và chỉnh sửa hồ sơ
           </p>
@@ -204,7 +112,7 @@ export function MoreView() {
         href="/wallet"
         className="mb-6 flex items-center gap-3 rounded-2xl bg-gradient-to-br from-irisl to-aqual p-4 text-white shadow-lg shadow-iris/30"
       >
-        <CrownIcon />
+        <CrownIcon width={22} height={22} />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold">Nâng cấp Premium</p>
           <p className="text-xs opacity-90">

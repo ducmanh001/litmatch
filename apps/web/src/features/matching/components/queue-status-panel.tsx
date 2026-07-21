@@ -3,8 +3,8 @@
 import { isApiError } from '@litmatch/api-client';
 import { RealtimeEvents } from '@litmatch/common-dtos/pure';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useRealtimeEvent } from '../../../shared/realtime/use-realtime-event';
 import { Button } from '../../../shared/ui/button';
@@ -17,12 +17,12 @@ import {
   useTicket,
 } from '../api';
 import { MatchTypePicker } from './match-type-picker';
+import { DirectQueueStart } from './direct-queue-start';
+import { MatchingScanner } from './matching-scanner';
 import { SpeedupButton } from './speedup-button';
 
-import type {
-  MatchConfirmedEventData,
-  MatchMatchedEventData,
-} from '@litmatch/common-dtos/pure';
+import type { MatchConfirmedEventData } from '@litmatch/common-dtos/pure';
+import type { TicketDto } from '../api';
 
 const OUTLINE_PILL =
   'border-border bg-card hover:bg-muted dark:border-white/15 dark:bg-white/[0.05] dark:text-white dark:hover:bg-white/10';
@@ -70,8 +70,19 @@ function mutationErrorMessage(error: unknown): string | undefined {
 
 export function QueueStatusPanel() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [ticketId, setTicketId] = useState<string | null>(null);
+  const [directStartConsumed, setDirectStartConsumed] = useState(false);
+  const legacyConfirmStarted = useRef<string | null>(null);
+  const matchParam = searchParams.get('match');
+  const directMatchType =
+    matchParam === 'soul' || matchParam === 'voice' ? matchParam : null;
+  const startRequested = searchParams.get('start') === '1';
+  const activeDirectMatch = useRef<TicketDto['matchType'] | null>(
+    startRequested ? directMatchType : null,
+  );
+  const previousMatchParam = useRef(directMatchType);
 
   const currentTicketQuery = useCurrentTicket();
   const activeTicketId =
@@ -88,28 +99,28 @@ export function QueueStatusPanel() {
   }, [activeTicketId, queryClient]);
 
   // Realtime chỉ là gợi ý để refetch sớm — REST poll của useTicket vẫn là fallback thật.
-  useRealtimeEvent<MatchMatchedEventData>(
-    RealtimeEvents.MatchMatched,
+  useRealtimeEvent<MatchConfirmedEventData>(
+    RealtimeEvents.MatchConfirmed,
     (data) => {
       if (data.ticketId === activeTicketId) {
         invalidateTicket();
         return;
       }
-      // Ticket lạ khi chưa có ticket là lời mời do phía còn lại vừa chấp nhận. Backend publish
-      // cùng event match.matched để luồng invite tiếp tục qua đúng state machine auto-match.
+      // Invite có thể được accept trong lúc user đang mở Matching. Realtime chỉ làm UI bắt kịp;
+      // GET ticket vẫn là nguồn sự thật khi event bị lỡ.
       if (activeTicketId === null) setTicketId(data.ticketId);
-    },
-  );
-  useRealtimeEvent<MatchConfirmedEventData>(
-    RealtimeEvents.MatchConfirmed,
-    (data) => {
-      if (data.ticketId === activeTicketId) invalidateTicket();
     },
   );
 
   const ticket = ticketQuery.data;
   const cancelError = mutationErrorMessage(cancelTicket.error);
   const confirmError = mutationErrorMessage(confirmTicket.error);
+
+  useEffect(() => {
+    if (previousMatchParam.current === directMatchType) return;
+    previousMatchParam.current = directMatchType;
+    setDirectStartConsumed(false);
+  }, [directMatchType]);
 
   useEffect(() => {
     if (ticket?.status !== 'confirmed' || ticket.sessionId === null) return;
@@ -119,6 +130,44 @@ export function QueueStatusPanel() {
         : `/matching/voice/${ticket.sessionId}`;
     router.replace(dest);
   }, [ticket, router]);
+
+  // Tương thích session pending_confirm tồn tại trước khi đổi flow: client tự hoàn tất, tuyệt đối
+  // không render lại nút "Xác nhận". Session mới luôn đã confirmed tại transaction ghép cặp.
+  useEffect(() => {
+    if (
+      ticket?.status !== 'matched' ||
+      legacyConfirmStarted.current === ticket.id
+    )
+      return;
+    legacyConfirmStarted.current = ticket.id;
+    confirmTicket.mutate();
+  }, [confirmTicket, ticket]);
+
+  // Đổi loại từ CTA mobile hoặc đóng bước xác nhận phải rời queue thật trước khi UI được phép
+  // bắt đầu intent mới. Backend vẫn là chốt transition queued→cancelled.
+  useEffect(() => {
+    if (ticket?.status !== 'queued' || cancelTicket.isPending) return;
+    const startedType = activeDirectMatch.current;
+    const changedDirectType =
+      directMatchType !== null && directMatchType !== ticket.matchType;
+    const cancelledDirectIntent =
+      startedType !== null &&
+      (directMatchType !== startedType || !startRequested);
+    if (!changedDirectType && !cancelledDirectIntent) return;
+
+    cancelTicket.mutate(undefined, {
+      onSuccess: () => {
+        activeDirectMatch.current = null;
+        setTicketId(null);
+      },
+    });
+  }, [
+    cancelTicket,
+    directMatchType,
+    startRequested,
+    ticket?.matchType,
+    ticket?.status,
+  ]);
 
   if (ticketId === null && currentTicketQuery.isPending) {
     return (
@@ -166,6 +215,18 @@ export function QueueStatusPanel() {
   }
 
   if (activeTicketId === null) {
+    if (directMatchType !== null && startRequested && !directStartConsumed) {
+      return (
+        <DirectQueueStart
+          matchType={directMatchType}
+          onJoined={(joined) => {
+            activeDirectMatch.current = joined.matchType;
+            setDirectStartConsumed(true);
+            setTicketId(joined.id);
+          }}
+        />
+      );
+    }
     return <MatchTypePicker onJoined={(joined) => setTicketId(joined.id)} />;
   }
 
@@ -223,13 +284,7 @@ export function QueueStatusPanel() {
     case 'queued':
       return (
         <div className={`${CENTERED_STATE} gap-6`} aria-live="polite">
-          <div className="relative flex h-44 w-44 items-center justify-center">
-            <span className="pulsering absolute h-40 w-40 rounded-full border border-iris/35" />
-            <span className="pulsering2 absolute h-40 w-40 rounded-full border border-iris/35" />
-            <div className="relative z-10 flex h-24 w-24 items-center justify-center rounded-[2rem] bg-irisl text-white">
-              <StateIcon width={34} height={34} />
-            </div>
-          </div>
+          <MatchingScanner matchType={ticket.matchType} />
 
           <div className="max-w-md">
             <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-muted-foreground dark:text-white/85">
@@ -239,8 +294,8 @@ export function QueueStatusPanel() {
               Đang tìm người ghép đôi…
             </h2>
             <p className="mt-3 text-sm leading-6 text-muted-foreground dark:text-white/70">
-              Litmatch đang tìm trong lựa chọn của bạn. Trạng thái sẽ tự cập
-              nhật ngay khi có kết quả phù hợp.
+              Litmatch đang quét các kết nối phù hợp và chọn cặp tốt nhất cho
+              bạn. Ghép được là vào phòng ngay.
             </p>
             <p className="mt-3 text-[11px] font-semibold text-muted-foreground dark:text-white/60">
               Vào hàng đợi lúc{' '}
@@ -262,7 +317,15 @@ export function QueueStatusPanel() {
               size="sm"
               className={OUTLINE_PILL}
               disabled={cancelTicket.isPending}
-              onClick={() => cancelTicket.mutate()}
+              onClick={() =>
+                cancelTicket.mutate(undefined, {
+                  onSuccess: () => {
+                    activeDirectMatch.current = null;
+                    setTicketId(null);
+                    router.replace('/matching');
+                  },
+                })
+              }
             >
               {cancelTicket.isPending ? 'Đang huỷ…' : 'Huỷ tìm kiếm'}
             </Button>
@@ -279,7 +342,11 @@ export function QueueStatusPanel() {
       );
     case 'matched':
       return (
-        <div className={`${CENTERED_STATE} gap-5`} aria-live="polite">
+        <div
+          className={`${CENTERED_STATE} gap-5`}
+          aria-live="polite"
+          role="status"
+        >
           <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-iris/10 text-irisl dark:bg-white/[0.05] dark:text-white">
             <StateIcon width={34} height={34} />
             <span className="absolute -right-1 -top-1 flex h-8 w-8 items-center justify-center rounded-full border-4 border-card bg-emerald-500 text-sm font-black text-white">
@@ -294,19 +361,10 @@ export function QueueStatusPanel() {
               Đã tìm thấy một người phù hợp
             </h2>
             <p className="mt-3 text-sm leading-6 text-muted-foreground dark:text-white/70">
-              Xác nhận khi bạn sẵn sàng. Kết nối chỉ bắt đầu sau khi cả hai
-              người đều đồng ý.
+              Đang mở phòng trò chuyện cho hai bạn…
             </p>
           </div>
-          <Button
-            type="button"
-            size="lg"
-            className="w-full max-w-xs bg-irisl text-white shadow-none hover:bg-irisl/90"
-            disabled={confirmTicket.isPending}
-            onClick={() => confirmTicket.mutate()}
-          >
-            {confirmTicket.isPending ? 'Đang xác nhận…' : 'Xác nhận kết nối'}
-          </Button>
+          <span className="h-9 w-9 animate-spin rounded-full border-2 border-iris/20 border-t-irisl" />
           {confirmError !== undefined && (
             <p
               role="alert"

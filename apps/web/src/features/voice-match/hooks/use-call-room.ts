@@ -27,25 +27,41 @@ export function useCallRoom(matchSessionId: string) {
   // được set (đúng ý — call thiếu mic thì vô dụng) nhưng UI cũng không biết vì sao mà báo.
   const [mediaError, setMediaError] = useState<unknown>(null);
   const roomRef = useRef<Room | null>(null);
+  // Mỗi lần connect/unmount tăng generation. REST join không thể bị hủy đáng tin cậy ở mọi
+  // browser; guard này bảo đảm một response đến muộn không thể nối lại room sau khi user đã
+  // rời màn hoặc sau khi họ bấm kết nối lại lần nữa.
+  const generationRef = useRef(0);
+  const disposedRef = useRef(false);
 
   const { mutate: joinCallMutate } = joinCall;
   const connect = useCallback(() => {
+    disposedRef.current = false;
+    const generation = ++generationRef.current;
     setRoomDisconnected(false);
     setMediaError(null);
     joinCallMutate(undefined, {
       onSuccess: (joined) => {
         if (joined === undefined) return;
         void (async () => {
+          let connected: Room | null = null;
           try {
+            if (disposedRef.current || generation !== generationRef.current) {
+              return;
+            }
             if (roomRef.current !== null) {
               await disconnectMediaRoom(roomRef.current);
+              roomRef.current = null;
             }
-            const connected = await connectMediaRoom(
-              joined.token,
-              joined.livekitUrl,
-            );
+            if (disposedRef.current || generation !== generationRef.current) {
+              return;
+            }
+            connected = await connectMediaRoom(joined.token, joined.livekitUrl);
             // connectMediaRoom chỉ join room — publish mic là bước riêng, thiếu thì call câm.
             await connected.localParticipant.setMicrophoneEnabled(true);
+            if (disposedRef.current || generation !== generationRef.current) {
+              await disconnectMediaRoom(connected);
+              return;
+            }
             connected.on(RoomEvent.Disconnected, () =>
               setRoomDisconnected(true),
             );
@@ -53,7 +69,18 @@ export function useCallRoom(matchSessionId: string) {
             setCallId(joined.call.id);
             setRoom(connected);
           } catch (err) {
-            setMediaError(err);
+            // Nếu microphone bị từ chối thì `connected` đã vào LiveKit nhưng chưa được đưa vào
+            // roomRef. Phải đóng CHÍNH room này, nếu không server vẫn thấy participant và phiên
+            // pending bị treo tới khi timeout.
+            if (connected !== null) {
+              await disconnectMediaRoom(connected).catch(() => undefined);
+            } else if (roomRef.current !== null) {
+              await disconnectMediaRoom(roomRef.current).catch(() => undefined);
+              roomRef.current = null;
+            }
+            if (!disposedRef.current && generation === generationRef.current) {
+              setMediaError(err);
+            }
           }
         })();
       },
@@ -62,6 +89,8 @@ export function useCallRoom(matchSessionId: string) {
 
   useEffect(
     () => () => {
+      disposedRef.current = true;
+      generationRef.current += 1;
       if (roomRef.current !== null) void disconnectMediaRoom(roomRef.current);
     },
     [],

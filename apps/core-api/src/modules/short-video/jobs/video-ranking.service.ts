@@ -9,6 +9,7 @@ import { SchedulerRegistry } from '@nestjs/schedule';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
+import { ManagedInterval } from '../../../common/scheduling/managed-interval';
 import { VideoStatus } from '../entities/video.entity';
 
 import type { CoreApiEnv } from '../../../config/env.validation';
@@ -27,7 +28,7 @@ export class VideoRankingService
   implements OnApplicationBootstrap, OnApplicationShutdown
 {
   private readonly logger = new Logger(VideoRankingService.name);
-  private running = false;
+  private readonly job = new ManagedInterval();
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
@@ -36,27 +37,24 @@ export class VideoRankingService
   ) {}
 
   onApplicationBootstrap(): void {
-    const interval = setInterval(
-      () =>
-        void this.runOnce().catch((err) =>
-          this.logger.error({ err: `${err}` }, 'Video ranking job lỗi'),
-        ),
-      this.config.getOrThrow('VIDEO_RANKING_JOB_INTERVAL_MS', { infer: true }),
-    );
-    this.scheduler.addInterval(VIDEO_RANKING_JOB, interval);
+    this.job.start(this.scheduler, {
+      jobName: VIDEO_RANKING_JOB,
+      intervalMs: this.config.getOrThrow('VIDEO_RANKING_JOB_INTERVAL_MS', {
+        infer: true,
+      }),
+      task: () => this.runOnce(),
+      logger: this.logger,
+      errorMessage: 'Video ranking job lỗi',
+    });
   }
 
   onApplicationShutdown(): void {
-    if (this.scheduler.doesExist('interval', VIDEO_RANKING_JOB)) {
-      this.scheduler.deleteInterval(VIDEO_RANKING_JOB);
-    }
+    this.job.stop();
   }
 
   /** 1 tick — public để test/chạy tay. */
   async runOnce(): Promise<number> {
-    if (this.running) return 0;
-    this.running = true;
-    try {
+    return this.job.runExclusive(async () => {
       const weightView = this.config.getOrThrow('VIDEO_RANK_WEIGHT_VIEW', {
         infer: true,
       });
@@ -86,8 +84,6 @@ export class VideoRankingService
         ],
       )) as [unknown, number];
       return count;
-    } finally {
-      this.running = false;
-    }
+    }, 0);
   }
 }

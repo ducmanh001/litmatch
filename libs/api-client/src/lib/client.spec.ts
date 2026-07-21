@@ -22,6 +22,7 @@ interface Recorded {
   url: string;
   auth: string | null;
   csrfHeader: string | null;
+  acceptLanguage: string | null;
   credentials: RequestCredentials;
 }
 
@@ -40,6 +41,7 @@ function fetchStub(queue: Array<Response | Error>): {
       url: new URL(request.url).pathname,
       auth: request.headers.get('authorization'),
       csrfHeader: request.headers.get('x-csrf-token'),
+      acceptLanguage: request.headers.get('accept-language'),
       credentials: request.credentials,
     });
     const next = queue.shift();
@@ -86,6 +88,22 @@ describe('createApiClient', () => {
     await client.GET('/api/v1/users/me');
 
     expect(calls[0].credentials).toBe('include');
+  });
+
+  it('gắn Accept-Language cho REST và refresh để core-api localize error envelope', async () => {
+    const { fetch, calls } = fetchStub([
+      jsonResponse(200, { data: { id: 'u1' } }),
+    ]);
+    const client = createApiClient({
+      baseUrl: BASE_URL,
+      tokenStore: storeWithSession(),
+      getLocale: () => 'en',
+      fetch,
+    });
+
+    await client.GET('/api/v1/users/me');
+
+    expect(calls[0].acceptLanguage).toBe('en');
   });
 
   it('non-2xx → ném ApiError đúng code/traceId/status', async () => {
@@ -142,6 +160,30 @@ describe('createApiClient', () => {
     expect(calls.map((call) => call.url)).toEqual(['/api/v1/auth/refresh']);
     expect(calls[0].csrfHeader).toBe('csrf-old');
     expect(calls[0].credentials).toBe('include');
+  });
+
+  it('Safari/iOS không có Web Locks vẫn restore phiên thay vì bị đẩy về login', async () => {
+    vi.stubGlobal('window', {});
+    vi.stubGlobal('navigator', {});
+    try {
+      const { fetch, calls } = fetchStub([
+        jsonResponse(200, {
+          data: { accessToken: 'access-new', csrfToken: 'csrf-new' },
+        }),
+      ]);
+      const storage = memoryCsrfTokenStorage();
+      storage.set('csrf-old');
+      const client = createApiClient({
+        baseUrl: BASE_URL,
+        tokenStore: createTokenStore(storage),
+        fetch,
+      });
+
+      await expect(client.restoreSession()).resolves.toBe(true);
+      expect(calls.map((call) => call.url)).toEqual(['/api/v1/auth/refresh']);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('chưa từng đăng nhập (không có csrfToken persisted) → restoreSession false, không gọi API', async () => {

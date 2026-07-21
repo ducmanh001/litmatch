@@ -11,6 +11,13 @@ import type { VideoDto } from '../api';
 const video: VideoDto = {
   id: 'video-1',
   authorUserId: 'u1',
+  author: {
+    id: 'u1',
+    nickname: 'Mây',
+    gender: 'unknown',
+    avatarId: 'avatar-1',
+    interests: null,
+  },
   status: 'published',
   playbackUrl: 'https://cdn.example.com/v1.mp4',
   thumbnailUrl: null,

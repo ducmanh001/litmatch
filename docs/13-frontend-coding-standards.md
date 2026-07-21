@@ -2,7 +2,7 @@
 
 # 13. Frontend Coding Standards — tuân theo xuyên suốt, mọi feature, mọi phase
 
-Áp dụng cho `apps/admin`, `apps/web`, `libs/api-client`. Kiến trúc/boundary/thứ tự triển khai
+Áp dụng cho `apps/admin`, `apps/web`, `libs/api-client`, `libs/browser-auth`. Kiến trúc/boundary/thứ tự triển khai
 nằm ở [12-frontend-architecture.md](./12-frontend-architecture.md); file này quy định cách
 viết code cụ thể. Nguyên tắc gốc (ownership, abstraction, comment) vẫn là
 [11-engineering-principles.md](./11-engineering-principles.md) — FE không có bộ triết lý riêng.
@@ -198,6 +198,9 @@ feature sở hữu nó, mỗi store 1 concern — không store "app state" tổn
   không đọc được và KHÔNG BAO GIỜ được persist ở tầng FE; access token chỉ ở memory. Không nhét
   thêm PII/token khác/cache dữ liệu người khác vào storage bền. Session multi-tab phải đồng bộ
   logout/rotation qua `storage` event, không coi mỗi tab là phiên độc lập.
+- Locale là preference không nhạy cảm nhưng vẫn persist bằng cookie first-party, không thêm key
+  vào `localStorage`. Chuỗi hệ thống mới phải đi qua i18n concern của app; nội dung do người dùng
+  tạo (chat, post, profile) không được tự động dịch hoặc biến đổi ở client.
 - Ẩn/hiện theo role là UX; mọi enforcement thật ở backend guard (12.9-9). Không bao giờ coi
   "UI không có nút đó" là chốt chặn.
 

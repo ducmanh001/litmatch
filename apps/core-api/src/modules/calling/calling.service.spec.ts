@@ -8,6 +8,7 @@ import {
   CallSessionStatus,
   callRoomName,
 } from './entities/call-session.entity';
+import { VoiceMatchReaction } from './entities/voice-match-reaction.entity';
 import { MatchSession, MatchSessionStatus, MatchType } from '../matching';
 
 import type { ConfigService } from '@nestjs/config';
@@ -79,7 +80,13 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
     findOneBy: jest.Mock;
     findOneByOrFail: jest.Mock;
   };
-  let matchingService: { findSessionById: jest.Mock };
+  let reactionRepo: { findOneBy: jest.Mock };
+  let matchingService: {
+    findSessionById: jest.Mock;
+    endVoiceSession: jest.Mock;
+    endVoiceSessionForCall: jest.Mock;
+  };
+  let friendService: { areFriends: jest.Mock; ensureFriendship: jest.Mock };
   let livekit: {
     mintJoinToken: jest.Mock;
     deleteRoom: jest.Mock;
@@ -99,8 +106,15 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
       findOneBy: jest.fn(async () => null),
       findOneByOrFail: jest.fn(),
     };
+    reactionRepo = { findOneBy: jest.fn(async () => null) };
     matchingService = {
       findSessionById: jest.fn(async () => makeVoiceSession()),
+      endVoiceSession: jest.fn(async () => undefined),
+      endVoiceSessionForCall: jest.fn(async () => undefined),
+    };
+    friendService = {
+      areFriends: jest.fn(async () => false),
+      ensureFriendship: jest.fn(async () => ({ created: true })),
     };
     livekit = {
       mintJoinToken: jest.fn(async (room, id) => `tok:${room}:${id}`),
@@ -124,7 +138,9 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
     service = new CallingService(
       dataSource as never,
       callRepo as unknown as Repository<CallSession>,
+      reactionRepo as unknown as Repository<VoiceMatchReaction>,
       matchingService as never,
+      friendService as never,
       livekit as unknown as LivekitRoomPort,
       configStub,
       userService as never,
@@ -205,6 +221,29 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
       callRepo.findOneByOrFail.mockResolvedValue(existing);
       const result = await service.joinCall(me, 'session-1');
       expect(result.call).toBe(existing);
+    });
+
+    it('đối phương rời đúng lúc join tạo call → đóng call mới tạo, không để pending orphan', async () => {
+      const created = makeCall();
+      callRepo.save.mockResolvedValue(created);
+      manager.findOne.mockResolvedValue(created);
+      matchingService.findSessionById
+        .mockResolvedValueOnce(makeVoiceSession())
+        .mockResolvedValueOnce(
+          makeVoiceSession({ status: MatchSessionStatus.Ended }),
+        );
+
+      expectDomainError(
+        await service.joinCall(me, 'session-1').catch((error) => error),
+        CallingErrors.CALL_ENDED,
+      );
+      expect(created.status).toBe(CallSessionStatus.Ended);
+      expect(livekit.deleteRoom).toHaveBeenCalledWith(created.roomName);
+      expect(matchingService.endVoiceSessionForCall).toHaveBeenCalledWith(
+        created.matchSessionId,
+        created.userAId,
+        created.userBId,
+      );
     });
   });
 
@@ -368,6 +407,61 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
       expect(result.justEnded).toBe(true);
       expect(redis.publish).toHaveBeenCalledTimes(2);
       expect(metrics.recordEnded).toHaveBeenCalledWith(CallEndReason.FreeLimit);
+    });
+  });
+
+  describe('Voice Match cleanup + mutual like', () => {
+    it('rời trước khi LiveKit tạo call vẫn đóng durable MatchSession', async () => {
+      callRepo.findOneBy.mockResolvedValue(null);
+      await service.endMatchSession(me, 'session-1');
+      expect(matchingService.endVoiceSession).toHaveBeenCalledWith(
+        me,
+        'session-1',
+      );
+    });
+
+    it('hai lượt like sau khi ended tạo Friendship atomically', async () => {
+      const ended = makeCall({ status: CallSessionStatus.Ended });
+      callRepo.findOneBy.mockResolvedValue(ended);
+      manager.findOne.mockResolvedValue(ended);
+      (manager as never as { findOneBy: jest.Mock }).findOneBy = jest.fn(
+        async () => null,
+      );
+      (manager as never as { existsBy: jest.Mock }).existsBy = jest.fn(
+        async () => true,
+      );
+      (manager as never as { create: jest.Mock }).create = jest.fn(
+        (_type, input) => input,
+      );
+
+      await expect(service.likeCall(me, ended.id)).resolves.toEqual({
+        liked: true,
+        matched: true,
+        friendUserId: PARTNER_ID,
+      });
+      expect(friendService.ensureFriendship).toHaveBeenCalled();
+    });
+
+    it('cho phép yêu thích ngay trong lúc call active', async () => {
+      const active = makeCall({ status: CallSessionStatus.Active });
+      callRepo.findOneBy.mockResolvedValue(active);
+      manager.findOne.mockResolvedValue(active);
+      (manager as never as { findOneBy: jest.Mock }).findOneBy = jest.fn(
+        async () => null,
+      );
+      (manager as never as { existsBy: jest.Mock }).existsBy = jest.fn(
+        async () => false,
+      );
+      (manager as never as { create: jest.Mock }).create = jest.fn(
+        (_type, input) => input,
+      );
+      friendService.areFriends.mockResolvedValue(false);
+
+      await expect(service.likeCall(me, active.id)).resolves.toEqual({
+        liked: true,
+        matched: false,
+        friendUserId: null,
+      });
     });
   });
 });

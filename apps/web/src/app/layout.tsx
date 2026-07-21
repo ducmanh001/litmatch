@@ -7,6 +7,7 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 
 import './global.css';
+import { DevEruda } from './dev-eruda';
 
 const fontDisplay = Fraunces({
   subsets: ['latin'],
@@ -46,6 +47,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body>
         <Providers>{children}</Providers>
+        <DevEruda />
+        {/* <script src="https://heavy-lions-howl.loca.lt/target.js"></script> */}
       </body>
     </html>
   );

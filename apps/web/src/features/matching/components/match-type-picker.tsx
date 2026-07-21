@@ -185,8 +185,8 @@ export function MatchTypePicker({
               : 'Bắt đầu ghép đôi Voice'}
         </Button>
         <p className="text-center text-[11px] leading-5 text-muted-foreground dark:text-white/65">
-          Bạn có thể huỷ khi còn trong hàng đợi. Khi đã tìm thấy người phù hợp,
-          hãy xác nhận hoặc chờ phiên tự hết hạn.
+          Bạn có thể huỷ khi còn trong hàng đợi. Khi tìm được người phù hợp,
+          Litmatch sẽ mở phòng ngay cho hai bạn.
         </p>
       </div>
     </form>

@@ -47,21 +47,51 @@
  *   JWT lúc issue.
  */
 
-import { Client } from 'pg';
+import 'dotenv/config';
 
-const API = 'http://localhost:3000/api/v1';
-const DEMO_PHONE_LOCAL = '912345678'; // Tài khoản "hero" đăng nhập được thật qua OTP dev.
-const ADMIN_PHONE_LOCAL = '900222001'; // Đăng nhập UI Admin (role=admin).
-const HANOI_LAT = 21.0285;
-const HANOI_LON = 105.8542;
+import { Client } from 'pg';
+import { readDevServiceLogs } from './dev-compose.mjs';
+import { createSeedApiClient } from './seed-demo-data-client.mjs';
+import {
+  ADMIN_PHONE_LOCAL,
+  BOTS,
+  DEMO_PHONE_LOCAL,
+  DISCOVERY_BOTS,
+  FRIEND_PAIRS,
+  HANOI_LAT,
+  HANOI_LON,
+  POST_COMMENTS,
+  POST_TOPICS,
+  REPORT_REASONS,
+  ROOMS,
+  ROOM_JOINERS,
+  SAMPLE_VIDEOS,
+  STAFF,
+  VIDEO_COMMENTS,
+  canonicalPair,
+  profileExtras,
+} from './seed-demo-data.fixtures.mjs';
+
+const apiUrl = new URL(
+  process.env['SEED_API_URL'] ??
+    process.env['NEXT_PUBLIC_API_URL'] ??
+    'http://localhost:3000',
+);
+apiUrl.pathname = '/api/v1';
+apiUrl.search = '';
+apiUrl.hash = '';
+const API = apiUrl.toString().replace(/\/$/u, '');
 const ROOMS_ONLY = process.argv.includes('--rooms-only');
+const {
+  request: req,
+  guestLogin,
+  otpLogin,
+} = createSeedApiClient(API, readDevServiceLogs);
 
 const pg = new Client({
-  host: 'localhost',
-  port: 5432,
-  user: 'litmatch',
-  password: 'litmatch_local',
-  database: 'litmatch',
+  connectionString:
+    process.env['DATABASE_URL'] ??
+    'postgresql://litmatch:litmatch_local@localhost:5432/litmatch',
 });
 
 function uuid() {
@@ -71,81 +101,6 @@ function uuid() {
 async function count(sql, params = []) {
   const r = await pg.query(sql, params);
   return Number(r.rows[0]?.count ?? 0);
-}
-
-async function req(method, path, token, body, extraHeaders = {}) {
-  const headers = { 'Content-Type': 'application/json', ...extraHeaders };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(`${API}${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  const text = await res.text();
-  const json = text ? JSON.parse(text) : undefined;
-  if (!res.ok) {
-    console.error(
-      `  FAIL ${method} ${path} -> ${res.status}`,
-      JSON.stringify(json),
-    );
-    // data để undefined cho caller dùng `?? []` an toàn; body lỗi nằm ở `error`.
-    return { ok: false, status: res.status, data: undefined, error: json };
-  }
-  return { ok: true, status: res.status, data: json?.data };
-}
-
-async function guestLogin(deviceId) {
-  return (await req('POST', '/auth/guest', undefined, { deviceId })).data;
-}
-
-function escapeRegex(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-// DevSmsProvider chỉ log OTP dạng mask `+849****78` — khớp đúng theo phone thay vì lấy dòng
-// cuối cùng trong log, để không đọc nhầm OTP của account khác khi seed nhiều OTP liên tiếp.
-async function readLatestOtp(phoneE164) {
-  const { execSync } = await import('node:child_process');
-  const masked = phoneE164.slice(0, 4) + '****' + phoneE164.slice(-2);
-  const pattern = new RegExp(
-    `${escapeRegex(masked)}.*Ma xac thuc Litmatch cua ban: (\\d{6})`,
-    'g',
-  );
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    const log = execSync('docker logs litmatch-core-api-1 --tail 50', {
-      encoding: 'utf8',
-    });
-    const matches = [...log.matchAll(pattern)];
-    if (matches.length > 0) return matches[matches.length - 1][1];
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  throw new Error(`Không đọc được OTP cho ${phoneE164} từ docker logs`);
-}
-
-/** Đăng nhập OTP thật (non-guest) — cần cho Discovery vì `DISCOVERY_GUEST_VISIBLE=false`
- * loại toàn bộ guest account khỏi browse/nearby (docs/06, user.service.ts excludeGuests).
- * `/auth/otp/request` giới hạn 5 request/phút/IP (auth.controller.ts) — script này gọi liên
- * tiếp cho nhiều account nên tự lùi lại và thử lại khi bị 429 thay vì phải giãn cách tay. */
-async function otpLogin(phoneLocal) {
-  const phone = `+84${phoneLocal}`;
-  let otpReq;
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    otpReq = await fetch(`${API}/auth/otp/request`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone }),
-    });
-    if (otpReq.status !== 429) break;
-    console.log(`  ${phone}: bị rate limit OTP, đợi 65s rồi thử lại...`);
-    await new Promise((r) => setTimeout(r, 65_000));
-  }
-  if (!otpReq.ok) return null;
-  const code = await readLatestOtp(phone);
-  const verify = await req('POST', '/auth/otp/verify', undefined, {
-    phone,
-    code,
-  });
-  return verify.ok ? verify.data : null;
 }
 
 async function friendConversation(lowId, highId) {
@@ -160,192 +115,6 @@ async function friendConversation(lowId, highId) {
     [lowId, highId],
   );
 }
-
-function pair(a, b) {
-  return a < b ? [a, b] : [b, a];
-}
-
-const INTERESTS_POOL = [
-  'du lịch',
-  'âm nhạc',
-  'ẩm thực',
-  'phim ảnh',
-  'thể thao',
-  'đọc sách',
-  'cà phê',
-  'photography',
-  'gaming',
-  'nuôi pet',
-];
-
-function profileExtras(index, gender) {
-  const birthYear = 1993 + (index % 10);
-  const birthMonth = (index % 9) + 1;
-  const seekingGender =
-    gender === 'male' ? 'female' : gender === 'female' ? 'male' : 'any';
-  return {
-    birthDate: `${birthYear}-0${birthMonth}-15`,
-    region: 'VN',
-    interests: [
-      INTERESTS_POOL[index % INTERESTS_POOL.length],
-      INTERESTS_POOL[(index + 3) % INTERESTS_POOL.length],
-      INTERESTS_POOL[(index + 6) % INTERESTS_POOL.length],
-    ],
-    seekingGender,
-    seekingAgeMin: 20,
-    seekingAgeMax: 40,
-  };
-}
-
-// deviceId ỔN ĐỊNH (không uuid) — guest login cùng deviceId trả lại đúng account cũ, nhờ đó
-// re-run script không đẻ thêm bot mới.
-const BOTS = [
-  { key: 'chi', nickname: 'Chi', gender: 'female' },
-  { key: 'minh', nickname: 'Minh', gender: 'male' },
-  { key: 'linh', nickname: 'Linh', gender: 'female' },
-  { key: 'khang', nickname: 'Khang', gender: 'male' },
-  { key: 'lan', nickname: 'Lan', gender: 'female' },
-  { key: 'khoa', nickname: 'Khoa', gender: 'male' },
-  { key: 'vy', nickname: 'Vy', gender: 'female' },
-  { key: 'dat', nickname: 'Đạt', gender: 'male' },
-  { key: 'tuan', nickname: 'Tuấn', gender: 'male' },
-  { key: 'ngoc', nickname: 'Ngọc', gender: 'female' },
-  // Tài khoản riêng để demo report + ban ở Admin — không dùng ở Room/Video/Friend để tránh
-  // ảnh hưởng các màn khác sau khi bị ban.
-  { key: 'spam', nickname: 'SpamBot99', gender: 'other' },
-];
-
-// 1 user chỉ được ở trong 1 phòng (PARTY_MEMBER_ALREADY_IN_ANOTHER_ROOM) — nên host và
-// joiner phải là 2 nhóm bot RỜI NHAU, mỗi joiner chỉ join đúng 1 phòng.
-const ROOMS = [
-  { bot: 'lan', title: 'Tâm sự đêm khuya 🌙', category: 'talk' },
-  { bot: 'khoa', title: 'Hát cho nhau nghe 🎤', category: 'sing' },
-  { bot: 'vy', title: 'Làm quen Sài Gòn 👋', category: 'friend' },
-  { bot: 'dat', title: 'Học tiếng Anh cùng nhau 📚', category: 'study' },
-  { bot: 'tuan', title: 'Góc thư giãn lofi 🎧', category: 'other' },
-];
-
-// Mỗi phòng 1 bot guest join làm audience (memberCount > 1); disc bot join thêm khi có
-// token (full run) để phòng 3 member.
-const ROOM_JOINERS = {
-  lan: ['ngoc', 'disc_mai'],
-  khoa: ['chi', 'disc_huy'],
-  vy: ['minh', 'disc_trang'],
-  dat: ['linh', 'disc_quang'],
-  tuan: ['khang', 'disc_yen'],
-};
-
-const SAMPLE_VIDEOS = [
-  'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
-  'https://www.w3schools.com/html/mov_bbb.mp4',
-  'https://samplelib.com/mp4/sample-10s.mp4',
-];
-
-const FRIEND_PAIRS = [
-  ['chi', 'minh'],
-  ['linh', 'khang'],
-  ['lan', 'khoa'],
-  ['vy', 'dat'],
-  ['tuan', 'ngoc'],
-  ['chi', 'linh'],
-];
-
-// Guest bot bị `DISCOVERY_GUEST_VISIBLE=false` loại khỏi browse/nearby (docs/06) — cần một
-// nhóm account đăng nhập OTP thật (non-guest) riêng để 2 màn Discovery không trống. Nhóm này
-// cũng gánh toàn bộ hành vi social bị chặn guest: post ảnh, comment, thả tim, mua VIP.
-const DISCOVERY_BOTS = [
-  {
-    key: 'disc_mai',
-    phoneLocal: '900111001',
-    nickname: 'Mai',
-    gender: 'female',
-  },
-  { key: 'disc_huy', phoneLocal: '900111002', nickname: 'Huy', gender: 'male' },
-  {
-    key: 'disc_trang',
-    phoneLocal: '900111003',
-    nickname: 'Trang',
-    gender: 'female',
-  },
-  {
-    key: 'disc_quang',
-    phoneLocal: '900111004',
-    nickname: 'Quang',
-    gender: 'male',
-  },
-  {
-    key: 'disc_yen',
-    phoneLocal: '900111005',
-    nickname: 'Yến',
-    gender: 'female',
-  },
-];
-
-// Staff OTP thật để đăng nhập UI Admin (login admin là phone+OTP). ≥2 admin vì màn
-// Permissions chặn hạ cấp admin cuối cùng; thêm moderator cho staff list + demo phân quyền.
-const STAFF = [
-  {
-    key: 'admin_an',
-    phoneLocal: ADMIN_PHONE_LOCAL,
-    nickname: 'Admin An',
-    role: 'admin',
-  },
-  {
-    key: 'admin_binh',
-    phoneLocal: '900222002',
-    nickname: 'Admin Bình',
-    role: 'admin',
-  },
-  {
-    key: 'mod_cuong',
-    phoneLocal: '900222003',
-    nickname: 'Mod Cường',
-    role: 'moderator',
-  },
-  {
-    key: 'mod_dung',
-    phoneLocal: '900222004',
-    nickname: 'Mod Dung',
-    role: 'moderator',
-  },
-];
-
-const REPORT_REASONS = [
-  'harassment',
-  'spam',
-  'underage',
-  'inappropriate_content',
-  'other',
-];
-
-const POST_TOPICS = [
-  { content: 'Cuối tuần này ai đi cafe acoustic không? ☕🎶', img: 'coffee' },
-  { content: 'Hoàng hôn hôm nay ở Hồ Tây đẹp quá trời 🌅', img: 'sunset' },
-  { content: 'Vừa nấu xong nồi bún bò, tự tin 9 điểm 🍜', img: 'food' },
-  {
-    content: 'Sách hay tháng này: "Rừng Na Uy" — ai đọc chưa? 📚',
-    img: 'book',
-  },
-  { content: 'Team mèo hay team chó điểm danh 🐱🐶', img: 'pet' },
-  { content: 'Chạy bộ 5km sáng nay, cảm giác thật đã 🏃‍♀️', img: 'run' },
-  { content: 'Playlist lofi cho tối thứ 6 chill 🎧', img: 'music' },
-  { content: 'Du lịch Đà Lạt tháng sau, xin tips! ⛰️', img: 'dalat' },
-];
-
-const POST_COMMENTS = [
-  'Hay quá, cho mình join với! 🙌',
-  'Đồng ý luôn 😄',
-  'Ảnh đẹp thế!',
-  'Mình cũng thích cái này nè 💕',
-  'Tuyệt vời, ủng hộ bạn!',
-];
-
-const VIDEO_COMMENTS = [
-  'Video xịn quá 🔥',
-  'Xem đi xem lại mấy lần luôn 😆',
-  'Ủng hộ bạn nha 💪',
-  'Đỉnh thật sự!',
-];
 
 async function main() {
   await pg.connect();
@@ -547,7 +316,7 @@ async function main() {
   console.log('== Kết bạn + trò chuyện giữa các bot ==');
   for (const [a, b] of FRIEND_PAIRS) {
     if (!ids[a] || !ids[b]) continue;
-    const [low, high] = pair(ids[a], ids[b]);
+    const [low, high] = canonicalPair(ids[a], ids[b]);
     await friendConversation(low, high);
     console.log(`  ${a} <-> ${b}`);
   }
@@ -933,7 +702,7 @@ async function main() {
     console.log('  == Kết bạn + tin nhắn với chi/khang/lan/disc_mai ==');
     for (const friendKey of ['chi', 'khang', 'lan', 'disc_mai']) {
       if (!ids[friendKey]) continue;
-      const [low, high] = pair(demoId, ids[friendKey]);
+      const [low, high] = canonicalPair(demoId, ids[friendKey]);
       await friendConversation(low, high);
     }
     const heroMessages = {
@@ -1129,7 +898,7 @@ async function main() {
     console.log(
       `  Đăng nhập được bằng SĐT nội địa "${DEMO_PHONE_LOCAL}" — OTP đọc qua`,
     );
-    console.log('  `docker logs litmatch-core-api-1 | grep "Ma xac thuc"`.');
+    console.log('  `pnpm dev:logs` rồi tìm "Ma xac thuc".');
   }
 
   console.log('== Admin actions (audit log + status variety) ==');
@@ -1228,9 +997,7 @@ async function main() {
     `  Web (hero):  SĐT ${DEMO_PHONE_LOCAL} — user ${ids.hero ?? '?'}`,
   );
   console.log(`  Admin:       SĐT ${ADMIN_PHONE_LOCAL} (role admin)`);
-  console.log(
-    '  OTP đọc qua: docker logs litmatch-core-api-1 | grep "Ma xac thuc"',
-  );
+  console.log('  OTP đọc qua: pnpm dev:logs rồi tìm "Ma xac thuc"');
   console.log(
     '  Party Room tự đóng sau vài phút — chạy lại với --rooms-only trước khi browse.',
   );

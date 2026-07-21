@@ -355,7 +355,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Xác nhận match — đủ 2 bên confirm thì session + 2 ticket sang confirmed */
+    /** Tương thích session pending_confirm cũ — flow mới được xác nhận ngay khi ghép */
     post: operations['MatchingController_confirmTicket'];
     delete?: never;
     options?: never;
@@ -424,7 +424,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Chấp nhận lời mời — tạo trực tiếp ticket/session, gọi confirmTicket(inviteeTicketId) tiếp theo như auto-match */
+    /** Chấp nhận lời mời — tạo trực tiếp ticket/session đã confirmed và vào phòng ngay */
     post: operations['InviteController_accept'];
     delete?: never;
     options?: never;
@@ -770,6 +770,40 @@ export interface paths {
     put?: never;
     /** Chủ động kết thúc call — idempotent, đã ended thì trả trạng thái hiện tại */
     post: operations['CallingController_endCall'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/calling/match-sessions/{matchSessionId}/end': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Rời Voice Match — đóng call nếu đã tạo và luôn kết thúc session để có thể tìm lượt mới */
+    post: operations['CallingController_endMatchSession'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/calling/calls/{id}/like': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Yêu thích trong/sau Voice Match — cả hai cùng thích thì tạo Friendship và chat vĩnh viễn */
+    post: operations['CallingController_likeCall'];
     delete?: never;
     options?: never;
     head?: never;
@@ -2638,7 +2672,7 @@ export interface components {
       invite: components['schemas']['MatchInviteDto'];
       /** @description sessionId — cùng khái niệm session của auto-match */
       sessionId: string;
-      /** @description ticketId CỦA CHÍNH NGƯỜI ACCEPT — gọi confirmTicket(ticketId) như auto-match */
+      /** @description ticketId CỦA CHÍNH NGƯỜI ACCEPT — giữ để tương thích client cũ; session đã sẵn sàng ngay */
       inviteeTicketId: string;
     };
     CreateReportDto: {
@@ -2794,11 +2828,18 @@ export interface components {
         | null;
       durationSeconds: number | null;
       billedMinutes: number;
+      /** Format: date-time */
+      freeCallEndsAt: string | null;
     };
     JoinCallDto: {
       call: components['schemas']['CallDto'];
       token: string;
       livekitUrl: string;
+    };
+    VoiceMatchLikeDto: {
+      liked: boolean;
+      matched: boolean;
+      friendUserId: string | null;
     };
     CreatePartyRoomDto: {
       title: string;
@@ -2892,6 +2933,7 @@ export interface components {
     VideoDto: {
       id: string;
       authorUserId: string;
+      author: components['schemas']['PublicProfileDto'];
       /** @enum {string} */
       status:
         | 'uploading'
@@ -2935,6 +2977,7 @@ export interface components {
       id: string;
       videoId: string;
       authorUserId: string;
+      author: components['schemas']['PublicProfileDto'];
       content: string;
       /** Format: date-time */
       createdAt: string;
@@ -2955,6 +2998,7 @@ export interface components {
     PostDto: {
       id: string;
       authorUserId: string;
+      author: components['schemas']['PublicProfileDto'];
       content: string | null;
       imageUrl: string | null;
       /** @enum {string} */
@@ -2975,6 +3019,7 @@ export interface components {
       id: string;
       postId: string;
       authorUserId: string;
+      author: components['schemas']['PublicProfileDto'];
       content: string;
       /** Format: date-time */
       createdAt: string;
@@ -4829,6 +4874,51 @@ export interface operations {
         content: {
           'application/json': {
             data: components['schemas']['CallDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  CallingController_endMatchSession: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        matchSessionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  CallingController_likeCall: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['VoiceMatchLikeDto'];
             meta?: {
               [key: string]: unknown;
             };

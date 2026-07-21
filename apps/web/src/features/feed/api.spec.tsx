@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 
-import { feedKeys, useDeletePost, useFeed, usePostAuthor } from './api';
+import { feedKeys, useDeletePost, useFeed } from './api';
 import { apiClient } from '../../shared/api/client';
 
 import type { ReactNode } from 'react';
@@ -20,7 +20,7 @@ function createHarness() {
 describe('feed api hooks', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('giới hạn mỗi trang để không dồn quá nhiều request hydrate tác giả', async () => {
+  it('giới hạn mỗi trang; tác giả đã được nhúng trong response', async () => {
     const getSpy = vi.spyOn(apiClient, 'GET').mockResolvedValue({
       data: { data: { items: [], nextCursor: null } },
     } as never);
@@ -32,29 +32,6 @@ describe('feed api hooks', () => {
     expect(getSpy).toHaveBeenCalledWith('/api/v1/feed/posts', {
       params: { query: { limit: 10, cursor: undefined } },
     });
-  });
-
-  it('tái sử dụng hồ sơ tác giả còn mới khi cùng người xuất hiện nhiều lần', async () => {
-    const getSpy = vi.spyOn(apiClient, 'GET').mockResolvedValue({
-      data: {
-        data: {
-          id: 'user-1',
-          nickname: 'Mây',
-          gender: 'unknown',
-          avatarId: null,
-        },
-      },
-    } as never);
-    const { wrapper } = createHarness();
-
-    const first = renderHook(() => usePostAuthor('user-1'), { wrapper });
-    await waitFor(() => expect(first.result.current.isSuccess).toBe(true));
-    first.unmount();
-
-    const second = renderHook(() => usePostAuthor('user-1'), { wrapper });
-    await waitFor(() => expect(second.result.current.isSuccess).toBe(true));
-
-    expect(getSpy).toHaveBeenCalledTimes(1);
   });
 
   it('xoá cache chi tiết, bình luận và reaction sau khi xoá bài', async () => {

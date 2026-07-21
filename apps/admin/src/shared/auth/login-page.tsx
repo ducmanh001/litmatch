@@ -1,5 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { isApiError } from '@litmatch/api-client';
+import { getGoogleIdToken } from '@litmatch/browser-auth';
 import {
   normalizeVnPhone,
   VN_COUNTRY_CODE,
@@ -12,6 +13,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 
 import { apiClient, tokenStore } from '../api/client';
+import { env } from '../env';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Field } from '../ui/field';
@@ -70,6 +72,26 @@ export function LoginPage() {
     },
   });
 
+  const socialLogin = useMutation({
+    mutationFn: async () => {
+      const clientId = env.VITE_AUTH_GOOGLE_CLIENT_ID;
+      if (clientId === undefined) {
+        throw new Error('Google OAuth chưa được cấu hình trên môi trường này.');
+      }
+      const idToken = await getGoogleIdToken(clientId);
+      const res = await apiClient.POST('/api/v1/auth/social', {
+        body: { provider: 'google', idToken },
+      });
+      return res.data?.data;
+    },
+    onSuccess: (tokens) => {
+      if (tokens === undefined) return;
+      tokenStore.setSession(tokens);
+      const from = (location.state as { from?: string } | null)?.from;
+      navigate(from ?? '/', { replace: true });
+    },
+  });
+
   if (isAuthenticated) return <Navigate to="/" replace />;
 
   const mutationError = (error: unknown): string | undefined =>
@@ -77,7 +99,9 @@ export function LoginPage() {
       ? undefined
       : isApiError(error)
         ? error.message
-        : 'Có lỗi xảy ra, thử lại.';
+        : error instanceof Error
+          ? error.message
+          : 'Có lỗi xảy ra, thử lại.';
 
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
@@ -86,50 +110,81 @@ export function LoginPage() {
           <h1 className="text-xl font-semibold">Litmatch Admin</h1>
           <p className="text-sm text-muted-foreground">
             {phase.step === 'phone'
-              ? 'Đăng nhập bằng số điện thoại'
+              ? env.VITE_PHONE_OTP_ENABLED
+                ? 'Đăng nhập bằng số điện thoại hoặc Google'
+                : 'Đăng nhập bằng Google'
               : `Nhập mã OTP đã gửi tới ${phase.phone}`}
           </p>
         </div>
 
         {phase.step === 'phone' ? (
-          <form
-            key="phone"
-            className="space-y-4"
-            onSubmit={phoneForm.handleSubmit((v) => requestOtp.mutate(v.phone))}
-            noValidate
-          >
-            <Field
-              htmlFor="phone"
-              label="Số điện thoại"
-              error={
-                phoneForm.formState.errors.phone?.message ??
-                mutationError(requestOtp.error)
-              }
-            >
-              <div className="flex gap-2">
-                <span
-                  aria-hidden
-                  className="flex h-9 w-14 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-sm text-muted-foreground"
+          <div className="space-y-4">
+            {env.VITE_PHONE_OTP_ENABLED && (
+              <form
+                key="phone"
+                className="space-y-4"
+                onSubmit={phoneForm.handleSubmit((v) =>
+                  requestOtp.mutate(v.phone),
+                )}
+                noValidate
+              >
+                <Field
+                  htmlFor="phone"
+                  label="Số điện thoại"
+                  error={
+                    phoneForm.formState.errors.phone?.message ??
+                    mutationError(requestOtp.error)
+                  }
                 >
-                  {VN_COUNTRY_CODE}
-                </span>
-                <Input
-                  id="phone"
-                  type="tel"
-                  autoComplete="tel"
-                  placeholder="912345678 hoặc 0912345678"
-                  {...phoneForm.register('phone')}
-                />
+                  <div className="flex gap-2">
+                    <span
+                      aria-hidden
+                      className="flex h-9 w-14 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-sm text-muted-foreground"
+                    >
+                      {VN_COUNTRY_CODE}
+                    </span>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      autoComplete="tel"
+                      placeholder="912345678 hoặc 0912345678"
+                      {...phoneForm.register('phone')}
+                    />
+                  </div>
+                </Field>
+                <Button
+                  className="w-full"
+                  type="submit"
+                  disabled={requestOtp.isPending}
+                >
+                  {requestOtp.isPending ? 'Đang gửi…' : 'Gửi mã OTP'}
+                </Button>
+              </form>
+            )}
+            {env.VITE_PHONE_OTP_ENABLED && (
+              <div className="flex items-center gap-3" aria-hidden>
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-xs text-muted-foreground">hoặc</span>
+                <div className="h-px flex-1 bg-border" />
               </div>
-            </Field>
+            )}
             <Button
               className="w-full"
-              type="submit"
-              disabled={requestOtp.isPending}
+              type="button"
+              variant="outline"
+              disabled={socialLogin.isPending}
+              onClick={() => socialLogin.mutate()}
             >
-              {requestOtp.isPending ? 'Đang gửi…' : 'Gửi mã OTP'}
+              {socialLogin.isPending
+                ? 'Đang mở Google…'
+                : 'Đăng nhập với Google'}
             </Button>
-          </form>
+            {mutationError(socialLogin.error) !== undefined && (
+              <p role="alert" className="text-sm text-destructive">
+                {mutationError(socialLogin.error)}
+              </p>
+            )}
+          </div>
         ) : (
           <form
             key="code"

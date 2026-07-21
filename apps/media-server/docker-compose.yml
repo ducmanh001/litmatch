@@ -6,11 +6,16 @@ services:
     image: livekit/livekit-server:v1.13.1@sha256:2c6869d2d5ff6c9c0166f47be1c92dad6928bfecfa5e4060a6ece48db8accfa3
     container_name: litmatch-livekit
     command: --config /etc/livekit.yaml
+    env_file: ../../.env
+    environment:
+      NODE_IP: ${DEV_LAN_IP:-}
+      LIVEKIT_KEYS: '${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-devsecret_change_me_0123456789abcdef}'
+      LIVEKIT_WEBHOOK_API_KEY: ${LIVEKIT_API_KEY:-devkey}
     ports:
-      - '7880:7880'
-      - '7881:7881'
-      - '50000-50200:50000-50200/udp'
-      - '6789:6789' # Prometheus metrics nội bộ LiveKit (docs/07 Giai đoạn 6)
+      - '${LIVEKIT_HTTP_HOST_PORT:-7880}:7880'
+      - '${LIVEKIT_TCP_HOST_PORT:-7881}:7881'
+      - '${LIVEKIT_RTC_UDP_HOST_RANGE:-50000-50200}:50000-50200/udp'
+      - '${LIVEKIT_PROMETHEUS_HOST_PORT:-6789}:6789' # Prometheus metrics nội bộ
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml:ro
     extra_hosts:
