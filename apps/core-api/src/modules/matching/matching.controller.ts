@@ -104,7 +104,7 @@ export class MatchingController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Xác nhận match — đủ 2 bên confirm thì session + 2 ticket sang confirmed',
+      'Tương thích session pending_confirm cũ — flow mới được xác nhận ngay khi ghép',
   })
   @ApiOkResponse({ type: TicketDto })
   async confirmTicket(

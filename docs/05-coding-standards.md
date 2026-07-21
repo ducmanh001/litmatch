@@ -33,7 +33,15 @@ vào cách triển khai cụ thể trong NestJS.
 - `Guard` cho auth/permission, `Interceptor` cho logging/transform response, `Pipe` cho validate.
 - Config qua `ConfigService`, không dùng `process.env` trực tiếp trong business logic.
 - **Luôn tiêm `ConfigService<CoreApiEnv, true>`, không phải `ConfigService` trần** (`CoreApiEnv` khai trong `env.validation.ts`, khớp 1-1 với `coreApiEnvSchema`) — gọi `getOrThrow('KEY', { infer: true })`/`get('KEY', { infer: true })` thay vì tự viết `getOrThrow<string>('KEY')`. Thêm key mới vào Joi schema thì thêm luôn field tương ứng vào `CoreApiEnv` cùng lúc — gõ sai tên key hoặc sai kiểu là lỗi compile-time, không đợi tới lúc chạy mới vỡ.
-- **`.env.example` ↔ Joi schema ↔ interface Env khớp 1-1 THEO TỪNG APP, không có key mồ côi**: `.env.example` là file chung cả repo = hợp của schema các app — mỗi key trong đó phải thuộc ít nhất 1 schema (`coreApiEnvSchema` hoặc `signalingEnvSchema`); các key nền tảng dùng chung như `NODE_ENV`, `LOG_LEVEL`, `CORS_ORIGINS` có thể xuất hiện trong nhiều schema. Mỗi app vẫn khớp 1-1 giữa schema ↔ interface Env của nó (`CoreApiEnv`, `SignalingEnv`). Không thêm key "để sẵn" cho module chưa tồn tại (ai đó `getOrThrow` nó sẽ chết runtime vì schema không biết key này) — env key của 1 module ra đời CÙNG PR với module đó, đủ cả 3 nơi.
+- **App-runtime env phải khớp 1-1 giữa `.env.example` ↔ Joi schema ↔ interface Env THEO
+  TỪNG APP, không có key mồ côi**: tập key core/signaling mà process NestJS đọc phải thuộc
+  `coreApiEnvSchema` hoặc `signalingEnvSchema`; mỗi app giữ schema ↔ interface tương ứng
+  (`CoreApiEnv`, `SignalingEnv`). Root `.env.example` còn là nguồn cấu hình local stack nên được
+  phép chứa nhóm operator-only mà app không đọc trực tiếp: `POSTGRES_*`, `*_HOST_PORT`,
+  `NEXT_PUBLIC_*`/`VITE_*`, `DEV_*`, Grafana/OTel và script tooling. Các key này phải có consumer
+  tường minh trong Compose, frontend env schema hoặc script và có regression test; không đưa vào
+  Joi backend chỉ để làm vừa quy tắc. Không thêm key "để sẵn" cho module chưa tồn tại — env key
+  của business module ra đời CÙNG PR với module đó, đủ cả ba nơi.
 - **`getOrThrow()` mặc định, không phải `get()` + fallback tay**: mọi giá trị mặc định/optional khai 1 lần trong Joi schema (`env.validation.ts`, `.default(...)`), code luôn đọc bằng `getOrThrow()` — thiếu biến thì chết ngay lúc dùng thay vì âm thầm chạy với giá trị đoán, và không có 2 nơi cùng giữ 1 default (schema + `config.get('X', 100)` lặp lại) dễ lệch nhau khi sửa 1 chỗ quên chỗ kia. Ngoại lệ hợp lệ duy nhất: cờ môi trường có thể thật sự không tồn tại ở 1 số môi trường (vd `NODE_ENV`) thì dùng `get()`.
 - **Job chạy định kỳ cần đọc interval từ config** (`.env`, không hardcode — § 5.1): không dùng decorator tĩnh `@Cron()`/`@Interval()`/`@Timeout()` (nhận giá trị cố định lúc decorate class) — đăng ký qua `SchedulerRegistry` (`@nestjs/schedule`) trong `onApplicationBootstrap`, đọc interval bằng `getOrThrow()` rồi `addInterval()`/`addCronJob()` thủ công (xem `outbox-relay.service.ts`, `ticket-sweeper.service.ts`).
 
@@ -74,6 +82,10 @@ Tóm tắt bắt buộc:
 - **Bug/bất biến nội bộ bị vi phạm (không phải lỗi client) → `throw new Error(...)` thường, KHÔNG bọc `DomainException`**: dữ liệu inconsistent ("dữ liệu hỏng"), caller gọi sai hợp đồng (tham số phải dương mà nhận âm, thiếu field bắt buộc do lỗi lập trình chứ không phải do request), guard "không bao giờ xảy ra" — những chỗ này không có mã lỗi nghiệp vụ để đặt tên trong `*.errors.ts`, cứ để rơi qua global exception filter mặc định thành 500. `DomainException` chỉ dành cho lỗi đã đặt tên, client sửa được (đủ tiền, sai trạng thái, thiếu quyền...).
 - `httpStatus` của `DomainException` truyền bằng enum `HttpStatus` của `@nestjs/common` (`HttpStatus.CONFLICT`, không phải `409`) — nhất quán với `@HttpCode(HttpStatus.OK)` ở controller (docs/10 § 10.1.G).
 - `traceId` trong error response/mọi log line = request-id: lấy từ header `x-request-id` nếu client gửi, không thì UUID sinh tại entry (`libs/logger` `genReqId`). Từ Giai đoạn 6, mỗi log line còn có thêm `trace_id`/`span_id` của OpenTelemetry (tự động qua `@opentelemetry/instrumentation-pino`, xem `libs/observability/src/lib/tracing.ts`) khi `OTEL_EXPORTER_OTLP_ENDPOINT` được cấu hình — 2 id khác mục đích: request-id ổn định xuyên vòng đời 1 request kể cả khi tracing tắt, trace_id/span_id dùng để nhảy sang dashboard trace khi tracing bật.
+- API nhận locale chuẩn qua `Accept-Language`; global exception filter chọn message theo locale
+  từ error `code`, mặc định `vi`. Service/domain chỉ tạo `DomainException(code, message, ... )`,
+  không đọc request hoặc tự dịch message. Với locale chưa có catalog đầy đủ, API phải trả fallback
+  an toàn đã localize, không lộ message nội bộ.
 
 ## 5.6 Naming convention
 

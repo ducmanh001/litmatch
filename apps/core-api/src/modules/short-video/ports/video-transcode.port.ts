@@ -32,7 +32,10 @@ export class DevVideoTranscodeProvider
   }
 
   onApplicationBootstrap(): void {
-    if (this.config.get('NODE_ENV', { infer: true }) === 'production') {
+    if (
+      this.config.get('NODE_ENV', { infer: true }) === 'production' &&
+      this.config.getOrThrow('VIDEO_UPLOAD_ENABLED', { infer: true })
+    ) {
       throw new Error(
         'DevVideoTranscodeProvider không được dùng ở production — cấu hình VideoTranscodePort thật (Cloudflare Stream/Mux) trước khi deploy',
       );
@@ -40,6 +43,11 @@ export class DevVideoTranscodeProvider
   }
 
   async transcode(storageKey: string): Promise<TranscodeResult> {
+    if (this.config.get('NODE_ENV', { infer: true }) === 'production') {
+      throw new Error(
+        'DevVideoTranscodeProvider không bao giờ chạy trong production',
+      );
+    }
     this.logger.warn(`[DEV-ONLY VIDEO TRANSCODE] xử lý giả cho ${storageKey}`);
     return {
       playbackUrl: `https://dev-storage.invalid/playback/${storageKey}`,

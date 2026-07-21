@@ -15,6 +15,7 @@ import type { VideoTranscodePort } from './ports/video-transcode.port';
 import type { SafetyService } from '../safety';
 
 const CONFIG: Record<string, unknown> = {
+  VIDEO_UPLOAD_ENABLED: true,
   VIDEO_CAPTION_MAX_LENGTH: 500,
   VIDEO_MODERATION_MODE: 'pre',
   VIDEO_QUALIFIED_VIEW_MIN_MS: 3000,
@@ -99,6 +100,7 @@ describe('ShortVideoService (unit — mock repo/ports/dataSource)', () => {
   let service: ShortVideoService;
 
   beforeEach(() => {
+    CONFIG['VIDEO_UPLOAD_ENABLED'] = true;
     videoRepo = {
       save: jest.fn(async (v) => v as Video),
       create: jest.fn((input) => Object.assign(new Video(), input)),
@@ -192,6 +194,17 @@ describe('ShortVideoService (unit — mock repo/ports/dataSource)', () => {
   });
 
   describe('createUploadIntent', () => {
+    it('upload disabled → chặn trước storage và database', async () => {
+      CONFIG['VIDEO_UPLOAD_ENABLED'] = false;
+      await expect(
+        service.createUploadIntent(author, { caption: 'hi' }, 'k1'),
+      ).rejects.toMatchObject({
+        code: ShortVideoErrors.VIDEO_UPLOAD_DISABLED,
+      });
+      expect(storagePort.generateStorageKey).not.toHaveBeenCalled();
+      expect(videoRepo.save).not.toHaveBeenCalled();
+    });
+
     it('caption quá dài → CAPTION_TOO_LONG, không gọi storage port', async () => {
       await expect(
         service.createUploadIntent(author, { caption: 'x'.repeat(501) }, 'k1'),

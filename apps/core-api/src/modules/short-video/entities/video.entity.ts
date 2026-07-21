@@ -13,28 +13,6 @@ export enum VideoStatus {
 }
 
 /**
- * Transition hợp lệ duy nhất (docs/services/short-video-service.md § 1) — CHỈ để tài liệu hoá/
- * đối chiếu, KHÔNG dùng SELECT FOR UPDATE như `MatchTicket`. Mọi transition thật thi hành bằng
- * 1 câu `UPDATE ... WHERE status = 'từ'` (conditional UPDATE, thua race = 0 rows = no-op) — nhẹ
- * hơn pessimistic lock vì video không tranh chấp gay gắt như ticket matching.
- */
-export const VIDEO_TRANSITIONS: Readonly<
-  Record<VideoStatus, readonly VideoStatus[]>
-> = {
-  [VideoStatus.Uploading]: [VideoStatus.Processing, VideoStatus.Failed],
-  [VideoStatus.Processing]: [
-    VideoStatus.PendingReview,
-    VideoStatus.Published,
-    VideoStatus.Failed,
-  ],
-  [VideoStatus.PendingReview]: [VideoStatus.Published, VideoStatus.Rejected],
-  [VideoStatus.Published]: [VideoStatus.Removed],
-  [VideoStatus.Rejected]: [],
-  [VideoStatus.Failed]: [],
-  [VideoStatus.Removed]: [],
-};
-
-/**
  * Video ngắn (docs/services/short-video-service.md) — V1 hướng Momo, KHÔNG phải feed toàn cục
  * cạnh tranh TikTok. Upload qua presigned URL (`VideoStoragePort`) — body video không bao giờ
  * chạm NestJS, `storageKey` chỉ là object key trỏ tới file trên storage. `playbackUrl`/

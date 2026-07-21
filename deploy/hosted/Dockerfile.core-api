@@ -1,0 +1,21 @@
+FROM node:22-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2 AS build
+WORKDIR /workspace
+RUN corepack enable
+COPY . .
+RUN pnpm install --frozen-lockfile \
+  && pnpm nx run core-api:build --skip-nx-cache
+
+FROM node:22-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2
+WORKDIR /app
+ENV NODE_ENV=production PORT=3000
+COPY --from=build /workspace/pnpm-workspace.yaml ./
+COPY --from=build /workspace/dist/apps/core-api ./
+RUN corepack enable pnpm \
+  && pnpm install --prod --frozen-lockfile --ignore-scripts \
+  && corepack disable \
+  && rm -rf /root/.cache /root/.local/share/pnpm /usr/local/lib/node_modules/npm
+USER node
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:${PORT}/health/live >/dev/null || exit 1
+CMD ["node", "main.js"]

@@ -14,6 +14,7 @@ import { CursorPageQueryDto } from '@litmatch/common-dtos';
 import { Video, VideoStatus } from '../entities/video.entity';
 import { VideoComment } from '../entities/video-comment.entity';
 import { ReportReason } from '../../safety';
+import { PublicProfileDto } from '../../user';
 
 export class CreateUploadIntentDto {
   @ApiPropertyOptional()
@@ -37,6 +38,7 @@ export class UploadIntentDto {
 export class VideoDto {
   @ApiProperty() id!: string;
   @ApiProperty() authorUserId!: string;
+  @ApiProperty({ type: () => PublicProfileDto }) author!: PublicProfileDto;
   @ApiProperty({ enum: VideoStatus }) status!: VideoStatus;
   @ApiProperty({ nullable: true, type: String }) playbackUrl!: string | null;
   @ApiProperty({ nullable: true, type: String }) thumbnailUrl!: string | null;
@@ -48,10 +50,11 @@ export class VideoDto {
   @ApiProperty() commentCount!: number;
   @ApiProperty() createdAt!: Date;
 
-  static from(video: Video): VideoDto {
+  static from(video: Video, author: PublicProfileDto): VideoDto {
     const dto = new VideoDto();
     dto.id = video.id;
     dto.authorUserId = video.authorUserId;
+    dto.author = author;
     dto.status = video.status;
     dto.playbackUrl = video.playbackUrl;
     dto.thumbnailUrl = video.thumbnailUrl;
@@ -82,12 +85,14 @@ export class VideosPageDto {
   @ApiProperty({ type: [VideoDto] }) items!: VideoDto[];
   @ApiProperty({ nullable: true, type: String }) nextCursor!: string | null;
 
-  static from(page: {
-    items: Video[];
-    meta: { nextCursor: string | null };
-  }): VideosPageDto {
+  static from(
+    page: { items: Video[]; meta: { nextCursor: string | null } },
+    authors: ReadonlyMap<string, PublicProfileDto>,
+  ): VideosPageDto {
     const dto = new VideosPageDto();
-    dto.items = page.items.map((v) => VideoDto.from(v));
+    dto.items = page.items.map((video) =>
+      VideoDto.from(video, authorFor(authors, video.authorUserId)),
+    );
     dto.nextCursor = page.meta.nextCursor;
     return dto;
   }
@@ -111,14 +116,19 @@ export class VideoCommentDto {
   @ApiProperty() id!: string;
   @ApiProperty() videoId!: string;
   @ApiProperty() authorUserId!: string;
+  @ApiProperty({ type: () => PublicProfileDto }) author!: PublicProfileDto;
   @ApiProperty() content!: string;
   @ApiProperty() createdAt!: Date;
 
-  static from(comment: VideoComment): VideoCommentDto {
+  static from(
+    comment: VideoComment,
+    author: PublicProfileDto,
+  ): VideoCommentDto {
     const dto = new VideoCommentDto();
     dto.id = comment.id;
     dto.videoId = comment.videoId;
     dto.authorUserId = comment.authorUserId;
+    dto.author = author;
     dto.content = comment.content;
     dto.createdAt = comment.createdAt;
     return dto;
@@ -129,15 +139,27 @@ export class VideoCommentsPageDto {
   @ApiProperty({ type: [VideoCommentDto] }) items!: VideoCommentDto[];
   @ApiProperty({ nullable: true, type: String }) nextCursor!: string | null;
 
-  static from(page: {
-    items: VideoComment[];
-    meta: { nextCursor: string | null };
-  }): VideoCommentsPageDto {
+  static from(
+    page: { items: VideoComment[]; meta: { nextCursor: string | null } },
+    authors: ReadonlyMap<string, PublicProfileDto>,
+  ): VideoCommentsPageDto {
     const dto = new VideoCommentsPageDto();
-    dto.items = page.items.map((c) => VideoCommentDto.from(c));
+    dto.items = page.items.map((comment) =>
+      VideoCommentDto.from(comment, authorFor(authors, comment.authorUserId)),
+    );
     dto.nextCursor = page.meta.nextCursor;
     return dto;
   }
+}
+
+/** FK tới users bảo đảm luôn có tác giả; thiếu bản ghi là corruption, không được trả DTO nửa vời. */
+function authorFor(
+  authors: ReadonlyMap<string, PublicProfileDto>,
+  userId: string,
+): PublicProfileDto {
+  const author = authors.get(userId);
+  if (!author) throw new Error(`Không tìm thấy tác giả ${userId}`);
+  return author;
 }
 
 export class ReactionStatusDto {

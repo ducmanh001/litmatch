@@ -29,8 +29,10 @@ không có chi phí hạ tầng — chọn hướng này, đúng ưu tiên ADR 0
 ## Quyết định
 
 1. **Refresh token chuyển hẳn sang httpOnly cookie**, `Secure` (bật ở `NODE_ENV=production`),
-   `SameSite=Strict`, `Path=/api/v1/auth`. `AuthTokensDto` không còn trả `refreshToken` trong
-   body — client không bao giờ thấy giá trị này.
+   `SameSite=Strict`, `Path=/api/v1/auth`. Profile frontend/backend khác site được dùng
+   `AUTH_COOKIE_SAME_SITE=none` theo ADR 0009; `None` vẫn luôn đi cùng `Secure`, exact CORS
+   allowlist và CSRF ở điểm 3-4. `AuthTokensDto` không còn trả `refreshToken` trong body — client
+   không bao giờ thấy giá trị này.
 2. **Access token giữ nguyên**: vẫn ký JWT, trả trong body, FE giữ trong memory — không đổi
    (ADR này chỉ đóng gate refresh token, không mở lại quyết định access token).
 3. **CSRF double-submit, giá trị phát qua response body (không qua `document.cookie`)**: `web`

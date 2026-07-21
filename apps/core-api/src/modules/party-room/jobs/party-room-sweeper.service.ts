@@ -9,6 +9,7 @@ import { SchedulerRegistry } from '@nestjs/schedule';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, IsNull, LessThan } from 'typeorm';
 
+import { ManagedInterval } from '../../../common/scheduling/managed-interval';
 import { partyRoomName } from '../party-room.constants';
 import { PartyRoomService } from '../party-room.service';
 import {
@@ -44,8 +45,8 @@ export class PartyRoomSweeperService
   implements OnApplicationBootstrap, OnApplicationShutdown
 {
   private readonly logger = new Logger(PartyRoomSweeperService.name);
-  private running = false;
-  private hostGraceRunning = false;
+  private readonly sweeperJob = new ManagedInterval();
+  private readonly hostGraceJob = new ManagedInterval();
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
@@ -56,54 +57,44 @@ export class PartyRoomSweeperService
   ) {}
 
   onApplicationBootstrap(): void {
-    const interval = setInterval(
-      () =>
-        void this.runOnce().catch((err) =>
-          this.logger.error({ err: `${err}` }, 'Party sweeper tick lỗi'),
-        ),
-      this.config.getOrThrow('PARTY_SWEEPER_INTERVAL_MS', { infer: true }),
-    );
-    this.scheduler.addInterval(SWEEPER_JOB, interval);
-
-    const hostGraceInterval = setInterval(
-      () =>
-        void this.runHostGraceCheckOnce().catch((err) =>
-          this.logger.error({ err: `${err}` }, 'Party host-grace-check lỗi'),
-        ),
-      this.config.getOrThrow('PARTY_HOST_GRACE_CHECK_INTERVAL_MS', {
+    this.sweeperJob.start(this.scheduler, {
+      jobName: SWEEPER_JOB,
+      intervalMs: this.config.getOrThrow('PARTY_SWEEPER_INTERVAL_MS', {
         infer: true,
       }),
-    );
-    this.scheduler.addInterval(HOST_GRACE_JOB, hostGraceInterval);
+      task: () => this.runOnce(),
+      logger: this.logger,
+      errorMessage: 'Party sweeper tick lỗi',
+    });
+
+    this.hostGraceJob.start(this.scheduler, {
+      jobName: HOST_GRACE_JOB,
+      intervalMs: this.config.getOrThrow('PARTY_HOST_GRACE_CHECK_INTERVAL_MS', {
+        infer: true,
+      }),
+      task: () => this.runHostGraceCheckOnce(),
+      logger: this.logger,
+      errorMessage: 'Party host-grace-check lỗi',
+    });
   }
 
   onApplicationShutdown(): void {
-    if (this.scheduler.doesExist('interval', SWEEPER_JOB))
-      this.scheduler.deleteInterval(SWEEPER_JOB);
-    if (this.scheduler.doesExist('interval', HOST_GRACE_JOB))
-      this.scheduler.deleteInterval(HOST_GRACE_JOB);
+    this.sweeperJob.stop();
+    this.hostGraceJob.stop();
   }
 
   /** 1 tick — public để test/chạy tay. */
   async runOnce(): Promise<void> {
-    if (this.running) return; // tick trước chưa xong thì bỏ qua, không chồng
-    this.running = true;
-    try {
+    await this.sweeperJob.runExclusive(async () => {
       await this.sweepStaleRooms();
-    } finally {
-      this.running = false;
-    }
+    }, undefined);
   }
 
   /** 1 tick grace-check — public để test/chạy tay. */
   async runHostGraceCheckOnce(): Promise<void> {
-    if (this.hostGraceRunning) return;
-    this.hostGraceRunning = true;
-    try {
+    await this.hostGraceJob.runExclusive(async () => {
       await this.sweepExpiredHostGrace();
-    } finally {
-      this.hostGraceRunning = false;
-    }
+    }, undefined);
   }
 
   /**

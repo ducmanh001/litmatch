@@ -12,6 +12,14 @@
           "NODE_ENV": "production"
         }
       }
+    },
+    "cloudflare-deploy": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "cache": false,
+      "options": {
+        "command": "pnpm exec wrangler pages deploy dist/apps/admin --project-name litmatch-admin --branch main"
+      }
     }
   }
 }

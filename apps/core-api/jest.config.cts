@@ -4,6 +4,9 @@ module.exports = {
   coverageDirectory: '../../coverage/apps/core-api',
   testEnvironment: 'node',
   setupFiles: ['<rootDir>/src/test-setup.ts'],
+  // Integration suites reset the same PostgreSQL test schema and reserved Redis databases.
+  // Running test files in parallel makes those resets race and produces nondeterministic CI.
+  maxWorkers: 1,
   // Gate coverage cho service layer (docs/05 § 5.9 — đích 80%, gate ratchet chỉ nâng không hạ).
   // Ngưỡng chỉ được enforce khi chạy với --coverage (CI luôn bật) và phải kèm
   // INTEGRATION_DB_URL (Economy test chủ yếu là integration; thiếu env này coverage tụt ~26 điểm).

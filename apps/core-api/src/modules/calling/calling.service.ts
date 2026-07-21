@@ -21,9 +21,11 @@ import {
   CallSessionStatus,
   callRoomName,
 } from './entities/call-session.entity';
+import { VoiceMatchReaction } from './entities/voice-match-reaction.entity';
 import { LivekitRoomPort } from './ports/livekit-room';
 import { CALLING_REDIS } from './redis/calling-redis.provider';
 import { MatchSessionStatus, MatchType, MatchingService } from '../matching';
+import { FriendService, FriendshipSource } from '../friend';
 import { UserService } from '../user';
 
 import type {
@@ -47,6 +49,13 @@ export interface EndCallResult {
   justEnded: boolean;
 }
 
+export interface VoiceMatchLikeResult {
+  liked: boolean;
+  matched: boolean;
+  /** Chỉ reveal sau mutual like; client dùng để mở conversation bạn bè bền vững. */
+  friendUserId: string | null;
+}
+
 /**
  * Nghiệp vụ voice call 2 người trên LiveKit (docs/services/calling-service.md).
  * State machine spec § 1 — `ended` terminal, mọi transition idempotent (webhook retry an toàn).
@@ -60,13 +69,21 @@ export class CallingService {
     @InjectDataSource() private readonly dataSource: DataSource,
     @InjectRepository(CallSession)
     private readonly callRepo: Repository<CallSession>,
+    @InjectRepository(VoiceMatchReaction)
+    private readonly reactionRepo: Repository<VoiceMatchReaction>,
     private readonly matchingService: MatchingService,
+    private readonly friendService: FriendService,
     private readonly livekit: LivekitRoomPort,
     private readonly config: ConfigService<CoreApiEnv, true>,
     private readonly userService: UserService,
     @Inject(CALLING_REDIS) private readonly redis: Redis,
     private readonly metrics: CallingMetrics,
   ) {}
+
+  /** Giá thời lượng do server cấu hình; DTO chỉ phát mốc kết thúc để client render countdown. */
+  getFreeCallSeconds(): number {
+    return this.config.getOrThrow('CALLING_FREE_CALL_SECONDS', { infer: true });
+  }
 
   /**
    * Tạo/lấy call của voice session + mint token (spec § 2). Idempotent tự nhiên theo
@@ -87,10 +104,25 @@ export class CallingService {
         HttpStatus.NOT_FOUND,
       );
     }
+    let call = await this.callRepo.findOneBy({ matchSessionId });
     if (
       session.matchType !== MatchType.Voice ||
       session.status !== MatchSessionStatus.Confirmed
     ) {
+      // Sau timeout/webhook, MatchSession đã terminal cùng CallSession. Giữ lỗi CALL_ENDED cho
+      // re-join của call cũ để client có một nhánh xử lý dứt khoát; nếu có row pending orphan
+      // từ race đời trước thì dọn luôn thay vì để ticker phải chờ.
+      if (call?.status === CallSessionStatus.Ended) {
+        throw new DomainException(
+          CallingErrors.CALL_ENDED,
+          'Call đã kết thúc',
+          HttpStatus.CONFLICT,
+          { reason: call.endReason },
+        );
+      }
+      if (call && session.matchType === MatchType.Voice) {
+        await this.endById(call.id, CallEndReason.Completed);
+      }
       throw new DomainException(
         CallingErrors.SESSION_NOT_CALLABLE,
         'Chỉ mở phòng call cho voice session đã đủ 2 bên xác nhận',
@@ -98,7 +130,6 @@ export class CallingService {
       );
     }
 
-    let call = await this.callRepo.findOneBy({ matchSessionId });
     if (!call) {
       // id sinh trước để đặt roomName từ id — client không bao giờ tự chọn room
       const id = randomUUID();
@@ -118,6 +149,25 @@ export class CallingService {
         if (!isUniqueViolation(err)) throw err;
         call = await this.callRepo.findOneByOrFail({ matchSessionId });
       }
+    }
+    // `endMatchSession` có thể chạy ngay giữa lúc request join đang tạo CallSession (user
+    // bấm back/đóng tab ở thiết bị còn lại). Re-check sau upsert biến race đó thành một call
+    // terminal thay vì để pending orphan tới ticker timeout. Matching vẫn là owner của state.
+    const currentSession =
+      await this.matchingService.findSessionById(matchSessionId);
+    if (
+      !currentSession ||
+      currentSession.matchType !== MatchType.Voice ||
+      currentSession.status !== MatchSessionStatus.Confirmed ||
+      (currentSession.userAId !== user.userId &&
+        currentSession.userBId !== user.userId)
+    ) {
+      await this.endById(call.id, CallEndReason.Completed);
+      throw new DomainException(
+        CallingErrors.CALL_ENDED,
+        'Phiên Voice Match đã kết thúc',
+        HttpStatus.CONFLICT,
+      );
     }
     if (call.status === CallSessionStatus.Ended) {
       throw new DomainException(
@@ -167,7 +217,123 @@ export class CallingService {
         HttpStatus.NOT_FOUND,
       );
     }
+    await this.matchingService.endVoiceSession(user, call.matchSessionId);
     return call;
+  }
+
+  /**
+   * Rời màn Voice Match trước khi LiveKit tạo call cũng phải đóng durable session. Nếu call đã
+   * tồn tại thì đóng nó trước (idempotent), sau đó Matching chốt session terminal cho cả cặp.
+   */
+  async endMatchSession(
+    user: AuthenticatedUser,
+    matchSessionId: string,
+  ): Promise<void> {
+    const session = await this.matchingService.findSessionById(matchSessionId);
+    if (
+      !session ||
+      (session.userAId !== user.userId && session.userBId !== user.userId)
+    ) {
+      throw new DomainException(
+        CallingErrors.SESSION_NOT_FOUND,
+        'Không tìm thấy session',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    const call = await this.callRepo.findOneBy({ matchSessionId });
+    if (call) await this.endById(call.id, CallEndReason.Completed);
+    await this.matchingService.endVoiceSession(user, matchSessionId);
+  }
+
+  /**
+   * Like trong hoặc sau khi cuộc gọi đã kết thúc. Hai lượt like được serialize bằng lock CallSession;
+   * reaction unique ở DB và Friendship/Conversation cùng transaction nên retry/double tap không
+   * tạo đôi hoặc tạo Friendship thiếu Conversation.
+   */
+  async likeCall(
+    user: AuthenticatedUser,
+    callId: string,
+  ): Promise<VoiceMatchLikeResult> {
+    await this.getCall(user, callId);
+    try {
+      return await this.dataSource.transaction(async (manager) => {
+        const call = await manager.findOne(CallSession, {
+          where: { id: callId },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (
+          !call ||
+          (call.userAId !== user.userId && call.userBId !== user.userId)
+        ) {
+          throw new DomainException(
+            CallingErrors.CALL_NOT_FOUND,
+            'Không tìm thấy call',
+            HttpStatus.NOT_FOUND,
+          );
+        }
+        // Consent phải được ghi ngay trong lúc đang nói để UX không bắt user phải end chỉ để
+        // bấm like. `pending` chưa có cuộc nói chuyện thực nên vẫn bị chặn; `active` và `ended`
+        // đều hợp lệ, reaction unique bảo đảm retry/double tap vô hại.
+        if (
+          call.status !== CallSessionStatus.Active &&
+          call.status !== CallSessionStatus.Ended
+        ) {
+          throw new DomainException(
+            CallingErrors.CALL_NOT_ENDED,
+            'Chỉ có thể yêu thích khi cuộc gọi đã kết nối hoặc đã kết thúc',
+            HttpStatus.CONFLICT,
+          );
+        }
+        const partnerId =
+          call.userAId === user.userId ? call.userBId : call.userAId;
+        const existing = await manager.findOneBy(VoiceMatchReaction, {
+          callId,
+          raterUserId: user.userId,
+        });
+        if (!existing) {
+          await manager.save(
+            manager.create(VoiceMatchReaction, {
+              callId,
+              raterUserId: user.userId,
+            }),
+          );
+        }
+        const partnerLiked = await manager.existsBy(VoiceMatchReaction, {
+          callId,
+          raterUserId: partnerId,
+        });
+        if (partnerLiked) {
+          await this.friendService.ensureFriendship(
+            manager,
+            user.userId,
+            partnerId,
+            FriendshipSource.VoiceMatch,
+          );
+        }
+        const matched =
+          partnerLiked ||
+          (await this.friendService.areFriends(user.userId, partnerId));
+        return {
+          liked: true,
+          matched,
+          friendUserId: matched ? partnerId : null,
+        };
+      });
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      const call = await this.getCall(user, callId);
+      const partnerId =
+        call.userAId === user.userId ? call.userBId : call.userAId;
+      const matched = await this.friendService.areFriends(
+        user.userId,
+        partnerId,
+      );
+      return {
+        liked: true,
+        matched,
+        friendUserId: matched ? partnerId : null,
+      };
+    }
   }
 
   /**
@@ -301,6 +467,13 @@ export class CallingService {
 
   /** Sau khi end: dọn room SFU (chống leak) + báo realtime — cả 2 đều best-effort. */
   private async cleanupEndedCall(call: CallSession): Promise<void> {
+    // Chốt Matching trước khi phát event: user nhận `call.ended` rồi quay lại tìm match sẽ không
+    // bao giờ bị session confirmed cũ giữ lại. Đây cũng cover webhook/ticker, không chỉ nút UI.
+    await this.matchingService.endVoiceSessionForCall(
+      call.matchSessionId,
+      call.userAId,
+      call.userBId,
+    );
     await this.livekit.deleteRoom(call.roomName).catch((err) => {
       // room có thể đã tự đóng (room_finished) — không phải lỗi nghiệp vụ
       this.logger.debug(

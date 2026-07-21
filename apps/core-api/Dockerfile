@@ -3,6 +3,7 @@
 FROM node:22-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2
 WORKDIR /app
 ENV NODE_ENV=production
+COPY pnpm-workspace.yaml ./
 COPY dist/apps/core-api ./
 RUN corepack enable pnpm \
   && pnpm install --prod --frozen-lockfile --ignore-scripts \

@@ -5,18 +5,20 @@
 ## 1. State machine `MatchTicket`
 
 ```
-queued ──(matcher ghép cặp thành công)──▶ matched ──(cả 2 confirm)──▶ confirmed
-  │                                          │
-  │ (sweeper: quá MATCHING_QUEUE_MAX_WAIT_SECONDS)   │ (sweeper: quá MATCHING_CONFIRM_TIMEOUT_SECONDS,
-  ▼                                          │        1 bên không confirm)
-expired                                      ├──▶ expired (bên không confirm)
-                                              └──▶ ticket bên ĐÃ confirm được requeue lại `queued`
-                                                    (enqueue mới, không mất lượt — docs/10 § Matching)
+queued ──(matcher ghép cặp thành công)──▶ confirmed
+  │
+  │ (sweeper: quá MATCHING_QUEUE_MAX_WAIT_SECONDS)
+  ▼
+expired
 queued ──(user gọi cancel)──▶ cancelled
 ```
 
-Transition hợp lệ duy nhất ở tầng service (không tin client gửi trạng thái đích):
-`queued→matched`, `queued→expired`, `queued→cancelled`, `matched→confirmed`, `matched→expired`.
+Hai người đã biểu lộ đồng ý khi chủ động vào hàng đợi. Matcher vì vậy tạo `MatchSession` và hai
+ticket `confirmed` trong cùng transaction; client nhận `match.confirmed`, refetch rồi vào phòng
+ngay. `matched`/`pending_confirm` và endpoint confirm chỉ giữ để hoàn tất session cũ.
+
+Transition mới: `queued→confirmed`, `queued→expired`, `queued→cancelled`; các transition
+`matched→*` chỉ dành cho tương thích legacy.
 Mọi transition khác throw `MATCHING_TICKET_INVALID_TRANSITION`.
 
 ## 2. Sharding & Redis queue (docs/03 § 3.8.B)
@@ -25,7 +27,7 @@ Mọi transition khác throw `MATCHING_TICKET_INVALID_TRANSITION`.
 - Cấu trúc: **Sorted Set**, member = `ticketId`, score = `enqueuedAtMs - speedupBoostMs` (speed-up trừ `MATCHING_PRIORITY_BOOST_MS` khỏi score → nổi lên đầu hàng đợi, score càng nhỏ càng được ghép trước).
 - Danh sách shard đang hoạt động: Set `matching:shards:active` (thêm khi enqueue, dọn khi shard rỗng) để matcher worker không phải quét toàn bộ keyspace.
 - **Double-lock ghép cặp — atomic bằng `ZPOPMIN key 2`** (Redis native, atomic sẵn không cần Lua vì Redis đơn luồng): lấy 2 ticketId điểm thấp nhất ra khỏi sorted set trong 1 lệnh, đảm bảo 2 matcher instance không bao giờ lấy trùng ticket.
-- Sau khi pop khỏi Redis, **verify lại trong Postgres** (không tin trạng thái Redis là nguồn sự thật): cả 2 ticket còn `queued`, không cùng `userId`, **preference giới tính khớp 2 chiều (§ 2.1)**, không nằm trong danh sách block/report lẫn nhau (docs/06). Verify + transition `queued→matched` + tạo `MatchSession` phải nằm trong **1 transaction Postgres** với `SELECT ... FOR UPDATE` trên 2 ticket đó.
+- Sau khi pop khỏi Redis, **verify lại trong Postgres** (không tin trạng thái Redis là nguồn sự thật): cả 2 ticket còn `queued`, không cùng `userId`, **preference giới tính khớp 2 chiều (§ 2.1)**, không nằm trong danh sách block/report lẫn nhau (docs/06). Verify + transition `queued→confirmed` + tạo `MatchSession{confirmed}` phải nằm trong **1 transaction Postgres** với `SELECT ... FOR UPDATE` trên 2 ticket đó.
 - Ticket nào verify fail (đã bị cancel/hết hạn ở giữa chừng, hoặc bị block) → **không** ghép, tự expire ticket đó; ticket còn hợp lệ → đẩy lại vào Redis với **priority gốc, không mất lượt chờ** (dùng lại `enqueuedAtMs` cũ, không tính lại từ đầu).
 
 ### 2.1 Bộ lọc giới tính (docs/01 #13)
@@ -34,7 +36,6 @@ Mọi transition khác throw `MATCHING_TICKET_INVALID_TRANSITION`.
 - **KHÔNG shard theo gender**: filter là điều kiện verify tại thời điểm ghép trong `tryPair`, cùng chỗ với block/report (docs/10 § 10.0.C). Lý do: shard theo gender nổ số shard ×3 và preference `any` sẽ phải quét nhiều shard.
 - Check **2 chiều** (`prefA` khớp `genderB` VÀ `prefB` khớp `genderA`); gender đối phương đọc **tươi** từ `users` trong chính transaction verify — user đổi profile giữa lúc chờ vẫn đúng. Preference cụ thể chỉ khớp đúng giá trị đó: user gender `unknown`/`other` chỉ ghép được với preference `any`.
 - Cặp không khớp giới = cặp hợp lệ nhưng không ghép → đi cùng nhánh requeue với block/report (score gốc, không mất lượt). Trade-off đã chấp nhận (giống block): cặp không khớp ở đầu shard chặn shard đó tới khi có ứng viên score thấp hơn chen vào hoặc sweeper expire; nếu thành vấn đề thật → slice sau đổi sang pop-k-candidates.
-- Sweeper requeue bên đã confirm (§ 3) phải **copy `genderPreference`** sang ticket mới, không rơi về default.
 
 ## 3. Matcher worker & sweeper
 
@@ -44,7 +45,7 @@ Mọi transition khác throw `MATCHING_TICKET_INVALID_TRANSITION`.
 - `TicketSweeperService`: đăng ký interval động bằng `SchedulerRegistry`, đọc
   `MATCHING_SWEEPER_INTERVAL_MS`:
   - `queued` quá `MATCHING_QUEUE_MAX_WAIT_SECONDS` kể từ `createdAt` → `expired`, xoá khỏi Redis (dùng `ZREM`, ticketId không còn thì bỏ qua — idempotent).
-  - `matched` (qua `MatchSession.status = pending_confirm`) quá `MATCHING_CONFIRM_TIMEOUT_SECONDS` kể từ lúc match mà chưa đủ 2 confirm → session `expired`; ticket đã confirm → `queued` lại (enqueue mới, priority mới); ticket chưa confirm → `expired`.
+  - chỉ dọn `queued` quá hạn. Nhánh `pending_confirm` cũ vẫn được dọn để không bỏ rơi session tạo bởi phiên bản trước, nhưng không phát sinh từ flow hiện tại.
 
 ## 4. Speed-up (trừ diamond qua Economy qua DI — docs/03 § 3.7)
 
@@ -69,7 +70,7 @@ Mọi transition khác throw `MATCHING_TICKET_INVALID_TRANSITION`.
 ## 5. Entity
 
 - `MatchTicket extends BaseAppEntity`: `userId (uuid, index)`, `matchType ('soul'|'voice')`, `region (varchar)`, `ageBand (int)`, `genderPreference ('any'|'male'|'female', default 'any' — § 2.1)`, `status (enum MatchTicketStatus)`, `enqueuedAt (timestamptz)`, `sessionId (uuid, nullable)`. Index `(status, matchType, region, ageBand)` cho sweeper quét theo shard.
-- `MatchSession extends BaseAppEntity`: `matchType`, `userAId`, `userBId`, `ticketAId`, `ticketBId`, `status (enum: pending_confirm|confirmed|expired)`, `confirmedAId (nullable timestamptz-check hoặc 2 cột confirmedAAt/confirmedBAt)`, `endedAt (nullable)`.
+- `MatchSession extends BaseAppEntity`: `matchType`, `userAId`, `userBId`, `ticketAId`, `ticketBId`, `status (enum: pending_confirm|confirmed|expired)`, `confirmedAId (nullable timestamptz-check hoặc 2 cột confirmedAAt/confirmedBAt)`, `endedAt (nullable)`. Flow mới ghi `confirmed` cùng hai timestamp ngay khi ghép; `pending_confirm` chỉ tương thích dữ liệu cũ.
 - 1 user chỉ 1 ticket `queued`/`matched` tại 1 thời điểm (docs/06) → **partial unique index** Postgres: `UNIQUE (user_id) WHERE status IN ('queued','matched')` — chặn ở DB, không chỉ ở code.
 
 ## 6. API (`api/v1/matching`)
@@ -80,7 +81,7 @@ Mọi transition khác throw `MATCHING_TICKET_INVALID_TRANSITION`.
 | `GET /matching/tickets/current`      | không           | Phục hồi sau reload: trả `{ ticket: TicketDto \| null }` của chính user từ auth; active chỉ gồm `queued\|matched`                                        |
 | `DELETE /matching/tickets/:id`       | không           | Huỷ ticket của chính mình (check ownership — IDOR, docs/10 § 10.1.D)                                                                                     |
 | `GET /matching/tickets/:id`          | không           | Trạng thái ticket (poll)                                                                                                                                 |
-| `POST /matching/tickets/:id/confirm` | không           | Xác nhận match — check ownership + đúng session đang `pending_confirm`                                                                                   |
+| `POST /matching/tickets/:id/confirm` | không           | Tương thích session `pending_confirm` cũ; UI mới không gọi endpoint này                                                                                  |
 | `POST /matching/tickets/:id/speedup` | có              | Trừ diamond ưu tiên — xem § 4                                                                                                                            |
 
 ## 7. Domain rule tái xác nhận tại thời điểm ghép (docs/10 § 10.0.C)
@@ -91,7 +92,7 @@ Check block/report **không chỉ lúc vào queue** — bắt buộc verify lạ
 
 `MATCHING_MATCHER_INTERVAL_MS`, `MATCHING_MATCHER_BATCH_SIZE`,
 `MATCHING_SWEEPER_INTERVAL_MS`, `MATCHING_QUEUE_MAX_WAIT_SECONDS`,
-`MATCHING_CONFIRM_TIMEOUT_SECONDS`, `MATCHING_AGE_BAND_SIZE`,
+`MATCHING_CONFIRM_TIMEOUT_SECONDS` (chỉ dọn session legacy), `MATCHING_AGE_BAND_SIZE`,
 `MATCHING_SPEEDUP_PRICE_DIAMOND`, `MATCHING_SPEEDUP_MAX_PER_HOUR`,
 `MATCHING_PRIORITY_BOOST_MS` đã có đủ trong `.env.example`, `CoreApiEnv` và
 `coreApiEnvSchema` (Joi); code đọc qua `ConfigService<CoreApiEnv, true>`.
@@ -122,7 +123,7 @@ Transition hợp lệ duy nhất (`MATCH_INVITE_TRANSITIONS`, không tin client 
 ### 9.2 Accept — tạo trực tiếp ticket/session, bỏ qua hàng đợi shard
 
 Khác auto-match (2 ticket độc lập vào queue rồi chờ matcher ghép), accept invite tạo **trực
-tiếp** 2 `MatchTicket{status: matched}` + 1 `MatchSession{status: pending_confirm}` trong 1
+tiếp** 2 `MatchTicket{status: confirmed}` + 1 `MatchSession{status: confirmed}` trong 1
 transaction — tái dùng NGUYÊN các validate của `tryPair` (§ 2):
 
 - **1-user-1-queue** (docs/06): cùng partial unique index `uq_match_tickets_active_user` — insert
@@ -140,20 +141,16 @@ transaction — tái dùng NGUYÊN các validate của `tryPair` (§ 2):
   auto-pairing cần lọc trước khi biết đối phương là ai. Quyết định thiết kế, không phải thiếu sót.
 - **Idempotent** qua `inviteAcceptIdempotencyKey(inviteId, 'inviter'|'invitee')` — accept lặp lại
   (retry mạng, hoặc gọi 2 lần) đọc lại ĐÚNG 2 ticket + session đã tạo, không tạo đôi (docs/05 § 5.10).
-- Sau khi tạo, publish CÙNG realtime event `match.matched` mà auto-match dùng — client dùng lại
-  đúng 1 chỗ lắng nghe rồi gọi `confirmTicket()` như bình thường, không cần logic riêng cho luồng
-  invite. Response `accept` trả kèm `inviteeTicketId` (ticket của chính người gọi) để FE biết
-  `ticketId` nào dùng cho `confirmTicket`.
+- Sau khi tạo, publish CÙNG realtime event `match.confirmed` mà auto-match dùng; hai bên refetch
+  rồi vào phòng ngay. Response `accept` vẫn trả `inviteeTicketId` để tương thích client/API cũ.
 
-### 9.3 Voice invite KHÔNG tạo Friendship (quyết định chốt 2026-07-14)
+### 9.3 Voice Match → Friendship sau mutual-like (cập nhật 2026-07-17)
 
-`docs/02-domain-model.md` từng mô tả Friendship "tạo ra sau Soul/Voice Match" nhưng **code chỉ
-implement rating/like cho `MatchType.Soul`** (`soul-match.service.ts` chặn cứng
-`matchType !== Soul`) — gap tài liệu-code có từ trước W4, không phải lỗi phát sinh ở invite.
-Quyết định: **giữ nguyên scope code hiện tại** — mời Voice Match chỉ vào cuộc gọi tính phí theo
-phút như bình thường, KHÔNG thêm cơ chế like/reveal mới cho Voice. `docs/02` đã sửa lại cho khớp
-(chỉ Soul Match có Friendship). Nếu sau này muốn Voice cũng dẫn tới Friendship — đó là một
-tính năng mới, cần plan riêng, không phải phần mở rộng ngầm của invite.
+Sau khi Voice Match terminal, mỗi thành viên có một lượt “Yêu thích” immutable. Hai lượt like
+được serialize trên `CallSession`; khi đủ cả hai, Calling gọi `FriendService.ensureFriendship`
+trong cùng transaction để tạo atomically `Friendship` và `Conversation`. Không có reveal/profile
+trong lúc call active, không có unilateral friend request, và retry/double tap bị chặn bởi unique
+DB `(call_id, rater_user_id)`.
 
 ### 9.4 Chống spam mời — đối xứng, không phân biệt giới tính trong logic
 

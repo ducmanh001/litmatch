@@ -154,6 +154,8 @@ jobs:
         run: |
           docker build -f apps/core-api/Dockerfile -t litmatch/core-api:${{ github.sha }} .
           docker build -f apps/signaling-gateway/Dockerfile -t litmatch/signaling-gateway:${{ github.sha }} .
+          docker build -f apps/web/Dockerfile -t litmatch/web:${{ github.sha }} .
+          docker build -f deploy/production/Dockerfile.edge -t litmatch/edge:${{ github.sha }} .
 
       - name: Install Trivy (verified checksum)
         run: node scripts/ci/security-tools.mjs trivy --install-dir /tmp/litmatch-ci-tools --add-to-github-path
@@ -162,8 +164,12 @@ jobs:
         run: |
           trivy image litmatch/core-api:${{ github.sha }} --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress --skip-version-check
           trivy image litmatch/signaling-gateway:${{ github.sha }} --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress --skip-version-check
+          trivy image litmatch/web:${{ github.sha }} --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress --skip-version-check
+          trivy image litmatch/edge:${{ github.sha }} --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress --skip-version-check
           trivy image litmatch/core-api:${{ github.sha }} --scanners vuln --format cyclonedx --output core-api.cdx.json --skip-version-check
           trivy image litmatch/signaling-gateway:${{ github.sha }} --scanners vuln --format cyclonedx --output signaling-gateway.cdx.json --skip-version-check
+          trivy image litmatch/web:${{ github.sha }} --scanners vuln --format cyclonedx --output web.cdx.json --skip-version-check
+          trivy image litmatch/edge:${{ github.sha }} --scanners vuln --format cyclonedx --output edge.cdx.json --skip-version-check
 
       - name: Upload image SBOMs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -178,26 +184,48 @@ jobs:
           CORE_IMAGE: litmatch/core-api:${{ github.sha }}
           SIGNALING_IMAGE: litmatch/signaling-gateway:${{ github.sha }}
         run: |
-          trap 'docker rm --force litmatch-core-smoke litmatch-signaling-smoke >/dev/null 2>&1 || true' EXIT
+          trap 'docker rm --force litmatch-core-smoke litmatch-signaling-smoke litmatch-web-smoke >/dev/null 2>&1 || true' EXIT
 
-          # The production bundle uses test config until a real SMS provider is available;
-          # core-api intentionally refuses to boot production with DevSmsProvider.
+          # Production zero-cost profile tắt fail-closed capability cần vendor; không chạy
+          # provider dev hoặc dữ liệu giả trong production.
           docker run --detach --name litmatch-core-smoke --network host \
-            --env NODE_ENV=test \
+            --env NODE_ENV=production \
             --env DATABASE_URL="${DATABASE_URL}" \
             --env REDIS_URL="${REDIS_URL}" \
             --env JWT_SECRET="${JWT_SECRET}" \
             --env AUTH_OTP_PEPPER="${AUTH_OTP_PEPPER}" \
+            --env AUTH_PHONE_OTP_ENABLED=false \
+            --env VIDEO_UPLOAD_ENABLED=false \
+            --env NOTIFICATION_PUSH_PROVIDER=disabled \
+            --env ECONOMY_IAP_VERIFIER=disabled \
+            --env ECONOMY_APPLE_WEBHOOK_VERIFIER=store \
+            --env ECONOMY_GOOGLE_RTDN_VERIFIER=store \
+            --env ECONOMY_OUTBOX_RELAY_ENABLED=false \
+            --env ECONOMY_REFUND_POLL_ENABLED=false \
+            --env LIVEKIT_URL=wss://media.example.com \
+            --env LIVEKIT_API_URL=http://127.0.0.1:7880 \
+            --env LIVEKIT_API_KEY=ci-livekit-key \
+            --env LIVEKIT_API_SECRET=ci-livekit-secret-0123456789abcdef \
             "${CORE_IMAGE}"
           docker run --detach --name litmatch-signaling-smoke --network host \
             --env NODE_ENV=production \
             --env JWT_SECRET="${JWT_SECRET}" \
             --env REDIS_URL="${REDIS_URL}" \
             "${SIGNALING_IMAGE}"
+          docker run --detach --name litmatch-web-smoke --network host \
+            --env PORT=4300 \
+            litmatch/web:${{ github.sha }}
+          docker run --rm \
+            --env DOMAIN=example.com \
+            --env ACME_EMAIL=ci@example.com \
+            --entrypoint caddy \
+            litmatch/edge:${{ github.sha }} \
+            validate --config /etc/caddy/Caddyfile
 
           for _ in {1..30}; do
             if curl --fail --silent http://127.0.0.1:3000/health/ready >/dev/null \
-              && curl --fail --silent http://127.0.0.1:3001/health/ready >/dev/null; then
+              && curl --fail --silent http://127.0.0.1:3001/health/ready >/dev/null \
+              && curl --fail --silent http://127.0.0.1:4300/ >/dev/null; then
               exit 0
             fi
             sleep 1
@@ -205,6 +233,7 @@ jobs:
 
           docker logs litmatch-core-smoke
           docker logs litmatch-signaling-smoke
+          docker logs litmatch-web-smoke
           exit 1
 
   required:

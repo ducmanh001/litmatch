@@ -11,6 +11,7 @@ import { DomainException } from '@litmatch/common-exceptions';
 import { withSpan } from '@litmatch/observability';
 import { DataSource, LessThan } from 'typeorm';
 
+import { ManagedInterval } from '../../../common/scheduling/managed-interval';
 import { callTickIdempotencyKey } from '../calling.constants';
 import { CallingService } from '../calling.service';
 import {
@@ -41,7 +42,7 @@ export class CallTickerService
   implements OnApplicationBootstrap, OnApplicationShutdown
 {
   private readonly logger = new Logger(CallTickerService.name);
-  private running = false;
+  private readonly job = new ManagedInterval();
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
@@ -52,26 +53,24 @@ export class CallTickerService
   ) {}
 
   onApplicationBootstrap(): void {
-    const interval = setInterval(
-      () =>
-        void this.runOnce().catch((err) =>
-          this.logger.error({ err: `${err}` }, 'Call ticker tick lỗi'),
-        ),
-      this.config.getOrThrow('CALLING_TICKER_INTERVAL_MS', { infer: true }),
-    );
-    this.scheduler.addInterval(TICKER_JOB, interval);
+    this.job.start(this.scheduler, {
+      jobName: TICKER_JOB,
+      intervalMs: this.config.getOrThrow('CALLING_TICKER_INTERVAL_MS', {
+        infer: true,
+      }),
+      task: () => this.runOnce(),
+      logger: this.logger,
+      errorMessage: 'Call ticker tick lỗi',
+    });
   }
 
   onApplicationShutdown(): void {
-    if (this.scheduler.doesExist('interval', TICKER_JOB))
-      this.scheduler.deleteInterval(TICKER_JOB);
+    this.job.stop();
   }
 
   /** 1 tick — public để test/chạy tay. */
   async runOnce(): Promise<void> {
-    if (this.running) return; // tick trước chưa xong thì bỏ qua, không chồng
-    this.running = true;
-    try {
+    await this.job.runExclusive(async () => {
       // Bọc span thủ công — tick không có parent context tự nhiên (docs/07 GĐ6, cùng lý do
       // MatcherWorkerService), giúp thấy nguyên vẹn 1 tick billing chạm cả Calling lẫn Economy
       // (spendDiamond) trong 1 trace.
@@ -79,9 +78,7 @@ export class CallTickerService
         await this.sweepPending();
         await this.processActiveCalls();
       });
-    } finally {
-      this.running = false;
-    }
+    }, undefined);
   }
 
   private async sweepPending(): Promise<void> {

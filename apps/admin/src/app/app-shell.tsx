@@ -22,6 +22,7 @@ import { apiClient, tokenStore } from '../shared/api/client';
 import { useRole } from '../shared/auth/use-role';
 import { cn } from '../shared/lib/cn';
 import { Button } from '../shared/ui/button';
+import { LanguageToggle } from '../shared/ui/language-toggle';
 import { ThemeSlider } from '../shared/ui/theme-slider';
 import { ToastStack } from '../shared/ui/toast-stack';
 
@@ -257,6 +258,7 @@ export function AppShell() {
                 <span className="absolute top-[7px] right-2 size-[7px] rounded-full border-[1.5px] border-card bg-destructive" />
               </button>
               <ThemeSlider />
+              <LanguageToggle />
               <div className="flex items-center gap-2 rounded-full border border-border bg-card py-[5px] pr-3 pl-[5px]">
                 <div className="flex size-7 items-center justify-center rounded-full bg-accent text-[11px] font-extrabold text-avatar-foreground">
                   {roleInfo.initials}

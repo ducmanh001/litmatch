@@ -2,52 +2,15 @@
 
 import { isApiError } from '@litmatch/api-client';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
 
 import { Button } from '../../../shared/ui/button';
 import { MatchIcon, MicIcon } from '../../../shared/ui/icons';
 import { PlaceholderAvatar } from '../../../shared/ui/placeholder-avatar';
-import { useConfirmTicket } from '../api';
 import {
   useAcceptInvite,
   useDeclineInvite,
   useReceivedInvites,
 } from '../invite-api';
-
-/** Sau accept: ticket đã ở 'matched' cho đúng người gọi, rồi confirm qua cùng state machine
- * auto-match trước khi điều hướng vào phòng (docs/services/matching-service.md § 9.2). */
-function useAcceptAndEnter() {
-  const router = useRouter();
-  const [pending, setPending] = useState<{
-    ticketId: string;
-    sessionId: string;
-    matchType: 'soul' | 'voice';
-  } | null>(null);
-  const confirmTicket = useConfirmTicket(pending?.ticketId ?? '');
-
-  useEffect(() => {
-    if (pending === null) return;
-    confirmTicket.mutate(undefined, {
-      onSuccess: () => {
-        router.replace(
-          pending.matchType === 'soul'
-            ? `/matching/soul/${pending.sessionId}`
-            : `/matching/voice/${pending.sessionId}`,
-        );
-      },
-      // Confirm có thể lỗi nếu ticket hết hạn giữa lúc chờ; trả CTA về trạng thái bấm được.
-      onError: () => setPending(null),
-    });
-    // Chỉ chạy khi chuyển sang lời mời khác. Mutation object đổi identity theo render nên không
-    // thể là dependency nếu không muốn gọi confirm lặp lại.
-  }, [pending]);
-
-  return {
-    startEntering: setPending,
-    isEntering: pending !== null,
-    confirmError: confirmTicket.error,
-  };
-}
 
 function errorMessage(error: unknown): string | undefined {
   if (isApiError(error)) return error.message;
@@ -67,15 +30,13 @@ function expiryLabel(expiresAt: string): string {
 }
 
 export function IncomingInvites() {
+  const router = useRouter();
   const invitesQuery = useReceivedInvites();
   const acceptInvite = useAcceptInvite();
   const declineInvite = useDeclineInvite();
-  const { startEntering, isEntering, confirmError } = useAcceptAndEnter();
   const invites = invitesQuery.data?.items ?? [];
   const actionError =
-    errorMessage(acceptInvite.error) ??
-    errorMessage(declineInvite.error) ??
-    errorMessage(confirmError);
+    errorMessage(acceptInvite.error) ?? errorMessage(declineInvite.error);
 
   return (
     <section
@@ -176,7 +137,7 @@ export function IncomingInvites() {
                     type="button"
                     size="sm"
                     variant="secondary"
-                    disabled={isEntering || declineInvite.isPending}
+                    disabled={acceptInvite.isPending || declineInvite.isPending}
                     onClick={() => declineInvite.mutate(invite.id)}
                   >
                     {declineInvite.isPending ? 'Đang từ chối…' : 'Từ chối'}
@@ -185,23 +146,21 @@ export function IncomingInvites() {
                     type="button"
                     size="sm"
                     className="bg-irisl text-white shadow-none hover:bg-irisl/90"
-                    disabled={isEntering || acceptInvite.isPending}
+                    disabled={acceptInvite.isPending || declineInvite.isPending}
                     onClick={() =>
                       acceptInvite.mutate(invite.id, {
                         onSuccess: (data) => {
                           if (data === undefined) return;
-                          startEntering({
-                            ticketId: data.inviteeTicketId,
-                            sessionId: data.sessionId,
-                            matchType: invite.matchType,
-                          });
+                          router.replace(
+                            invite.matchType === 'soul'
+                              ? `/matching/soul/${data.sessionId}`
+                              : `/matching/voice/${data.sessionId}`,
+                          );
                         },
                       })
                     }
                   >
-                    {isEntering || acceptInvite.isPending
-                      ? 'Đang vào…'
-                      : 'Chấp nhận'}
+                    {acceptInvite.isPending ? 'Đang vào…' : 'Chấp nhận'}
                   </Button>
                 </div>
               </article>

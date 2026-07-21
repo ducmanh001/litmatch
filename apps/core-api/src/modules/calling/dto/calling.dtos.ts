@@ -17,8 +17,10 @@ export class CallDto {
   @ApiProperty({ nullable: true, type: Number })
   durationSeconds!: number | null;
   @ApiProperty() billedMinutes!: number;
+  /** Server derive từ CALLING_FREE_CALL_SECONDS; client chỉ hiển thị countdown, không tự enforce. */
+  @ApiProperty({ nullable: true, type: Date }) freeCallEndsAt!: Date | null;
 
-  static from(call: CallSession): CallDto {
+  static from(call: CallSession, freeCallSeconds: number): CallDto {
     const dto = new CallDto();
     dto.id = call.id;
     dto.matchSessionId = call.matchSessionId;
@@ -28,6 +30,9 @@ export class CallDto {
     dto.endReason = call.endReason;
     dto.durationSeconds = call.durationSeconds;
     dto.billedMinutes = call.billedMinutes;
+    dto.freeCallEndsAt = call.startedAt
+      ? new Date(call.startedAt.getTime() + freeCallSeconds * 1000)
+      : null;
     return dto;
   }
 }
@@ -42,11 +47,20 @@ export class JoinCallDto {
     call: CallSession,
     token: string,
     livekitUrl: string,
+    freeCallSeconds: number,
   ): JoinCallDto {
     const dto = new JoinCallDto();
-    dto.call = CallDto.from(call);
+    dto.call = CallDto.from(call, freeCallSeconds);
     dto.token = token;
     dto.livekitUrl = livekitUrl;
     return dto;
   }
+}
+
+export class VoiceMatchLikeDto {
+  @ApiProperty() liked!: boolean;
+  /** true khi cả hai đã thích và Friendship + Conversation đã được tạo atomically. */
+  @ApiProperty() matched!: boolean;
+  /** Chỉ trả khi mutual like để client mở chat 1-1; null trước khi đủ consent hai chiều. */
+  @ApiProperty({ type: String, nullable: true }) friendUserId!: string | null;
 }

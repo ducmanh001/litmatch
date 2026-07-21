@@ -20,6 +20,14 @@ function renderLogin() {
 }
 
 describe('LoginPage', () => {
+  it('cung cấp đăng nhập Google dùng được cho profile không SMS', () => {
+    renderLogin();
+
+    expect(
+      screen.getByRole('button', { name: 'Đăng nhập với Google' }),
+    ).toBeVisible();
+  });
+
   it('validate số điện thoại sai format bằng Zod trước khi gọi API', async () => {
     renderLogin();
     await userEvent.type(screen.getByLabelText('Số điện thoại'), 'abc');

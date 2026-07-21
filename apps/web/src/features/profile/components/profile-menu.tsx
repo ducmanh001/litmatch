@@ -3,87 +3,14 @@
 import Link from 'next/link';
 
 import { useLogout } from '../../../shared/auth/use-logout';
-import { DiamondIcon, ProfileIcon } from '../../../shared/ui/icons';
-
-import type { SVGProps } from 'react';
-
-function ChevronRightIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      width={16}
-      height={16}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      className="text-slate-300"
-      {...props}
-    >
-      <path d="M9 18l6-6-6-6" />
-    </svg>
-  );
-}
-
-function CrownIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      width={15}
-      height={15}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      {...props}
-    >
-      <path d="M3 8l4 3 5-6 5 6 4-3-2 11H5z" />
-    </svg>
-  );
-}
-
-function ShieldIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      width={15}
-      height={15}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      {...props}
-    >
-      <path d="M12 2l8 4v6c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10V6z" />
-    </svg>
-  );
-}
-
-function HelpCircleIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      width={15}
-      height={15}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      {...props}
-    >
-      <circle cx={12} cy={12} r={9} />
-      <path d="M9.5 9a2.5 2.5 0 015 .5c0 1.5-2 1.5-2 3.5M12 17h.01" />
-    </svg>
-  );
-}
+import {
+  ChevronRightIcon,
+  CrownIcon,
+  DiamondIcon,
+  HelpCircleIcon,
+  ProfileIcon,
+  ShieldIcon,
+} from '../../../shared/ui/icons';
 
 const rowClass =
   'flex items-center gap-3 px-4 py-3.5 first:rounded-t-2xl last:rounded-b-2xl';
@@ -105,14 +32,14 @@ export function ProfileMenu() {
           <span className="flex-1 text-sm font-semibold">
             Ví Diamond & Giao dịch
           </span>
-          <ChevronRightIcon />
+          <ChevronRightIcon className="text-slate-300" />
         </Link>
         <Link href="/wallet" className={rowClass}>
           <span className={`${iconWrapClass} bg-amber-400/15 text-amber-500`}>
             <CrownIcon />
           </span>
           <span className="flex-1 text-sm font-semibold">Nâng cấp VIP</span>
-          <ChevronRightIcon />
+          <ChevronRightIcon className="text-slate-300" />
         </Link>
         <Link href="/profile/edit" className={rowClass}>
           <span className={iconWrapClass}>
@@ -121,7 +48,7 @@ export function ProfileMenu() {
           <span className="flex-1 text-sm font-semibold">
             Chỉnh sửa Avatar & hồ sơ
           </span>
-          <ChevronRightIcon />
+          <ChevronRightIcon className="text-slate-300" />
         </Link>
         <Link href="/privacy" className={rowClass}>
           <span className={iconWrapClass}>
@@ -130,7 +57,7 @@ export function ProfileMenu() {
           <span className="flex-1 text-sm font-semibold">
             Quyền riêng tư, chặn & báo cáo
           </span>
-          <ChevronRightIcon />
+          <ChevronRightIcon className="text-slate-300" />
         </Link>
         <Link href="/help" className={rowClass}>
           <span className={iconWrapClass}>
@@ -139,7 +66,7 @@ export function ProfileMenu() {
           <span className="flex-1 text-sm font-semibold">
             Trợ giúp & phản hồi
           </span>
-          <ChevronRightIcon />
+          <ChevronRightIcon className="text-slate-300" />
         </Link>
       </div>
 

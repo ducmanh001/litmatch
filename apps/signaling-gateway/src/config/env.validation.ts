@@ -25,7 +25,7 @@ export const signalingEnvSchema = Joi.object({
   CORS_ORIGINS: Joi.string().allow('').default(''),
   JWT_SECRET: Joi.string().min(32).required(),
   REDIS_URL: Joi.string()
-    .uri({ scheme: ['redis'] })
+    .uri({ scheme: ['redis', 'rediss'] })
     .default('redis://localhost:6379'),
 });
 

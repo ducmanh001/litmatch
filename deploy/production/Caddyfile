@@ -1,0 +1,29 @@
+{
+	email {$ACME_EMAIL}
+	admin off
+}
+
+app.{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy web:4300
+}
+
+admin.{$DOMAIN} {
+	encode zstd gzip
+	root * /srv/admin
+	try_files {path} /index.html
+	file_server
+}
+
+api.{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy core-api:3000
+}
+
+realtime.{$DOMAIN} {
+	reverse_proxy signaling-gateway:3001
+}
+
+media.{$DOMAIN} {
+	reverse_proxy livekit:7880
+}

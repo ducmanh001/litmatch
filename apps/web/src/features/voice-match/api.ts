@@ -5,7 +5,6 @@ import { apiClient } from '../../shared/api/client';
 import type { ApiSchema } from '@litmatch/api-client';
 
 export type CallDto = ApiSchema<'CallDto'>;
-export type JoinCallDto = ApiSchema<'JoinCallDto'>;
 
 export const voiceMatchKeys = {
   call: (id: string) => ['voice-match', 'call', id] as const,
@@ -61,6 +60,35 @@ export function useEndCall(callId: string) {
       void queryClient.invalidateQueries({
         queryKey: voiceMatchKeys.call(callId),
       });
+    },
+  });
+}
+
+/** Đóng toàn bộ Voice Match kể cả khi người dùng rời trước lúc LiveKit tạo CallSession. */
+export function useEndVoiceMatch(matchSessionId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      await apiClient.POST(
+        '/api/v1/calling/match-sessions/{matchSessionId}/end',
+        {
+          params: { path: { matchSessionId } },
+        },
+      );
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['matching'] });
+    },
+  });
+}
+
+export function useLikeCall(callId: string) {
+  return useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.POST('/api/v1/calling/calls/{id}/like', {
+        params: { path: { id: callId } },
+      });
+      return res.data?.data;
     },
   });
 }

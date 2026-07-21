@@ -18,11 +18,22 @@ import type { CookieOptions, Request, Response } from 'express';
  * `document.cookie` — `web`/`admin` khác origin với `core-api`), cookie chỉ để SERVER so khớp
  * lại lúc verify, không có lý do phải JS-readable.
  */
-function cookieOptions(isProduction: boolean, ttlDays: number): CookieOptions {
+function cookieOptions(
+  isProduction: boolean,
+  ttlDays: number,
+  crossOriginDev: boolean, // true khi test qua tunnel/LAN IP (frontend & backend khác origin)
+  productionSameSite: 'strict' | 'none',
+): CookieOptions {
+  const sameSite = isProduction
+    ? productionSameSite
+    : crossOriginDev
+      ? 'none'
+      : 'strict';
   return {
     httpOnly: true,
-    secure: isProduction,
-    sameSite: 'strict',
+    // sameSite: 'none' bắt buộc đi kèm secure: true (browser spec) — tunnel dùng HTTPS nên vẫn ổn ở dev
+    secure: isProduction || sameSite === 'none',
+    sameSite,
     path: REFRESH_TOKEN_COOKIE_PATH,
     maxAge: ttlDays * 24 * 3600 * 1000,
   };
@@ -34,21 +45,36 @@ export function setAuthCookies(
     refreshToken: string;
     csrfToken: string;
     isProduction: boolean;
+    crossOriginDev?: boolean;
+    productionSameSite?: 'strict' | 'none';
     ttlDays: number;
   },
 ): void {
-  const options = cookieOptions(input.isProduction, input.ttlDays);
+  const options = cookieOptions(
+    input.isProduction,
+    input.ttlDays,
+    input.crossOriginDev ?? false,
+    input.productionSameSite ?? 'strict',
+  );
   res.cookie(REFRESH_TOKEN_COOKIE_NAME, input.refreshToken, options);
   res.cookie(CSRF_COOKIE_NAME, input.csrfToken, options);
 }
 
-/** Logout — xoá cả 2 cookie cùng path/flags đã set lúc issue (khác flags thì browser không xoá). */
-export function clearAuthCookies(res: Response, isProduction: boolean): void {
-  const options = cookieOptions(isProduction, 0);
+export function clearAuthCookies(
+  res: Response,
+  isProduction: boolean,
+  crossOriginDev = false,
+  productionSameSite: 'strict' | 'none' = 'strict',
+): void {
+  const options = cookieOptions(
+    isProduction,
+    0,
+    crossOriginDev,
+    productionSameSite,
+  );
   res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, options);
   res.clearCookie(CSRF_COOKIE_NAME, options);
 }
-
 /**
  * Đọc refresh token từ cookie httpOnly (`/auth/refresh`, `/auth/logout` — ADR 0007). Tách hàm
  * thuần để test không cần dựng Nest context, cùng convention `extractIdempotencyKey`.

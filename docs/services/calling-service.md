@@ -38,6 +38,9 @@ upsert `CallSession` (`ON CONFLICT (match_session_id)` lấy call cũ — **re-j
 hợp lệ** khi call chưa `ended`, trả token MỚI); mint LiveKit access token TTL
 `CALLING_TOKEN_TTL_SECONDS`, `identity = userId` từ JWT, room = `call-{callSessionId}` —
 client không bao giờ tự chọn room/identity. Call đã `ended` → 409 `CALLING_CALL_ENDED`.
+Sau upsert, service đọc lại `MatchSession`: nếu đối phương vừa rời và session đã terminal thì
+đóng ngay `CallSession` vừa tạo rồi trả `CALLING_CALL_ENDED`; không được để pending orphan chờ
+ticker timeout.
 
 ## 3. Webhook LiveKit (`POST /calling/webhooks/livekit`, `@Public` + verify)
 
@@ -70,13 +73,24 @@ identity, đủ 2 → `active` + `startedAt`), `participant_left` + `room_finish
 End ở bất kỳ nhánh nào → publish `call.ended` `{callId, matchSessionId, reason,
 durationSeconds}` cho cả 2 qua kênh `realtime:user:{userId}` (hợp đồng
 `@litmatch/common-dtos`, best-effort — polling `GET /calling/calls/:id` là fallback).
+Kết thúc call cũng chốt `MatchSession{ended}` ở Matching trong cùng cleanup boundary; từ đó cả
+hai user lập tức không còn bị session voice cũ giữ lại để vào queue mới. Khi rời màn trước lúc
+CallSession được tạo, endpoint end MatchSession thực hiện cùng cleanup durable.
 
-| Endpoint                                | Mô tả                                                               |
-| --------------------------------------- | ------------------------------------------------------------------- |
-| `POST /calling/match-sessions/:id/join` | Tạo/lấy call + mint token (idempotent tự nhiên theo unique session) |
-| `GET /calling/calls/:id`                | Trạng thái call (poll fallback) — chỉ member                        |
-| `POST /calling/calls/:id/end`           | Member chủ động kết thúc                                            |
-| `POST /calling/webhooks/livekit`        | Webhook LiveKit — `@Public` + verify chữ ký                         |
+`POST /calling/calls/:id/like` nhận consent immutable khi call `active` hoặc `ended`; server
+khóa `CallSession`, unique reaction theo `(callId, raterUserId)` và chỉ tạo `Friendship` +
+`Conversation` trong cùng transaction khi đã có like từ cả hai. Response chỉ trả `friendUserId`
+khi mutual để client có thể đi thẳng `/chat/:friendUserId` sau khi người dùng kết thúc call;
+double tap/retry không tạo thêm bạn hay conversation.
+
+| Endpoint                                | Mô tả                                                                           |
+| --------------------------------------- | ------------------------------------------------------------------------------- |
+| `POST /calling/match-sessions/:id/join` | Tạo/lấy call + mint token (idempotent tự nhiên theo unique session)             |
+| `GET /calling/calls/:id`                | Trạng thái call (poll fallback) — chỉ member                                    |
+| `POST /calling/calls/:id/end`           | Member chủ động kết thúc                                                        |
+| `POST /calling/calls/:id/like`          | Like immutable khi call `active`/`ended`; mutual like tạo Friend + Conversation |
+| `POST /calling/match-sessions/:id/end`  | Rời Voice Match, đóng cả session kể cả khi chưa tạo call                        |
+| `POST /calling/webhooks/livekit`        | Webhook LiveKit — `@Public` + verify chữ ký                                     |
 
 ## 6. Config (Joi + `.env.example`) & quyết định mở
 
@@ -84,6 +98,11 @@ durationSeconds}` cho cả 2 qua kênh `realtime:user:{userId}` (hợp đồng
 `livekit.yaml`; dev = devkey), `CALLING_FREE_CALL_SECONDS` (default 420 — docs/06 ~7 phút),
 `CALLING_PRICE_PER_MINUTE_DIAMOND` (default **0** = free + tự end), `CALLING_PENDING_TIMEOUT_SECONDS`
 (default 60), `CALLING_TICKER_INTERVAL_MS` (default 1000), `CALLING_TOKEN_TTL_SECONDS` (default 120).
+
+Khi test điện thoại, `LIVEKIT_URL` phải là `wss://` public, không phải `ws://localhost`; còn
+`LIVEKIT_API_URL` của core-api vẫn là DNS nội bộ tới SFU. Tunnel HTTP chỉ giải quyết signaling,
+không thay được đường media WebRTC: môi trường public phải expose ICE UDP (hoặc ICE/TCP) và
+TURN/TLS theo cấu hình SFU; nếu không hai thiết bị khác mạng có thể vào room nhưng không có tiếng.
 
 Quyết định mở đã chọn default (đổi không phá schema): (a) billing đối xứng cả 2 bên;
 (b) phút lẻ đã bắt đầu tính trọn phút; (c) không tự hoàn tiền khi call end sớm — hoàn tiền

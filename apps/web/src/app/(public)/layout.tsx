@@ -1,13 +1,18 @@
+'use client';
+
 import Link from 'next/link';
 
 import { ConfirmSheet } from '../../shared/ui/confirm-sheet';
 import { LogoMark } from '../../shared/ui/icons';
+import { LanguageSelector } from '../../shared/ui/language-selector';
 import { ToastStack } from '../../shared/ui/toast-stack';
+import { useTranslation } from '../../shared/i18n/messages';
 
 import type { ReactNode } from 'react';
 
 /** Layout vùng công khai (SSR/SEO — docs/12 § 12.5): header marketing + footer, đúng layouts/web/index.html. */
 export default function PublicLayout({ children }: { children: ReactNode }) {
+  const t = useTranslation();
   return (
     <div className="relative">
       <header className="sticky top-0 z-50 border-b border-black/5 bg-paper/85 backdrop-blur dark:border-white/5 dark:bg-ink/85">
@@ -24,19 +29,19 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
               href="#features"
               className="transition hover:text-iris dark:hover:text-irisl"
             >
-              Tính năng
+              {t('public.features')}
             </a>
             <a
               href="#how"
               className="transition hover:text-iris dark:hover:text-irisl"
             >
-              Cách hoạt động
+              {t('public.howItWorks')}
             </a>
             <Link
               href="/login"
               className="transition hover:text-iris dark:hover:text-irisl"
             >
-              Cộng đồng
+              {t('public.community')}
             </Link>
           </nav>
           <div className="flex items-center gap-3">
@@ -44,14 +49,15 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
               href="/login"
               className="hidden px-4 py-2 text-sm font-semibold text-slate-600 transition hover:text-iris sm:block dark:text-slate-300 dark:hover:text-irisl"
             >
-              Đăng nhập
+              {t('public.signIn')}
             </Link>
             <Link
               href="/login"
               className="rounded-full bg-irisl px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-iris/30"
             >
-              Đăng ký miễn phí
+              {t('public.signUp')}
             </Link>
+            <LanguageSelector />
           </div>
         </div>
       </header>
@@ -63,18 +69,18 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
               Litmatch
             </p>
             <p className="max-w-[220px] text-sm text-slate-500 dark:text-slate-400">
-              Ẩn danh trước, chân thật sau — kết nối đúng người, đúng nhịp.
+              {t('public.tagline')}
             </p>
           </div>
           <div>
-            <p className="mb-4 text-sm font-bold">Sản phẩm</p>
+            <p className="mb-4 text-sm font-bold">{t('public.product')}</p>
             <ul className="space-y-2.5 text-sm text-slate-500 dark:text-slate-400">
               <li>
                 <a
                   href="#features"
                   className="transition hover:text-iris dark:hover:text-irisl"
                 >
-                  Tính năng
+                  {t('public.features')}
                 </a>
               </li>
               <li>
@@ -82,7 +88,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
                   href="/login"
                   className="transition hover:text-iris dark:hover:text-irisl"
                 >
-                  Khám phá
+                  {t('public.explore')}
                 </Link>
               </li>
               <li>
@@ -90,20 +96,20 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
                   href="/login"
                   className="transition hover:text-iris dark:hover:text-irisl"
                 >
-                  Feed
+                  {t('public.feed')}
                 </Link>
               </li>
             </ul>
           </div>
           <div>
-            <p className="mb-4 text-sm font-bold">Công ty</p>
+            <p className="mb-4 text-sm font-bold">{t('public.company')}</p>
             <ul className="space-y-2.5 text-sm text-slate-500 dark:text-slate-400">
               <li>
                 <a
                   href="#"
                   className="transition hover:text-iris dark:hover:text-irisl"
                 >
-                  Về chúng tôi
+                  {t('public.about')}
                 </a>
               </li>
               <li>
@@ -111,7 +117,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
                   href="#"
                   className="transition hover:text-iris dark:hover:text-irisl"
                 >
-                  Tuyển dụng
+                  {t('public.careers')}
                 </a>
               </li>
               <li>
@@ -119,20 +125,20 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
                   href="#"
                   className="transition hover:text-iris dark:hover:text-irisl"
                 >
-                  Liên hệ
+                  {t('public.contact')}
                 </a>
               </li>
             </ul>
           </div>
           <div>
-            <p className="mb-4 text-sm font-bold">Pháp lý</p>
+            <p className="mb-4 text-sm font-bold">{t('public.legal')}</p>
             <ul className="space-y-2.5 text-sm text-slate-500 dark:text-slate-400">
               <li>
                 <a
                   href="#"
                   className="transition hover:text-iris dark:hover:text-irisl"
                 >
-                  Điều khoản
+                  {t('public.terms')}
                 </a>
               </li>
               <li>
@@ -140,7 +146,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
                   href="/privacy"
                   className="transition hover:text-iris dark:hover:text-irisl"
                 >
-                  Quyền riêng tư
+                  {t('public.privacy')}
                 </Link>
               </li>
               <li>
@@ -148,7 +154,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
                   href="/help"
                   className="transition hover:text-iris dark:hover:text-irisl"
                 >
-                  An toàn cộng đồng
+                  {t('public.safety')}
                 </Link>
               </li>
             </ul>

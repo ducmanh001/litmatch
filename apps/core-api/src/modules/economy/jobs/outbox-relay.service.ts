@@ -10,6 +10,7 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import { Kafka, Producer } from 'kafkajs';
 import { DataSource } from 'typeorm';
 
+import { ManagedInterval } from '../../../common/scheduling/managed-interval';
 import type { CoreApiEnv } from '../../../config/env.validation';
 import { OutboxEvent } from '../entities/outbox-event.entity';
 
@@ -27,7 +28,7 @@ export class OutboxRelayService
 {
   private readonly logger = new Logger(OutboxRelayService.name);
   private producer: Producer | null = null;
-  private running = false;
+  private readonly job = new ManagedInterval();
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
@@ -50,30 +51,26 @@ export class OutboxRelayService
     this.producer = kafka.producer();
     await this.producer.connect();
 
-    const interval = setInterval(
-      () =>
-        void this.flushOnce().catch((err) =>
-          this.logger.error({ err: `${err}` }, 'Outbox relay lỗi'),
-        ),
-      this.config.getOrThrow('ECONOMY_OUTBOX_RELAY_INTERVAL_MS', {
+    this.job.start(this.scheduler, {
+      jobName: RELAY_JOB,
+      intervalMs: this.config.getOrThrow('ECONOMY_OUTBOX_RELAY_INTERVAL_MS', {
         infer: true,
       }),
-    );
-    this.scheduler.addInterval(RELAY_JOB, interval);
+      task: () => this.flushOnce(),
+      logger: this.logger,
+      errorMessage: 'Outbox relay lỗi',
+    });
     this.logger.log('Outbox relay đã bật');
   }
 
   async onApplicationShutdown(): Promise<void> {
-    if (this.scheduler.doesExist('interval', RELAY_JOB))
-      this.scheduler.deleteInterval(RELAY_JOB);
+    this.job.stop();
     await this.producer?.disconnect();
   }
 
   /** 1 vòng relay — public để test/chạy tay. */
   async flushOnce(): Promise<number> {
-    if (this.running) return 0; // vòng trước chưa xong thì bỏ qua, không chồng
-    this.running = true;
-    try {
+    return this.job.runExclusive(async () => {
       return await this.dataSource.transaction(async (manager) => {
         const events: OutboxEvent[] = await manager
           .getRepository(OutboxEvent)
@@ -113,8 +110,6 @@ export class OutboxRelayService
         await manager.save(events);
         return events.filter((e) => e.publishedAt).length;
       });
-    } finally {
-      this.running = false;
-    }
+    }, 0);
   }
 }

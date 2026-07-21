@@ -13,6 +13,7 @@ import { SoulMatch1752400000000 } from '../../database/migrations/1752400000000-
 import { Calling1752500000000 } from '../../database/migrations/1752500000000-calling';
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
 import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
+import { VoiceMatchCompletion1756000000000 } from '../../database/migrations/1756000000000-voice-match-completion';
 
 import { CallingService } from './calling.service';
 import { CallTickerService } from './jobs/call-ticker.service';
@@ -259,6 +260,7 @@ d('Calling integration (Postgres thật)', () => {
         Calling1752500000000,
         Safety1752800000000,
         ReportTargetVideo1754900000000,
+        VoiceMatchCompletion1756000000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -298,7 +300,10 @@ d('Calling integration (Postgres thật)', () => {
     calling = new CallingService(
       ds,
       ds.getRepository(CallSession),
+      // Mutual-like không phải trọng tâm suite billing/lifecycle này.
+      {} as never,
       matchingService,
+      {} as never,
       livekitStub,
       configStub,
       userService,

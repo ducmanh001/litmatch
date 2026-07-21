@@ -619,7 +619,7 @@
           }
         },
         "security": [{ "bearer": [] }],
-        "summary": "Xác nhận match — đủ 2 bên confirm thì session + 2 ticket sang confirmed",
+        "summary": "Tương thích session pending_confirm cũ — flow mới được xác nhận ngay khi ghép",
         "tags": ["matching"]
       }
     },
@@ -802,7 +802,7 @@
           }
         },
         "security": [{ "bearer": [] }],
-        "summary": "Chấp nhận lời mời — tạo trực tiếp ticket/session, gọi confirmTicket(inviteeTicketId) tiếp theo như auto-match",
+        "summary": "Chấp nhận lời mời — tạo trực tiếp ticket/session đã confirmed và vào phòng ngay",
         "tags": ["matching"]
       }
     },
@@ -1621,6 +1621,58 @@
         },
         "security": [{ "bearer": [] }],
         "summary": "Chủ động kết thúc call — idempotent, đã ended thì trả trạng thái hiện tại",
+        "tags": ["calling"]
+      }
+    },
+    "/api/v1/calling/match-sessions/{matchSessionId}/end": {
+      "post": {
+        "operationId": "CallingController_endMatchSession",
+        "parameters": [
+          {
+            "name": "matchSessionId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Rời Voice Match — đóng call nếu đã tạo và luôn kết thúc session để có thể tìm lượt mới",
+        "tags": ["calling"]
+      }
+    },
+    "/api/v1/calling/calls/{id}/like": {
+      "post": {
+        "operationId": "CallingController_likeCall",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/VoiceMatchLikeDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Yêu thích trong/sau Voice Match — cả hai cùng thích thì tạo Friendship và chat vĩnh viễn",
         "tags": ["calling"]
       }
     },
@@ -5947,7 +5999,7 @@
           },
           "inviteeTicketId": {
             "type": "string",
-            "description": "ticketId CỦA CHÍNH NGƯỜI ACCEPT — gọi confirmTicket(ticketId) như auto-match"
+            "description": "ticketId CỦA CHÍNH NGƯỜI ACCEPT — giữ để tương thích client cũ; session đã sẵn sàng ngay"
           }
         },
         "required": ["invite", "sessionId", "inviteeTicketId"]
@@ -6250,7 +6302,12 @@
             "nullable": true
           },
           "durationSeconds": { "type": "number", "nullable": true },
-          "billedMinutes": { "type": "number" }
+          "billedMinutes": { "type": "number" },
+          "freeCallEndsAt": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true
+          }
         },
         "required": [
           "id",
@@ -6260,7 +6317,8 @@
           "endedAt",
           "endReason",
           "durationSeconds",
-          "billedMinutes"
+          "billedMinutes",
+          "freeCallEndsAt"
         ]
       },
       "JoinCallDto": {
@@ -6271,6 +6329,15 @@
           "livekitUrl": { "type": "string" }
         },
         "required": ["call", "token", "livekitUrl"]
+      },
+      "VoiceMatchLikeDto": {
+        "type": "object",
+        "properties": {
+          "liked": { "type": "boolean" },
+          "matched": { "type": "boolean" },
+          "friendUserId": { "type": "string", "nullable": true }
+        },
+        "required": ["liked", "matched", "friendUserId"]
       },
       "CreatePartyRoomDto": {
         "type": "object",
@@ -6447,6 +6514,7 @@
         "properties": {
           "id": { "type": "string" },
           "authorUserId": { "type": "string" },
+          "author": { "$ref": "#/components/schemas/PublicProfileDto" },
           "status": {
             "type": "string",
             "enum": [
@@ -6471,6 +6539,7 @@
         "required": [
           "id",
           "authorUserId",
+          "author",
           "status",
           "playbackUrl",
           "thumbnailUrl",
@@ -6534,10 +6603,18 @@
           "id": { "type": "string" },
           "videoId": { "type": "string" },
           "authorUserId": { "type": "string" },
+          "author": { "$ref": "#/components/schemas/PublicProfileDto" },
           "content": { "type": "string" },
           "createdAt": { "format": "date-time", "type": "string" }
         },
-        "required": ["id", "videoId", "authorUserId", "content", "createdAt"]
+        "required": [
+          "id",
+          "videoId",
+          "authorUserId",
+          "author",
+          "content",
+          "createdAt"
+        ]
       },
       "VideoCommentsPageDto": {
         "type": "object",
@@ -6567,6 +6644,7 @@
         "properties": {
           "id": { "type": "string" },
           "authorUserId": { "type": "string" },
+          "author": { "$ref": "#/components/schemas/PublicProfileDto" },
           "content": { "type": "string", "nullable": true },
           "imageUrl": { "type": "string", "nullable": true },
           "audience": {
@@ -6580,6 +6658,7 @@
         "required": [
           "id",
           "authorUserId",
+          "author",
           "content",
           "imageUrl",
           "audience",
@@ -6610,10 +6689,18 @@
           "id": { "type": "string" },
           "postId": { "type": "string" },
           "authorUserId": { "type": "string" },
+          "author": { "$ref": "#/components/schemas/PublicProfileDto" },
           "content": { "type": "string" },
           "createdAt": { "format": "date-time", "type": "string" }
         },
-        "required": ["id", "postId", "authorUserId", "content", "createdAt"]
+        "required": [
+          "id",
+          "postId",
+          "authorUserId",
+          "author",
+          "content",
+          "createdAt"
+        ]
       },
       "CommentsPageDto": {
         "type": "object",

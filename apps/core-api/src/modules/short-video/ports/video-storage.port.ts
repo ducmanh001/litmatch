@@ -35,7 +35,10 @@ export class DevVideoStorageProvider
   }
 
   onApplicationBootstrap(): void {
-    if (this.config.get('NODE_ENV', { infer: true }) === 'production') {
+    if (
+      this.config.get('NODE_ENV', { infer: true }) === 'production' &&
+      this.config.getOrThrow('VIDEO_UPLOAD_ENABLED', { infer: true })
+    ) {
       throw new Error(
         'DevVideoStorageProvider không được dùng ở production — cấu hình VideoStoragePort thật (Cloudflare Stream/Mux) trước khi deploy',
       );
@@ -47,6 +50,7 @@ export class DevVideoStorageProvider
   }
 
   async issueUploadUrl(storageKey: string): Promise<string> {
+    this.assertNonProduction();
     this.logger.warn(
       `[DEV-ONLY VIDEO STORAGE] issue upload url cho ${storageKey}`,
     );
@@ -54,10 +58,20 @@ export class DevVideoStorageProvider
   }
 
   async getPlaybackUrl(storageKey: string): Promise<string> {
+    this.assertNonProduction();
     return `https://dev-storage.invalid/playback/${storageKey}`;
   }
 
   async getThumbnailUrl(storageKey: string): Promise<string> {
+    this.assertNonProduction();
     return `https://dev-storage.invalid/thumbnail/${storageKey}`;
+  }
+
+  private assertNonProduction(): void {
+    if (this.config.get('NODE_ENV', { infer: true }) === 'production') {
+      throw new Error(
+        'DevVideoStorageProvider không bao giờ chạy trong production',
+      );
+    }
   }
 }

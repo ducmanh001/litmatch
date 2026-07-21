@@ -147,6 +147,19 @@ Luồng `Matching → Calling → Economy` chạm vào nhiều module, không th
 - Ở giai đoạn scale thật, cân nhắc PostgreSQL với constraint chặt + partition theo thời gian là đủ cho phần lớn trường hợp; chỉ cân nhắc engine ledger chuyên dụng (vd TigerBeetle) nếu throughput giao dịch tiền vượt quá khả năng Postgres đã tối ưu (đây là quyết định đo bằng số liệu thật, không phải mặc định).
 - Job đối soát (Giai đoạn 7) chạy **2 tier theo chi phí**: tier fast (bất biến Nợ=Có theo currency + orphan receipt — 1 câu aggregate) chạy dày (`ECONOMY_RECONCILIATION_FAST_INTERVAL_MS`, mặc định 60s), tier deep (sample ví so snapshot↔derived) giữ cadence thưa (`ECONOMY_RECONCILIATION_INTERVAL_MS`, mặc định 300s). Lệch/run lỗi được export qua Prometheus (`economy_reconciliation_mismatch_total` theo check+currency, `economy_reconciliation_last_run_status` theo tier, `economy_reconciliation_run_duration_seconds`) để alert rule fire tự động — job **read-only tuyệt đối**, sửa lệch thật luôn đi qua reversal entry ở write path chuẩn.
 
+## 3.9 Profile alpha hosted-free
+
+[ADR 0009](./adr/0009-hosted-free-alpha-release-profile.md) thêm một profile vận hành
+cloud-only cho demo/alpha: Core API + Signaling + PostgreSQL trên Northflank, Redis trên Upstash,
+Web/Admin trên Cloudflare và media component trên LiveKit Cloud. Đây vẫn là đúng ba backend
+component (`core-api`, `signaling-gateway`, LiveKit media), không thêm business service và không
+đổi ownership/domain boundary.
+
+Profile này không thay topology K8s/Compose cho production có SLA. Kafka relay tắt nhưng outbox
+vẫn được ghi atomic cùng nghiệp vụ; migration chạy trước deploy; browser auth khác site dùng
+SameSite=None + Secure + exact CORS allowlist + CSRF. Chi tiết provisioning và quota nằm tại
+[runbook hosted-free](./runbooks/hosted-free-release.md).
+
 ---
 
 [← 02 · Domain Model](./02-domain-model.md) · [04 · Tech Stack →](./04-tech-stack.md)

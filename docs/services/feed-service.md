@@ -74,6 +74,14 @@ mutable/cặp, unique DB `(postId, userId)` chặn double-like race; unlike xoá
 - `createPost` **idempotent theo Idempotency-Key** (unique DB) — client retry mất mạng không tạo
   đôi bài; cùng key khác nội dung → 409 `POST_IDEMPOTENCY_CONFLICT`.
 
+## 7.1 Tác giả trong response post/comment
+
+Mỗi `PostDto` và `CommentDto` trả thêm `author: PublicProfileDto` (`id`, nickname, avatar,
+gender, interests) bên cạnh `authorUserId`. Feed controller batch-load tác giả qua public API của
+User module cho một trang kết quả; không để web gọi `GET /users/:id` N lần. Chỉ dùng trường đã
+công khai trong `PublicProfileDto`; không lộ birth date, region, seeking preference, status hay
+trust score.
+
 ## 8. Stories (W3, entity riêng `Story`/`StoryView` — KHÔNG dùng chung `Post`)
 
 Ephemeral — KHÁC `Post` (không soft-delete/audit trail): hết hạn = filter lúc đọc

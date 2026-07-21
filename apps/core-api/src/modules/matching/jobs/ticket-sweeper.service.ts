@@ -10,6 +10,7 @@ import { SchedulerRegistry } from '@nestjs/schedule';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, In } from 'typeorm';
 
+import { ManagedInterval } from '../../../common/scheduling/managed-interval';
 import { requeueIdempotencyKey } from '../matching.constants';
 import {
   MatchTicket,
@@ -48,7 +49,7 @@ export class TicketSweeperService
   implements OnApplicationBootstrap, OnApplicationShutdown
 {
   private readonly logger = new Logger(TicketSweeperService.name);
-  private running = false;
+  private readonly job = new ManagedInterval();
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
@@ -58,32 +59,31 @@ export class TicketSweeperService
   ) {}
 
   onApplicationBootstrap(): void {
-    const interval = setInterval(
-      () =>
-        void this.runOnce().catch((err) =>
-          this.logger.error({ err: `${err}` }, 'Sweeper tick lỗi'),
-        ),
-      this.config.getOrThrow('MATCHING_SWEEPER_INTERVAL_MS', { infer: true }),
-    );
-    this.scheduler.addInterval(SWEEPER_JOB, interval);
+    this.job.start(this.scheduler, {
+      jobName: SWEEPER_JOB,
+      intervalMs: this.config.getOrThrow('MATCHING_SWEEPER_INTERVAL_MS', {
+        infer: true,
+      }),
+      task: () => this.runOnce(),
+      logger: this.logger,
+      errorMessage: 'Sweeper tick lỗi',
+    });
   }
 
   onApplicationShutdown(): void {
-    if (this.scheduler.doesExist('interval', SWEEPER_JOB))
-      this.scheduler.deleteInterval(SWEEPER_JOB);
+    this.job.stop();
   }
 
   /** 1 tick — public để test/chạy tay. */
   async runOnce(): Promise<{ expiredQueued: number; expiredSessions: number }> {
-    if (this.running) return { expiredQueued: 0, expiredSessions: 0 };
-    this.running = true;
-    try {
-      const expiredQueued = await this.expireStaleQueuedTickets();
-      const expiredSessions = await this.expireStalePendingSessions();
-      return { expiredQueued, expiredSessions };
-    } finally {
-      this.running = false;
-    }
+    return this.job.runExclusive(
+      async () => {
+        const expiredQueued = await this.expireStaleQueuedTickets();
+        const expiredSessions = await this.expireStalePendingSessions();
+        return { expiredQueued, expiredSessions };
+      },
+      { expiredQueued: 0, expiredSessions: 0 },
+    );
   }
 
   /**

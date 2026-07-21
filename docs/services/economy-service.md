@@ -49,7 +49,9 @@ diamonds tăng dần; read-only, không trả gói inactive. Client (web) chọn
 3. Tra `iap_products` → số diamond. Ledger: Nợ `system_iap` / Có `user_wallet`. Lưu `iap_receipts` (status `credited`, trỏ `transaction_id`). Ghi snapshot `{productId, diamonds}` vào `transactions.metadata`.
 4. **Nếu `user_wallet` đang âm** (còn nợ do refund trước đó): credit mới **tự động bù nợ** — vì balance = tổng Có − tổng Nợ, việc Có thêm sẽ kéo balance lên; không cần logic riêng, chỉ cần không có CHECK >= 0 chặn giữa chừng.
 
-- Dev/test dùng `DevIapVerifier` (chặn cứng ở production, giống DevSmsProvider).
+- Dev/test dùng `DevIapVerifier`. Production đủ store credential dùng `StoreIapVerifier`; profile
+  production chưa có credential phải dùng `DisabledIapVerifier`, trả `ECONOMY_IAP_DISABLED` trước
+  transaction/ledger side effect. `DevIapVerifier` chặn cứng nếu bị chọn trong production.
 - **Anti-fraud (từ Giai đoạn 1, không đợi Trust & Safety Giai đoạn 4)**: `iap_receipts` unique (provider, provider_transaction_id) chặn replay ở DB; thêm rate-limit số lần verify/user + cảnh báo khi 1 user có tỉ lệ refund-sau-tiêu bất thường (xem § 5).
 
 ### Mua VIP bằng diamond

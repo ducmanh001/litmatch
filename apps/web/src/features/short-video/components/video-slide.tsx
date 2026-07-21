@@ -1,9 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
-import { useAuthorProfile, useRecordVideoView } from '../api';
+import { getUserDisplayName } from '../../../shared/lib/user-display-name';
+import { useLocale } from '../../../shared/i18n/locale-store';
+import { PlaceholderAvatar } from '../../../shared/ui/placeholder-avatar';
+import { useRecordVideoView } from '../api';
 
 import type { VideoDto } from '../api';
 import type { SVGProps } from 'react';
@@ -71,15 +74,24 @@ const MIN_TRACKED_WATCH_MS = 500;
 export function VideoSlide({
   video,
   onActiveChange,
+  muted,
+  onMutedChange,
 }: {
   video: VideoDto;
   onActiveChange: (video: VideoDto) => void;
+  muted: boolean;
+  onMutedChange: (muted: boolean) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const watchStartRef = useRef<number | null>(null);
-  const [muted, setMuted] = useState(true);
-  const author = useAuthorProfile(video.authorUserId);
+  const locale = useLocale();
+  // Tương thích response core-api cũ trong lúc web và API được deploy/restart lệch phiên bản.
+  const author = video.author ?? {
+    id: video.authorUserId,
+    nickname: getUserDisplayName(video.author, locale),
+    avatarId: video.authorUserId,
+  };
   const recordView = useRecordVideoView(video.id);
 
   useEffect(() => {
@@ -147,7 +159,7 @@ export function VideoSlide({
       {video.playbackUrl !== null && (
         <button
           type="button"
-          onClick={() => setMuted((current) => !current)}
+          onClick={() => onMutedChange(!muted)}
           aria-label={muted ? 'Bật âm thanh' : 'Tắt âm thanh'}
           className="absolute right-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur"
         >
@@ -167,21 +179,29 @@ export function VideoSlide({
             {video.caption}
           </p>
         )}
-        {author.data !== undefined && (
-          <>
-            <p className="mt-2 flex items-center gap-1.5 text-xs text-white/90">
-              <MusicNoteIcon />
-              Âm thanh gốc · {author.data.nickname}
-            </p>
-            <Link
-              href="/matching"
-              className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold text-white backdrop-blur"
-            >
-              <VoiceIcon />
-              Voice Match ngay
-            </Link>
-          </>
-        )}
+        <Link
+          href={`/users/${author.id}`}
+          className="mt-3 inline-flex items-center gap-2 text-xs font-bold text-white hover:underline"
+        >
+          <PlaceholderAvatar
+            seed={author.avatarId}
+            alt=""
+            size={28}
+            className="border border-white/50"
+          />
+          {author.nickname}
+        </Link>
+        <p className="mt-2 flex items-center gap-1.5 text-xs text-white/90">
+          <MusicNoteIcon />
+          Âm thanh gốc · {author.nickname}
+        </p>
+        <Link
+          href="/matching"
+          className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold text-white backdrop-blur"
+        >
+          <VoiceIcon />
+          Voice Match ngay
+        </Link>
       </div>
     </section>
   );

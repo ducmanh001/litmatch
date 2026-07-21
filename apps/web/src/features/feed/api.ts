@@ -10,20 +10,17 @@ import { apiClient } from '../../shared/api/client';
 import type { ApiSchema } from '@litmatch/api-client';
 
 export type PostDto = ApiSchema<'PostDto'>;
-export type CommentDto = ApiSchema<'CommentDto'>;
 export type ReactionStatusDto = ApiSchema<'ReactionStatusDto'>;
 export type CreatePostDto = ApiSchema<'CreatePostDto'>;
 
 const FEED_PAGE_LIMIT = 10;
 const COMMENTS_PAGE_LIMIT = 30;
-const POST_AUTHOR_STALE_TIME_MS = 5 * 60 * 1000;
 
 export const feedKeys = {
   list: ['feed', 'list'] as const,
   detail: (postId: string) => ['feed', 'detail', postId] as const,
   comments: (postId: string) => ['feed', 'comments', postId] as const,
   reaction: (postId: string) => ['feed', 'reaction', postId] as const,
-  author: (userId: string) => ['feed', 'author', userId] as const,
   userTimeline: (userId: string) => ['feed', 'user-timeline', userId] as const,
 };
 
@@ -40,20 +37,6 @@ export function useFeed() {
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage?.nextCursor ?? undefined,
-  });
-}
-
-/** `PostDto` chỉ giữ authorUserId; profile công khai được hydrate qua contract Users hiện có. */
-export function usePostAuthor(userId: string) {
-  return useQuery({
-    queryKey: feedKeys.author(userId),
-    queryFn: async () => {
-      const res = await apiClient.GET('/api/v1/users/{id}', {
-        params: { path: { id: userId } },
-      });
-      return res.data?.data;
-    },
-    staleTime: POST_AUTHOR_STALE_TIME_MS,
   });
 }
 

@@ -10,6 +10,7 @@ import { SchedulerRegistry } from '@nestjs/schedule';
 import { RealtimeEvents } from '@litmatch/common-dtos';
 
 import { publishRealtimeEvent } from '../../../common/realtime/publish-realtime';
+import { ManagedInterval } from '../../../common/scheduling/managed-interval';
 import { FRIEND_REDIS } from '../redis/friend-redis.provider';
 import { ConversationService } from '../services/conversation.service';
 import { StreakService } from '../services/streak.service';
@@ -35,7 +36,7 @@ export class StreakWarningJob
   implements OnApplicationBootstrap, OnApplicationShutdown
 {
   private readonly logger = new Logger(StreakWarningJob.name);
-  private running = false;
+  private readonly job = new ManagedInterval();
 
   constructor(
     private readonly streakService: StreakService,
@@ -47,29 +48,24 @@ export class StreakWarningJob
   ) {}
 
   onApplicationBootstrap(): void {
-    const interval = setInterval(
-      () =>
-        void this.runOnce().catch((err) =>
-          this.logger.error({ err: `${err}` }, 'Streak warning job lỗi'),
-        ),
-      this.config.getOrThrow('STREAK_WARNING_CHECK_INTERVAL_MS', {
+    this.job.start(this.scheduler, {
+      jobName: STREAK_WARNING_JOB,
+      intervalMs: this.config.getOrThrow('STREAK_WARNING_CHECK_INTERVAL_MS', {
         infer: true,
       }),
-    );
-    this.scheduler.addInterval(STREAK_WARNING_JOB, interval);
+      task: () => this.runOnce(),
+      logger: this.logger,
+      errorMessage: 'Streak warning job lỗi',
+    });
   }
 
   onApplicationShutdown(): void {
-    if (this.scheduler.doesExist('interval', STREAK_WARNING_JOB)) {
-      this.scheduler.deleteInterval(STREAK_WARNING_JOB);
-    }
+    this.job.stop();
   }
 
   /** 1 tick — public để test/chạy tay. */
   async runOnce(): Promise<void> {
-    if (this.running) return;
-    this.running = true;
-    try {
+    await this.job.runExclusive(async () => {
       const conversationIds =
         await this.streakService.findConversationsNeedingWarning();
       for (const conversationId of conversationIds) {
@@ -82,9 +78,7 @@ export class StreakWarningJob
           );
         }
       }
-    } finally {
-      this.running = false;
-    }
+    }, undefined);
   }
 
   private async warnOne(conversationId: string): Promise<void> {

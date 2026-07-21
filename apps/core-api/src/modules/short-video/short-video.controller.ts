@@ -39,6 +39,7 @@ import {
   ApiIdempotencyKeyHeader,
   IdempotencyKey,
 } from '../../common/decorators/idempotency-key.decorator';
+import { PublicProfileDto, UserService } from '../user';
 
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 
@@ -46,7 +47,10 @@ import type { AuthenticatedUser } from '../../common/decorators/current-user.dec
 @ApiBearerAuth()
 @Controller('videos')
 export class ShortVideoController {
-  constructor(private readonly videoService: ShortVideoService) {}
+  constructor(
+    private readonly videoService: ShortVideoService,
+    private readonly userService: UserService,
+  ) {}
 
   @Post('upload-intent')
   @ApiIdempotencyKeyHeader()
@@ -78,7 +82,8 @@ export class ShortVideoController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<VideoDto> {
-    return VideoDto.from(await this.videoService.finalizeUpload(user, id));
+    const video = await this.videoService.finalizeUpload(user, id);
+    return VideoDto.from(video, await this.getAuthor(video.authorUserId));
   }
 
   @Get()
@@ -92,9 +97,8 @@ export class ShortVideoController {
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: ListVideosQueryDto,
   ): Promise<VideosPageDto> {
-    return VideosPageDto.from(
-      await this.videoService.listPublished(query, user),
-    );
+    const page = await this.videoService.listPublished(query, user);
+    return VideosPageDto.from(page, await this.getAuthors(page.items));
   }
 
   @Get(':id')
@@ -107,7 +111,8 @@ export class ShortVideoController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<VideoDto> {
-    return VideoDto.from(await this.videoService.getVideoOrThrow(user, id));
+    const video = await this.videoService.getVideoOrThrow(user, id);
+    return VideoDto.from(video, await this.getAuthor(video.authorUserId));
   }
 
   @Post(':id/report')
@@ -163,8 +168,14 @@ export class ShortVideoController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: CreateVideoCommentDto,
   ): Promise<VideoCommentDto> {
+    const comment = await this.videoService.createComment(
+      user,
+      id,
+      dto.content,
+    );
     return VideoCommentDto.from(
-      await this.videoService.createComment(user, id, dto.content),
+      comment,
+      await this.getAuthor(comment.authorUserId),
     );
   }
 
@@ -177,9 +188,8 @@ export class ShortVideoController {
     @Param('id', ParseUUIDPipe) id: string,
     @Query() query: CursorPageQueryDto,
   ): Promise<VideoCommentsPageDto> {
-    return VideoCommentsPageDto.from(
-      await this.videoService.listComments(user, id, query),
-    );
+    const page = await this.videoService.listComments(user, id, query);
+    return VideoCommentsPageDto.from(page, await this.getAuthors(page.items));
   }
 
   @Delete(':id/comments/:commentId')
@@ -193,5 +203,21 @@ export class ShortVideoController {
     @Param('commentId', ParseUUIDPipe) commentId: string,
   ): Promise<void> {
     await this.videoService.deleteComment(user, id, commentId);
+  }
+
+  private async getAuthor(userId: string): Promise<PublicProfileDto> {
+    return PublicProfileDto.from(await this.userService.getByIdOrThrow(userId));
+  }
+
+  /** Batch load dùng chung cho một page để không sinh N request author ở client/server. */
+  private async getAuthors(
+    items: ReadonlyArray<{ authorUserId: string }>,
+  ): Promise<Map<string, PublicProfileDto>> {
+    const users = await this.userService.findByIds(
+      items.map((item) => item.authorUserId),
+    );
+    return new Map(
+      users.map((author) => [author.id, PublicProfileDto.from(author)]),
+    );
   }
 }

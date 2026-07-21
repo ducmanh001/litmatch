@@ -1,7 +1,6 @@
 import {
   useInfiniteQuery,
   useMutation,
-  useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
 
@@ -10,9 +9,8 @@ import { apiClient } from '../../shared/api/client';
 import type { ApiSchema } from '@litmatch/api-client';
 
 export type VideoDto = ApiSchema<'VideoDto'>;
-export type VideoCommentDto = ApiSchema<'VideoCommentDto'>;
 export type ReactionStatusDto = ApiSchema<'ReactionStatusDto'>;
-export type ReportVideoDto = ApiSchema<'ReportVideoDto'>;
+type ReportVideoDto = ApiSchema<'ReportVideoDto'>;
 
 /** `sort` thật từ backend (short-video.dtos.ts `ListVideosQueryDto`). */
 export type VideoFeedSort = 'recent' | 'ranked';
@@ -21,7 +19,6 @@ export type VideoFeedScope = 'for_you' | 'following';
 
 const VIDEO_FEED_PAGE_LIMIT = 10;
 const VIDEO_COMMENTS_PAGE_LIMIT = 30;
-const VIDEO_AUTHOR_STALE_TIME_MS = 5 * 60 * 1000;
 
 export const shortVideoKeys = {
   listAll: ['short-video', 'list'] as const,
@@ -153,20 +150,5 @@ export function useReportVideo(videoId: string) {
         body: dto,
       });
     },
-  });
-}
-
-/** Nickname thật của tác giả (đúng "Âm thanh gốc · {tác giả}" ở layouts/web/video.html) —
- * `VideoDto` chỉ có `authorUserId`, tra thêm qua `GET /users/{id}` như party-room đã làm. */
-export function useAuthorProfile(userId: string) {
-  return useQuery({
-    queryKey: ['short-video', 'author', userId],
-    queryFn: async () => {
-      const res = await apiClient.GET('/api/v1/users/{id}', {
-        params: { path: { id: userId } },
-      });
-      return res.data?.data;
-    },
-    staleTime: VIDEO_AUTHOR_STALE_TIME_MS,
   });
 }

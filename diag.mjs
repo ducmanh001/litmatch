@@ -1,14 +1,16 @@
-import { chromium } from '@playwright/test';
-import { execSync } from 'node:child_process';
+import 'dotenv/config';
 
-const BASE_URL = 'http://localhost:4300';
-const PHONE = '912345678';
+import { chromium } from '@playwright/test';
+import { readDevServiceLogs } from './scripts/dev/dev-compose.mjs';
+
+const BASE_URL =
+  process.env['DIAG_BASE_URL'] ??
+  process.env['BASE_URL'] ??
+  'http://localhost:4300';
+const PHONE = process.env['DIAG_PHONE_LOCAL'] ?? '912345678';
 
 function readLatestOtp() {
-  const logs = execSync('docker logs litmatch-core-api-1 --tail 200', {
-    encoding: 'utf8',
-    maxBuffer: 1024 * 1024 * 20,
-  });
+  const logs = readDevServiceLogs('core-api', 200);
   const matches = [...logs.matchAll(/Ma xac thuc Litmatch cua ban: (\d{6})/g)];
   return matches[matches.length - 1][1];
 }

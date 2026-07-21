@@ -6,6 +6,7 @@ import { vi } from 'vitest';
 
 import { VideoReelFeed } from './video-reel-feed';
 import { apiClient } from '../../../shared/api/client';
+import { ConfirmSheet } from '../../../shared/ui/confirm-sheet';
 
 import type { VideoDto } from '../api';
 
@@ -16,6 +17,7 @@ function renderFeed() {
   return render(
     <QueryClientProvider client={queryClient}>
       <VideoReelFeed />
+      <ConfirmSheet />
     </QueryClientProvider>,
   );
 }
@@ -50,6 +52,13 @@ describe('VideoReelFeed', () => {
     const video: VideoDto = {
       id: 'video-1',
       authorUserId: 'u1',
+      author: {
+        id: 'u1',
+        nickname: 'Mây',
+        gender: 'unknown',
+        avatarId: 'avatar-1',
+        interests: null,
+      },
       status: 'published',
       playbackUrl: 'https://cdn.example.com/v1.mp4',
       thumbnailUrl: null,
@@ -63,12 +72,63 @@ describe('VideoReelFeed', () => {
     vi.spyOn(apiClient, 'GET').mockResolvedValue({
       data: { data: { items: [video], nextCursor: null } },
     } as never);
+    const postSpy = vi.spyOn(apiClient, 'POST').mockResolvedValue({
+      data: { data: undefined },
+    } as never);
 
     renderFeed();
 
     expect(await screen.findByText('Một ngày đẹp trời')).toBeVisible();
     expect(screen.getByRole('button', { name: /7/ })).toBeVisible();
     expect(screen.getByRole('button', { name: /3/ })).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Tặng quà cho tác giả' }),
+    ).toBeVisible();
+    const soundButton = screen.getByRole('button', {
+      name: 'Bật âm thanh gốc của video',
+    });
+    expect(soundButton).toBeVisible();
+    await userEvent.click(soundButton);
+    expect(
+      screen.getByRole('button', { name: 'Tắt âm thanh gốc của video' }),
+    ).toBeVisible();
+
+    await userEvent.click(
+      screen.getByRole('button', {
+        name: 'Báo cáo video có nội dung không phù hợp',
+      }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Gửi báo cáo' }));
+    await waitFor(() =>
+      expect(postSpy).toHaveBeenCalledWith('/api/v1/videos/{id}/report', {
+        params: { path: { id: 'video-1' } },
+        body: { reason: 'inappropriate_content' },
+      }),
+    );
+  });
+
+  it('response API cũ chưa có author vẫn render video được trong lúc core-api reload', async () => {
+    const legacyVideo = {
+      id: 'video-legacy',
+      authorUserId: 'u-legacy',
+      status: 'published',
+      playbackUrl: null,
+      thumbnailUrl: null,
+      caption: 'Video từ API cũ',
+      durationSeconds: null,
+      viewCount: 0,
+      likeCount: 0,
+      commentCount: 0,
+      createdAt: new Date().toISOString(),
+    };
+    vi.spyOn(apiClient, 'GET').mockResolvedValue({
+      data: { data: { items: [legacyVideo], nextCursor: null } },
+    } as never);
+
+    renderFeed();
+
+    expect(await screen.findByText('Video từ API cũ')).toBeVisible();
+    expect(screen.getByText('Người dùng')).toBeVisible();
   });
 
   it('tab "Đang theo dõi" gọi lại feed với feed=following và có empty state riêng', async () => {
@@ -104,6 +164,13 @@ describe('VideoReelFeed', () => {
       {
         id: 'video-1',
         authorUserId: 'u1',
+        author: {
+          id: 'u1',
+          nickname: 'Mây',
+          gender: 'unknown',
+          avatarId: 'avatar-1',
+          interests: null,
+        },
         status: 'published',
         playbackUrl: 'https://cdn.example.com/v1.mp4',
         thumbnailUrl: null,
@@ -117,6 +184,13 @@ describe('VideoReelFeed', () => {
       {
         id: 'video-2',
         authorUserId: 'u2',
+        author: {
+          id: 'u2',
+          nickname: 'Nắng',
+          gender: 'unknown',
+          avatarId: 'avatar-2',
+          interests: null,
+        },
         status: 'published',
         playbackUrl: 'https://cdn.example.com/v2.mp4',
         thumbnailUrl: null,
@@ -150,18 +224,6 @@ describe('VideoReelFeed', () => {
       if (path === '/api/v1/videos') {
         return {
           data: { data: { items: videos, nextCursor: null } },
-        } as never;
-      }
-      if (path === '/api/v1/users/{id}') {
-        return {
-          data: {
-            data: {
-              id: 'user',
-              nickname: 'Thành viên',
-              gender: 'unknown',
-              avatarId: null,
-            },
-          },
         } as never;
       }
       throw new Error(`unexpected GET ${path}`);

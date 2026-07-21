@@ -42,7 +42,6 @@ export function AvatarLayerPreview({
       aria-label="Ảnh đại diện ghép từ các layer đã trang bị"
     >
       {layers.map((layer) => (
-        // eslint-disable-next-line @next/next/no-img-element -- asset URL ngoài domain
         <img
           key={layer.id}
           src={layer.imageUrl}
@@ -207,7 +206,6 @@ export function AvatarBuilder() {
                     : 'border-black/5 hover:border-iris/30 dark:border-white/10'
                 }`}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element -- asset URL ngoài domain */}
                 <img
                   src={item.imageUrl}
                   alt=""

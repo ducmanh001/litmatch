@@ -64,7 +64,12 @@ export class DevAppleNotificationVerifier
   }
 
   onApplicationBootstrap(): void {
-    if (this.config.get('NODE_ENV', { infer: true }) === 'production') {
+    if (
+      this.config.get('NODE_ENV', { infer: true }) === 'production' &&
+      this.config.getOrThrow('ECONOMY_APPLE_WEBHOOK_VERIFIER', {
+        infer: true,
+      }) === 'dev'
+    ) {
       throw new Error(
         'DevAppleNotificationVerifier không được dùng ở production — set ECONOMY_APPLE_WEBHOOK_VERIFIER=store',
       );
@@ -188,7 +193,12 @@ export class DevGoogleRtdnVerifier
   }
 
   onApplicationBootstrap(): void {
-    if (this.config.get('NODE_ENV', { infer: true }) === 'production') {
+    if (
+      this.config.get('NODE_ENV', { infer: true }) === 'production' &&
+      this.config.getOrThrow('ECONOMY_GOOGLE_RTDN_VERIFIER', {
+        infer: true,
+      }) === 'dev'
+    ) {
       throw new Error(
         'DevGoogleRtdnVerifier không được dùng ở production — set ECONOMY_GOOGLE_RTDN_VERIFIER=store',
       );
