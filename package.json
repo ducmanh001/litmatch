@@ -80,6 +80,7 @@
     "@nx/vitest": "23.0.1",
     "@nx/web": "23.0.1",
     "@nx/webpack": "23.0.1",
+    "@opennextjs/cloudflare": "^1.20.1",
     "@playwright/test": "^1.61.1",
     "@swc-node/register": "^1.11.1",
     "@swc/cli": "~0.8.0",
@@ -136,7 +137,8 @@
     "vitest": "^4.1.10",
     "webpack": "^5.101.3",
     "webpack-cli": "^7.0.0",
-    "webpack-dev-server": "^5.2.1"
+    "webpack-dev-server": "^5.2.1",
+    "wrangler": "^4.112.0"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",

@@ -58,6 +58,22 @@ describe('setAuthCookies', () => {
       expect.objectContaining({ secure: false }),
     );
   });
+
+  it('production cross-site dùng SameSite=None và luôn Secure', () => {
+    const res = fakeResponse();
+    setAuthCookies(res as unknown as Response, {
+      refreshToken: 'r1',
+      csrfToken: 'c1',
+      isProduction: true,
+      productionSameSite: 'none',
+      ttlDays: 30,
+    });
+    expect(res.cookie).toHaveBeenCalledWith(
+      'refresh_token',
+      'r1',
+      expect.objectContaining({ secure: true, sameSite: 'none' }),
+    );
+  });
 });
 
 describe('clearAuthCookies', () => {
@@ -71,6 +87,15 @@ describe('clearAuthCookies', () => {
     expect(res.clearCookie).toHaveBeenCalledWith(
       'csrf_token',
       expect.objectContaining({ path: '/api/v1/auth' }),
+    );
+  });
+
+  it('xoá cookie bằng cùng SameSite policy đã dùng lúc issue', () => {
+    const res = fakeResponse();
+    clearAuthCookies(res as unknown as Response, true, false, 'none');
+    expect(res.clearCookie).toHaveBeenCalledWith(
+      'refresh_token',
+      expect.objectContaining({ secure: true, sameSite: 'none' }),
     );
   });
 });

@@ -136,6 +136,7 @@ export class AuthController {
       res,
       this.config.get('NODE_ENV', { infer: true }) === 'production',
       this.config.get('AUTH_CROSS_ORIGIN_DEV', { infer: true }) === true,
+      this.config.getOrThrow('AUTH_COOKIE_SAME_SITE', { infer: true }),
     );
   }
 
@@ -151,6 +152,9 @@ export class AuthController {
         this.config.get('NODE_ENV', { infer: true }) === 'production',
       crossOriginDev:
         this.config.get('AUTH_CROSS_ORIGIN_DEV', { infer: true }) === true,
+      productionSameSite: this.config.getOrThrow('AUTH_COOKIE_SAME_SITE', {
+        infer: true,
+      }),
       ttlDays: this.config.getOrThrow('AUTH_REFRESH_TTL_DAYS', { infer: true }),
     });
     return {

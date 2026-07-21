@@ -39,6 +39,7 @@
 | —   | [adr/](./adr/README.md)                                                | Architecture Decision Records — lịch sử các quyết định đã chốt (bối cảnh, phương án loại, hệ quả); 03 là trạng thái đích, ADR là lý do lịch sử                     |
 | —   | [runbooks/posthog-cloud.md](./runbooks/posthog-cloud.md)               | Hướng dẫn bật user analytics/session replay hosted miễn phí, consent, privacy và giới hạn chi phí                                                                  |
 | —   | [runbooks/grafana-cloud.md](./runbooks/grafana-cloud.md)               | Hướng dẫn đẩy metrics/log Docker lên Grafana Cloud Free, dashboard, alert và giới hạn cardinality                                                                  |
+| —   | [runbooks/hosted-free-release.md](./runbooks/hosted-free-release.md)   | Provision và release profile cloud-only miễn phí qua Northflank, Cloudflare, Upstash và LiveKit Cloud                                                              |
 | —   | [sources.md](./sources.md)                                             | Nguồn tham khảo đã dùng để nghiên cứu bộ docs này                                                                                                                  |
 
 ## Đường dẫn đọc gợi ý theo tình huống

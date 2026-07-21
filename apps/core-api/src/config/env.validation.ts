@@ -34,6 +34,7 @@ export interface CoreApiEnv {
   AUTH_GOOGLE_CLIENT_ID: string;
   AUTH_APPLE_CLIENT_ID: string;
   AUTH_CROSS_ORIGIN_DEV: boolean;
+  AUTH_COOKIE_SAME_SITE: 'strict' | 'none';
   USER_DEFAULT_AVATAR_ID: string;
   ECONOMY_IAP_VERIFIER: 'dev' | 'store' | 'disabled';
   ECONOMY_APPLE_SHARED_SECRET: string;
@@ -164,7 +165,7 @@ export const coreApiEnvSchema = Joi.object({
     .uri({ scheme: ['postgres', 'postgresql'] })
     .required(),
   REDIS_URL: Joi.string()
-    .uri({ scheme: ['redis'] })
+    .uri({ scheme: ['redis', 'rediss'] })
     .default('redis://localhost:6379'),
   KAFKA_BROKERS: Joi.string().default('localhost:9092'),
 
@@ -181,6 +182,7 @@ export const coreApiEnvSchema = Joi.object({
   AUTH_GOOGLE_CLIENT_ID: Joi.string().allow('').default(''),
   AUTH_APPLE_CLIENT_ID: Joi.string().allow('').default(''),
   AUTH_CROSS_ORIGIN_DEV: Joi.boolean().default(false),
+  AUTH_COOKIE_SAME_SITE: Joi.string().valid('strict', 'none').default('strict'),
 
   USER_DEFAULT_AVATAR_ID: Joi.string().default('default-01'),
 

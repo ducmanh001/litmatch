@@ -115,7 +115,8 @@ cookie mode.
 ## 12.6 Auth — lifecycle và quyết định lưu token
 
 Cả hai app dùng đúng JWT flow của core-api, không dựng hệ auth riêng. Refresh token là
-**httpOnly cookie** do core-api set (`Secure` ở production, `SameSite=Strict`) theo
+**httpOnly cookie** do core-api set (`Secure` ở production; `SameSite=Strict` mặc định, hoặc
+`None` khi profile khác site khai tường minh `AUTH_COOKIE_SAME_SITE=none`) theo
 [ADR 0007](./adr/0007-httponly-cookie-refresh-token.md) — thay thế hoàn toàn
 [ADR 0002](./adr/0002-browser-refresh-token-local-storage.md)/
 [0003](./adr/0003-browser-auth-production-gate.md) (`Superseded`). JS không bao giờ đọc được

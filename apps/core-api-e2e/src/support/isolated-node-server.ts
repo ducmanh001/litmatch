@@ -1,4 +1,5 @@
 // Jest loads E2E bootstrap files before tsconfig path aliases are available.
+// eslint-disable-next-line @nx/enforce-module-boundaries
 export {
   readIsolatedNodeServerState,
   startIsolatedNodeServer,

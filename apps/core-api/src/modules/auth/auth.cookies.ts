@@ -22,12 +22,18 @@ function cookieOptions(
   isProduction: boolean,
   ttlDays: number,
   crossOriginDev: boolean, // true khi test qua tunnel/LAN IP (frontend & backend khác origin)
+  productionSameSite: 'strict' | 'none',
 ): CookieOptions {
+  const sameSite = isProduction
+    ? productionSameSite
+    : crossOriginDev
+      ? 'none'
+      : 'strict';
   return {
     httpOnly: true,
     // sameSite: 'none' bắt buộc đi kèm secure: true (browser spec) — tunnel dùng HTTPS nên vẫn ổn ở dev
-    secure: isProduction || crossOriginDev,
-    sameSite: isProduction ? 'strict' : crossOriginDev ? 'none' : 'strict',
+    secure: isProduction || sameSite === 'none',
+    sameSite,
     path: REFRESH_TOKEN_COOKIE_PATH,
     maxAge: ttlDays * 24 * 3600 * 1000,
   };
@@ -40,6 +46,7 @@ export function setAuthCookies(
     csrfToken: string;
     isProduction: boolean;
     crossOriginDev?: boolean;
+    productionSameSite?: 'strict' | 'none';
     ttlDays: number;
   },
 ): void {
@@ -47,6 +54,7 @@ export function setAuthCookies(
     input.isProduction,
     input.ttlDays,
     input.crossOriginDev ?? false,
+    input.productionSameSite ?? 'strict',
   );
   res.cookie(REFRESH_TOKEN_COOKIE_NAME, input.refreshToken, options);
   res.cookie(CSRF_COOKIE_NAME, input.csrfToken, options);
@@ -56,8 +64,14 @@ export function clearAuthCookies(
   res: Response,
   isProduction: boolean,
   crossOriginDev = false,
+  productionSameSite: 'strict' | 'none' = 'strict',
 ): void {
-  const options = cookieOptions(isProduction, 0, crossOriginDev);
+  const options = cookieOptions(
+    isProduction,
+    0,
+    crossOriginDev,
+    productionSameSite,
+  );
   res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, options);
   res.clearCookie(CSRF_COOKIE_NAME, options);
 }
