@@ -7,6 +7,11 @@
   "engines": {
     "node": ">=22 <23"
   },
+  "pnpm": {
+    "overrides": {
+      "brace-expansion": "^2.0.1"
+    }
+  },
   "scripts": {
     "bootstrap": "pnpm install --frozen-lockfile && pnpm infra:up && pnpm db:migrate && pnpm doctor",
     "dev:up": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d",
