@@ -39,7 +39,7 @@
       "cache": false,
       "options": {
         "cwd": "apps/web",
-        "command": "pnpm exec opennextjs-cloudflare deploy --skipNextBuild"
+        "command": "pnpm exec opennextjs-cloudflare deploy"
       }
     },
     "e2e": {
