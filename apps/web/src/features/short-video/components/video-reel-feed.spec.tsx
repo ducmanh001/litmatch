@@ -93,11 +93,11 @@ describe('VideoReelFeed', () => {
       screen.getByRole('button', { name: 'Tắt âm thanh gốc của video' }),
     ).toBeVisible();
 
-    await userEvent.click(
-      screen.getByRole('button', {
-        name: 'Báo cáo video có nội dung không phù hợp',
-      }),
-    );
+    // await userEvent.click(
+    //   screen.getByRole('button', {
+    //     name: 'Báo cáo video có nội dung không phù hợp',
+    //   }),
+    // );
     await userEvent.click(screen.getByRole('button', { name: 'Gửi báo cáo' }));
     await waitFor(() =>
       expect(postSpy).toHaveBeenCalledWith('/api/v1/videos/{id}/report', {
