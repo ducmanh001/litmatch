@@ -8,6 +8,10 @@ const MESSAGES = {
     vi: 'Đang kiểm tra phiên đăng nhập…',
     en: 'Checking your sign-in session…',
   },
+  'auth.otpCreated': {
+    vi: 'Mã OTP của bạn là',
+    en: 'Your OTP is',
+  },
   'analytics.consentTitle': {
     vi: 'Cho phép phân tích trải nghiệm?',
     en: 'Allow experience analytics?',
@@ -135,6 +139,106 @@ const MESSAGES = {
     vi: 'Điều hướng chính (di động)',
     en: 'Primary navigation (mobile)',
   },
+  'more.profile.description': {
+    vi: 'Xem và chỉnh sửa hồ sơ',
+    en: 'View and edit your profile',
+  },
+  'more.premium.title': { vi: 'Nâng cấp Premium', en: 'Upgrade to Premium' },
+  'more.premium.description': {
+    vi: 'Xem ai đã thích bạn, vuốt không giới hạn',
+    en: 'See who likes you and swipe without limits',
+  },
+  'more.section.explore': { vi: 'Khám phá', en: 'Explore' },
+  'more.explore.discovery.label': { vi: 'Quanh đây', en: 'Nearby' },
+  'more.explore.discovery.description': {
+    vi: 'Tìm người gần bạn',
+    en: 'Find people nearby',
+  },
+  'more.explore.video.label': { vi: 'Video', en: 'Video' },
+  'more.explore.video.description': {
+    vi: 'Lướt khoảnh khắc ngắn',
+    en: 'Browse short moments',
+  },
+  'more.explore.party.label': { vi: 'Party', en: 'Party' },
+  'more.explore.party.description': {
+    vi: 'Vào phòng trò chuyện',
+    en: 'Enter a voice room',
+  },
+  'more.explore.feed.label': { vi: 'Bảng tin', en: 'Feed' },
+  'more.explore.feed.description': {
+    vi: 'Xem câu chuyện mới',
+    en: 'See new stories',
+  },
+  'more.section.account': { vi: 'Tài khoản', en: 'Account' },
+  'more.account.theme': {
+    vi: 'Giao diện sáng/tối',
+    en: 'Light / dark theme',
+  },
+  'more.account.language': { vi: 'Ngôn ngữ', en: 'Language' },
+  'more.account.editProfile': { vi: 'Chỉnh sửa hồ sơ', en: 'Edit profile' },
+  'more.account.privacy': {
+    vi: 'Cài đặt và quyền riêng tư',
+    en: 'Settings and privacy',
+  },
+  'more.section.support': { vi: 'Hỗ trợ', en: 'Support' },
+  'more.support.inviteFriends': { vi: 'Mời bạn bè', en: 'Invite friends' },
+  'more.support.helpCenter': {
+    vi: 'Trung tâm trợ giúp',
+    en: 'Help center',
+  },
+  'more.logout': { vi: 'Đăng xuất', en: 'Log out' },
+  'more.invite.shareTitle': { vi: 'Litmatch', en: 'Litmatch' },
+  'more.invite.shareText': {
+    vi: 'Tham gia Litmatch cùng mình:',
+    en: 'Join Litmatch with me:',
+  },
+  'more.invite.copied': {
+    vi: 'Đã copy link mời bạn bè',
+    en: 'Invite link copied',
+  },
+  'theme.toLight': {
+    vi: 'Chuyển sang giao diện sáng',
+    en: 'Switch to light theme',
+  },
+  'theme.toDark': {
+    vi: 'Chuyển sang giao diện tối',
+    en: 'Switch to dark theme',
+  },
+  'profile.eyebrow': { vi: 'Hồ sơ của bạn', en: 'Your profile' },
+  'profile.loading': { vi: 'Đang tải hồ sơ…', en: 'Loading profile…' },
+  'profile.error': {
+    vi: 'Có lỗi xảy ra, thử lại.',
+    en: 'Something went wrong. Please try again.',
+  },
+  'profile.empty': {
+    vi: 'Không có dữ liệu hồ sơ.',
+    en: 'No profile data is available.',
+  },
+  'profile.changeAvatar': { vi: 'Đổi ảnh đại diện', en: 'Change avatar' },
+  'profile.guestNotice': {
+    vi: 'Tài khoản khách — một số tính năng bị giới hạn.',
+    en: 'Guest account — some features are limited.',
+  },
+  'profile.wallet': {
+    vi: 'Ví Diamond & Giao dịch',
+    en: 'Diamond wallet & transactions',
+  },
+  'profile.vip': { vi: 'Nâng cấp VIP', en: 'Upgrade to VIP' },
+  'profile.edit': {
+    vi: 'Chỉnh sửa Avatar & hồ sơ',
+    en: 'Edit avatar & profile',
+  },
+  'profile.language': { vi: 'Ngôn ngữ', en: 'Language' },
+  'profile.privacy': {
+    vi: 'Quyền riêng tư, chặn & báo cáo',
+    en: 'Privacy, blocks & reports',
+  },
+  'profile.help': { vi: 'Trợ giúp & phản hồi', en: 'Help & feedback' },
+  'profile.logout': { vi: 'Đăng xuất', en: 'Log out' },
+  'profile.friends': { vi: 'Bạn bè', en: 'Friends' },
+  'profile.posts': { vi: 'Bài viết của bạn', en: 'Your posts' },
+  'profile.viewFeed': { vi: 'Xem trên Bảng tin →', en: 'View in Feed →' },
+  'profile.postImageAlt': { vi: 'Ảnh bài viết', en: 'Post image' },
   'home.welcome': { vi: 'Rất vui gặp lại 👋', en: 'Good to see you again 👋' },
   'home.heroLineOne': {
     vi: 'Trò chuyện chân thành,',
