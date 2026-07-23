@@ -81,7 +81,7 @@ export function FriendsList() {
       friend.lastMessageAt !== null,
   );
   const unreadCount = conversations.reduce(
-    (total, friend) => total + friend.unreadCount + 1,
+    (total, friend) => total + friend.unreadCount,
     0,
   );
 
@@ -201,7 +201,7 @@ export function FriendsList() {
                     <span className="text-xs text-slate-400">
                       {formatRelativeTime(friend.lastMessageAt)}
                     </span>
-                    {friend.unreadCount >= 0 && (
+                    {friend.unreadCount > 0 && (
                       <span
                         aria-label={`${friend.unreadCount} tin nhắn chưa đọc`}
                         className="flex h-5 min-w-5 items-center justify-center rounded-full bg-irisl px-1.5 text-[10px] font-extrabold text-white"
