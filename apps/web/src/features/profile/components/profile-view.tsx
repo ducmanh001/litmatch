@@ -4,6 +4,7 @@ import { isApiError } from '@litmatch/api-client';
 import Link from 'next/link';
 
 import { useCurrentUser } from '../../../shared/auth/use-current-user';
+import { useTranslation } from '../../../shared/i18n/messages';
 import { ProfileIcon } from '../../../shared/ui/icons';
 import { PageHeader } from '../../../shared/ui/page-header';
 import { PlaceholderAvatar } from '../../../shared/ui/placeholder-avatar';
@@ -14,6 +15,7 @@ import { ProfileStats } from './profile-stats';
 
 export function ProfileView() {
   const profile = useCurrentUser();
+  const t = useTranslation();
   // Ví đã có sẵn cho stat Diamond (ProfileStats) — dùng chung query này để lấy vipTier thật
   // cho badge VIP, tránh gọi thêm 1 endpoint riêng (MyProfileDto không có field vipTier).
   const wallet = useWallet();
@@ -21,7 +23,7 @@ export function ProfileView() {
   if (profile.isPending) {
     return (
       <p className="px-5 text-sm text-slate-500 dark:text-slate-400">
-        Đang tải hồ sơ…
+        {t('profile.loading')}
       </p>
     );
   }
@@ -29,7 +31,7 @@ export function ProfileView() {
   if (profile.isError) {
     const message = isApiError(profile.error)
       ? profile.error.message
-      : 'Có lỗi xảy ra, thử lại.';
+      : t('profile.error');
     return (
       <p role="alert" className="px-5 text-sm text-destructive">
         {message}
@@ -40,7 +42,7 @@ export function ProfileView() {
   if (profile.data === undefined) {
     return (
       <p className="px-5 text-sm text-slate-500 dark:text-slate-400">
-        Không có dữ liệu hồ sơ.
+        {t('profile.empty')}
       </p>
     );
   }
@@ -51,7 +53,7 @@ export function ProfileView() {
     <div>
       <div className="px-5">
         <PageHeader
-          eyebrow="Hồ sơ của bạn"
+          eyebrow={t('profile.eyebrow')}
           eyebrowIcon={<ProfileIcon width={16} height={16} />}
         />
       </div>
@@ -64,11 +66,11 @@ export function ProfileView() {
             seed={profile.data.id}
             alt={profile.data.nickname}
             size={96}
-            className="border-4 border-paper dark:border-ink"
+            className="dark:border-ink"
           />
           <Link
             href="/profile/edit"
-            aria-label="Đổi ảnh đại diện"
+            aria-label={t('profile.changeAvatar')}
             className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full border-2 border-paper bg-iris text-white dark:border-ink"
           >
             <svg
@@ -103,7 +105,7 @@ export function ProfileView() {
 
           {profile.data.isGuest && (
             <p className="mt-4 rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-500 dark:bg-surf2 dark:text-slate-400">
-              Tài khoản khách — một số tính năng bị giới hạn.
+              {t('profile.guestNotice')}
             </p>
           )}
         </div>

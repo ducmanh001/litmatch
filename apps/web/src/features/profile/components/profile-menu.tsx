@@ -3,6 +3,7 @@
 import Link from 'next/link';
 
 import { useLogout } from '../../../shared/auth/use-logout';
+import { useTranslation } from '../../../shared/i18n/messages';
 import {
   ChevronRightIcon,
   CrownIcon,
@@ -11,6 +12,7 @@ import {
   ProfileIcon,
   ShieldIcon,
 } from '../../../shared/ui/icons';
+import { LanguageSelector } from '../../../shared/ui/language-selector';
 
 const rowClass =
   'flex items-center gap-3 px-4 py-3.5 first:rounded-t-2xl last:rounded-b-2xl';
@@ -19,6 +21,7 @@ const iconWrapClass =
 
 export function ProfileMenu() {
   const logout = useLogout();
+  const t = useTranslation();
 
   return (
     <div className="mb-4 space-y-3">
@@ -30,7 +33,7 @@ export function ProfileMenu() {
             <DiamondIcon width={15} height={15} />
           </span>
           <span className="flex-1 text-sm font-semibold">
-            Ví Diamond & Giao dịch
+            {t('profile.wallet')}
           </span>
           <ChevronRightIcon className="text-slate-300" />
         </Link>
@@ -38,7 +41,9 @@ export function ProfileMenu() {
           <span className={`${iconWrapClass} bg-amber-400/15 text-amber-500`}>
             <CrownIcon />
           </span>
-          <span className="flex-1 text-sm font-semibold">Nâng cấp VIP</span>
+          <span className="flex-1 text-sm font-semibold">
+            {t('profile.vip')}
+          </span>
           <ChevronRightIcon className="text-slate-300" />
         </Link>
         <Link href="/profile/edit" className={rowClass}>
@@ -46,16 +51,22 @@ export function ProfileMenu() {
             <ProfileIcon width={15} height={15} />
           </span>
           <span className="flex-1 text-sm font-semibold">
-            Chỉnh sửa Avatar & hồ sơ
+            {t('profile.edit')}
           </span>
           <ChevronRightIcon className="text-slate-300" />
         </Link>
+        <div className={rowClass}>
+          <span className="flex-1 text-sm font-semibold">
+            {t('profile.language')}
+          </span>
+          <LanguageSelector />
+        </div>
         <Link href="/privacy" className={rowClass}>
           <span className={iconWrapClass}>
             <ShieldIcon />
           </span>
           <span className="flex-1 text-sm font-semibold">
-            Quyền riêng tư, chặn & báo cáo
+            {t('profile.privacy')}
           </span>
           <ChevronRightIcon className="text-slate-300" />
         </Link>
@@ -64,7 +75,7 @@ export function ProfileMenu() {
             <HelpCircleIcon />
           </span>
           <span className="flex-1 text-sm font-semibold">
-            Trợ giúp & phản hồi
+            {t('profile.help')}
           </span>
           <ChevronRightIcon className="text-slate-300" />
         </Link>
@@ -75,7 +86,7 @@ export function ProfileMenu() {
         onClick={logout}
         className="block w-full rounded-2xl border border-black/5 bg-white py-3 text-center text-sm font-bold text-rose-500 dark:border-white/5 dark:bg-surf"
       >
-        Đăng xuất
+        {t('profile.logout')}
       </button>
     </div>
   );

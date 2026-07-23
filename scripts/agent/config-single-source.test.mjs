@@ -66,3 +66,35 @@ test('file tracked không chứa tunnel id, private LAN IP hoặc local DB crede
     /DATABASE_URL:\s*postgresql:\/\/litmatch:litmatch_local/u,
   );
 });
+
+test('mọi LiveKit webhook dùng đúng global API prefix', async () => {
+  const files = [
+    'apps/media-server/livekit.compose.yaml',
+    'apps/media-server/livekit.yaml',
+    'deploy/production/livekit.yaml',
+    'k8s/base/media-server/configmap.yaml',
+  ];
+  const contents = await Promise.all(files.map(read));
+
+  for (const content of contents) {
+    assert.match(content, /\/api\/v1\/calling\/webhooks\/livekit/u);
+    assert.match(content, /\/api\/v1\/party\/webhooks\/livekit/u);
+    assert.doesNotMatch(
+      content,
+      /:3000\/(?:calling|party)\/webhooks\/livekit/u,
+    );
+  }
+});
+
+test('mọi production profile tắt upload video khi chưa có provider thật', async () => {
+  const files = [
+    'deploy/hosted/core-api.env.example',
+    'deploy/production/compose.yml',
+    'k8s/base/core-api/configmap.yaml',
+  ];
+  const contents = await Promise.all(files.map(read));
+
+  for (const content of contents) {
+    assert.match(content, /VIDEO_UPLOAD_ENABLED(?::|=)\s*['"]?false/u);
+  }
+});

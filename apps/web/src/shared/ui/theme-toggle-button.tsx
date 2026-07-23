@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { useTranslation } from '../i18n/messages';
 import { cn } from '../lib/cn';
 import { MoonIcon, SunIcon } from './icons';
 import {
@@ -19,6 +20,7 @@ const LAST_DARK_MOOD_KEY = 'litmatch-last-dark-mood';
  */
 export function ThemeToggleButton({ className }: { className?: string }) {
   const [isDark, setIsDark] = useState(true);
+  const t = useTranslation();
 
   useEffect(() => {
     const sync = () => setIsDark(readCurrentTheme() !== 'white');
@@ -43,9 +45,7 @@ export function ThemeToggleButton({ className }: { className?: string }) {
     <button
       type="button"
       onClick={toggle}
-      aria-label={
-        isDark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'
-      }
+      aria-label={isDark ? t('theme.toLight') : t('theme.toDark')}
       aria-pressed={isDark}
       className={cn(
         'flex h-10 w-10 items-center justify-center rounded-full border border-black/5 bg-white text-slate-600 transition hover:border-iris/30 dark:border-white/10 dark:bg-surf dark:text-white/80',

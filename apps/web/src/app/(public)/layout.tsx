@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ConfirmSheet } from '../../shared/ui/confirm-sheet';
 import { LogoMark } from '../../shared/ui/icons';
 import { LanguageSelector } from '../../shared/ui/language-selector';
+import { ThemeToggleButton } from '../../shared/ui/theme-toggle-button';
 import { ToastStack } from '../../shared/ui/toast-stack';
 import { useTranslation } from '../../shared/i18n/messages';
 
@@ -57,6 +58,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
             >
               {t('public.signUp')}
             </Link>
+            <ThemeToggleButton />
             <LanguageSelector />
           </div>
         </div>

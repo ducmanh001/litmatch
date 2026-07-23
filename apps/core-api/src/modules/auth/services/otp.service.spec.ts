@@ -5,7 +5,6 @@ import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
 import { OtpService } from './otp.service';
-import { SmsProvider } from '../ports/sms-provider';
 import { AuthErrors } from '../auth.errors';
 import { PhoneOtp } from '../entities/phone-otp.entity';
 
@@ -27,7 +26,6 @@ describe('OtpService', () => {
     findOne: jest.fn(),
     createQueryBuilder: jest.fn(() => qb),
   };
-  const sms = { send: jest.fn() };
   const config = {
     getOrThrow: jest.fn(
       (key: string) =>
@@ -60,7 +58,6 @@ describe('OtpService', () => {
       providers: [
         OtpService,
         { provide: getRepositoryToken(PhoneOtp), useValue: repo },
-        { provide: SmsProvider, useValue: sms },
         { provide: ConfigService, useValue: config },
       ],
     }).compile();
@@ -68,16 +65,13 @@ describe('OtpService', () => {
   });
 
   describe('requestOtp', () => {
-    it('tạo OTP mới, vô hiệu OTP cũ, gửi SMS', async () => {
+    it('tạo OTP mới, vô hiệu OTP cũ, trả mã cho client tự điền', async () => {
       repo.countBy.mockResolvedValue(0);
       repo.update.mockResolvedValue({ affected: 1 });
       const result = await service.requestOtp(PHONE);
+      expect(result.code).toMatch(/^\d{6}$/u);
       expect(result.ttlSeconds).toBe(300);
       expect(repo.update).toHaveBeenCalled(); // vô hiệu mã cũ
-      expect(sms.send).toHaveBeenCalledWith(
-        PHONE,
-        expect.stringMatching(/\d{6}/),
-      );
     });
 
     it('rate limit theo số điện thoại ở server — không phải chỉ ở FE (docs/10 § 10.1.H)', async () => {
@@ -86,7 +80,6 @@ describe('OtpService', () => {
         code: AuthErrors.OTP_REQUEST_RATE_LIMITED,
         httpStatus: 429,
       });
-      expect(sms.send).not.toHaveBeenCalled();
     });
   });
 

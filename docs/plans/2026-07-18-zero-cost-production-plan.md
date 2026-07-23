@@ -5,7 +5,8 @@
 Triển khai lựa chọn “production 0 đồng an toàn”: chạy `NODE_ENV=production`, giữ toàn bộ
 capability tự host (Web, Admin, Core API, PostgreSQL, Redis, Kafka, Socket.IO, LiveKit, in-app
 notification, analytics/observability), đồng thời fail-closed các capability cần adapter/vendor
-chưa có là phone OTP, video upload/transcode, store IAP và external push.
+chưa có là video upload/transcode, store IAP và external push. Phone OTP dùng mã trả trực tiếp
+qua API, không cần SMS.
 
 Flow cấu hình:
 
@@ -30,13 +31,13 @@ operator promote user đầu tiên thành admin bằng runbook → Admin đăng 
 | #   | Giả định / invariant                                      | Ai/cách phá                                      | Chặn ở đâu dự kiến                                                                         | Verdict |
 | --- | --------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------ | ------- |
 | 1   | Core phải boot bằng `NODE_ENV=production`                 | Dev provider lifecycle throw dù feature disabled | Provider bootstrap chỉ reject khi chính provider dev được chọn; boot smoke test            | ✅      |
-| 2   | Phone OTP disabled không ghi OTP rồi mới lỗi              | Chặn tại SmsProvider sau `repo.save`             | `AuthService` assert capability trước `OtpService.requestOtp/verifyOtp`                    | ✅      |
+| 2   | Phone OTP không phụ thuộc SMS/provider dev                | Không có kênh SMS khi deploy production          | `OtpService` trả mã qua DTO; `AuthService` vẫn giữ feature flag trước khi ghi DB           | ✅      |
 | 3   | Video upload disabled không tạo row `uploading` mồ côi    | Chặn sau insert hoặc phát URL dev                | `ShortVideoService` assert trước create/finalize; dev port vẫn fail trong prod             | ✅      |
 | 4   | IAP disabled không verify receipt giả và không ghi ledger | Dev verifier được chọn nhầm                      | `DisabledIapVerifier` trả domain error trước transaction/ledger                            | ✅      |
 | 5   | Economy ngoài IAP vẫn hoạt động                           | Disable cả module Economy                        | Chỉ thay `IapVerifier`; wallet, gift, VIP bằng diamond, admin adjustment giữ nguyên        | ✅      |
 | 6   | Push disabled không làm mất in-app notification           | No-op làm rollback transaction gốc               | `DisabledPushProvider` chỉ bỏ external side effect; notification row vẫn commit            | ✅      |
 | 7   | Store webhook production không khởi tạo dev verifier      | Dev provider hook throw dù factory chọn store    | Hook dev kiểm tra đúng env selector; webhook verifier store vẫn fail-closed                | ✅      |
-| 8   | Admin không bị khoá ngoài khi SMS tắt                     | Admin UI chỉ có form OTP                         | Google login dùng browser-auth primitive chung; server vẫn verify token                    | ✅      |
+| 8   | Admin không bị khoá ngoài khi OTP dùng API                | Admin UI không nhận code từ response             | Admin login tự điền code + toast từ cùng `OtpRequestedDto`                                 | ✅      |
 | 9   | User thường không thấy CTA chắc chắn thất bại             | Frontend không biết runtime profile              | Public build flags derive từ cùng deploy env và có test                                    | ✅      |
 | 10  | Production không dùng secret/default dev                  | Compose có fallback dev                          | `deploy/production/.env.example` + preflight bắt required secret và reject known dev value | ✅      |
 | 11  | LiveKit dùng public UDP, không đi qua HTTP tunnel         | Chỉ proxy WebSocket qua reverse proxy            | Public IP + TCP 7881 + UDP range trong Compose/firewall runbook                            | ✅      |
@@ -56,9 +57,9 @@ operator promote user đầu tiên thành admin bằng runbook → Admin đăng 
 
 ### 5. Test bắt buộc sau implementation
 
-- Unit: disabled/dev/store provider selection và không-side-effect khi disabled.
-- Auth/Admin/Web behavior test: OTP CTA ẩn, Google login dùng đúng endpoint/session.
-- Core production bootstrap smoke với profile disabled và PostgreSQL/Redis thật.
+- Unit: feature flag OTP và response code không có SMS side effect.
+- Auth/Admin/Web behavior test: OTP response hiển thị toast và tự điền, Google login dùng đúng endpoint/session.
+- Core production bootstrap smoke với OTP enabled và PostgreSQL/Redis thật.
 - Economy integration PostgreSQL thật, không cache.
 - `docker compose config`, build image Web/Admin/Core/Signaling, runtime health smoke.
 - `pnpm agent:verify core`, `frontend`, `signaling`, `media`, `infra`.

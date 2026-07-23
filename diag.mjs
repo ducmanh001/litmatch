@@ -1,19 +1,12 @@
 import 'dotenv/config';
 
 import { chromium } from '@playwright/test';
-import { readDevServiceLogs } from './scripts/dev/dev-compose.mjs';
 
 const BASE_URL =
   process.env['DIAG_BASE_URL'] ??
   process.env['BASE_URL'] ??
   'http://localhost:4300';
 const PHONE = process.env['DIAG_PHONE_LOCAL'] ?? '912345678';
-
-function readLatestOtp() {
-  const logs = readDevServiceLogs('core-api', 200);
-  const matches = [...logs.matchAll(/Ma xac thuc Litmatch cua ban: (\d{6})/g)];
-  return matches[matches.length - 1][1];
-}
 
 const browser = await chromium.launch();
 const context = await browser.newContext({
@@ -23,11 +16,15 @@ const page = await context.newPage();
 
 await page.goto(`${BASE_URL}/login`);
 await page.locator('#phone').fill(PHONE);
+const otpResponsePromise = page.waitForResponse((response) =>
+  response.url().includes('/api/v1/auth/otp/request'),
+);
 await page.getByRole('button', { name: 'Gửi mã OTP' }).click();
 const otpDigitInputs = page.locator('input[inputmode="numeric"]');
 await otpDigitInputs.first().waitFor({ timeout: 15000 });
-await page.waitForTimeout(500);
-const code = readLatestOtp();
+const otpResponse = await otpResponsePromise;
+const otpPayload = await otpResponse.json();
+const code = otpPayload.data.code;
 for (const [index, digit] of [...code].entries()) {
   await otpDigitInputs.nth(index).fill(digit);
 }

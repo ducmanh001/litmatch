@@ -1,0 +1,31 @@
+---
+
+### File 2: `.agentignore` (Tạo mới ở Root Repo - Tấm khiên Token)
+
+File này ép AI **không bao giờ** được quét hoặc đọc nội dung các file rác khủng hoảng token này:
+
+```gitignore
+# Lockfiles & Package Managers
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Build Artifacts & Caches
+dist/
+build/
+.nx/
+.next/
+node_modules/
+coverage/
+
+# Minified & Generated Files
+*.min.js
+*.min.css
+*.map
+*.svg
+*.graphql.schema
+
+# Logs & Environment
+*.log
+.env*
+!.env.example

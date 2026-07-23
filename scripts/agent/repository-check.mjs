@@ -50,7 +50,25 @@ function validateContextMap() {
   const path = join(root, '.agents/context-map.json');
   const map = JSON.parse(readFileSync(path, 'utf8'));
   for (const [scope, entry] of Object.entries(map)) {
-    for (const target of [...(entry.read ?? []), ...(entry.paths ?? [])]) {
+    const conditionalPaths = (entry.readWhen ?? []).map((item) => {
+      if (
+        typeof item?.path !== 'string' ||
+        typeof item?.when !== 'string' ||
+        !item.when.trim()
+      ) {
+        addError(
+          `Context scope ${scope} có readWhen không hợp lệ; cần { path, when }.`,
+        );
+        return '';
+      }
+      return item.path;
+    });
+    for (const target of [
+      ...(entry.read ?? []),
+      ...conditionalPaths,
+      ...(entry.paths ?? []),
+    ]) {
+      if (!target) continue;
       if (!existsSync(join(root, target))) {
         addError(
           `Context scope ${scope} trỏ tới path không tồn tại: ${target}`,
@@ -96,10 +114,10 @@ function validateGithubWorkflowPolicy() {
     join(root, '.github/workflows/ci.yml'),
     'utf8',
   );
-  const securityWorkflow = readFileSync(
-    join(root, '.github/workflows/security.yml'),
-    'utf8',
-  );
+  const securityWorkflowPath = join(root, '.github/workflows/security.yml');
+  const securityWorkflow = existsSync(securityWorkflowPath)
+    ? readFileSync(securityWorkflowPath, 'utf8')
+    : undefined;
 
   for (const error of workflowPolicyErrors({ ciWorkflow, securityWorkflow })) {
     addError(error);

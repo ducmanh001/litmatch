@@ -20,7 +20,7 @@ export function HomeDashboard({ trendingRooms }: { trendingRooms: ReactNode }) {
   const t = useTranslation();
 
   return (
-    <div className="mx-auto w-full px-5 pb-4 dark:text-white">
+    <div className="mx-auto w-full px-5 dark:text-white">
       <PageHeader
         leading={
           <Link
@@ -30,7 +30,7 @@ export function HomeDashboard({ trendingRooms }: { trendingRooms: ReactNode }) {
             <PlaceholderAvatar
               seed={user?.id ?? 'me'}
               size={46}
-              className="shrink-0 border-2 border-iris/30"
+              className="shrink-0 border-iris/30"
             />
             <div className="min-w-0">
               <p className="text-xs text-muted-foreground dark:text-white/65">

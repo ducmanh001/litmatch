@@ -98,7 +98,7 @@ export function DiscoveryModeToggle({
         aria-pressed={mode === 'nearby'}
         onClick={() => onModeChange('nearby')}
         className={cn(
-          'flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border px-4 py-2.5 text-sm font-bold transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+          'flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border px-4 py-2.5 text-sm font-bold transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring w-full md:w-auto',
           mode === 'nearby'
             ? 'border-transparent bg-gradient-to-r from-aqua to-irisl text-white shadow-sm shadow-iris/15'
             : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground dark:border-white/15 dark:text-white/75 dark:hover:bg-white/[0.08] dark:hover:text-white',
@@ -112,7 +112,7 @@ export function DiscoveryModeToggle({
         aria-pressed={mode === 'browse'}
         onClick={() => onModeChange('browse')}
         className={cn(
-          'flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border px-4 py-2.5 text-sm font-bold transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+          'flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border px-4 py-2.5 text-sm font-bold transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring w-full md:w-auto',
           mode === 'browse'
             ? 'border-transparent bg-gradient-to-r from-aqua to-irisl text-white shadow-sm shadow-iris/15'
             : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground dark:border-white/15 dark:text-white/75 dark:hover:bg-white/[0.08] dark:hover:text-white',

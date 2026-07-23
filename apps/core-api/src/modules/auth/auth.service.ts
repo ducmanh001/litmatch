@@ -54,7 +54,9 @@ export class AuthService {
     return this.issue(user);
   }
 
-  async requestOtp(phone: string): Promise<{ ttlSeconds: number }> {
+  async requestOtp(
+    phone: string,
+  ): Promise<{ code: string; ttlSeconds: number }> {
     this.assertPhoneOtpEnabled();
     return this.otpService.requestOtp(phone);
   }

@@ -1,9 +1,10 @@
 # Release production chi phí 0 — single-node alpha/beta
 
-Profile này giữ toàn bộ capability self-hosted, Google/guest login, admin, realtime, LiveKit,
-in-app notification, audit, metrics/log và analytics. Bốn capability cần vendor production bị
-tắt fail-closed: SMS OTP, store IAP, external push và video upload/transcode. Không có fake
-provider nào chạy dưới `NODE_ENV=production`.
+Profile này giữ toàn bộ capability self-hosted, gồm phone OTP không dùng SMS (mã trả trực tiếp
+qua API để client toast/tự điền), Google/guest login, admin, realtime, LiveKit, in-app
+notification, audit, metrics/log và analytics. Ba capability cần vendor production bị tắt
+fail-closed: store IAP, external push và video upload/transcode. Không có fake provider nào chạy
+dưới `NODE_ENV=production`.
 
 ## 1. Những việc chủ hệ thống cần làm một lần
 

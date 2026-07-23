@@ -18,6 +18,7 @@ export function isActiveCallStatus(
 }
 
 export function useJoinCall(matchSessionId: string) {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async () => {
       const res = await apiClient.POST(
@@ -25,6 +26,15 @@ export function useJoinCall(matchSessionId: string) {
         { params: { path: { matchSessionId } } },
       );
       return res.data?.data;
+    },
+    // `join` đã trả CallDto từ server. Seed đúng response đó để UI biết ngay đang chờ hay
+    // active, rồi `useCall` vẫn refetch/poll làm nguồn đồng bộ sau các webhook LiveKit.
+    onSuccess: (joined) => {
+      if (joined?.call === undefined) return;
+      queryClient.setQueryData(
+        voiceMatchKeys.call(joined.call.id),
+        joined.call,
+      );
     },
   });
 }

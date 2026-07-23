@@ -116,7 +116,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Gửi OTP tới số điện thoại */
+    /** Tạo OTP cho đăng nhập bằng số điện thoại */
     post: operations['AuthController_requestOtp'];
     delete?: never;
     options?: never;
@@ -2516,7 +2516,12 @@ export interface components {
       phone: string;
     };
     OtpRequestedDto: {
-      /** @description TTL của OTP vừa gửi (giây) — client hiển thị đếm ngược */
+      /**
+       * @description Mã OTP 6 chữ số — không gửi SMS, client dùng để hiển thị và tự điền
+       * @example 123456
+       */
+      code: string;
+      /** @description TTL của OTP vừa tạo (giây) — client hiển thị đếm ngược */
       ttlSeconds: number;
     };
     VerifyOtpDto: {

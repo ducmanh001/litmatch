@@ -27,7 +27,7 @@ const MATCH_COPY = {
 export function MobileMatchActions() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const current = searchParams.get('match');
+  const current = searchParams.get('match') || 'soul';
 
   const select = async (matchType: TicketDto['matchType']) => {
     router.replace(`/matching?match=${matchType}`);

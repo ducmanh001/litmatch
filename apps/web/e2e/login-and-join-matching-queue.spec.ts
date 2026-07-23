@@ -1,7 +1,5 @@
 import { expect, test } from '@playwright/test';
 
-import { waitForLatestOtpCode } from './support/dev-otp';
-
 /**
  * Bằng chứng browser E2E thật bắt buộc theo ADR 0003/0007 (docs/13 § 13.12 — trigger dựng
  * Playwright là có flow login + 1 flow nghiệp vụ thật). Xác nhận cookie httpOnly refresh_token
@@ -17,16 +15,27 @@ test('đăng nhập OTP, session sống sót qua reload, vào hàng đợi ghép
   // layouts/web/login.html) — normalizeVnPhone() mới ghép +84 vào trước khi gửi lên server.
   const phone = '90' + String(Date.now()).slice(-7);
   await page.locator('#phone').fill(phone);
+  const otpResponsePromise = page.waitForResponse((response) =>
+    response.url().includes('/api/v1/auth/otp/request'),
+  );
   await page.getByRole('button', { name: 'Gửi mã OTP' }).click();
 
   // Ô nhập OTP là 6 input rời (mỗi ô 1 chữ số, đúng mockup) — không còn input ẩn #code.
   const otpDigitInputs = page.locator('input[inputmode="numeric"]');
   await otpDigitInputs.first().waitFor();
-  const code = await waitForLatestOtpCode();
+  const otpResponse = await otpResponsePromise;
+  const otpPayload = await otpResponse.json();
+  const code: string = otpPayload.data.code;
+  await expect(page.getByText(/Mã OTP của bạn là \d{6}/u)).toBeVisible();
+  for (const [index, digit] of [...code].entries()) {
+    await expect(otpDigitInputs.nth(index)).toHaveValue(digit);
+  }
+  await page.getByRole('button', { name: 'Đăng nhập' }).click();
+
+  // FIX: Điền từng chữ số OTP vào từng ô input để trigger đúng event của frontend
   for (const [index, digit] of [...code].entries()) {
     await otpDigitInputs.nth(index).fill(digit);
   }
-  await page.getByRole('button', { name: 'Đăng nhập' }).click();
 
   await expect(page).toHaveURL(/\/home$/);
 

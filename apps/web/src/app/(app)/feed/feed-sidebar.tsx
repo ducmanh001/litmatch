@@ -72,7 +72,7 @@ export function FeedSidebar() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-black/5 bg-white dark:border-white/5 dark:bg-surf">
-        <div className="bg-gradient-to-br from-irisl/20 via-aqual/10 to-transparent p-4">
+        <div className="bg-gradient-to-br from-iris1 to-aqual p-4 rounded-2xl">
           <p className="text-sm font-bold">Tìm một kết nối nghiêm túc?</p>
           <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
             Xem những người ở gần có cùng mong muốn hẹn hò hoặc tìm bạn đồng

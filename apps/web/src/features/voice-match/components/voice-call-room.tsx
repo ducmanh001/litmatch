@@ -171,7 +171,8 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
     return () => clearInterval(id);
   }, []);
   const freeCallRemainingSeconds =
-    call.data?.freeCallEndsAt !== null &&
+    call.data?.status === 'active' &&
+    call.data.freeCallEndsAt !== null &&
     call.data?.freeCallEndsAt !== undefined
       ? Math.max(
           0,
@@ -398,6 +399,16 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
       {/* Audio đối phương — không cần hiển thị, chỉ cần phát */}
       <div ref={audioContainerRef} className="hidden" />
 
+      {call.data?.status === 'pending' && (
+        <p
+          role="status"
+          className="mb-4 rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-600 dark:bg-surf2 dark:text-slate-200"
+        >
+          Đang chờ cả hai cùng vào phòng… Thời gian miễn phí sẽ bắt đầu khi cuộc
+          gọi kết nối.
+        </p>
+      )}
+
       {freeCallRemainingSeconds !== null && (
         <p className="mb-4 text-sm font-bold text-irisl dark:text-rose-200">
           Còn {formatMinutesSeconds(freeCallRemainingSeconds)} cho phiên này
@@ -441,6 +452,14 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
             Kết nối lại
           </button>
         </div>
+      )}
+
+      {(hasLikedCall || likeCall.data?.liked) && (
+        <p role="status" className="mb-4 text-sm font-semibold text-irisl">
+          {likeCall.data?.matched
+            ? 'Cả hai đã yêu thích — kết thúc cuộc gọi để mở chat riêng.'
+            : 'Đã gửi yêu thích — chờ đối phương.'}
+        </p>
       )}
 
       <div className="flex items-center gap-5">

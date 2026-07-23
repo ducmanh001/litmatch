@@ -195,7 +195,7 @@ function VideoActionRail({
         <span className="text-xs font-bold">Tặng</span>
       </button>
 
-      <VideoReportButton videoId={video.id} />
+      {/* <VideoReportButton videoId={video.id} /> */}
 
       <button
         type="button"

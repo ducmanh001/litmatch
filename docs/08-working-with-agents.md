@@ -27,7 +27,12 @@ Không nạp toàn bộ repo theo thói quen. Chạy `pnpm agent:context <scope>
 boundary và test bắt buộc. Context map nằm ở `.agents/context-map.json` và được validate trong
 `pnpm agent:check` để đường dẫn không bị stale.
 
-Scope chuẩn: `core`, `economy`, `matching`, `calling`, `signaling`, `media`, `frontend`, `infra`.
+Output chia hai mức: **Read first** là context tối thiểu bắt buộc; **Read when applicable** chỉ
+đọc khi điều kiện sau dấu `—` khớp task. Cách này tránh nạp checklist/spec không liên quan nhưng
+không được dùng để bỏ qua tài liệu domain khi điều kiện đã khớp.
+
+Scope chuẩn: `core`, `economy`, `matching`, `calling`, `signaling`, `content`, `media`, `frontend`,
+`infra`.
 
 ## 8.3 Skills dùng chung
 
@@ -73,7 +78,8 @@ liệt kê trong [14-rule-enforcement-matrix.md](./14-rule-enforcement-matrix.md
 5. Chạy `pnpm agent:check`, unit test file/target bị ảnh hưởng, lint/build target áp dụng.
 6. Trước khi push/cập nhật PR, chạy một local gate bằng `pnpm ci:preflight`; hook `pre-push`
    luôn chạy thêm clean quality gate trong Node 22 Linux với dependency cài từ lockfile mới.
-7. Chạy `review-module verify`; FAIL thì sửa và verify lại.
+7. Với business flow nhạy cảm, chạy `review-module verify`; FAIL thì sửa và verify lại. Với
+   docs/tooling không chạm business flow, ghi `review-module: N/A` có lý do.
 8. Bàn giao bằng chứng, không chỉ nói “đã xong”.
 
 ## 8.6 Handoff contract
@@ -122,8 +128,8 @@ Prompt, contract, context map, guard và skill được coi là code:
 Mọi agent tuân theo giới hạn ở `AGENTS.md` và `adaptive-orchestration`: không polling/sleep loop,
 không progress filler, log/context theo bounded range, tối đa hai retry cho cùng failure và unit
 test theo file/target bị ảnh hưởng. Full test suite chỉ chạy khi người dùng yêu cầu rõ; gate riêng
-của domain nhạy cảm vẫn bắt buộc. Sub-agent cap hai theo mặc định, critical cap ba gồm reviewer;
-agent phải dừng delegate khi đã đủ evidence thay vì để chạy nền không cần thiết.
+của domain nhạy cảm vẫn bắt buộc. Sub-agent cap hai; agent phải dừng delegate khi đã đủ evidence
+thay vì để chạy nền không cần thiết.
 
 ---
 

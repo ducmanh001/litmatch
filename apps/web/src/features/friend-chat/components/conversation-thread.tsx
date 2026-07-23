@@ -32,7 +32,15 @@ import type { FriendMessageEventData } from '@litmatch/common-dtos/pure';
 // mở bước tiếp theo (toast tắt thông báo, hoặc confirm chặn) để 2 bottom-sheet không đè animation.
 const MENU_CLOSE_DELAY_MS = 320;
 
-export function ConversationThread({ friendUserId }: { friendUserId: string }) {
+export function ConversationThread({
+  friendUserId,
+  inDialog = false,
+  onBack,
+}: {
+  friendUserId: string;
+  inDialog?: boolean;
+  onBack?: () => void;
+}) {
   const queryClient = useQueryClient();
   const router = useRouter();
   const blockUser = useBlockUser();
@@ -262,29 +270,58 @@ export function ConversationThread({ friendUserId }: { friendUserId: string }) {
   };
 
   return (
-    <div className="flex min-h-[calc(100dvh-8rem)] flex-col bg-card/40 dark:bg-surf/20">
+    <div
+      className={`flex flex-col bg-card/40 dark:bg-surf/20 ${
+        inDialog ? 'min-h-0 flex-1' : 'min-h-[calc(100dvh-8rem)]'
+      }`}
+    >
       <div className="bg-paper/90 dark:bg-ink/90 sticky top-0 z-10 flex items-center gap-3 border-b border-black/5 px-5 pb-3 pt-2 backdrop-blur dark:border-white/10">
-        <Link
-          href="/friends"
-          aria-label="Quay lại danh sách bạn bè"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-surf2"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2.5}
-            aria-hidden
+        {onBack === undefined ? (
+          <Link
+            href="/friends"
+            aria-label="Quay lại danh sách bạn bè"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-surf2"
           >
-            <path
-              d="M15 18l-6-6 6-6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </Link>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2.5}
+              aria-hidden
+            >
+              <path
+                d="M15 18l-6-6 6-6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Quay lại danh sách bạn bè"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-surf2"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2.5}
+              aria-hidden
+            >
+              <path
+                d="M15 18l-6-6 6-6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        )}
         <FriendAvatar
           userId={partner.data.id}
           nickname={partner.data.nickname}
@@ -327,10 +364,18 @@ export function ConversationThread({ friendUserId }: { friendUserId: string }) {
           </svg>
         </button>
       </div>
-      <div className="flex-1 px-5 py-4">
+      <div
+        className={`flex-1 px-5 py-4 ${
+          inDialog ? 'min-h-0 overflow-y-auto' : ''
+        }`}
+      >
         <MessageList conversationId={conversation.data.id} />
       </div>
-      <div className="bg-paper/90 dark:bg-ink/90 sticky bottom-16 z-10 border-t border-black/5 px-5 py-3 backdrop-blur md:bottom-0 dark:border-white/10">
+      <div
+        className={`bg-paper/90 dark:bg-ink/90 sticky z-10 border-t border-black/5 px-5 py-3 backdrop-blur dark:border-white/10 ${
+          inDialog ? 'bottom-0' : 'bottom-16 md:bottom-0'
+        }`}
+      >
         <MessageComposer conversationId={conversation.data.id} />
       </div>
     </div>

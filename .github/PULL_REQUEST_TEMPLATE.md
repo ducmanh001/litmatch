@@ -19,7 +19,7 @@
 
 ## Checklist trước khi xin review
 
-- [ ] Đã chạy `/review-module verify` — kết luận **PASS** (dán output vào bảng trên)
+- [ ] `review-module verify` **PASS**, hoặc **N/A có lý do** nếu chỉ docs/tooling và không chạm business flow
 - [ ] Test viết song song với feature, không dồn cuối (docs/05 § 5.9)
 - [ ] Chạm tiền: integration test trên Postgres thật pass (`INTEGRATION_DB_URL=... pnpm nx test core-api --skip-nx-cache`)
 - [ ] Không hardcode giá/threshold — đưa vào `.env` + `ConfigModule`, cập nhật `.env.example`

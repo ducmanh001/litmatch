@@ -177,7 +177,7 @@ function AppChrome({ children }: { children: ReactNode }) {
             fullBleed ? 'md:max-w-none' : 'md:max-w-[1200px]'
           } ${fullBleed ? '' : 'pb-24 md:pb-10'}`}
         >
-          <main className={`min-w-0 ${fullBleed ? '' : 'py-4'}`}>
+          <main className={`min-w-0 ${fullBleed ? '' : 'pt-6'}`}>
             {children}
           </main>
 

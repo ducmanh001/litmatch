@@ -27,7 +27,7 @@ const MATCHING_STEPS = [
 
 export default function MatchingPage() {
   return (
-    <section className="mx-auto w-full max-w-[1040px] min-w-0 px-5 pb-8">
+    <section className="mx-auto w-full max-w-[1040px] min-w-0 px-5">
       <PageHeader
         eyebrow="Kết nối có chủ đích"
         eyebrowIcon={<MatchIcon width={16} height={16} />}

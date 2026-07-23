@@ -4,6 +4,7 @@ import Link from 'next/link';
 
 import { useFriends } from '../../friend-chat/api';
 import { useWallet } from '../../wallet/api';
+import { useTranslation } from '../../../shared/i18n/messages';
 
 /**
  * Không có endpoint tổng số bài viết (PostsPageDto chỉ có cursor pagination, không có
@@ -13,6 +14,7 @@ import { useWallet } from '../../wallet/api';
 export function ProfileStats() {
   const wallet = useWallet();
   const friends = useFriends();
+  const t = useTranslation();
 
   const balance = wallet.data?.balance;
   const friendCount = friends.data?.length;
@@ -43,7 +45,7 @@ export function ProfileStats() {
         >
           <p className="text-sm font-extrabold">{friendCount}</p>
           <p className="text-[11px] text-slate-500 dark:text-slate-400">
-            Bạn bè
+            {t('profile.friends')}
           </p>
         </Link>
       )}

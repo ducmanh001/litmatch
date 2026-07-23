@@ -8,7 +8,13 @@ plan và không bật auto-upgrade. Nguồn giới hạn hiện hành: [Northfla
 ## 1. Provision một lần
 
 1. Upstash: tạo một Redis Free ở region gần `asia-southeast`, lấy TLS URL `rediss://...`.
-2. LiveKit Cloud: tạo project Build, lấy `wss://...`, API key và API secret.
+2. LiveKit Cloud: tạo project Build, lấy `wss://...`, API key và API secret. Sau khi Core có
+   public URL, vào **Settings → Webhooks**, tạo hai webhook
+   `<PUBLIC_API_URL>/api/v1/calling/webhooks/livekit` và
+   `<PUBLIC_API_URL>/api/v1/party/webhooks/livekit`; chọn đúng API key đang cấu hình cho Core làm
+   Signing API key, rồi gửi test event cho từng URL. Thiếu `/api/v1` hoặc thiếu webhook làm
+   `participant_joined` không tới Core: call kẹt `pending`, không có mốc đếm ngược và chưa được
+   phép gửi reaction.
 3. Northflank: chọn Developer Sandbox, tạo project region `asia-southeast`, tạo PostgreSQL addon
    Free và bật public TLS endpoint để GitHub Actions chạy migration.
 4. Northflank: tạo hai **combined service** từ repo/branch `main`, tắt CI tự động, giữ CD bật:

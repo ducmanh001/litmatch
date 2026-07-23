@@ -72,7 +72,8 @@ test('strict high-risk change dùng worker balanced và reviewer frontier khi cr
 
   assert.equal(route.complexity, 'critical');
   assert.equal(route.strategy, 'parallel-delegates');
-  assert.equal(route.agentCount, 3);
+  assert.equal(route.agentCount, 2);
+  assert.equal(route.delegates[0].count, 1);
   assert.equal(route.delegates[0].modelTier, 'balanced');
   assert.equal(route.delegates[1].role, 'reviewer');
   assert.equal(route.delegates[1].modelTier, 'frontier');

@@ -1,11 +1,16 @@
 {
   "default": {
     "description": "Định vị repo và chọn scope trước khi sửa",
-    "read": [
-      "AGENTS.md",
-      "docs/00-overview-and-index.md",
-      "docs/07-roadmap.md",
-      "docs/11-engineering-principles.md"
+    "read": ["AGENTS.md", "docs/00-overview-and-index.md"],
+    "readWhen": [
+      {
+        "path": "docs/07-roadmap.md",
+        "when": "cần chọn việc, kiểm tra tiến độ hoặc cập nhật milestone"
+      },
+      {
+        "path": "docs/11-engineering-principles.md",
+        "when": "task có quyết định thiết kế, boundary hoặc refactor"
+      }
     ],
     "checks": ["pnpm agent:check", "pnpm format:check", "pnpm lint"]
   },
@@ -14,9 +19,17 @@
     "read": [
       "AGENTS.md",
       "apps/core-api/AGENTS.md",
-      "docs/03-architecture.md",
-      "docs/05-coding-standards.md",
-      "docs/10-code-review-checklist.md"
+      "docs/05-coding-standards.md"
+    ],
+    "readWhen": [
+      {
+        "path": "docs/03-architecture.md",
+        "when": "đổi module boundary, dependency, persistence hoặc deploy topology"
+      },
+      {
+        "path": "docs/10-code-review-checklist.md",
+        "when": "plan/verify business flow; chỉ đọc § 10.0 + mục domain áp dụng"
+      }
     ],
     "paths": ["apps/core-api/src", "libs"],
     "checks": ["pnpm agent:verify core --tier=fast", "pnpm agent:verify core"]
@@ -26,11 +39,22 @@
     "read": [
       "AGENTS.md",
       "apps/core-api/AGENTS.md",
-      "docs/02-domain-model.md",
-      "docs/03-architecture.md",
       "docs/06-domain-rules.md",
-      "docs/services/economy-service.md",
-      "docs/10-code-review-checklist.md"
+      "docs/services/economy-service.md"
+    ],
+    "readWhen": [
+      {
+        "path": "docs/02-domain-model.md",
+        "when": "đổi entity, relation hoặc schema"
+      },
+      {
+        "path": "docs/03-architecture.md",
+        "when": "đổi transaction, ledger boundary, event hoặc persistence"
+      },
+      {
+        "path": "docs/10-code-review-checklist.md",
+        "when": "plan/verify; đọc § 10.0, § 10.1 và mục Economy"
+      }
     ],
     "paths": [
       "apps/core-api/src/modules/economy",
@@ -48,12 +72,26 @@
     "read": [
       "AGENTS.md",
       "apps/core-api/AGENTS.md",
-      "docs/03-architecture.md",
       "docs/06-domain-rules.md",
-      "docs/services/matching-service.md",
-      "docs/services/soul-match-service.md",
-      "docs/services/friend-service.md",
-      "docs/10-code-review-checklist.md"
+      "docs/services/matching-service.md"
+    ],
+    "readWhen": [
+      {
+        "path": "docs/03-architecture.md",
+        "when": "đổi queue, locking, module boundary hoặc event"
+      },
+      {
+        "path": "docs/services/soul-match-service.md",
+        "when": "chạm Soul Match, anonymous chat hoặc rating"
+      },
+      {
+        "path": "docs/services/friend-service.md",
+        "when": "chạm Friendship, Conversation hoặc Friend Chat"
+      },
+      {
+        "path": "docs/10-code-review-checklist.md",
+        "when": "plan/verify; đọc § 10.0, § 10.1 và đúng mục Matching/Soul/Friend"
+      }
     ],
     "paths": [
       "apps/core-api/src/modules/matching",
@@ -75,12 +113,26 @@
     "read": [
       "AGENTS.md",
       "apps/core-api/AGENTS.md",
-      "docs/03-architecture.md",
       "docs/06-domain-rules.md",
-      "docs/services/calling-service.md",
-      "docs/services/realtime-gateway.md",
-      "docs/adr/0001-livekit-self-host-lam-media-server.md",
-      "docs/10-code-review-checklist.md"
+      "docs/services/calling-service.md"
+    ],
+    "readWhen": [
+      {
+        "path": "docs/03-architecture.md",
+        "when": "đổi billing boundary, event, persistence hoặc topology"
+      },
+      {
+        "path": "docs/services/realtime-gateway.md",
+        "when": "chạm signaling, realtime event hoặc reconnect"
+      },
+      {
+        "path": "docs/adr/0001-livekit-self-host-lam-media-server.md",
+        "when": "đổi LiveKit/SFU ownership hoặc deployment"
+      },
+      {
+        "path": "docs/10-code-review-checklist.md",
+        "when": "plan/verify; đọc § 10.0, § 10.1 và mục Calling"
+      }
     ],
     "paths": [
       "apps/core-api/src/modules/calling",
@@ -100,10 +152,21 @@
     "read": [
       "AGENTS.md",
       "apps/signaling-gateway/AGENTS.md",
-      "docs/03-architecture.md",
-      "docs/06-domain-rules.md",
-      "docs/services/realtime-gateway.md",
-      "docs/10-code-review-checklist.md"
+      "docs/services/realtime-gateway.md"
+    ],
+    "readWhen": [
+      {
+        "path": "docs/03-architecture.md",
+        "when": "đổi gateway boundary, scaling, delivery hoặc topology"
+      },
+      {
+        "path": "docs/06-domain-rules.md",
+        "when": "event có ảnh hưởng business state hoặc privacy"
+      },
+      {
+        "path": "docs/10-code-review-checklist.md",
+        "when": "plan/verify; đọc § 10.0, § 10.1 và mục Calling/Distributed"
+      }
     ],
     "paths": [
       "apps/signaling-gateway",
@@ -119,18 +182,40 @@
   },
   "content": {
     "description": "Content phụ trợ Giai đoạn 5: Movie Match (đồng bộ playback qua WebSocket, tái dùng Friend Chat), Palm Match (template random theo input), Mini game (rock-paper-scissors 2 người, thấp ưu tiên nhất)",
-    "read": [
-      "AGENTS.md",
-      "apps/core-api/AGENTS.md",
-      "docs/02-domain-model.md",
-      "docs/03-architecture.md",
-      "docs/06-domain-rules.md",
-      "docs/services/friend-service.md",
-      "docs/services/realtime-gateway.md",
-      "docs/services/movie-match-service.md",
-      "docs/services/palm-match-service.md",
-      "docs/services/mini-game-service.md",
-      "docs/10-code-review-checklist.md"
+    "read": ["AGENTS.md", "apps/core-api/AGENTS.md", "docs/06-domain-rules.md"],
+    "readWhen": [
+      {
+        "path": "docs/02-domain-model.md",
+        "when": "đổi entity, relation hoặc schema"
+      },
+      {
+        "path": "docs/03-architecture.md",
+        "when": "đổi module boundary, persistence hoặc event"
+      },
+      {
+        "path": "docs/services/friend-service.md",
+        "when": "tính năng tái dùng Friendship hoặc Conversation"
+      },
+      {
+        "path": "docs/services/realtime-gateway.md",
+        "when": "tính năng phát realtime event"
+      },
+      {
+        "path": "docs/services/movie-match-service.md",
+        "when": "chạm Movie Match"
+      },
+      {
+        "path": "docs/services/palm-match-service.md",
+        "when": "chạm Palm Match"
+      },
+      {
+        "path": "docs/services/mini-game-service.md",
+        "when": "chạm Mini Game"
+      },
+      {
+        "path": "docs/10-code-review-checklist.md",
+        "when": "plan/verify; đọc § 10.0, § 10.1 và đúng mục content"
+      }
     ],
     "paths": [
       "apps/core-api/src/modules/movie-match",
@@ -151,21 +236,37 @@
     "read": [
       "AGENTS.md",
       "apps/media-server/AGENTS.md",
-      "docs/03-architecture.md",
-      "docs/04-tech-stack.md",
-      "docs/10-code-review-checklist.md",
       "docs/adr/0001-livekit-self-host-lam-media-server.md"
+    ],
+    "readWhen": [
+      {
+        "path": "docs/03-architecture.md",
+        "when": "đổi topology, scaling hoặc boundary core/media"
+      },
+      {
+        "path": "docs/04-tech-stack.md",
+        "when": "đổi runtime, dependency hoặc hạ tầng media"
+      },
+      {
+        "path": "docs/10-code-review-checklist.md",
+        "when": "verify flow Calling/Party Room; chỉ đọc mục áp dụng"
+      }
     ],
     "paths": ["apps/media-server"],
     "checks": ["pnpm agent:verify media"]
   },
   "infra": {
     "description": "CI, container, local tooling, security và agent infrastructure",
-    "read": [
-      "AGENTS.md",
-      "docs/04-tech-stack.md",
-      "docs/08-working-with-agents.md",
-      "docs/11-engineering-principles.md"
+    "read": ["AGENTS.md", "docs/08-working-with-agents.md"],
+    "readWhen": [
+      {
+        "path": "docs/04-tech-stack.md",
+        "when": "đổi runtime, dependency, CI image hoặc deployment stack"
+      },
+      {
+        "path": "docs/11-engineering-principles.md",
+        "when": "đổi architecture, boundary hoặc abstraction"
+      }
     ],
     "paths": [
       ".github",
@@ -180,12 +281,20 @@
   },
   "frontend": {
     "description": "Frontend browser: apps/admin (Vite+React SPA nội bộ), apps/web (Next.js end-user), libs/api-client (hợp đồng REST duy nhất)",
-    "read": [
-      "AGENTS.md",
-      "apps/admin/AGENTS.md",
-      "apps/web/AGENTS.md",
-      "docs/12-frontend-architecture.md",
-      "docs/13-frontend-coding-standards.md"
+    "read": ["AGENTS.md", "docs/13-frontend-coding-standards.md"],
+    "readWhen": [
+      {
+        "path": "apps/admin/AGENTS.md",
+        "when": "chạm apps/admin"
+      },
+      {
+        "path": "apps/web/AGENTS.md",
+        "when": "chạm apps/web"
+      },
+      {
+        "path": "docs/12-frontend-architecture.md",
+        "when": "đổi route, feature boundary, state ownership hoặc API integration"
+      }
     ],
     "paths": [
       "apps/admin",

@@ -58,7 +58,7 @@ export class DisabledIapVerifier extends IapVerifier {
   }
 }
 
-/** Dev/test: nhận devTransactionId giả — chặn cứng ở production, giống DevSmsProvider. */
+/** Dev/test: nhận devTransactionId giả — chặn cứng ở production như các dev-only adapter khác. */
 @Injectable()
 export class DevIapVerifier
   extends IapVerifier

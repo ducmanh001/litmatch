@@ -49,7 +49,7 @@ node .agents/skills/adaptive-orchestration/scripts/route-task.mjs '<json>'
 ```
 
 Nếu không chạy được script, áp dụng cùng policy: simple/standard làm trực tiếp; complex dùng tối
-đa hai delegate; critical dùng tối đa hai worker cost-balanced và một reviewer mạnh.
+đa hai delegate; critical dùng một worker cost-balanced và một reviewer mạnh.
 
 ## 3. Ánh xạ tier vào runtime
 
@@ -79,9 +79,9 @@ worker: Objective + ownership + constraints + acceptance + checks. Sửa trong o
 reviewer: Kiểm tra raw diff/artifact theo invariants và tìm counterexample. Không được biết đáp án kỳ vọng.
 ```
 
-Cap mặc định là hai sub-agent; chỉ critical mới được tối đa ba, gồm reviewer. Dừng hoặc interrupt
+Cap là hai sub-agent. Với critical, dành một slot cho independent reviewer. Dừng hoặc interrupt
 delegate ngay khi đã đủ bằng chứng; không spawn nhiều agent để bỏ phiếu. Khi kết quả conflict,
-agent gốc kiểm tra evidence rồi mới dùng một reviewer frontier.
+agent gốc kiểm tra evidence rồi mới dùng reviewer frontier.
 
 ## 5. Giữ quality floor
 
