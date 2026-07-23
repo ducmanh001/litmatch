@@ -224,7 +224,6 @@ jobs:
       - name: Require every CI stage
         env:
           QUALITY_RESULT: ${{ needs.quality.result }}
-          # TEST_RESULT: ${{ needs.test.result }}
           DOCKER_RESULT: ${{ needs.docker.result }}
         run: |
           if [[ "${QUALITY_RESULT}" != success \
