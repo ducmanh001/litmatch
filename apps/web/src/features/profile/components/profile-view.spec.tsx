@@ -1,10 +1,12 @@
 import { ApiError } from '@litmatch/api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
 import { ProfileView } from './profile-view';
 import { apiClient, tokenStore } from '../../../shared/api/client';
+import { setLocale } from '../../../shared/i18n/locale-store';
 
 import type { MyProfileDto } from '../../../shared/auth/use-current-user';
 
@@ -30,6 +32,7 @@ describe('ProfileView', () => {
 
   afterEach(() => {
     tokenStore.setSession(null);
+    setLocale('vi');
     vi.restoreAllMocks();
   });
 
@@ -83,5 +86,32 @@ describe('ProfileView', () => {
     renderView();
 
     expect(await screen.findByText(/Tài khoản khách/)).toBeVisible();
+  });
+
+  it('English — localizes profile copy and keeps English selectable in the profile menu', async () => {
+    act(() => setLocale('en'));
+    const profile: MyProfileDto = {
+      id: 'u3',
+      nickname: 'Sky',
+      gender: 'unknown',
+      birthDate: null,
+      region: null,
+      avatarId: 'a1',
+      isGuest: false,
+    };
+    vi.spyOn(apiClient, 'GET').mockResolvedValue({
+      data: { data: profile },
+    } as never);
+    renderView();
+
+    expect(await screen.findByText('Your profile')).toBeVisible();
+    expect(screen.getByText('Language')).toBeVisible();
+    const user = userEvent.setup();
+    await user.click(
+      screen.getAllByRole('button', {
+        name: /Choose language, English/,
+      })[1],
+    );
+    expect(screen.getByRole('option', { name: 'English' })).toBeVisible();
   });
 });

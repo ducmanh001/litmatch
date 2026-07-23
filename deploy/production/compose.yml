@@ -92,7 +92,7 @@ services:
       KAFKA_BROKERS: kafka:19092
       JWT_SECRET: ${JWT_SECRET:?required}
       AUTH_OTP_PEPPER: ${AUTH_OTP_PEPPER:?required}
-      AUTH_PHONE_OTP_ENABLED: 'false'
+      AUTH_PHONE_OTP_ENABLED: 'true'
       AUTH_GOOGLE_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:?required}
       AUTH_APPLE_CLIENT_ID: ''
       AUTH_CROSS_ORIGIN_DEV: 'false'

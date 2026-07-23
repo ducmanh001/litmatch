@@ -44,7 +44,7 @@ thừa; conditional UPDATE đủ an toàn và đơn giản hơn nhiều — cùn
   `VIDEO_UPLOAD_ENABLED=false`, service chặn create/finalize trước DB/storage side effect và
   production được boot với capability tắt. Nếu flag bật dưới `NODE_ENV=production`, dev provider
   fail-fast lúc bootstrap; mỗi method port cũng tự chặn phòng bypass — cùng pattern
-  `DevSmsProvider`/`DevIapVerifier`. Vendor thật là quyết định ADR riêng (đã hỏi lại người dùng 2026-07-14: ưu
+  `dev-only provider`/`DevIapVerifier`. Vendor thật là quyết định ADR riêng (đã hỏi lại người dùng 2026-07-14: ưu
   tiên vendor gộp Cloudflare Stream/Mux hơn tự ráp S3+transcoder).
 
 ## 3. View counting — chống đếm đôi, self-view không tính

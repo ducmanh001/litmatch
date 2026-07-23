@@ -42,6 +42,23 @@ jobs:
   assert.deepEqual(errors, []);
 });
 
+test('accepts the repo when the security workflow is absent', () => {
+  const errors = workflowPolicyErrors({
+    ciWorkflow: `${triggers}${frontendBuildEnvironment}
+jobs:
+  quality:
+    steps:
+      - uses: ${pinnedAction}
+      - run: pnpm ci:local:quick
+  required:
+    name: CI required
+`,
+    securityWorkflow: undefined,
+  });
+
+  assert.deepEqual(errors, []);
+});
+
 test('rejects missing PR coverage, floating actions and unstable required checks', () => {
   const errors = workflowPolicyErrors({
     ciWorkflow: `on:

@@ -12,7 +12,6 @@ import { AuthIdentity } from './entities/auth-identity.entity';
 import { PhoneOtp } from './entities/phone-otp.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { OtpService } from './services/otp.service';
-import { DevSmsProvider, SmsProvider } from './ports/sms-provider';
 import { SocialVerifierService } from './services/social-verifier';
 import { TokenService } from './services/token.service';
 
@@ -29,13 +28,7 @@ import { TokenService } from './services/token.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [
-    AuthService,
-    TokenService,
-    OtpService,
-    SocialVerifierService,
-    { provide: SmsProvider, useClass: DevSmsProvider }, // đổi sang provider thật khi tích hợp SMS
-  ],
+  providers: [AuthService, TokenService, OtpService, SocialVerifierService],
   exports: [],
 })
 export class AuthModule {}

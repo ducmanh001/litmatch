@@ -26,6 +26,13 @@ console.log('- Risk/invariants:');
 console.log('\n## Read first');
 for (const path of entry.read ?? []) console.log(`- ${path}`);
 
+if (entry.readWhen?.length) {
+  console.log('\n## Read when applicable');
+  for (const item of entry.readWhen) {
+    console.log(`- ${item.path} — ${item.when}`);
+  }
+}
+
 if (entry.paths?.length) {
   console.log('\n## Expected paths');
   for (const path of entry.paths) console.log(`- ${path}`);

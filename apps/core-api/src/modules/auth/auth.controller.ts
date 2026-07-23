@@ -63,9 +63,11 @@ export class AuthController {
   @Post('otp/request')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: minutes(1) } }) // theo IP; limit theo số điện thoại nằm trong OtpService
-  @ApiOperation({ summary: 'Gửi OTP tới số điện thoại' })
+  @ApiOperation({ summary: 'Tạo OTP cho đăng nhập bằng số điện thoại' })
   @ApiOkResponse({ type: OtpRequestedDto })
-  requestOtp(@Body() dto: RequestOtpDto): Promise<{ ttlSeconds: number }> {
+  requestOtp(
+    @Body() dto: RequestOtpDto,
+  ): Promise<{ code: string; ttlSeconds: number }> {
     return this.authService.requestOtp(dto.phone);
   }
 

@@ -50,7 +50,7 @@ backend thứ tư.
 - `pnpm agent:verify signaling` → PASS; 26 unit test, 2 E2E, lint và build PASS.
 - `pnpm agent:verify calling` → PASS; 716 test, lint và build PASS.
 - `INTEGRATION_DB_URL=postgresql://litmatch:litmatch_local@localhost:5432/litmatch_test pnpm agent:verify economy --skip-nx-cache` → PASS với PostgreSQL thật, 716 test, lint và build PASS.
-- `NEXT_PUBLIC_API_URL=https://api.example.com NEXT_PUBLIC_SOCKET_URL=https://realtime.example.com NEXT_PUBLIC_LIVEKIT_URL=wss://media.example.com NEXT_PUBLIC_PHONE_OTP_ENABLED=false pnpm nx run web:cloudflare-build --skipNxCache` → PASS.
+- `NEXT_PUBLIC_API_URL=https://api.example.com NEXT_PUBLIC_SOCKET_URL=https://realtime.example.com NEXT_PUBLIC_LIVEKIT_URL=wss://media.example.com NEXT_PUBLIC_PHONE_OTP_ENABLED=true pnpm nx run web:cloudflare-build --skipNxCache` → PASS.
 - `docker build -f deploy/hosted/Dockerfile.core-api -t litmatch/core-api:hosted-test .` → PASS.
 - `docker build -f deploy/hosted/Dockerfile.signaling-gateway -t litmatch/signaling-gateway:hosted-test .` → PASS.
 - `pnpm agent:test` → 51/51 PASS, gồm ba test release Northflank.

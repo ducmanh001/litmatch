@@ -99,10 +99,10 @@ function build() {
     NEXT_PUBLIC_LIVEKIT_URL: `wss://media.${values.DOMAIN}`,
     NEXT_PUBLIC_AUTH_GOOGLE_CLIENT_ID: values.GOOGLE_OAUTH_CLIENT_ID,
     NEXT_PUBLIC_AUTH_APPLE_CLIENT_ID: '',
-    NEXT_PUBLIC_PHONE_OTP_ENABLED: 'false',
+    NEXT_PUBLIC_PHONE_OTP_ENABLED: 'true',
     VITE_API_URL: `https://api.${values.DOMAIN}`,
     VITE_AUTH_GOOGLE_CLIENT_ID: values.GOOGLE_OAUTH_CLIENT_ID,
-    VITE_PHONE_OTP_ENABLED: 'false',
+    VITE_PHONE_OTP_ENABLED: 'true',
   };
   runtimeEnv = publicBuildEnv;
   run('pnpm', ['install', '--frozen-lockfile']);

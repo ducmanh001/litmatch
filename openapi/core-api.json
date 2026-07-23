@@ -181,7 +181,7 @@
             }
           }
         },
-        "summary": "Gửi OTP tới số điện thoại",
+        "summary": "Tạo OTP cho đăng nhập bằng số điện thoại",
         "tags": ["auth"]
       }
     },
@@ -5732,12 +5732,17 @@
       "OtpRequestedDto": {
         "type": "object",
         "properties": {
+          "code": {
+            "type": "string",
+            "description": "Mã OTP 6 chữ số — không gửi SMS, client dùng để hiển thị và tự điền",
+            "example": "123456"
+          },
           "ttlSeconds": {
             "type": "number",
-            "description": "TTL của OTP vừa gửi (giây) — client hiển thị đếm ngược"
+            "description": "TTL của OTP vừa tạo (giây) — client hiển thị đếm ngược"
           }
         },
-        "required": ["ttlSeconds"]
+        "required": ["code", "ttlSeconds"]
       },
       "VerifyOtpDto": {
         "type": "object",

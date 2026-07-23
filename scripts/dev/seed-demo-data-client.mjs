@@ -1,8 +1,4 @@
-function escapeRegex(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-export function createSeedApiClient(apiBaseUrl, readServiceLogs) {
+export function createSeedApiClient(apiBaseUrl) {
   async function request(method, path, token, body, extraHeaders = {}) {
     const headers = { 'Content-Type': 'application/json', ...extraHeaders };
     if (token) headers.Authorization = `Bearer ${token}`;
@@ -32,22 +28,7 @@ export function createSeedApiClient(apiBaseUrl, readServiceLogs) {
     return (await request('POST', '/auth/guest', undefined, { deviceId })).data;
   }
 
-  async function readLatestOtp(phoneE164) {
-    const masked = phoneE164.slice(0, 4) + '****' + phoneE164.slice(-2);
-    const pattern = new RegExp(
-      `${escapeRegex(masked)}.*Ma xac thuc Litmatch cua ban: (\\d{6})`,
-      'g',
-    );
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      const log = readServiceLogs('core-api', 50);
-      const matches = [...log.matchAll(pattern)];
-      if (matches.length > 0) return matches[matches.length - 1][1];
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-    throw new Error(`Không đọc được OTP cho ${phoneE164} từ docker logs`);
-  }
-
-  /** OTP dev có rate-limit thật; retry giữ script deterministic khi seed nhiều account. */
+  /** OTP có rate-limit thật; retry giữ script deterministic khi seed nhiều account. */
   async function otpLogin(phoneLocal) {
     const phone = `+84${phoneLocal}`;
     let otpRequest;
@@ -62,7 +43,9 @@ export function createSeedApiClient(apiBaseUrl, readServiceLogs) {
       await new Promise((resolve) => setTimeout(resolve, 65_000));
     }
     if (!otpRequest.ok) return null;
-    const code = await readLatestOtp(phone);
+    const otpJson = await otpRequest.json();
+    const code = otpJson?.data?.code;
+    if (typeof code !== 'string') return null;
     const verify = await request('POST', '/auth/otp/verify', undefined, {
       phone,
       code,

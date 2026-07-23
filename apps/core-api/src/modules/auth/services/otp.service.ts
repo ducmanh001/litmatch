@@ -10,13 +10,11 @@ import type { CoreApiEnv } from '../../../config/env.validation';
 import { OTP_CODE_DIGITS, OTP_RATE_WINDOW_MS } from '../auth.constants';
 import { AuthErrors } from '../auth.errors';
 import { PhoneOtp } from '../entities/phone-otp.entity';
-import { SmsProvider } from '../ports/sms-provider';
 
 @Injectable()
 export class OtpService {
   constructor(
     @InjectRepository(PhoneOtp) private readonly otpRepo: Repository<PhoneOtp>,
-    private readonly smsProvider: SmsProvider,
     private readonly config: ConfigService<CoreApiEnv, true>,
   ) {}
 
@@ -24,7 +22,9 @@ export class OtpService {
    * Rate limit theo SỐ ĐIỆN THOẠI ở server (docs/10 § 10.1.H — limit chỉ ở FE là vô nghĩa);
    * throttler theo IP đặt thêm ở controller.
    */
-  async requestOtp(phone: string): Promise<{ ttlSeconds: number }> {
+  async requestOtp(
+    phone: string,
+  ): Promise<{ code: string; ttlSeconds: number }> {
     const perHour = this.config.getOrThrow('AUTH_OTP_REQUESTS_PER_HOUR', {
       infer: true,
     });
@@ -61,8 +61,8 @@ export class OtpService {
       }),
     );
 
-    await this.smsProvider.send(phone, `Ma xac thuc Litmatch cua ban: ${code}`);
-    return { ttlSeconds };
+    // Không gửi SMS: client nhận mã qua response để hiển thị toast và tự điền.
+    return { code, ttlSeconds };
   }
 
   /**

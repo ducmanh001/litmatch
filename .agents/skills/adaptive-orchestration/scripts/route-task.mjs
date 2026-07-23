@@ -126,8 +126,7 @@ export function routeTask(input) {
     complexity === 'critical' ||
     task.risk === 'high' ||
     task.verification === 'strict';
-  const agentCeiling =
-    complexity === 'critical' ? 3 : complexity === 'complex' ? 2 : 0;
+  const agentCeiling = ['critical', 'complex'].includes(complexity) ? 2 : 0;
   if (!direct) {
     delegates.push(
       makeWorker(task, complexity, agentCeiling - (independentReview ? 1 : 0)),

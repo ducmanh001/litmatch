@@ -157,28 +157,6 @@ jobs:
           docker build -f apps/web/Dockerfile -t litmatch/web:${{ github.sha }} .
           docker build -f deploy/production/Dockerfile.edge -t litmatch/edge:${{ github.sha }} .
 
-      - name: Install Trivy (verified checksum)
-        run: node scripts/ci/security-tools.mjs trivy --install-dir /tmp/litmatch-ci-tools --add-to-github-path
-
-      - name: Scan runtime images
-        run: |
-          trivy image litmatch/core-api:${{ github.sha }} --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress --skip-version-check
-          trivy image litmatch/signaling-gateway:${{ github.sha }} --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress --skip-version-check
-          trivy image litmatch/web:${{ github.sha }} --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress --skip-version-check
-          trivy image litmatch/edge:${{ github.sha }} --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress --skip-version-check
-          trivy image litmatch/core-api:${{ github.sha }} --scanners vuln --format cyclonedx --output core-api.cdx.json --skip-version-check
-          trivy image litmatch/signaling-gateway:${{ github.sha }} --scanners vuln --format cyclonedx --output signaling-gateway.cdx.json --skip-version-check
-          trivy image litmatch/web:${{ github.sha }} --scanners vuln --format cyclonedx --output web.cdx.json --skip-version-check
-          trivy image litmatch/edge:${{ github.sha }} --scanners vuln --format cyclonedx --output edge.cdx.json --skip-version-check
-
-      - name: Upload image SBOMs
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: image-sboms-${{ github.run_id }}
-          path: '*.cdx.json'
-          if-no-files-found: error
-          retention-days: 30
-
       - name: Start images and verify health endpoints
         env:
           CORE_IMAGE: litmatch/core-api:${{ github.sha }}

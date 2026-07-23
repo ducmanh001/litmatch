@@ -14,10 +14,12 @@ import { z } from 'zod';
 
 import { apiClient, tokenStore } from '../api/client';
 import { env } from '../env';
+import { showToast } from '../lib/toast-store';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Field } from '../ui/field';
 import { Input } from '../ui/input';
+import { ToastStack } from '../ui/toast-stack';
 import { useIsAuthenticated } from './use-session';
 
 const phoneSchema = z.object({
@@ -51,10 +53,25 @@ export function LoginPage() {
         // Đã qua zodResolver(phoneSchema) nên luôn khớp VN_LOCAL_PHONE_PATTERN.
         throw new Error('unreachable: phone không khớp VN_LOCAL_PHONE_PATTERN');
       }
-      await apiClient.POST('/api/v1/auth/otp/request', { body: { phone } });
-      return phone;
+      const res = await apiClient.POST('/api/v1/auth/otp/request', {
+        body: { phone },
+      });
+      const otp = res.data?.data;
+      if (otp === undefined || !/^\d{6}$/u.test(otp.code)) {
+        throw new Error(
+          'API chưa trả về mã OTP hợp lệ. Hãy restart/rebuild core-api rồi thử lại.',
+        );
+      }
+      return { phone, otp };
     },
-    onSuccess: (phone) => setPhase({ step: 'code', phone }),
+    onSuccess: ({ phone, otp }) => {
+      codeForm.setValue('code', otp.code, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      setPhase({ step: 'code', phone });
+      showToast(`Mã OTP của bạn là ${otp.code}`);
+    },
   });
 
   const verifyOtp = useMutation({
@@ -104,129 +121,132 @@ export function LoginPage() {
           : 'Có lỗi xảy ra, thử lại.';
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-sm space-y-6">
-        <div className="space-y-1">
-          <h1 className="text-xl font-semibold">Litmatch Admin</h1>
-          <p className="text-sm text-muted-foreground">
-            {phase.step === 'phone'
-              ? env.VITE_PHONE_OTP_ENABLED
-                ? 'Đăng nhập bằng số điện thoại hoặc Google'
-                : 'Đăng nhập bằng Google'
-              : `Nhập mã OTP đã gửi tới ${phase.phone}`}
-          </p>
-        </div>
-
-        {phase.step === 'phone' ? (
-          <div className="space-y-4">
-            {env.VITE_PHONE_OTP_ENABLED && (
-              <form
-                key="phone"
-                className="space-y-4"
-                onSubmit={phoneForm.handleSubmit((v) =>
-                  requestOtp.mutate(v.phone),
-                )}
-                noValidate
-              >
-                <Field
-                  htmlFor="phone"
-                  label="Số điện thoại"
-                  error={
-                    phoneForm.formState.errors.phone?.message ??
-                    mutationError(requestOtp.error)
-                  }
-                >
-                  <div className="flex gap-2">
-                    <span
-                      aria-hidden
-                      className="flex h-9 w-14 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-sm text-muted-foreground"
-                    >
-                      {VN_COUNTRY_CODE}
-                    </span>
-                    <Input
-                      id="phone"
-                      type="tel"
-                      autoComplete="tel"
-                      placeholder="912345678 hoặc 0912345678"
-                      {...phoneForm.register('phone')}
-                    />
-                  </div>
-                </Field>
-                <Button
-                  className="w-full"
-                  type="submit"
-                  disabled={requestOtp.isPending}
-                >
-                  {requestOtp.isPending ? 'Đang gửi…' : 'Gửi mã OTP'}
-                </Button>
-              </form>
-            )}
-            {env.VITE_PHONE_OTP_ENABLED && (
-              <div className="flex items-center gap-3" aria-hidden>
-                <div className="h-px flex-1 bg-border" />
-                <span className="text-xs text-muted-foreground">hoặc</span>
-                <div className="h-px flex-1 bg-border" />
-              </div>
-            )}
-            <Button
-              className="w-full"
-              type="button"
-              variant="outline"
-              disabled={socialLogin.isPending}
-              onClick={() => socialLogin.mutate()}
-            >
-              {socialLogin.isPending
-                ? 'Đang mở Google…'
-                : 'Đăng nhập với Google'}
-            </Button>
-            {mutationError(socialLogin.error) !== undefined && (
-              <p role="alert" className="text-sm text-destructive">
-                {mutationError(socialLogin.error)}
-              </p>
-            )}
+    <>
+      <main className="flex min-h-screen items-center justify-center p-4">
+        <Card className="w-full max-w-sm space-y-6">
+          <div className="space-y-1">
+            <h1 className="text-xl font-semibold">Litmatch Admin</h1>
+            <p className="text-sm text-muted-foreground">
+              {phase.step === 'phone'
+                ? env.VITE_PHONE_OTP_ENABLED
+                  ? 'Đăng nhập bằng số điện thoại hoặc Google'
+                  : 'Đăng nhập bằng Google'
+                : `Nhập mã OTP đã gửi tới ${phase.phone}`}
+            </p>
           </div>
-        ) : (
-          <form
-            key="code"
-            className="space-y-4"
-            onSubmit={codeForm.handleSubmit((v) =>
-              verifyOtp.mutate({ phone: phase.phone, code: v.code }),
-            )}
-            noValidate
-          >
-            <Field
-              htmlFor="code"
-              label="Mã OTP"
-              error={
-                codeForm.formState.errors.code?.message ??
-                mutationError(verifyOtp.error)
-              }
+
+          {phase.step === 'phone' ? (
+            <div className="space-y-4">
+              {env.VITE_PHONE_OTP_ENABLED && (
+                <form
+                  key="phone"
+                  className="space-y-4"
+                  onSubmit={phoneForm.handleSubmit((v) =>
+                    requestOtp.mutate(v.phone),
+                  )}
+                  noValidate
+                >
+                  <Field
+                    htmlFor="phone"
+                    label="Số điện thoại"
+                    error={
+                      phoneForm.formState.errors.phone?.message ??
+                      mutationError(requestOtp.error)
+                    }
+                  >
+                    <div className="flex gap-2">
+                      <span
+                        aria-hidden
+                        className="flex h-9 w-14 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-sm text-muted-foreground"
+                      >
+                        {VN_COUNTRY_CODE}
+                      </span>
+                      <Input
+                        id="phone"
+                        type="tel"
+                        autoComplete="tel"
+                        placeholder="912345678 hoặc 0912345678"
+                        {...phoneForm.register('phone')}
+                      />
+                    </div>
+                  </Field>
+                  <Button
+                    className="w-full"
+                    type="submit"
+                    disabled={requestOtp.isPending}
+                  >
+                    {requestOtp.isPending ? 'Đang gửi…' : 'Gửi mã OTP'}
+                  </Button>
+                </form>
+              )}
+              {env.VITE_PHONE_OTP_ENABLED && (
+                <div className="flex items-center gap-3" aria-hidden>
+                  <div className="h-px flex-1 bg-border" />
+                  <span className="text-xs text-muted-foreground">hoặc</span>
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+              )}
+              <Button
+                className="w-full"
+                type="button"
+                variant="outline"
+                disabled={socialLogin.isPending}
+                onClick={() => socialLogin.mutate()}
+              >
+                {socialLogin.isPending
+                  ? 'Đang mở Google…'
+                  : 'Đăng nhập với Google'}
+              </Button>
+              {mutationError(socialLogin.error) !== undefined && (
+                <p role="alert" className="text-sm text-destructive">
+                  {mutationError(socialLogin.error)}
+                </p>
+              )}
+            </div>
+          ) : (
+            <form
+              key="code"
+              className="space-y-4"
+              onSubmit={codeForm.handleSubmit((v) =>
+                verifyOtp.mutate({ phone: phase.phone, code: v.code }),
+              )}
+              noValidate
             >
-              <Input
-                id="code"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={6}
-                {...codeForm.register('code')}
-              />
-            </Field>
-            <Button
-              className="w-full"
-              type="submit"
-              disabled={verifyOtp.isPending}
-            >
-              {verifyOtp.isPending ? 'Đang xác minh…' : 'Đăng nhập'}
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full"
-              onClick={() => setPhase({ step: 'phone' })}
-            >
-              Đổi số điện thoại
-            </Button>
-          </form>
-        )}
-      </Card>
-    </main>
+              <Field
+                htmlFor="code"
+                label="Mã OTP"
+                error={
+                  codeForm.formState.errors.code?.message ??
+                  mutationError(verifyOtp.error)
+                }
+              >
+                <Input
+                  id="code"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  {...codeForm.register('code')}
+                />
+              </Field>
+              <Button
+                className="w-full"
+                type="submit"
+                disabled={verifyOtp.isPending}
+              >
+                {verifyOtp.isPending ? 'Đang xác minh…' : 'Đăng nhập'}
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full"
+                onClick={() => setPhase({ step: 'phone' })}
+              >
+                Đổi số điện thoại
+              </Button>
+            </form>
+          )}
+        </Card>
+      </main>
+      <ToastStack />
+    </>
   );
 }
