@@ -10,7 +10,8 @@
   "overrides": {
     "brace-expansion": "^2.0.1",
     "minimatch": "^9.0.5",
-    "postcss": "^8.5.12"
+    "postcss": "8.5.12",
+    "next>postcss": "8.5.12"
   },
   "scripts": {
     "bootstrap": "pnpm install --frozen-lockfile && pnpm infra:up && pnpm db:migrate && pnpm doctor",

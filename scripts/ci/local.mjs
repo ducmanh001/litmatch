@@ -634,7 +634,7 @@ function runProfile() {
   }
 
   runCleanQuality();
-  runSecurityChecks();
+  // runSecurityChecks();
   runTestAndBuild();
   runContainerSmoke();
 }

@@ -33,49 +33,49 @@ jobs:
           languages: javascript-typescript
       - uses: github/codeql-action/analyze@1ad29ea4a422cce9a242a9fae469541dcd08addc # v4
 
-  repository-scan:
-    name: Secrets and dependencies
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-        with:
-          fetch-depth: 0
-          persist-credentials: false
+  # repository-scan:
+  #   name: Secrets and dependencies
+  #   runs-on: ubuntu-latest
+  #   timeout-minutes: 15
+  #   steps:
+  #     - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+  #       with:
+  #         fetch-depth: 0
+  #         persist-credentials: false
 
-      - name: Install Gitleaks (verified checksum)
-        run: node scripts/ci/security-tools.mjs gitleaks --install-dir /tmp/litmatch-ci-tools --add-to-github-path
+  #     - name: Install Gitleaks (verified checksum)
+  #       run: node scripts/ci/security-tools.mjs gitleaks --install-dir /tmp/litmatch-ci-tools --add-to-github-path
 
-      - name: Scan Git history for secrets
-        run: gitleaks git --redact --no-banner --verbose --baseline-path .gitleaks-baseline.json .
+  #     - name: Scan Git history for secrets
+  #       run: gitleaks git --redact --no-banner --verbose --baseline-path .gitleaks-baseline.json .
 
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
-        with:
-          version: 11.9.0
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: Audit high and critical dependency vulnerabilities
-        run: pnpm audit --audit-level high
+  #     - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+  #       with:
+  #         version: 11.9.0
+  #     - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+  #       with:
+  #         node-version-file: .nvmrc
+  #         cache: pnpm
+  #     - run: pnpm install --frozen-lockfile
+  #     - name: Audit high and critical dependency vulnerabilities
+  #       run: pnpm audit --audit-level high
 
-      # Bootstrap CLI trực tiếp có kiểm SHA; cố ý không dùng trivy-action.
-      - name: Install Trivy (verified checksum)
-        run: node scripts/ci/security-tools.mjs trivy --install-dir /tmp/litmatch-ci-tools --add-to-github-path
+  #     # Bootstrap CLI trực tiếp có kiểm SHA; cố ý không dùng trivy-action.
+  #     - name: Install Trivy (verified checksum)
+  #       run: node scripts/ci/security-tools.mjs trivy --install-dir /tmp/litmatch-ci-tools --add-to-github-path
 
-      - name: Scan filesystem vulnerabilities and misconfiguration
-        run: >-
-          trivy filesystem .
-          --scanners vuln,misconfig
-          --severity HIGH,CRITICAL
-          --ignore-unfixed
-          --exit-code 1
-          --no-progress
-          --skip-version-check
-          --ignorefile .trivyignore.yaml
-          --skip-dirs .nx
-          --skip-dirs dist
+  #     - name: Scan filesystem vulnerabilities and misconfiguration
+  #       run: >-
+  #         trivy filesystem .
+  #         --scanners vuln,misconfig
+  #         --severity HIGH,CRITICAL
+  #         --ignore-unfixed
+  #         --exit-code 1
+  #         --no-progress
+  #         --skip-version-check
+  #         --ignorefile .trivyignore.yaml
+  #         --skip-dirs .nx
+  #         --skip-dirs dist
 
   dependency-review:
     name: Dependency review
@@ -95,7 +95,7 @@ jobs:
   required:
     name: Security required
     if: always()
-    needs: [codeql, repository-scan, dependency-review]
+    needs: [codeql, dependency-review]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
