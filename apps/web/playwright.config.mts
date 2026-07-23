@@ -2,8 +2,6 @@ import { defineConfig, devices } from '@playwright/test';
 import { nxE2EPreset } from '@nx/playwright/preset';
 import { workspaceRoot } from '@nx/devkit';
 
-import { CORE_API_LOG } from './e2e/support/dev-otp';
-
 // For CI, you may want to set BASE_URL to the deployed application.
 const baseURL = process.env['BASE_URL'] || 'http://localhost:4300';
 
@@ -46,9 +44,8 @@ export default defineConfig({
    * ["core-api:migration-run"]` vì bỏ qua `nx serve` thì mất luôn phụ thuộc migration ngầm định. */
   webServer: [
     {
-      // Redirect ra file cố định — spec đọc lại để lấy mã OTP dev-only (không có backdoor
-      // API/DB nào trả plaintext OTP, đúng chủ đích, xem otp.service.ts — chỉ lưu codeHash).
-      command: `npx nx build core-api --configuration=development && PORT=${E2E_CORE_API_PORT} node ${workspaceRoot}/dist/apps/core-api/main.js > ${CORE_API_LOG} 2>&1`,
+      // OTP được trả qua response auth và được kiểm tra ở UI; core-api không ghi OTP ra log.
+      command: `npx nx build core-api --configuration=development && PORT=${E2E_CORE_API_PORT} node ${workspaceRoot}/dist/apps/core-api/main.js`,
       url: `http://localhost:${E2E_CORE_API_PORT}/health`,
       reuseExistingServer: true,
       cwd: workspaceRoot,

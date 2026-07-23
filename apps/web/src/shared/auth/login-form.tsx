@@ -15,6 +15,7 @@ import { z } from 'zod';
 
 import { apiClient, tokenStore } from '../api/client';
 import { env } from '../env';
+import { useTranslation } from '../i18n/messages';
 import { showToast } from '../lib/toast-store';
 import { getAppleIdToken, getGoogleIdToken } from './social-sdk';
 
@@ -54,6 +55,7 @@ const socialButtonClass =
 
 export function LoginForm() {
   const router = useRouter();
+  const t = useTranslation();
   const [phase, setPhase] = useState<
     { step: 'phone' } | { step: 'code'; phone: string }
   >({
@@ -67,12 +69,28 @@ export function LoginForm() {
     Array(OTP_LENGTH).fill(''),
   );
   const otpInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const pendingOtpRef = useRef<string | null>(null);
+
+  const applyOtpCode = (code: string) => {
+    const next = code.split('');
+    setOtpDigits(next);
+    codeForm.setValue('code', code, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    otpInputRefs.current[OTP_LENGTH - 1]?.focus();
+  };
 
   useEffect(() => {
     if (phase.step !== 'code') return;
     setOtpDigits(Array(OTP_LENGTH).fill(''));
     codeForm.setValue('code', '', { shouldValidate: false });
     otpInputRefs.current[0]?.focus();
+    const pendingOtp = pendingOtpRef.current;
+    if (pendingOtp !== null) {
+      pendingOtpRef.current = null;
+      applyOtpCode(pendingOtp);
+    }
   }, [phase]);
 
   const setOtpDigit = (index: number, rawValue: string) => {
@@ -117,8 +135,17 @@ export function LoginForm() {
     return () => clearTimeout(id);
   }, [resendCooldown]);
 
-  const postOtpRequest = async (phone: string): Promise<void> => {
-    await apiClient.POST('/api/v1/auth/otp/request', { body: { phone } });
+  const postOtpRequest = async (phone: string) => {
+    const res = await apiClient.POST('/api/v1/auth/otp/request', {
+      body: { phone },
+    });
+    const otp = res.data?.data;
+    if (otp === undefined || !/^\d{6}$/u.test(otp.code)) {
+      throw new Error(
+        'API chưa trả về mã OTP hợp lệ. Hãy restart/rebuild core-api rồi thử lại.',
+      );
+    }
+    return otp;
   };
 
   const requestOtp = useMutation({
@@ -128,12 +155,13 @@ export function LoginForm() {
         // Đã qua zodResolver(phoneSchema) nên luôn khớp VN_LOCAL_PHONE_PATTERN.
         throw new Error('unreachable: phone không khớp VN_LOCAL_PHONE_PATTERN');
       }
-      await postOtpRequest(phone);
-      return phone;
+      return { phone, otp: await postOtpRequest(phone) };
     },
-    onSuccess: (phone) => {
+    onSuccess: ({ phone, otp }) => {
+      pendingOtpRef.current = otp.code;
       setPhase({ step: 'code', phone });
       setResendCooldown(RESEND_COOLDOWN_SECONDS);
+      showToast(`${t('auth.otpCreated')} ${otp.code}`);
     },
   });
 
@@ -141,7 +169,11 @@ export function LoginForm() {
   // (nó chỉ nhận input dạng nội địa, sẽ trả null cho input đã có tiền tố +84).
   const resendOtp = useMutation({
     mutationFn: postOtpRequest,
-    onSuccess: () => setResendCooldown(RESEND_COOLDOWN_SECONDS),
+    onSuccess: (otp) => {
+      applyOtpCode(otp.code);
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
+      showToast(`${t('auth.otpCreated')} ${otp.code}`);
+    },
   });
 
   const verifyOtp = useMutation({
@@ -220,7 +252,9 @@ export function LoginForm() {
       ? undefined
       : isApiError(error)
         ? error.message
-        : 'Có lỗi xảy ra, thử lại.';
+        : error instanceof Error
+          ? error.message
+          : 'Có lỗi xảy ra, thử lại.';
 
   const guestCta = (
     <>

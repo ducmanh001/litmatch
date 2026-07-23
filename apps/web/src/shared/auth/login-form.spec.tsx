@@ -47,9 +47,9 @@ describe('LoginForm', () => {
     const user = userEvent.setup({
       advanceTimers: (ms) => vi.advanceTimersByTime(ms),
     });
-    const post = vi
-      .spyOn(apiClient, 'POST')
-      .mockResolvedValue({ data: {} } as never);
+    const post = vi.spyOn(apiClient, 'POST').mockResolvedValue({
+      data: { data: { code: '123456', ttlSeconds: 300 } },
+    } as never);
 
     renderForm();
     await user.type(screen.getByLabelText('Số điện thoại'), '912345678');
@@ -59,6 +59,13 @@ describe('LoginForm', () => {
       name: /Gửi lại mã \(30s\)/,
     });
     expect(resendButton).toBeDisabled();
+    expect(await screen.findByText('Mã OTP của bạn là 123456')).toBeVisible();
+    const otpDigitInputs = screen
+      .getAllByRole('textbox')
+      .filter((input) => input.getAttribute('inputmode') === 'numeric');
+    expect(otpDigitInputs.map((input) => input.getAttribute('value'))).toEqual([
+      ...'123456',
+    ]);
     expect(post).toHaveBeenCalledWith('/api/v1/auth/otp/request', {
       body: { phone: '+84912345678' },
     });
@@ -77,6 +84,7 @@ describe('LoginForm', () => {
 
     await user.click(readyButton);
     expect(post).toHaveBeenCalledTimes(2);
+    expect(await screen.findByText('Mã OTP của bạn là 123456')).toBeVisible();
     // Lần gửi lại phải dùng ĐÚNG phone đã chuẩn hoá trước đó, không normalize lại.
     expect(post).toHaveBeenLastCalledWith('/api/v1/auth/otp/request', {
       body: { phone: '+84912345678' },
@@ -98,6 +106,20 @@ describe('LoginForm', () => {
       ),
     ).toBeInTheDocument();
     expect(post).not.toHaveBeenCalled();
+  });
+
+  it('API cũ không trả code → hiển thị lỗi, không làm crash màn OTP', async () => {
+    vi.spyOn(apiClient, 'POST').mockResolvedValue({
+      data: { data: { ttlSeconds: 300 } },
+    } as never);
+    renderForm();
+
+    await userEvent.type(screen.getByLabelText('Số điện thoại'), '912345678');
+    await userEvent.click(screen.getByRole('button', { name: 'Gửi mã OTP' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'API chưa trả về mã OTP hợp lệ',
+    );
   });
 
   it('Facebook → thông báo "chưa hỗ trợ" tường minh (backend chủ đích chưa nhận Facebook)', async () => {
