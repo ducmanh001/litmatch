@@ -13,6 +13,7 @@ x-node-workspace: &node-workspace
 
 x-backend-env: &backend-env
   NODE_ENV: ${NODE_ENV:-development}
+  NX_DAEMON: 'false'
   DATABASE_URL: postgresql://${POSTGRES_USER:-litmatch}:${POSTGRES_PASSWORD:-litmatch_local}@postgres:5432/${POSTGRES_DB:-litmatch}
   REDIS_URL: redis://redis:6379
   KAFKA_BROKERS: kafka:19092

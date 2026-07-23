@@ -218,8 +218,8 @@ feature sở hữu nó, mỗi store 1 concern — không store "app state" tổn
   web dev server (webhook `webServer` trong `playwright.config.mts`) rồi lái Chrome cài sẵn
   trên máy (`channel: 'chrome'` — không tự quản lý Chromium riêng, tránh phải cài thêm OS deps
   cần sudo). Chỉ có project `chromium`; không set up firefox/webkit (chưa cần, đúng nguyên tắc
-  không để dành). Đọc OTP dev-only qua `apps/web/e2e/support/dev-otp.ts` — parse lại log
-  `DevSmsProvider` (không có backdoor API/DB trả plaintext OTP, xem `otp.service.ts`).
+  không để dành). E2E đọc OTP từ response auth thật, sau đó xác nhận toast và các ô OTP được tự
+  điền; không đọc log hoặc tạo backdoor API/DB riêng cho test.
 - Playwright lint rule (`eslint-plugin-playwright`) chỉ scope vào `e2e/**` trong
   `eslint.config.mjs` của `web` — áp toàn project thì báo sai trên mọi `*.spec.ts(x)` Vitest.
 

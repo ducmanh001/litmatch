@@ -453,7 +453,7 @@ function runContainerSmoke() {
       '--env',
       `AUTH_OTP_PEPPER=${environment.AUTH_OTP_PEPPER}`,
       '--env',
-      'AUTH_PHONE_OTP_ENABLED=false',
+      'AUTH_PHONE_OTP_ENABLED=true',
       '--env',
       'VIDEO_UPLOAD_ENABLED=false',
       '--env',

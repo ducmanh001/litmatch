@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 /**
- * Seed dữ liệu demo cho môi trường dev local (KHÔNG chạy ở production — script này gọi thẳng
- * DevSmsProvider-style endpoint thật + patch trực tiếp vài cột không thể set qua API do dev
- * transcode port trả URL giả `dev-storage.invalid`, docs/13 § 13.9 KHÔNG áp dụng ở đây vì đây
- * là tool vận hành, không phải code sản phẩm).
+ * Seed dữ liệu demo cho môi trường dev local (KHÔNG chạy ở production — script patch trực tiếp
+ * vài cột không thể set qua API do dev transcode port trả URL giả `dev-storage.invalid`,
+ * docs/13 § 13.9 KHÔNG áp dụng ở đây vì đây là tool vận hành, không phải code sản phẩm).
  *
  * Mục đích: làm đầy MỌI màn hình web + admin bằng dữ liệu THẬT đi qua các API thật (không fake
  * nghiệp vụ) để không còn trống rỗng khi test thủ công trên trình duyệt:
@@ -50,7 +49,6 @@
 import 'dotenv/config';
 
 import { Client } from 'pg';
-import { readDevServiceLogs } from './dev-compose.mjs';
 import { createSeedApiClient } from './seed-demo-data-client.mjs';
 import {
   ADMIN_PHONE_LOCAL,
@@ -82,11 +80,7 @@ apiUrl.search = '';
 apiUrl.hash = '';
 const API = apiUrl.toString().replace(/\/$/u, '');
 const ROOMS_ONLY = process.argv.includes('--rooms-only');
-const {
-  request: req,
-  guestLogin,
-  otpLogin,
-} = createSeedApiClient(API, readDevServiceLogs);
+const { request: req, guestLogin, otpLogin } = createSeedApiClient(API);
 
 const pg = new Client({
   connectionString:
@@ -898,7 +892,7 @@ async function main() {
     console.log(
       `  Đăng nhập được bằng SĐT nội địa "${DEMO_PHONE_LOCAL}" — OTP đọc qua`,
     );
-    console.log('  `pnpm dev:logs` rồi tìm "Ma xac thuc".');
+    console.log('  Mã OTP được trả trực tiếp về client trong response.');
   }
 
   console.log('== Admin actions (audit log + status variety) ==');
@@ -997,7 +991,7 @@ async function main() {
     `  Web (hero):  SĐT ${DEMO_PHONE_LOCAL} — user ${ids.hero ?? '?'}`,
   );
   console.log(`  Admin:       SĐT ${ADMIN_PHONE_LOCAL} (role admin)`);
-  console.log('  OTP đọc qua: pnpm dev:logs rồi tìm "Ma xac thuc"');
+  console.log('  OTP được trả trực tiếp về client trong response.');
   console.log(
     '  Party Room tự đóng sau vài phút — chạy lại với --rooms-only trước khi browse.',
   );
