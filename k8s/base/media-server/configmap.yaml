@@ -43,7 +43,10 @@ data:
     webhook:
       api_key: REPLACE_ME_KEY
       urls:
-        - http://core-api.litmatch.svc.cluster.local:3000/calling/webhooks/livekit
-        - http://core-api.litmatch.svc.cluster.local:3000/party/webhooks/livekit
+        # PHẢI khớp API_GLOBAL_PREFIX ('api/v1', core-api/src/app/openapi.ts). Nếu thiếu,
+        # participant_joined bị POST 404 và CallSession kẹt ở pending: không có countdown,
+        # reaction tim cũng chưa được server cho phép.
+        - http://core-api.litmatch.svc.cluster.local:3000/api/v1/calling/webhooks/livekit
+        - http://core-api.litmatch.svc.cluster.local:3000/api/v1/party/webhooks/livekit
     logging:
       level: info

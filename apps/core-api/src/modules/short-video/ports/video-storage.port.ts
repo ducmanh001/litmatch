@@ -21,7 +21,7 @@ export abstract class VideoStoragePort {
 
 /**
  * Dev/test: sinh `uploadUrl` giả, không thật sự lưu file nào — chặn cứng ở production, giống
- * `DevSmsProvider`/`DevIapVerifier`.
+ * dev-only adapter/`DevIapVerifier`.
  */
 @Injectable()
 export class DevVideoStorageProvider

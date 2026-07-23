@@ -34,7 +34,7 @@ import { UserModule } from '../user';
     ShortVideoService,
     VideoSweeperService,
     VideoRankingService,
-    // Đổi sang provider thật (Cloudflare Stream/Mux, ADR sau) khi tích hợp — giống DevSmsProvider.
+    // Đổi sang provider thật (Cloudflare Stream/Mux, ADR sau) khi tích hợp.
     { provide: VideoStoragePort, useClass: DevVideoStorageProvider },
     { provide: VideoTranscodePort, useClass: DevVideoTranscodeProvider },
   ],
