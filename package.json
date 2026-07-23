@@ -90,7 +90,7 @@
     "@swc/cli": "~0.8.0",
     "@swc/core": "^1.15.43",
     "@swc/helpers": "~0.5.18",
-    "@tailwindcss/postcss": "^4.3.2",
+    "@tailwindcss/postcss": "^8.5.12",
     "@tailwindcss/vite": "^4.3.2",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",

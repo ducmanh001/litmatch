@@ -32,6 +32,11 @@ test('đăng nhập OTP, session sống sót qua reload, vào hàng đợi ghép
   }
   await page.getByRole('button', { name: 'Đăng nhập' }).click();
 
+  // FIX: Điền từng chữ số OTP vào từng ô input để trigger đúng event của frontend
+  for (const [index, digit] of [...code].entries()) {
+    await otpDigitInputs.nth(index).fill(digit);
+  }
+
   await expect(page).toHaveURL(/\/home$/);
 
   // Reload thật — wipe hết state JS (access token memory-only), chỉ còn cookie httpOnly
