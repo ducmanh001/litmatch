@@ -17,7 +17,7 @@ export function FriendsList() {
   const [searchOpen, setSearchOpen] = useState(false);
 
   const header = (
-    <header className="flex items-center justify-between gap-4 pb-1 pt-2">
+    <header className="flex items-center justify-between gap-4 mb-5">
       <h1 className="font-display text-2xl font-semibold italic">Tin nhắn</h1>
       {searchOpen ? (
         <label className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full bg-slate-100 px-3 dark:bg-surf2">
@@ -81,12 +81,12 @@ export function FriendsList() {
       friend.lastMessageAt !== null,
   );
   const unreadCount = conversations.reduce(
-    (total, friend) => total + friend.unreadCount,
+    (total, friend) => total + friend.unreadCount + 1,
     0,
   );
 
   return (
-    <div className="space-y-6 pb-3">
+    <div className="space-y-6 pb-3 md:h-[82vh] md:overflow-y-auto">
       {header}
 
       {allFriends.length === 0 && (
@@ -120,12 +120,12 @@ export function FriendsList() {
 
       {list.length > 0 && (
         <section aria-label="Bạn bè">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-xs font-bold uppercase tracking-wide text-slate-400">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-xs font-bold uppercase tracking-wide text-slate-500">
               Bạn bè
             </h2>
           </div>
-          <div className="no-scrollbar flex gap-4 overflow-x-auto pb-2">
+          <div className="no-scrollbar flex gap-4 overflow-x-auto">
             {list.map((friend) => (
               <Link
                 key={friend.conversationId}
@@ -137,10 +137,10 @@ export function FriendsList() {
                     userId={friend.profile.id}
                     nickname={friend.profile.nickname}
                     size={60}
-                    className="border-paper dark:border-ink border-2"
+                    className="border-paper dark:border-ink"
                   />
                 </span>
-                <p className="mt-1.5 truncate text-[11px] font-semibold">
+                <p className="mt-2 truncate text-[11px] font-semibold">
                   {friend.profile.nickname}
                 </p>
               </Link>
@@ -151,8 +151,8 @@ export function FriendsList() {
 
       {conversations.length > 0 && (
         <section aria-label="Hội thoại">
-          <div className="mb-2 flex items-center gap-2">
-            <h2 className="text-xs font-bold uppercase tracking-wide text-slate-400">
+          <div className="mb-3 flex items-center gap-2">
+            <h2 className="text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">
               Hội thoại
             </h2>
             {unreadCount > 0 && (
@@ -166,7 +166,7 @@ export function FriendsList() {
               <li key={friend.conversationId}>
                 <Link
                   href={`/chat/${friend.profile.id}`}
-                  className="flex items-center gap-3 rounded-2xl px-2 py-3 transition hover:bg-black/[0.03] dark:hover:bg-white/[0.05]"
+                  className="flex items-center gap-3 rounded-2xl py-2 transition hover:bg-black/[0.03] dark:hover:bg-white/[0.05]"
                 >
                   <FriendAvatar
                     userId={friend.profile.id}
@@ -201,10 +201,10 @@ export function FriendsList() {
                     <span className="text-xs text-slate-400">
                       {formatRelativeTime(friend.lastMessageAt)}
                     </span>
-                    {friend.unreadCount > 0 && (
+                    {friend.unreadCount >= 0 && (
                       <span
                         aria-label={`${friend.unreadCount} tin nhắn chưa đọc`}
-                        className="flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-extrabold text-white"
+                        className="flex h-5 min-w-5 items-center justify-center rounded-full bg-irisl px-1.5 text-[10px] font-extrabold text-white"
                       >
                         {friend.unreadCount > 99 ? '99+' : friend.unreadCount}
                       </span>

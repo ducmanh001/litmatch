@@ -3,9 +3,11 @@
 import Link from 'next/link';
 
 import { useUserTimeline } from '../../feed/api';
+import { useTranslation } from '../../../shared/i18n/messages';
 
 export function ProfilePostsGrid({ userId }: { userId: string }) {
   const timeline = useUserTimeline(userId);
+  const t = useTranslation();
   const posts = timeline.data?.items ?? [];
 
   if (posts.length === 0) {
@@ -15,9 +17,9 @@ export function ProfilePostsGrid({ userId }: { userId: string }) {
   return (
     <div className="mb-6">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-bold">Bài viết của bạn</h2>
+        <h2 className="text-sm font-bold">{t('profile.posts')}</h2>
         <Link href="/feed" className="text-xs font-bold text-irisl">
-          Xem trên Bảng tin →
+          {t('profile.viewFeed')}
         </Link>
       </div>
       <div className="grid grid-cols-3 gap-2">
@@ -32,7 +34,7 @@ export function ProfilePostsGrid({ userId }: { userId: string }) {
               // cấu hình trước (docs/13 § 13.9); dùng <img> thuần như post-card.tsx.
               <img
                 src={post.imageUrl}
-                alt="Ảnh bài viết"
+                alt={t('profile.postImageAlt')}
                 className="h-full w-full object-cover"
               />
             ) : (

@@ -157,7 +157,7 @@ export function PageHeader({
   children?: ReactNode;
 }) {
   return (
-    <header className="mb-6 border-b border-black/5 pb-5 dark:border-white/5">
+    <header className="mb-5 border-b border-black/5 pb-5 dark:border-white/5">
       <div className="flex items-center justify-between gap-3">
         {leading ?? (
           <div className="flex min-w-0 items-center gap-3">

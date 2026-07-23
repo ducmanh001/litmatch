@@ -39,14 +39,25 @@ export function PlaceholderAvatar({
   }
 
   return (
-    <img
-      src={placeholderAvatarUrl(seed)}
-      alt={alt}
-      width={size}
-      height={size}
-      onError={() => setFailed(true)}
-      className={cn('shrink-0 rounded-full object-cover', className)}
+    <div
+      className={cn('relative inline-block shrink-0', className)}
       style={{ width: size, height: size }}
-    />
+    >
+      <div className="w-full h-full relative inline-block shrink-0 border-paper dark:border-ink rounded-full">
+        <img
+          src={placeholderAvatarUrl('Ngoc2')}
+          alt={alt}
+          width={size}
+          height={size}
+          onError={() => setFailed(true)}
+          className="w-full h-full rounded-full object-cover bg-surf2"
+        />
+        {size == 96 ? (
+          ''
+        ) : (
+          <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-paper dark:border-ink" />
+        )}
+      </div>
+    </div>
   );
 }

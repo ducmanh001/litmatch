@@ -7,6 +7,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { StrictMode } from 'react';
 import { vi } from 'vitest';
 
@@ -231,6 +232,103 @@ describe('VoiceCallRoom', () => {
     expect(screen.queryByText('0:05')).not.toBeInTheDocument();
 
     vi.useRealTimers();
+  });
+
+  it('pending — giải thích đang chờ webhook LiveKit, chưa đếm giờ và chưa cho gửi yêu thích', async () => {
+    mockedUseCallRoom.mockReturnValue({
+      connect: vi.fn(),
+      room: {
+        on: vi.fn(),
+        off: vi.fn(),
+        localParticipant: { setMicrophoneEnabled: vi.fn() },
+      },
+      callId: 'call-1',
+      roomDisconnected: false,
+      isConnecting: false,
+      error: null,
+    } as never);
+    const postSpy = vi.spyOn(apiClient, 'POST').mockResolvedValue({} as never);
+    vi.spyOn(apiClient, 'GET').mockResolvedValue({
+      data: {
+        data: {
+          id: 'call-1',
+          matchSessionId: 'session-1',
+          status: 'pending',
+          startedAt: null,
+          endedAt: null,
+          endReason: null,
+          durationSeconds: null,
+          billedMinutes: 0,
+          freeCallEndsAt: null,
+        },
+      },
+    } as never);
+
+    renderRoom();
+
+    expect(
+      await screen.findByText(/Đang chờ cả hai cùng vào phòng/),
+    ).toBeVisible();
+    expect(
+      screen.queryByText(/Còn \d+:\d+ cho phiên này/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Yêu thích để thành Litfriend' }),
+    ).toBeDisabled();
+    expect(postSpy).not.toHaveBeenCalledWith(
+      '/api/v1/calling/calls/{id}/like',
+      expect.anything(),
+    );
+  });
+
+  it('active — gửi yêu thích rồi hiển thị xác nhận từ response server', async () => {
+    mockedUseCallRoom.mockReturnValue({
+      connect: vi.fn(),
+      room: {
+        on: vi.fn(),
+        off: vi.fn(),
+        localParticipant: { setMicrophoneEnabled: vi.fn() },
+      },
+      callId: 'call-1',
+      roomDisconnected: false,
+      isConnecting: false,
+      error: null,
+    } as never);
+    vi.spyOn(apiClient, 'GET').mockResolvedValue({
+      data: {
+        data: {
+          id: 'call-1',
+          matchSessionId: 'session-1',
+          status: 'active',
+          startedAt: new Date().toISOString(),
+          endedAt: null,
+          endReason: null,
+          durationSeconds: null,
+          billedMinutes: 0,
+          freeCallEndsAt: new Date(Date.now() + 420_000).toISOString(),
+        },
+      },
+    } as never);
+    const postSpy = vi.spyOn(apiClient, 'POST').mockResolvedValue({
+      data: { data: { liked: true, matched: false, friendUserId: null } },
+    } as never);
+
+    renderRoom();
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: 'Yêu thích để thành Litfriend',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(postSpy).toHaveBeenCalledWith('/api/v1/calling/calls/{id}/like', {
+        params: { path: { id: 'call-1' } },
+      }),
+    );
+    expect(
+      await screen.findByText('Đã gửi yêu thích — chờ đối phương.'),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Đã yêu thích' })).toBeDisabled();
   });
 
   it('ended — hiển thị trạng thái kết thúc + thời lượng', async () => {

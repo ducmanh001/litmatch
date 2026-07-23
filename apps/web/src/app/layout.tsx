@@ -40,6 +40,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html
       lang="vi"
       className={`dark ${fontDisplay.variable} ${fontBody.variable} ${fontMono.variable}`}
+      suppressHydrationWarning
     >
       <head>
         {/* Script tĩnh tự viết (không phải input người dùng) — chạy trước hydrate để tránh nháy sáng/tối. */}
