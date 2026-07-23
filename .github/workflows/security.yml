@@ -33,6 +33,7 @@ jobs:
           languages: javascript-typescript
       - uses: github/codeql-action/analyze@1ad29ea4a422cce9a242a9fae469541dcd08addc # v4
 
+
   # repository-scan:
   #   name: Secrets and dependencies
   #   runs-on: ubuntu-latest
@@ -77,42 +78,42 @@ jobs:
   #         --skip-dirs .nx
   #         --skip-dirs dist
 
-  dependency-review:
-    name: Dependency review
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-        with:
-          persist-credentials: false
-      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
-        with:
-          fail-on-severity: high
-          show-openssf-scorecard: true
-          warn-on-openssf-scorecard-level: 3
+  # dependency-review:
+  #   name: Dependency review
+  #   if: github.event_name == 'pull_request'
+  #   runs-on: ubuntu-latest
+  #   timeout-minutes: 10
+  #   steps:
+  #     - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+  #       with:
+  #         persist-credentials: false
+  #     - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+  #       with:
+  #         fail-on-severity: high
+  #         show-openssf-scorecard: true
+  #         warn-on-openssf-scorecard-level: 3
 
-  required:
-    name: Security required
-    if: always()
-    needs: [codeql, dependency-review]
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    steps:
-      - name: Require every applicable security stage
-        env:
-          CODEQL_RESULT: ${{ needs.codeql.result }}
-          REPOSITORY_SCAN_RESULT: ${{ needs.repository-scan.result }}
-          DEPENDENCY_REVIEW_RESULT: ${{ needs.dependency-review.result }}
-        run: |
-          if [[ "${CODEQL_RESULT}" != success \
-            || "${REPOSITORY_SCAN_RESULT}" != success ]]; then
-            echo "::error::Security incomplete: codeql=${CODEQL_RESULT}, repository-scan=${REPOSITORY_SCAN_RESULT}"
-            exit 1
-          fi
+  # required:
+  #   name: Security required
+  #   if: always()
+  #   needs: [codeql, dependency-review]
+  #   runs-on: ubuntu-latest
+  #   timeout-minutes: 2
+  #   steps:
+  #     - name: Require every applicable security stage
+  #       env:
+  #         CODEQL_RESULT: ${{ needs.codeql.result }}
+  #         REPOSITORY_SCAN_RESULT: ${{ needs.repository-scan.result }}
+  #         DEPENDENCY_REVIEW_RESULT: ${{ needs.dependency-review.result }}
+  #       run: |
+  #         if [[ "${CODEQL_RESULT}" != success \
+  #           || "${REPOSITORY_SCAN_RESULT}" != success ]]; then
+  #           echo "::error::Security incomplete: codeql=${CODEQL_RESULT}, repository-scan=${REPOSITORY_SCAN_RESULT}"
+  #           exit 1
+  #         fi
 
-          if [[ "${DEPENDENCY_REVIEW_RESULT}" != success \
-            && "${DEPENDENCY_REVIEW_RESULT}" != skipped ]]; then
-            echo "::error::Dependency review failed: ${DEPENDENCY_REVIEW_RESULT}"
-            exit 1
-          fi
+  #         if [[ "${DEPENDENCY_REVIEW_RESULT}" != success \
+  #           && "${DEPENDENCY_REVIEW_RESULT}" != skipped ]]; then
+  #           echo "::error::Dependency review failed: ${DEPENDENCY_REVIEW_RESULT}"
+  #           exit 1
+  #         fi

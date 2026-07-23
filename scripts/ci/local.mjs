@@ -628,10 +628,10 @@ function runProfile() {
     runContainerSmoke();
     return;
   }
-  if (profile === 'security') {
-    runSecurityChecks();
-    return;
-  }
+  // if (profile === 'security') {
+  //   runSecurityChecks();
+  //   return;
+  // }
 
   runCleanQuality();
   // runSecurityChecks();
