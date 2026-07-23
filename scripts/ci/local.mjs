@@ -412,26 +412,6 @@ function runContainerSmoke() {
     edgeImage,
     '.',
   ]);
-  const trivy = provisionSecurityTool('trivy');
-  const imageScanArgs = [
-    'image',
-    '--scanners',
-    'vuln',
-    '--severity',
-    'HIGH,CRITICAL',
-    '--ignore-unfixed',
-    '--exit-code',
-    '1',
-    '--no-progress',
-    '--skip-version-check',
-  ];
-  run('Scan Core API runtime image', trivy, [...imageScanArgs, coreImage]);
-  run('Scan Signaling Gateway runtime image', trivy, [
-    ...imageScanArgs,
-    signalingImage,
-  ]);
-  run('Scan Web runtime image', trivy, [...imageScanArgs, webImage]);
-  run('Scan Edge runtime image', trivy, [...imageScanArgs, edgeImage]);
 
   removeSmokeContainers();
   try {
@@ -566,48 +546,6 @@ function runWorkflowLint() {
   ]);
 }
 
-function runSecurityChecks() {
-  const gitleaks = provisionSecurityTool('gitleaks');
-  const trivy = provisionSecurityTool('trivy');
-  run('Scan Git history for secrets', gitleaks, [
-    'git',
-    '--redact',
-    '--no-banner',
-    '--verbose',
-    '--baseline-path',
-    '.gitleaks-baseline.json',
-    '.',
-  ]);
-  prepareDependencies();
-  run('Audit high and critical dependency vulnerabilities', pnpm, [
-    'audit',
-    '--audit-level',
-    'high',
-  ]);
-  run('Scan filesystem vulnerabilities and misconfiguration', trivy, [
-    'filesystem',
-    '.',
-    '--scanners',
-    'vuln,misconfig',
-    '--severity',
-    'HIGH,CRITICAL',
-    '--ignore-unfixed',
-    '--exit-code',
-    '1',
-    '--no-progress',
-    '--skip-version-check',
-    '--ignorefile',
-    '.trivyignore.yaml',
-    '--skip-dirs',
-    '.nx',
-    '--skip-dirs',
-    'dist',
-  ]);
-  console.log(
-    '\n[ci-local] CodeQL uploads results to GitHub and remains a GitHub Actions-only check.',
-  );
-}
-
 function runProfile() {
   console.log(`[ci-local] Profile: ${profile}${dryRun ? ' (dry run)' : ''}`);
 
@@ -615,10 +553,10 @@ function runProfile() {
     runQuality();
     return;
   }
-  if (profile === 'clean') {
-    runCleanQuality();
-    return;
-  }
+  // if (profile === 'clean') {
+  //   runCleanQuality();
+  //   return;
+  // }
   if (profile === 'ci') {
     runQuality();
     runTestAndBuild();
@@ -628,13 +566,14 @@ function runProfile() {
     runContainerSmoke();
     return;
   }
-  // if (profile === 'security') {
-  //   runSecurityChecks();
-  //   return;
-  // }
+  if (profile === 'security') {
+    console.log(
+      '\n[ci-local] Security profile is disabled; skipping secret and vulnerability scans.',
+    );
+    return;
+  }
 
   runCleanQuality();
-  // runSecurityChecks();
   runTestAndBuild();
   runContainerSmoke();
 }

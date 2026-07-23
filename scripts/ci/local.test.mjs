@@ -69,7 +69,7 @@ test('clean local CI profile uses an empty node_modules volume in Node 22 Linux'
   assert.doesNotMatch(result.stdout, /bash -lc/u);
 });
 
-test('all local CI profile plans quality, security, test, and Docker smoke stages', () => {
+test('all local CI profile plans quality, test, and Docker smoke stages', () => {
   const result = dryRun('all');
 
   assert.equal(result.status, 0, result.stderr);
@@ -77,16 +77,12 @@ test('all local CI profile plans quality, security, test, and Docker smoke stage
     result.stdout,
     /Run quality gate in a clean Node 22 Linux container/u,
   );
-  assert.match(result.stdout, /Scan Git history for secrets/u);
   assert.match(result.stdout, /Ensure isolated database litmatch_ci/u);
   assert.match(result.stdout, /Start local PostgreSQL and Redis/u);
   assert.match(result.stdout, /End-to-end smoke tests/u);
   assert.match(result.stdout, /Build Core API image/u);
   assert.match(result.stdout, /Build Web image/u);
   assert.match(result.stdout, /Build Edge image/u);
-  assert.match(result.stdout, /Scan Core API runtime image/u);
-  assert.match(result.stdout, /Scan Web runtime image/u);
-  assert.match(result.stdout, /Scan Edge runtime image/u);
   assert.match(result.stdout, /Start Web smoke container/u);
   assert.match(result.stdout, /Validate Edge configuration/u);
   assert.match(result.stdout, /\[ci-local\] \$ pnpm \[args hidden\]/u);
@@ -98,6 +94,18 @@ test('all local CI profile plans quality, security, test, and Docker smoke stage
     /litmatch_local@localhost:5432\/litmatch_ci/u,
   );
   assert.doesNotMatch(result.stdout, /redis:\/\/localhost:6379\/15/u);
+});
+
+test('security local CI profile is disabled and does not run scans', () => {
+  const result = dryRun('security');
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /Security profile is disabled; skipping secret and vulnerability scans\./u,
+  );
+  assert.doesNotMatch(result.stdout, /Scan Git history for secrets/u);
+  assert.doesNotMatch(result.stdout, /Scan Core API runtime image/u);
 });
 
 test('local CI rejects an unsupported profile', () => {

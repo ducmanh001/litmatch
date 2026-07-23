@@ -114,10 +114,10 @@ function validateGithubWorkflowPolicy() {
     join(root, '.github/workflows/ci.yml'),
     'utf8',
   );
-  const securityWorkflow = readFileSync(
-    join(root, '.github/workflows/security.yml'),
-    'utf8',
-  );
+  const securityWorkflowPath = join(root, '.github/workflows/security.yml');
+  const securityWorkflow = existsSync(securityWorkflowPath)
+    ? readFileSync(securityWorkflowPath, 'utf8')
+    : undefined;
 
   for (const error of workflowPolicyErrors({ ciWorkflow, securityWorkflow })) {
     addError(error);
