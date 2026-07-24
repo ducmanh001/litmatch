@@ -70,7 +70,7 @@ export function TrendingRoomCards() {
             <PlaceholderAvatar
               seed={room.id}
               size={32}
-              className="border-2 border-card"
+              className="border-card"
             />
             <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/40" />
           </div>

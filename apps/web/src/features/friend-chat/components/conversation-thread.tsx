@@ -364,17 +364,12 @@ export function ConversationThread({
           </svg>
         </button>
       </div>
-      <div
-        className={`flex-1 px-5 py-4 ${
-          inDialog ? 'min-h-0 overflow-y-auto' : ''
-        }`}
-      >
+      <div className={`flex-1 px-5 py-4`}>
         <MessageList conversationId={conversation.data.id} />
       </div>
       <div
-        className={`bg-paper/90 dark:bg-ink/90 sticky z-10 border-t border-black/5 px-5 py-3 backdrop-blur dark:border-white/10 ${
-          inDialog ? 'bottom-0' : 'bottom-16 md:bottom-0'
-        }`}
+        style={{ marginBottom: '-35px' }}
+        className={`bg-paper/90 dark:bg-ink/90 sticky z-10 border-t border-black/5 px-5 py-3 backdrop-blur dark:border-white/10`}
       >
         <MessageComposer conversationId={conversation.data.id} />
       </div>

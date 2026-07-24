@@ -106,7 +106,7 @@ export function EditProfileView() {
                 aria-label="Đổi ảnh đại diện"
                 aria-expanded={builderOpen}
                 onClick={() => setBuilderOpen((open) => !open)}
-                className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full border-2 border-paper bg-irisl text-white dark:border-ink"
+                className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full border-paper bg-irisl text-white dark:border-ink"
               >
                 <PencilIcon />
               </button>

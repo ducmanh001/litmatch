@@ -162,7 +162,7 @@ function VideoActionRail({
       <Link
         href={`/users/${video.authorUserId}`}
         aria-label="Xem hồ sơ tác giả video"
-        className="relative flex h-11 w-11 items-center justify-center rounded-full border-2 border-white bg-surf2"
+        className="relative flex h-11 w-11 items-center justify-center rounded-full border-white bg-surf2"
       >
         <PlaceholderAvatar seed={video.authorUserId} alt="" size={40} />
         <span className="absolute -bottom-2 left-1/2 flex h-5 w-5 -translate-x-1/2 items-center justify-center rounded-full bg-irisl text-xs font-bold text-white">
@@ -207,7 +207,7 @@ function VideoActionRail({
             : 'Tắt âm thanh gốc của video'
         }
         title="Âm thanh gốc"
-        className="disc-spin mt-1 flex h-9 w-9 items-center justify-center rounded-full border-2 border-black/20 bg-gradient-to-br from-irisl to-aqual transition-transform active:scale-90 disabled:animate-none disabled:opacity-50"
+        className="disc-spin mt-1 flex h-9 w-9 items-center justify-center rounded-full border-black/20 bg-gradient-to-br from-irisl to-aqual transition-transform active:scale-90 disabled:animate-none disabled:opacity-50"
       >
         <span className="h-3 w-3 rounded-full bg-black/60" />
       </button>

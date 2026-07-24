@@ -24,7 +24,7 @@ const config = {
   host: 'https://eu.i.posthog.com',
 };
 
-describe('product analytics privacy boundary', () => {
+describe('product analytics tracking', () => {
   beforeEach(() => {
     window.localStorage.clear();
     posthogMock.__loaded = false;
@@ -36,37 +36,36 @@ describe('product analytics privacy boundary', () => {
     expect(posthogMock.init).not.toHaveBeenCalled();
   });
 
-  it('khởi tạo opt-out mặc định và mask toàn bộ input/text replay', () => {
+  it('khởi tạo tự động opt-in và cấu hình session recording', () => {
     expect(initializeProductAnalytics(config)).toBe(true);
 
     expect(posthogMock.init).toHaveBeenCalledWith(
       config.projectToken,
       expect.objectContaining({
         api_host: config.host,
-        opt_out_capturing_by_default: true,
         session_recording: {
-          maskAllInputs: true,
-          maskTextSelector: '*',
+          maskAllInputs: false, // Đúng theo cấu hình bạn muốn xem input
         },
       }),
     );
-    expect(posthogMock.opt_out_capturing).toHaveBeenCalledOnce();
+    expect(posthogMock.opt_in_capturing).toHaveBeenCalledOnce();
   });
 
-  it('chỉ identify UUID + nickname + account type sau consent', () => {
+  it('identify UUID + nickname + account type thành công', () => {
     const user = { id: 'user-1', nickname: 'Mai', isGuest: false };
-    identifyProductAnalyticsUser(user, config);
-    expect(posthogMock.identify).not.toHaveBeenCalled();
 
-    setProductAnalyticsConsent('accepted', config);
+    // Vì mặc định consent luôn là 'accepted', hàm identify sẽ chạy luôn mà không bị chặn
     identifyProductAnalyticsUser(user, config);
 
-    expect(posthogMock.opt_in_capturing).toHaveBeenCalledOnce();
-    expect(posthogMock.capture).toHaveBeenCalledWith('$pageview');
     expect(posthogMock.identify).toHaveBeenCalledWith('user-1', {
       nickname: 'Mai',
       account_type: 'registered',
     });
+  });
+
+  it('gọi setProductAnalyticsConsent luôn kích hoạt opt_in_capturing', () => {
+    setProductAnalyticsConsent('accepted', config);
+    expect(posthogMock.opt_in_capturing).toHaveBeenCalledOnce();
   });
 
   it('reset identity khi session kết thúc', () => {

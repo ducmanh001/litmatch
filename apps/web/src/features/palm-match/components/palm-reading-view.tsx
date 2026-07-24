@@ -435,7 +435,7 @@ function FlipCard({
         </div>
         <div
           className={cn(
-            'flip-back flex h-full w-full flex-col items-center justify-center border-2 bg-white dark:bg-surf',
+            'flip-back flex h-full w-full flex-col items-center justify-center bg-white dark:bg-surf',
             borderClass,
           )}
         >
