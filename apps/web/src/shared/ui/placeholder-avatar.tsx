@@ -55,7 +55,7 @@ export function PlaceholderAvatar({
         {size == 96 ? (
           ''
         ) : (
-          <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-paper dark:border-ink" />
+          <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 border-paper dark:border-ink" />
         )}
       </div>
     </div>

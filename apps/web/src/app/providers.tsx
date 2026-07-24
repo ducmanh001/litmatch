@@ -41,7 +41,6 @@ export function Providers({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ProductAnalyticsIdentity />
       {children}
-      <ProductAnalyticsConsentBanner />
     </QueryClientProvider>
   );
 }
