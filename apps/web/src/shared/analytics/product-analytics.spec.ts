@@ -36,7 +36,7 @@ describe('product analytics tracking', () => {
     expect(posthogMock.init).not.toHaveBeenCalled();
   });
 
-  it('khởi tạo tự động opt-in và chỉ mask các ô input', () => {
+  it('khởi tạo tự động opt-in và cấu hình session recording', () => {
     expect(initializeProductAnalytics(config)).toBe(true);
 
     expect(posthogMock.init).toHaveBeenCalledWith(
@@ -44,12 +44,10 @@ describe('product analytics tracking', () => {
       expect.objectContaining({
         api_host: config.host,
         session_recording: {
-          maskAllInputs: false,
-          không,
+          maskAllInputs: false, // Đúng theo cấu hình bạn muốn xem input
         },
       }),
     );
-    // Kiểm tra xem có tự động gọi opt_in ngay khi init không
     expect(posthogMock.opt_in_capturing).toHaveBeenCalledOnce();
   });
 
