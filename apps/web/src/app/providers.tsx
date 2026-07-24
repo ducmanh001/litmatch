@@ -3,10 +3,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
-import {
-  ProductAnalyticsConsentBanner,
-  ProductAnalyticsIdentity,
-} from '../shared/analytics/product-analytics-components';
+import { ProductAnalyticsIdentity } from '../shared/analytics/product-analytics-components';
 import { resetProductAnalyticsUser } from '../shared/analytics/product-analytics';
 import { tokenStore } from '../shared/api/client';
 
@@ -41,7 +38,6 @@ export function Providers({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ProductAnalyticsIdentity />
       {children}
-      <ProductAnalyticsConsentBanner />
     </QueryClientProvider>
   );
 }

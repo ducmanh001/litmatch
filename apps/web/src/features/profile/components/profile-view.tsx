@@ -71,7 +71,7 @@ export function ProfileView() {
           <Link
             href="/profile/edit"
             aria-label={t('profile.changeAvatar')}
-            className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full border-2 border-paper bg-iris text-white dark:border-ink"
+            className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full border-paper bg-iris text-white dark:border-ink"
           >
             <svg
               width="12"

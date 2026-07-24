@@ -13,7 +13,7 @@ const MAX_AUDIENCE_LISTED = 20;
 function EmptySeat() {
   return (
     <div className="flex flex-col items-center">
-      <div className="mb-1 flex h-14 w-14 items-center justify-center rounded-full border-2 border-dashed border-slate-300 text-slate-300 dark:border-white/15 dark:text-white/20">
+      <div className="mb-1 flex h-14 w-14 items-center justify-center rounded-full border-dashed border-slate-300 text-slate-300 dark:border-white/15 dark:text-white/20">
         <svg
           width={18}
           height={18}

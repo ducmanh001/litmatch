@@ -34,7 +34,7 @@ export default function FriendsPage() {
                         md:rounded-2xl md:border md:border-black/5 md:bg-white md:p-4 md:shadow-sm md:shadow-black/[0.02]
                         md:dark:border-white/5 md:dark:bg-surf md:dark:text-white md:dark:shadow-black/20 rounded-2xl"
         >
-          <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="flex-1 min-h-0">
             <FriendsList />
           </div>
         </div>

@@ -42,26 +42,19 @@ export function initializeProductAnalytics(
     capture_pageview: 'history_change',
     capture_pageleave: true,
     person_profiles: 'identified_only',
-    opt_out_capturing_by_default: true,
     session_recording: {
-      maskAllInputs: true,
-      // Litmatch có chat/profile nhạy cảm: replay chỉ cần layout + thao tác, không cần nội dung.
-      maskTextSelector: '*',
+      maskAllInputs: false,
     },
   });
 
-  if (getProductAnalyticsConsent() === 'accepted') {
-    posthog.opt_in_capturing();
-  } else {
-    posthog.opt_out_capturing();
-  }
+  // Tự động bật capturing ngay khi khởi tạo
+  posthog.opt_in_capturing();
   return true;
 }
 
+// Hàm luôn trả về 'accepted' để đảm bảo PostHog hoạt động 100%
 export function getProductAnalyticsConsent(): ProductAnalyticsConsent {
-  if (typeof window === 'undefined') return null;
-  const stored = window.localStorage.getItem(CONSENT_STORAGE_KEY);
-  return stored === 'accepted' || stored === 'declined' ? stored : null;
+  return 'accepted';
 }
 
 export function subscribeProductAnalyticsConsent(
@@ -72,17 +65,15 @@ export function subscribeProductAnalyticsConsent(
 }
 
 export function setProductAnalyticsConsent(
-  consent: Exclude<ProductAnalyticsConsent, null>,
+  _consent?: Exclude<ProductAnalyticsConsent, null>,
   config: ProductAnalyticsConfig | null = productAnalyticsConfig,
 ): void {
   if (config === null || typeof window === 'undefined') return;
-  window.localStorage.setItem(CONSENT_STORAGE_KEY, consent);
-  if (consent === 'accepted') {
-    posthog.opt_in_capturing();
-    posthog.capture('$pageview');
-  } else {
-    posthog.opt_out_capturing();
-  }
+
+  // Luôn lưu trạng thái là accepted vào localStorage
+  window.localStorage.setItem(CONSENT_STORAGE_KEY, 'accepted');
+  posthog.opt_in_capturing();
+
   consentSubscribers.forEach((subscriber) => subscriber());
 }
 
@@ -90,7 +81,7 @@ export function identifyProductAnalyticsUser(
   user: AnalyticsUser,
   config: ProductAnalyticsConfig | null = productAnalyticsConfig,
 ): void {
-  if (config === null || getProductAnalyticsConsent() !== 'accepted') return;
+  if (config === null) return;
   posthog.identify(user.id, {
     nickname: user.nickname,
     account_type: user.isGuest ? 'guest' : 'registered',

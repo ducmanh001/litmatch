@@ -45,7 +45,7 @@ export function MatchingScanner({
               <PlaceholderAvatar
                 seed={seed}
                 size={48}
-                className="border-2 border-card dark:border-surf"
+                className="border-card dark:border-surf"
               />
             </span>
           ))}

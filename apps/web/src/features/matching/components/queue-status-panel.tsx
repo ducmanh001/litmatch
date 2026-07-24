@@ -172,7 +172,7 @@ export function QueueStatusPanel() {
   if (ticketId === null && currentTicketQuery.isPending) {
     return (
       <div className={CENTERED_STATE} role="status">
-        <span className="h-10 w-10 animate-spin rounded-full border-2 border-iris/20 border-t-irisl" />
+        <span className="h-10 w-10 animate-spin rounded-full border-iris/20 border-t-irisl" />
         <p className="mt-4 text-sm font-semibold text-muted-foreground dark:text-white/70">
           Đang kiểm tra phiên ghép đôi của bạn…
         </p>
@@ -233,7 +233,7 @@ export function QueueStatusPanel() {
   if (ticketQuery.isPending) {
     return (
       <div className={CENTERED_STATE} role="status">
-        <span className="h-10 w-10 animate-spin rounded-full border-2 border-iris/20 border-t-irisl" />
+        <span className="h-10 w-10 animate-spin rounded-full border-iris/20 border-t-irisl" />
         <p className="mt-4 text-sm font-semibold text-muted-foreground dark:text-white/70">
           Đang tải trạng thái ghép đôi…
         </p>
@@ -364,7 +364,7 @@ export function QueueStatusPanel() {
               Đang mở phòng trò chuyện cho hai bạn…
             </p>
           </div>
-          <span className="h-9 w-9 animate-spin rounded-full border-2 border-iris/20 border-t-irisl" />
+          <span className="h-9 w-9 animate-spin rounded-full border-iris/20 border-t-irisl" />
           {confirmError !== undefined && (
             <p
               role="alert"
@@ -378,7 +378,7 @@ export function QueueStatusPanel() {
     case 'confirmed':
       return (
         <div className={CENTERED_STATE} role="status">
-          <span className="h-10 w-10 animate-spin rounded-full border-2 border-iris/20 border-t-irisl" />
+          <span className="h-10 w-10 animate-spin rounded-full border-iris/20 border-t-irisl" />
           <p className="mt-4 text-sm font-semibold text-muted-foreground dark:text-white/70">
             Đã xác nhận — đang chuyển vào phòng…
           </p>

@@ -115,7 +115,7 @@ export function IncomingInvites() {
                       size={42}
                       className="ring-1 ring-iris/20 dark:ring-white/15"
                     />
-                    <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-background bg-irisl text-white">
+                    <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border-background bg-irisl text-white">
                       <InviteIcon width={10} height={10} />
                     </span>
                   </span>

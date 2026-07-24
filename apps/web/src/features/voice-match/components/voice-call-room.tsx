@@ -317,8 +317,8 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
     return (
       <div className="flex flex-col items-center px-8 pb-10 pt-6 text-center">
         <div className="relative mb-8 flex h-40 w-40 items-center justify-center">
-          <span className="pulsering absolute inset-0 rounded-full border-2 border-irisl" />
-          <span className="pulsering2 absolute inset-0 rounded-full border-2 border-irisl" />
+          <span className="pulsering absolute inset-0 rounded-full border-irisl" />
+          <span className="pulsering2 absolute inset-0 rounded-full border-irisl" />
           <div className="relative z-10 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-irisl to-irisl">
             <MicIcon width={32} height={32} className="text-white" />
           </div>

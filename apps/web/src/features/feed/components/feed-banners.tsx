@@ -148,7 +148,7 @@ export function FeedBanners() {
               className="group flex flex-col items-center text-center"
             >
               <span
-                className={`flex h-14 w-14 items-center justify-center rounded-full border-2 border-white/70 bg-gradient-to-br text-white shadow-md shadow-iris/20 transition group-hover:-translate-y-0.5 group-focus-visible:-translate-y-0.5 ${gradient}`}
+                className={`flex h-14 w-14 items-center justify-center rounded-full border-white/70 bg-gradient-to-br text-white shadow-md shadow-iris/20 transition group-hover:-translate-y-0.5 group-focus-visible:-translate-y-0.5 ${gradient}`}
               >
                 {Icon !== null ? (
                   <Icon width={22} height={22} />
