@@ -259,7 +259,7 @@ export class UserService {
     const user = await this.getByIdOrThrow(userId);
 
     if (dto.birthDate !== undefined) {
-      this.assertBirthDateAllowed(dto.birthDate);
+      this.assertBirthDateValid(dto.birthDate);
       user.birthDate = dto.birthDate;
     }
     if (dto.nickname !== undefined) user.nickname = dto.nickname;
@@ -384,7 +384,7 @@ export class UserService {
     return qb.getMany();
   }
 
-  /** Ngày cutoff cho "tuổi >= years" — birthDate <= cutoff (cùng công thức `assertBirthDateAllowed`). */
+  /** Ngày cutoff cho filter "tuổi >= years" — birthDate <= cutoff. */
   private ageCutoffDate(years: number): string {
     const now = new Date();
     const cutoff = new Date(
@@ -395,12 +395,8 @@ export class UserService {
     return cutoff.toISOString().slice(0, 10);
   }
 
-  /**
-   * Tuổi tối thiểu enforce ở server (docs/06) — không tin FE.
-   * Giả định (docs/10 § 10.0): user có thể gửi birthDate tương lai hoặc < minAge → chặn cả 2.
-   */
-  private assertBirthDateAllowed(birthDate: string): void {
-    const minAge = this.config.getOrThrow('AUTH_MIN_AGE', { infer: true });
+  /** Ngày sinh là dữ liệu profile tự chọn; chỉ chặn giá trị không phải ngày hoặc ở tương lai. */
+  private assertBirthDateValid(birthDate: string): void {
     const parsed = new Date(birthDate);
     const now = new Date();
     if (Number.isNaN(parsed.getTime()) || parsed > now) {
@@ -408,19 +404,6 @@ export class UserService {
         UserErrors.PROFILE_BIRTH_DATE_INVALID,
         'Ngày sinh không hợp lệ',
         HttpStatus.UNPROCESSABLE_ENTITY,
-      );
-    }
-    const cutoff = new Date(
-      now.getFullYear() - minAge,
-      now.getMonth(),
-      now.getDate(),
-    );
-    if (parsed > cutoff) {
-      throw new DomainException(
-        UserErrors.PROFILE_AGE_BELOW_MINIMUM,
-        `Phải đủ ${minAge} tuổi để sử dụng dịch vụ`,
-        HttpStatus.UNPROCESSABLE_ENTITY,
-        { minAge },
       );
     }
   }

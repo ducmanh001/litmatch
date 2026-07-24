@@ -247,7 +247,7 @@
             }
           }
         },
-        "summary": "Đăng nhập bằng Google/Apple ID token (server tự verify chữ ký)",
+        "summary": "Đăng nhập bằng Google/Apple ID token hoặc Facebook access token (server tự verify)",
         "tags": ["auth"]
       }
     },
@@ -5648,7 +5648,7 @@
           "birthDate": {
             "type": "string",
             "example": "2000-01-31",
-            "description": "Ngày sinh ISO — server kiểm tra tuổi tối thiểu (docs/06)"
+            "description": "Ngày sinh ISO tự chọn — chỉ kiểm tra định dạng và không cho ngày trong tương lai"
           },
           "region": {
             "type": "string",
@@ -5755,10 +5755,13 @@
       "SocialLoginDto": {
         "type": "object",
         "properties": {
-          "provider": { "type": "string", "enum": ["google", "apple"] },
+          "provider": {
+            "type": "string",
+            "enum": ["google", "apple", "facebook"]
+          },
           "idToken": {
             "type": "string",
-            "description": "ID token từ SDK của provider — server tự verify, không tin client"
+            "description": "ID token (Google/Apple) hoặc access token (Facebook) từ SDK — server tự verify, không tin client"
           }
         },
         "required": ["provider", "idToken"]

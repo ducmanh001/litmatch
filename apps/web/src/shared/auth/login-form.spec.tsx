@@ -122,16 +122,20 @@ describe('LoginForm', () => {
     );
   });
 
-  it('Facebook → thông báo "chưa hỗ trợ" tường minh (backend chủ đích chưa nhận Facebook)', async () => {
+  it('Facebook chưa cấu hình App ID → toast lỗi rõ ràng, không gọi API', async () => {
+    const post = vi.spyOn(apiClient, 'POST');
     renderForm();
 
     await userEvent.click(
       screen.getByRole('button', {
-        name: 'Đăng nhập với Facebook (chưa hỗ trợ)',
+        name: 'Đăng nhập với Facebook',
       }),
     );
     expect(
-      await screen.findByText('Đăng nhập Facebook chưa được hỗ trợ.'),
+      await screen.findByText(
+        'Đăng nhập Facebook chưa được cấu hình trên môi trường này.',
+      ),
     ).toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
   });
 });

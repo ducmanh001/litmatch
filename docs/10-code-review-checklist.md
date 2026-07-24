@@ -282,7 +282,9 @@
 
 **Trust & Safety / tuân thủ — đặc thù nhạy cảm của app match ẩn danh với người lạ**
 
-- Thiếu cơ chế xác thực độ tuổi đủ mạnh khi đăng ký (chỉ hỏi tuổi qua form, không có gì ngăn khai gian) — đây là rủi ro pháp lý/reputation nghiêm trọng cho loại app ghép ngẫu nhiên qua voice/video với người lạ, nên bắt buộc có tầng kiểm soát (hạn chế tính năng cho tài khoản chưa xác minh, ưu tiên xử lý nhanh các report liên quan đến trẻ vị thành niên)
+- Không tự thêm age gate hoặc hạn chế feature dựa trên ngày sinh/profile ở client. Nếu một thị
+  trường sau này bắt buộc kiểm soát tuổi, đó là product/legal decision riêng có contract,
+  rollout và server enforcement rõ ràng — không mặc định chặn user trong core flow.
 - Trust score bị hạ nhưng không có audit log → khó điều tra khi có khiếu nại
 - Report bị lạm dụng để "vote kick" người khác (report giả hàng loạt) nhưng hệ thống không rate-limit hay phát hiện pattern bất thường
 - Unmatch/block chỉ ẩn ở UI nhưng vẫn cho phép bên kia tìm lại qua tính năng khác (feed, party room công khai) → "block" không thực sự cắt hết điểm chạm giữa 2 user

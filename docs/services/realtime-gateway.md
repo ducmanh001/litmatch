@@ -21,9 +21,14 @@ nguyên văn. Nhờ vậy slice này **không cần internal API** giữa gatewa
   cùng verify bằng CÙNG `JWT_SECRET`. Gateway không bao giờ ký token.
 - `realtime-events.ts`: channel builder/parser, tên event, kiểu payload
   (`RealtimeEnvelope<T>`). Event hiện có: `soul.message`, `soul.matched`, `match.matched`,
-  `match.confirmed`, `call.ended`, `friend.message`, `party.member.joined`,
-  `party.member.left`, `party.role.changed`, `party.room.closed`, `gift.sent`. Thêm event
-  mới = thêm vào file này, 2 app cùng thấy — lệch hợp đồng là lỗi compile.
+  `match.confirmed`, `call.ended`, `friend.message`, `friend.streak.increased`,
+  `friend.streak.at_risk`, `party.member.joined`, `party.member.left`, `party.role.changed`,
+  `party.room.closed`, `party.host.disconnected`, `party.host.reconnected`, `gift.sent`,
+  `movie.session.started`, `movie.state.changed`, `movie.session.ended`,
+  `movie.reaction.sent`, `minigame.session.started`, `minigame.session.resolved`.
+  `specs/realtime.asyncapi.yaml` is a transport-level companion, while this source type file
+  remains the single definition of event names and payloads. Thêm event mới = thêm vào file này,
+  2 app cùng thấy — lệch hợp đồng là lỗi compile.
 
 ## 3. Ngữ nghĩa best-effort (chủ đích, không phải thiếu sót)
 

@@ -13,3 +13,7 @@ export const GOOGLE_OIDC_ISSUERS = [
 
 export const APPLE_OIDC_JWKS_URL = 'https://appleid.apple.com/auth/keys';
 export const APPLE_OIDC_ISSUER = 'https://appleid.apple.com';
+
+/** Facebook Login access tokens are validated through this server-to-server endpoint. */
+export const FACEBOOK_DEBUG_TOKEN_URL =
+  'https://graph.facebook.com/debug_token';

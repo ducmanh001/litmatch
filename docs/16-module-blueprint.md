@@ -28,6 +28,7 @@ ra sao.
 ├── <module>.service.spec.ts         # unit test đặt cạnh facade, nếu có service
 ├── <module>.integration.spec.ts     # optional: test cả module + DB thật, đặt ở gốc
 ├── dto/                             # optional: HTTP input/output DTO
+├── controllers/                     # optional: secondary HTTP resource controllers + their tests
 ├── entities/                        # optional: TypeORM entity/persistence model
 ├── services/                        # optional: sub-service nghiệp vụ qua DI
 ├── repositories/                    # optional: custom data-access/query adapter
@@ -41,8 +42,12 @@ ra sao.
 
 Quy tắc gốc module:
 
-- File production ở gốc chỉ thuộc bộ file trên: facade, controller, module, errors,
-  constants, `index.ts`.
+- File production ở gốc chỉ thuộc bộ file trên: facade, **primary HTTP facade controller**,
+  module, errors, constants, `index.ts`. Đây là allowlist theo vai trò, không phải quota một
+  controller/file.
+- `<module>.controller.ts` là primary HTTP facade của module. Controller cho resource HTTP phụ
+  (ví dụ invite/story) đặt trong `controllers/` cùng test. Webhook inbound bên thứ ba vẫn đặt
+  trong `webhooks/`, không phải `controllers/`.
 - Unit test đặt cạnh file được test. Vì vậy `foo.service.spec.ts` hợp lệ ở gốc và
   `services/bar.service.spec.ts` hợp lệ trong `services/`.
 - Integration test của cả module đặt ở gốc và có hậu tố `.integration.spec.ts`.
@@ -56,6 +61,7 @@ Quy tắc gốc module:
 | Thành phần                          | Folder          | Ranh giới                                                                                                       |
 | ----------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------- |
 | DTO nhận/trả HTTP                   | `dto/`          | Class boundary, validation input, OpenAPI, serialization output                                                 |
+| Resource HTTP phụ                   | `controllers/`  | Controller + test cho resource phụ; root chỉ giữ facade HTTP chính của module                                   |
 | TypeORM entity và persistence model | `entities/`     | Sở hữu bởi module; không dùng làm public contract mặc định                                                      |
 | Nghiệp vụ được tách khỏi facade     | `services/`     | Gọi qua DI, không trở thành API xuyên module mặc định                                                           |
 | Custom query/data-access adapter    | `repositories/` | Chỉ tạo khi có query/persistence abstraction thực sự; CRUD TypeORM đơn giản có thể inject trực tiếp vào service |
@@ -107,8 +113,8 @@ Không export `Repository<T>` hoặc writer nội bộ của module.
 1. Đọc `AGENTS.md`, context core, architecture và domain spec; xác định ownership,
    boundary, flow và acceptance criteria.
 2. Nếu có tiền, realtime, state machine hoặc contention, chạy `review-module plan`.
-3. Tạo root skeleton: `<module>.module.ts`, facade service nếu có behavior,
-   controller nếu có HTTP, errors và `index.ts`.
+3. Tạo root skeleton: `<module>.module.ts`, facade service nếu có behavior, primary controller
+   nếu có HTTP, errors và `index.ts`; thêm `controllers/` chỉ khi có resource HTTP phụ thực sự.
 4. Thêm đúng các folder optional theo vai trò thực tế; không scaffold folder trống.
 5. Thêm entity/DTO/port/service/job/client/event theo nhu cầu, cùng migration mới nếu
    có schema thay đổi. Không sửa migration đã commit.

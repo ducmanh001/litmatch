@@ -10,6 +10,12 @@ const envSchema = z.object({
   VITE_API_URL: z.url(),
   /** OAuth client id công khai của Google Identity Services. */
   VITE_AUTH_GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+  /** Public browser DSN; empty disables error reporting. */
+  VITE_SENTRY_DSN: z.url().optional(),
+  /** Release environment attached to browser error events. */
+  VITE_SENTRY_ENVIRONMENT: z.string().min(1).default('production'),
+  /** Immutable release identifier attached to browser error events. */
+  VITE_SENTRY_RELEASE: z.string().max(200).optional(),
   /** Cho phép hiển thị flow OTP; production miễn phí đặt false để khớp capability backend. */
   VITE_PHONE_OTP_ENABLED: z
     .enum(['true', 'false'])
@@ -21,6 +27,10 @@ export const env = envSchema.parse({
   VITE_API_URL: import.meta.env['VITE_API_URL'],
   VITE_AUTH_GOOGLE_CLIENT_ID:
     import.meta.env['VITE_AUTH_GOOGLE_CLIENT_ID'] || undefined,
+  VITE_SENTRY_DSN: import.meta.env['VITE_SENTRY_DSN'] || undefined,
+  VITE_SENTRY_ENVIRONMENT:
+    import.meta.env['VITE_SENTRY_ENVIRONMENT'] || undefined,
+  VITE_SENTRY_RELEASE: import.meta.env['VITE_SENTRY_RELEASE'] || undefined,
   VITE_PHONE_OTP_ENABLED:
     import.meta.env['VITE_PHONE_OTP_ENABLED'] || undefined,
 });

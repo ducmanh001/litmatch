@@ -4,7 +4,10 @@ import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory, Reflector } from '@nestjs/core';
 import { SwaggerModule } from '@nestjs/swagger';
-import { createHttpMetricsMiddleware } from '@litmatch/observability';
+import {
+  createHttpMetricsMiddleware,
+  initializeSentry,
+} from '@litmatch/observability';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
@@ -45,6 +48,12 @@ async function bootstrap(): Promise<void> {
   app.useBodyParser('json', { type: 'application/webhook+json' });
 
   const config = app.get<ConfigService<CoreApiEnv, true>>(ConfigService);
+  initializeSentry({
+    dsn: config.getOrThrow('SENTRY_DSN', { infer: true }),
+    environment: config.getOrThrow('NODE_ENV', { infer: true }),
+    release: config.getOrThrow('SENTRY_RELEASE', { infer: true }),
+    serviceName: 'core-api',
+  });
 
   app.setGlobalPrefix(API_GLOBAL_PREFIX, {
     exclude: API_PREFIX_EXCLUDES,

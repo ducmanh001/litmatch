@@ -24,6 +24,7 @@ Chuẩn hoá task thành JSON, không chứa prompt, secret hay dữ liệu ngư
 {
   "action": "change",
   "workstreams": 2,
+  "parallelizableWorkstreams": 0,
   "risk": "medium",
   "uncertainty": "medium",
   "context": "medium",
@@ -35,7 +36,10 @@ Chuẩn hoá task thành JSON, không chứa prompt, secret hay dữ liệu ngư
 Giá trị hợp lệ:
 
 - `action`: `answer | inspect | change | review | incident`
-- `workstreams`: `1..4`, chỉ đếm phần việc thật sự độc lập
+- `workstreams`: `1..4`, số phần việc cần hoàn tất (có thể tuần tự)
+- `parallelizableWorkstreams`: `0..workstreams`, số phần việc đã xác minh có thể chạy đồng thời,
+  không cùng file hoặc external state. Mặc định `0`: không suy diễn rằng nhiều workstream là an toàn
+  để chạy song song.
 - `risk`: `low | medium | high | critical`
 - `uncertainty`: `low | medium | high`
 - `context`: `small | medium | large`
@@ -67,9 +71,10 @@ và dùng model kế thừa; không block task. Agent gốc không giả vờ đ
 ## 4. Delegate có giới hạn
 
 Không spawn cho task simple/standard, thay đổi nhỏ một file, hoặc chuỗi bước phụ thuộc tuần tự.
-Với `parallel-delegates`, chỉ chạy song song khi các workstream không ghi cùng file hoặc cùng
-external state. Giao ownership file/responsibility rõ ràng và nhắc worker rằng họ không làm việc
-một mình, không revert thay đổi của người khác.
+Chỉ nhận strategy `parallel-delegates` khi `parallelizableWorkstreams >= 2`. Với strategy
+`delegate-then-independent-review`, review là phase sau khi worker tạo artifact/diff, không chạy
+đồng thời. Giao ownership file/responsibility rõ ràng và nhắc worker rằng họ không làm việc một
+mình, không revert thay đổi của người khác.
 
 Dùng đúng prompt type và chỉ truyền artifact cần thiết:
 

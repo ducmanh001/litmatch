@@ -17,7 +17,11 @@ import { apiClient, tokenStore } from '../api/client';
 import { env } from '../env';
 import { useTranslation } from '../i18n/messages';
 import { showToast } from '../lib/toast-store';
-import { getAppleIdToken, getGoogleIdToken } from './social-sdk';
+import {
+  getAppleIdToken,
+  getFacebookAccessToken,
+  getGoogleIdToken,
+} from './social-sdk';
 
 import type { ClipboardEvent, KeyboardEvent } from 'react';
 
@@ -207,20 +211,27 @@ export function LoginForm() {
 
   // ID token lấy từ SDK chính chủ, server verify lại toàn bộ (POST /auth/social).
   const socialLogin = useMutation({
-    mutationFn: async (provider: 'google' | 'apple') => {
+    mutationFn: async (provider: 'google' | 'apple' | 'facebook') => {
       const clientId =
         provider === 'google'
           ? env.NEXT_PUBLIC_AUTH_GOOGLE_CLIENT_ID
-          : env.NEXT_PUBLIC_AUTH_APPLE_CLIENT_ID;
+          : provider === 'apple'
+            ? env.NEXT_PUBLIC_AUTH_APPLE_CLIENT_ID
+            : env.NEXT_PUBLIC_AUTH_FACEBOOK_APP_ID;
       if (clientId === undefined) {
         throw new Error(
-          `Đăng nhập ${provider === 'google' ? 'Google' : 'Apple'} chưa được cấu hình trên môi trường này.`,
+          `Đăng nhập ${provider === 'google' ? 'Google' : provider === 'apple' ? 'Apple' : 'Facebook'} chưa được cấu hình trên môi trường này.`,
         );
       }
       const idToken =
         provider === 'google'
           ? await getGoogleIdToken(clientId)
-          : await getAppleIdToken(clientId);
+          : provider === 'apple'
+            ? await getAppleIdToken(clientId)
+            : await getFacebookAccessToken(
+                clientId,
+                env.NEXT_PUBLIC_AUTH_FACEBOOK_API_VERSION,
+              );
       const res = await apiClient.POST('/api/v1/auth/social', {
         body: { provider, idToken },
       });
@@ -241,11 +252,6 @@ export function LoginForm() {
         'warn',
       ),
   });
-
-  // Backend chủ đích chưa hỗ trợ Facebook (access token, không phải OIDC — social-verifier.ts);
-  // nút vẫn theo mockup nhưng trạng thái "chưa hỗ trợ" phải nói rõ, không im lặng.
-  const onFacebookClick = () =>
-    showToast('Đăng nhập Facebook chưa được hỗ trợ.', 'warn');
 
   const errorOf = (error: unknown): string | undefined =>
     error === null
@@ -369,8 +375,9 @@ export function LoginForm() {
           </button>
           <button
             type="button"
-            onClick={onFacebookClick}
-            aria-label="Đăng nhập với Facebook (chưa hỗ trợ)"
+            disabled={socialLogin.isPending}
+            onClick={() => socialLogin.mutate('facebook')}
+            aria-label="Đăng nhập với Facebook"
             className={socialButtonClass}
           >
             <svg width={18} height={18} viewBox="0 0 24 24" aria-hidden>

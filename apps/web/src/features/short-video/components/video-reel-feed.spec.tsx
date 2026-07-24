@@ -79,6 +79,8 @@ describe('VideoReelFeed', () => {
     renderFeed();
 
     expect(await screen.findByText('Một ngày đẹp trời')).toBeVisible();
+    expect(screen.getByText(/42 lượt xem/)).toBeVisible();
+    expect(screen.getByText(/Âm thanh gốc · Mây/)).toBeVisible();
     expect(screen.getByRole('button', { name: /7/ })).toBeVisible();
     expect(screen.getByRole('button', { name: /3/ })).toBeVisible();
     expect(
@@ -93,18 +95,18 @@ describe('VideoReelFeed', () => {
       screen.getByRole('button', { name: 'Tắt âm thanh gốc của video' }),
     ).toBeVisible();
 
-    // await userEvent.click(
-    //   screen.getByRole('button', {
-    //     name: 'Báo cáo video có nội dung không phù hợp',
-    //   }),
-    // );
-    // await userEvent.click(screen.getByRole('button', { name: 'Gửi báo cáo' }));
-    // await waitFor(() =>
-    //   expect(postSpy).toHaveBeenCalledWith('/api/v1/videos/{id}/report', {
-    //     params: { path: { id: 'video-1' } },
-    //     body: { reason: 'inappropriate_content' },
-    //   }),
-    // );
+    await userEvent.click(
+      screen.getByRole('button', {
+        name: 'Báo cáo video có nội dung không phù hợp',
+      }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Gửi báo cáo' }));
+    await waitFor(() =>
+      expect(postSpy).toHaveBeenCalledWith('/api/v1/videos/{id}/report', {
+        params: { path: { id: 'video-1' } },
+        body: { reason: 'inappropriate_content' },
+      }),
+    );
   });
 
   it('response API cũ chưa có author vẫn render video được trong lúc core-api reload', async () => {

@@ -27,4 +27,13 @@ describe('coreApiEnvSchema invariants', () => {
     expect(schema.validate('none').error).toBeUndefined();
     expect(schema.validate('lax').error).toBeDefined();
   });
+
+  it('Sentry DSN is opt-in but must be an HTTP(S) endpoint when enabled', () => {
+    const schema = coreApiEnvSchema.extract('SENTRY_DSN');
+    expect(schema.validate(undefined).value).toBe('');
+    expect(
+      schema.validate('https://public@example.ingest.sentry.io/1').error,
+    ).toBeUndefined();
+    expect(schema.validate('not-a-dsn').error).toBeDefined();
+  });
 });

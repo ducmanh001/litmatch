@@ -13,6 +13,8 @@ const posthogMock = vi.hoisted(() => ({
 vi.mock('posthog-js', () => ({ default: posthogMock }));
 
 import {
+  captureProductWebVital,
+  getProductAnalyticsConsent,
   identifyProductAnalyticsUser,
   initializeProductAnalytics,
   resetProductAnalyticsUser,
@@ -26,7 +28,8 @@ const config = {
 
 describe('product analytics tracking', () => {
   beforeEach(() => {
-    window.localStorage.clear();
+    document.cookie =
+      'litmatch-web.product-analytics-consent=; Path=/; Max-Age=0';
     posthogMock.__loaded = false;
     vi.clearAllMocks();
   });
@@ -36,36 +39,80 @@ describe('product analytics tracking', () => {
     expect(posthogMock.init).not.toHaveBeenCalled();
   });
 
-  it('khởi tạo tự động opt-in và cấu hình session recording', () => {
+  it('không khởi tạo SDK hoặc gửi request trước khi có consent', () => {
+    expect(initializeProductAnalytics(config)).toBe(false);
+    expect(posthogMock.init).not.toHaveBeenCalled();
+    expect(posthogMock.opt_in_capturing).not.toHaveBeenCalled();
+  });
+
+  it('chỉ khởi tạo sau consent và che text/input của session replay', () => {
+    setProductAnalyticsConsent('accepted', config);
+
+    expect(getProductAnalyticsConsent()).toBe('accepted');
     expect(initializeProductAnalytics(config)).toBe(true);
 
     expect(posthogMock.init).toHaveBeenCalledWith(
       config.projectToken,
       expect.objectContaining({
         api_host: config.host,
+        autocapture: false,
+        capture_pageleave: false,
         session_recording: {
-          maskAllInputs: false, // Đúng theo cấu hình bạn muốn xem input
+          maskAllInputs: true,
+          maskTextSelector: '*',
         },
       }),
     );
-    expect(posthogMock.opt_in_capturing).toHaveBeenCalledOnce();
+    expect(posthogMock.opt_in_capturing).toHaveBeenCalled();
   });
 
-  it('identify UUID + nickname + account type thành công', () => {
-    const user = { id: 'user-1', nickname: 'Mai', isGuest: false };
+  it('identify chỉ gửi UUID + account type sau consent, không gửi nickname', () => {
+    const user = { id: 'user-1', isGuest: false };
+    setProductAnalyticsConsent('accepted', config);
+    posthogMock.__loaded = true;
 
-    // Vì mặc định consent luôn là 'accepted', hàm identify sẽ chạy luôn mà không bị chặn
     identifyProductAnalyticsUser(user, config);
 
     expect(posthogMock.identify).toHaveBeenCalledWith('user-1', {
-      nickname: 'Mai',
       account_type: 'registered',
     });
   });
 
-  it('gọi setProductAnalyticsConsent luôn kích hoạt opt_in_capturing', () => {
+  it('persist decline và opt-out SDK nếu SDK đã được tải trước đó', () => {
+    posthogMock.__loaded = true;
+    setProductAnalyticsConsent('declined', config);
+
+    expect(getProductAnalyticsConsent()).toBe('declined');
+    expect(posthogMock.opt_out_capturing).toHaveBeenCalledOnce();
+    expect(posthogMock.opt_in_capturing).not.toHaveBeenCalled();
+  });
+
+  it('chỉ capture Core Web Vitals thuộc mẫu 10% sau consent', () => {
     setProductAnalyticsConsent('accepted', config);
-    expect(posthogMock.opt_in_capturing).toHaveBeenCalledOnce();
+    posthogMock.__loaded = true;
+
+    captureProductWebVital(
+      {
+        id: 'sampled-0',
+        name: 'LCP',
+        value: 1200,
+        delta: 1200,
+        rating: 'good',
+      },
+      config,
+    );
+    captureProductWebVital(
+      { id: 'sampled-0', name: 'TTFB', value: 100, delta: 100 },
+      config,
+    );
+
+    expect(posthogMock.capture).toHaveBeenCalledTimes(1);
+    expect(posthogMock.capture).toHaveBeenCalledWith('web_vital', {
+      metric_name: 'LCP',
+      value: 1200,
+      delta: 1200,
+      rating: 'good',
+    });
   });
 
   it('reset identity khi session kết thúc', () => {

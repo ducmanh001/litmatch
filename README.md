@@ -6,15 +6,13 @@ Mục tiêu thiết kế: quy mô Litmatch thật (hàng trăm nghìn – hàng 
 
 ## Trạng thái hiện tại
 
-- **Backend Giai đoạn 0–3 — xong**: nền móng, Economy double-entry, Matching/Soul/Calling,
-  Signaling realtime, Friend chat, Party Room và Gift đã có code + integration test. IAP/webhook
-  store thật vẫn cần credential sandbox trước khi bật production.
-- **Frontend core/base — xong**: `apps/admin` (Vite + React), `apps/web` (Next.js) và generated
-  `libs/api-client`; feature UI thật tiếp tục theo frontend track trong roadmap.
-- **Đang chờ**: Giai đoạn 4 Social/T&S, Task 0 backend cho admin và security gate browser trước
-  public launch.
+Trạng thái code-backed hiện tại nằm trong
+[`docs/feature-registry.json`](./docs/feature-registry.json), với bản đọc được và DOCX sinh từ
+registry ở [`docs/generated/product-spec-evidence-report.md`](./docs/generated/product-spec-evidence-report.md).
+Chạy `pnpm docs:check` để xác minh evidence của checkout; đây không phải xác nhận production.
 
-Xem trạng thái chi tiết theo giai đoạn ở [`docs/07-roadmap.md`](./docs/07-roadmap.md) (tick `[x]` thủ công khi hoàn thành).
+Roadmap vẫn mô tả trình tự/milestone ở [`docs/07-roadmap.md`](./docs/07-roadmap.md), không phải
+nguồn trạng thái feature độc lập.
 
 ## Cấu trúc repo
 
@@ -38,7 +36,11 @@ Xem trạng thái chi tiết theo giai đoạn ở [`docs/07-roadmap.md`](./docs
 │   ├── 12-frontend-architecture.md
 │   ├── 13-frontend-coding-standards.md
 │   ├── 14-rule-enforcement-matrix.md ← rule nào được chặn bằng máy, rule nào review tay
+│   ├── 18-documentation-automation.md ← registry/evidence/report generator
+│   ├── feature-registry.json          ← trạng thái feature máy đọc được
 │   └── sources.md
+├── specs/                  ← Arazzo workflow và AsyncAPI transport companion contracts
+├── scripts/docs/           ← generator/validator cho registry report + DOCX
 ├── apps/
 │   ├── core-api/            ← modular monolith chứa toàn bộ business logic (auth, user, matching, economy, social, content, moderation, notification, gift...)
 │   ├── signaling-gateway/   ← WebSocket, connection-bound, tách riêng để scale ngang
@@ -109,20 +111,21 @@ của Compose luôn lấy từ root `.env` và có độ ưu tiên cao hơn các
 
 Các lệnh hạ tầng thường dùng:
 
-| Lệnh                                 | Mục đích                                                                               |
-| ------------------------------------ | -------------------------------------------------------------------------------------- |
-| `pnpm doctor`                        | Kiểm tra toolchain, `.env`, credential trong Git remote và trạng thái dependency local |
-| `pnpm infra:up` / `pnpm infra:down`  | Bật/tắt hạ tầng local                                                                  |
-| `pnpm infra:logs`                    | Theo dõi log Postgres/Redis/Kafka                                                      |
-| `pnpm infra:reset`                   | **Xoá toàn bộ volume local** và tạo lại từ đầu                                         |
-| `pnpm db:migrate` / `pnpm db:status` | Chạy hoặc xem trạng thái migration                                                     |
-| `pnpm ci:local:quick`                | Mô phỏng job Format and lint của GitHub Actions, reset Nx cache để không tin cache cũ  |
-| `pnpm ci:local:clean`                | Chạy quality gate trong Node 22 Linux container + `node_modules` rỗng, gần CI nhất     |
-| `pnpm ci:local`                      | Chạy quick + Postgres/Redis + frontend/core test, build và E2E như CI                  |
-| `pnpm ci:local:docker`               | Build, quét Trivy image Core API/Signaling và smoke health-check local; không deploy   |
-| `pnpm ci:local:security`             | Chạy Gitleaks, `pnpm audit` và Trivy local; CLI tự tải theo version/SHA đã pin         |
-| `pnpm ci:preflight`                  | Một lệnh trước PR: clean quality + security + test/build/E2E + image scan/smoke        |
-| `pnpm ci:local:all`                  | Alias đầy đủ của preflight; CodeQL/dependency review vẫn chạy trên GitHub              |
+| Lệnh                                     | Mục đích                                                                               |
+| ---------------------------------------- | -------------------------------------------------------------------------------------- |
+| `pnpm doctor`                            | Kiểm tra toolchain, `.env`, credential trong Git remote và trạng thái dependency local |
+| `pnpm infra:up` / `pnpm infra:down`      | Bật/tắt hạ tầng local                                                                  |
+| `pnpm infra:logs`                        | Theo dõi log Postgres/Redis/Kafka                                                      |
+| `pnpm infra:reset`                       | **Xoá toàn bộ volume local** và tạo lại từ đầu                                         |
+| `pnpm db:migrate` / `pnpm db:status`     | Chạy hoặc xem trạng thái migration                                                     |
+| `pnpm docs:generate` / `pnpm docs:check` | Sinh/kiểm tra registry report + DOCX từ evidence local; không xác minh production      |
+| `pnpm ci:local:quick`                    | Mô phỏng job Format and lint của GitHub Actions, reset Nx cache để không tin cache cũ  |
+| `pnpm ci:local:clean`                    | Chạy quality gate trong Node 22 Linux container + `node_modules` rỗng, gần CI nhất     |
+| `pnpm ci:local`                          | Chạy quick + Postgres/Redis + frontend/core test, build và E2E như CI                  |
+| `pnpm ci:local:docker`                   | Build, quét Trivy image Core API/Signaling và smoke health-check local; không deploy   |
+| `pnpm ci:local:security`                 | Chạy Gitleaks, `pnpm audit` và Trivy local; CLI tự tải theo version/SHA đã pin         |
+| `pnpm ci:preflight`                      | Một lệnh trước PR: clean quality + security + test/build/E2E + image scan/smoke        |
+| `pnpm ci:local:all`                      | Alias đầy đủ của preflight; CodeQL/dependency review vẫn chạy trên GitHub              |
 
 Nên chạy `pnpm ci:local:quick` trong vòng lặp hằng ngày và `pnpm ci:preflight` trước khi mở/cập
 nhật PR. Hook `pre-push` tự chạy quality gate trong Node 22 Linux với `node_modules` rỗng, nên lỗi

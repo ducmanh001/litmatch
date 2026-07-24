@@ -14,6 +14,7 @@ import {
   REALTIME_USER_CHANNEL_PATTERN,
   parseRealtimeUserChannel,
 } from '@litmatch/common-dtos';
+import { captureSentryException } from '@litmatch/observability';
 import Redis from 'ioredis';
 
 import type { Namespace, Socket } from 'socket.io';
@@ -154,6 +155,7 @@ export class SignalingGateway
       })
       .catch((err: unknown) => {
         this.logger.error(`PSUBSCRIBE thất bại: ${String(err)}`);
+        captureSentryException(err, 'signaling-redis-subscription');
       })
       .finally(() => {
         this.subscriptionInFlight = undefined;

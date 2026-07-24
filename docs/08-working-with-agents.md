@@ -31,6 +31,11 @@ Output chia hai mức: **Read first** là context tối thiểu bắt buộc; **
 đọc khi điều kiện sau dấu `—` khớp task. Cách này tránh nạp checklist/spec không liên quan nhưng
 không được dùng để bỏ qua tài liệu domain khi điều kiện đã khớp.
 
+Mỗi lần chạy, command cũng in **Shared-workspace safety** từ Git với danh sách path bị giới hạn.
+Đây là tín hiệu phòng va chạm khi nhiều session dùng chung worktree, không phải bằng chứng ownership:
+agent vẫn phải coi thay đổi có sẵn là của session khác, chốt vùng file trước khi sửa và không revert
+phần ngoài scope. Session-start adapter chỉ in số lượng để giữ startup gọn.
+
 Scope chuẩn: `core`, `economy`, `matching`, `calling`, `signaling`, `content`, `media`, `frontend`,
 `infra`.
 
@@ -39,7 +44,9 @@ Scope chuẩn: `core`, `economy`, `matching`, `calling`, `signaling`, `content`,
 - Task code, review, điều tra hoặc thiết kế không tầm thường: dùng
   `.agents/skills/adaptive-orchestration/SKILL.md` để route theo complexity/risk. Router ưu tiên
   direct cho task nhỏ, model cost-balanced cho workstream độc lập và chỉ nâng model mạnh cho
-  critical review/conflict.
+  critical review/conflict. Nhiều workstream không mặc nhiên được fan-out: chỉ khai báo
+  `parallelizableWorkstreams` sau khi xác minh chúng không ghi cùng file/external state; independent
+  review của task `change` luôn chạy sau khi worker tạo artifact.
 - Bắt đầu module/domain mới: `.agents/skills/new-module/SKILL.md`.
 - Plan trước code và verify trước bàn giao: `.agents/skills/review-module/SKILL.md`.
 
