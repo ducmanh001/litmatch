@@ -47,7 +47,7 @@ jobs:
       NEXT_PUBLIC_PHONE_OTP_ENABLED: ${{vars.NEXT_PUBLIC_PHONE_OTP_ENABLED}}
       NEXT_PUBLIC_SENTRY_DSN: ${{ vars.NEXT_PUBLIC_SENTRY_DSN }}
       NEXT_PUBLIC_SENTRY_ENVIRONMENT: production
-      NEXT_PUBLIC_SENTRY_RELEASE: ${{ env.RELEASE_SHA }}
+      NEXT_PUBLIC_SENTRY_RELEASE: ${{ inputs.sha || github.event.workflow_run.head_sha }}
 
       NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN: ${{ vars.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN }}
       NEXT_PUBLIC_POSTHOG_HOST: ${{ vars.NEXT_PUBLIC_POSTHOG_HOST }}
@@ -57,7 +57,7 @@ jobs:
       VITE_PHONE_OTP_ENABLED: 'false'
       VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
       VITE_SENTRY_ENVIRONMENT: production
-      VITE_SENTRY_RELEASE: ${{ env.RELEASE_SHA }}
+      VITE_SENTRY_RELEASE: ${{ inputs.sha || github.event.workflow_run.head_sha }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
