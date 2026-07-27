@@ -86,6 +86,16 @@ test('GitHub CI uses the same local profiles for quality, tests, and containers'
   assert.match(workflow, /run: pnpm ci:local:docker/u);
   assert.match(workflow, /needs: \[quality, test\]/u);
   assert.match(workflow, /bypass_ci:/u);
+  assert.match(
+    workflow,
+    /LOCAL_CI_DATABASE_URL:\s*postgresql:\/\/litmatch:litmatch_local@localhost:5432\/litmatch/u,
+  );
+  assert.match(
+    workflow,
+    /LOCAL_CI_INTEGRATION_DB_URL:\s*postgresql:\/\/litmatch:litmatch_local@localhost:5432\/litmatch_test/u,
+  );
+  assert.match(workflow, /LOCAL_CI_SERVICES_READY:\s*['"]true['"]/u);
+  assert.match(workflow, /LOCAL_CI_DATABASE_READY:\s*['"]true['"]/u);
 });
 
 test('backend runtime images install with the canonical pnpm settings', () => {

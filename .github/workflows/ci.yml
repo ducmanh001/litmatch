@@ -89,6 +89,9 @@ jobs:
           --health-retries 10
     env:
       INTEGRATION_DB_URL: postgresql://litmatch:litmatch_local@localhost:5432/litmatch_test
+      LOCAL_CI_DATABASE_URL: postgresql://litmatch:litmatch_local@localhost:5432/litmatch
+      LOCAL_CI_REDIS_URL: redis://localhost:6379/15
+      LOCAL_CI_INTEGRATION_DB_URL: postgresql://litmatch:litmatch_local@localhost:5432/litmatch_test
       LOCAL_CI_SERVICES_READY: 'true'
       LOCAL_CI_DATABASE_READY: 'true'
     steps:
@@ -146,6 +149,8 @@ jobs:
           --health-timeout 3s
           --health-retries 10
     env:
+      LOCAL_CI_DATABASE_URL: postgresql://litmatch:litmatch_local@localhost:5432/litmatch
+      LOCAL_CI_REDIS_URL: redis://localhost:6379/15
       LOCAL_CI_SERVICES_READY: 'true'
       LOCAL_CI_DATABASE_READY: 'true'
     steps:
