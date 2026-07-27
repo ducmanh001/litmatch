@@ -39,9 +39,10 @@ Mọi transition khác throw `MATCHING_TICKET_INVALID_TRANSITION`.
 
 ## 3. Matcher worker & sweeper
 
-- `MatcherWorkerService`: đăng ký interval động bằng `SchedulerRegistry`, đọc
-  `MATCHING_MATCHER_INTERVAL_MS`; mỗi tick quét `matching:shards:active`, mỗi shard thử ghép tối
-  đa `MATCHING_MATCHER_BATCH_SIZE` cặp.
+- `MatcherWorkerService`: enqueue phát tín hiệu đánh thức trong process và debounce các tín hiệu
+  liên tiếp thành một lần chạy batch; mỗi lần chạy quét `matching:shards:active`, mỗi shard thử
+  ghép tối đa `MATCHING_MATCHER_BATCH_SIZE` cặp. `MATCHING_MATCHER_INTERVAL_MS` chỉ là backstop
+  thưa để phục hồi khi event bị mất hoặc ticket tồn tại trước khi process khởi động.
 - `TicketSweeperService`: đăng ký interval động bằng `SchedulerRegistry`, đọc
   `MATCHING_SWEEPER_INTERVAL_MS`:
   - `queued` quá `MATCHING_QUEUE_MAX_WAIT_SECONDS` kể từ `createdAt` → `expired`, xoá khỏi Redis (dùng `ZREM`, ticketId không còn thì bỏ qua — idempotent).

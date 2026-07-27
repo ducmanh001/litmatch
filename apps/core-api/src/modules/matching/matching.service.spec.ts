@@ -2,6 +2,7 @@ import { DomainException } from '@litmatch/common-exceptions';
 
 import { MatchingService } from './matching.service';
 import { MatchingErrors } from './matching.errors';
+import { MatcherWakeup } from './matcher-wakeup';
 import {
   GenderPreference,
   MatchTicket,
@@ -84,6 +85,7 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
   let manager: jest.Mocked<Pick<EntityManager, 'findOne' | 'save'>>;
   let dataSource: { transaction: jest.Mock };
   let service: MatchingService;
+  let matcherWakeup: MatcherWakeup;
 
   beforeEach(() => {
     ticketRepo = {
@@ -120,6 +122,8 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
       })),
       sendPush: jest.fn(async () => undefined),
     };
+    matcherWakeup = new MatcherWakeup();
+    jest.spyOn(matcherWakeup, 'notify');
     userService = {
       getByIdOrThrow: jest.fn(
         async () =>
@@ -154,6 +158,7 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
       notificationService as never,
       config,
       redis as unknown as Redis,
+      matcherWakeup,
     );
   });
 
@@ -176,6 +181,7 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
         'matching:shards:active',
         'matching:queue:voice:VN:5',
       );
+      expect(matcherWakeup.notify).toHaveBeenCalledTimes(1);
     });
 
     it('profile thiếu region/birthDate → shard GLOBAL + ageBand -1 (không chặn, không đoán)', async () => {

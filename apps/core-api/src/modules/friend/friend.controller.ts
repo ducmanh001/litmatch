@@ -58,16 +58,23 @@ export class FriendController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<FriendDto[]> {
     const entries = await this.friendService.listFriends(user.userId);
-    return Promise.all(
-      entries.map(async (entry) =>
-        FriendDto.from(
-          entry,
-          PublicProfileDto.from(
-            await this.userService.getByIdOrThrow(entry.partnerId),
-          ),
-        ),
-      ),
+    const profiles = await this.userService.findByIds(
+      entries.map((entry) => entry.partnerId),
     );
+    const profileById = new Map(
+      profiles.map((profile) => [profile.id, profile]),
+    );
+    const missingPartnerId = entries.find(
+      (entry) => !profileById.has(entry.partnerId),
+    )?.partnerId;
+    if (missingPartnerId)
+      await this.userService.getByIdOrThrow(missingPartnerId);
+    return entries.map((entry) => {
+      const profile = profileById.get(entry.partnerId);
+      if (!profile)
+        throw new Error(`Missing friend profile ${entry.partnerId}`);
+      return FriendDto.from(entry, PublicProfileDto.from(profile));
+    });
   }
 
   @Get('friends/:friendUserId/conversation')

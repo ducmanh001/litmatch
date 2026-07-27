@@ -108,4 +108,25 @@ describe('SignalingGateway (unit — fanout thuần, không business logic)', ()
     const { gateway } = makeGateway();
     expect(gateway.ping()).toEqual({ event: 'pong', data: 'pong' });
   });
+
+  it('giới hạn tối đa 3 socket đang hoạt động cho cùng một user và nhả slot khi disconnect', () => {
+    const { gateway } = makeGateway();
+    const admit = (
+      gateway as unknown as {
+        admitConnection: (socket: Socket, userId: string) => boolean;
+      }
+    ).admitConnection;
+    const sockets = [makeSocket(), makeSocket(), makeSocket(), makeSocket()];
+    for (const socket of sockets) {
+      (socket.data as { userId?: string }).userId = 'user-1';
+    }
+
+    expect(admit.call(gateway, sockets[0], 'user-1')).toBe(true);
+    expect(admit.call(gateway, sockets[1], 'user-1')).toBe(true);
+    expect(admit.call(gateway, sockets[2], 'user-1')).toBe(true);
+    expect(admit.call(gateway, sockets[3], 'user-1')).toBe(false);
+
+    gateway.handleDisconnect(sockets[0]);
+    expect(admit.call(gateway, sockets[3], 'user-1')).toBe(true);
+  });
 });

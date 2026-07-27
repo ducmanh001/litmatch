@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config';
-import Redis from 'ioredis';
+import { createCoreRedisClient } from '../../../common/redis/core-redis-client';
 
 import type { Provider } from '@nestjs/common';
 import type { CoreApiEnv } from '../../../config/env.validation';
@@ -10,6 +10,6 @@ export const SOUL_MATCH_REDIS = Symbol('SOUL_MATCH_REDIS');
 export const soulMatchRedisProvider: Provider = {
   provide: SOUL_MATCH_REDIS,
   inject: [ConfigService],
-  useFactory: (config: ConfigService<CoreApiEnv, true>): Redis =>
-    new Redis(config.getOrThrow('REDIS_URL', { infer: true })),
+  useFactory: (config: ConfigService<CoreApiEnv, true>) =>
+    createCoreRedisClient(config.getOrThrow('REDIS_URL', { infer: true })),
 };

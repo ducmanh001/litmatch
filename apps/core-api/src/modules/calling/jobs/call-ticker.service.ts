@@ -24,6 +24,8 @@ import { EconomyErrors, EconomyService, TransactionType } from '../../economy';
 import type { CoreApiEnv } from '../../../config/env.validation';
 
 const TICKER_JOB = 'calling-ticker';
+/** Giới hạn vận hành; backlog sẽ được xử lý dần qua các tick tiếp theo. */
+const TICK_BATCH_SIZE = 100;
 
 /**
  * Timer + billing của call — TẤT CẢ enforce ở server, không tin timer client
@@ -89,6 +91,8 @@ export class CallTickerService
     const cutoff = new Date(Date.now() - timeoutSeconds * 1000);
     const stale = await this.dataSource.getRepository(CallSession).find({
       where: { status: CallSessionStatus.Pending, createdAt: LessThan(cutoff) },
+      order: { createdAt: 'ASC', id: 'ASC' },
+      take: TICK_BATCH_SIZE,
     });
     for (const call of stale) {
       await this.callingService.endById(call.id, CallEndReason.PendingTimeout);
@@ -98,6 +102,8 @@ export class CallTickerService
   private async processActiveCalls(): Promise<void> {
     const active = await this.dataSource.getRepository(CallSession).find({
       where: { status: CallSessionStatus.Active },
+      order: { updatedAt: 'ASC', id: 'ASC' },
+      take: TICK_BATCH_SIZE,
     });
     for (const call of active) {
       await this.processActive(call.id).catch((err) =>

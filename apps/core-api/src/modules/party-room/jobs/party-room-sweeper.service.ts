@@ -24,6 +24,8 @@ import type { CoreApiEnv } from '../../../config/env.validation';
 
 const SWEEPER_JOB = 'party-room-sweeper';
 const HOST_GRACE_JOB = 'party-room-host-grace-check';
+/** Housekeeping batch; phòng còn lại sẽ được xử lý ở tick sau. */
+const ROOM_SWEEP_BATCH_SIZE = 100;
 
 /**
  * Backstop chống phòng vô chủ chiếm SFU (docs/10 § Party Room) — webhook LiveKit có thể rớt,
@@ -114,6 +116,8 @@ export class PartyRoomSweeperService
         status: PartyRoomStatus.Active,
         hostDisconnectedAt: LessThan(cutoff),
       },
+      order: { hostDisconnectedAt: 'ASC', id: 'ASC' },
+      take: ROOM_SWEEP_BATCH_SIZE,
     });
 
     for (const room of candidates) {
@@ -145,6 +149,8 @@ export class PartyRoomSweeperService
         status: PartyRoomStatus.Active,
         createdAt: LessThan(cutoff),
       },
+      order: { createdAt: 'ASC', id: 'ASC' },
+      take: ROOM_SWEEP_BATCH_SIZE,
     });
 
     for (const room of candidates) {

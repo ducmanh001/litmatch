@@ -182,13 +182,20 @@ export class ReconciliationService
       derived: string;
     }> = await this.dataSource.query(
       `
+        WITH sample_wallets AS (
+          SELECT user_id, balance
+            FROM wallets
+           ORDER BY updated_at DESC
+           LIMIT $1
+        )
         SELECT w.user_id AS "userId", w.balance::text AS snapshot, COALESCE(d.derived, 0)::text AS derived
-        FROM (SELECT * FROM wallets ORDER BY updated_at DESC LIMIT $1) w
+        FROM sample_wallets w
         LEFT JOIN (
           SELECT la.user_id,
                  SUM(CASE WHEN le.direction = 'credit' THEN le.amount ELSE -le.amount END) AS derived
           FROM ledger_entries le
           JOIN ledger_accounts la ON la.id = le.account_id
+          JOIN sample_wallets sw ON sw.user_id = la.user_id
           WHERE la.kind = 'user_wallet'
           GROUP BY la.user_id
         ) d ON d.user_id = w.user_id

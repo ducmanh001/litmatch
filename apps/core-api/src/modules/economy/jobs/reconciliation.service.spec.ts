@@ -59,7 +59,7 @@ function stubDataSource(input: {
       if (sql.includes('GROUP BY currency')) return input.imbalances ?? [];
       if (sql.includes('iap_receipts'))
         return [{ count: input.orphanCount ?? '0' }];
-      if (sql.includes('FROM (SELECT * FROM wallets'))
+      if (sql.includes('FROM sample_wallets'))
         return input.walletMismatches ?? [];
       throw new Error(`query không nhận diện được trong stub: ${sql}`);
     }),
@@ -266,7 +266,7 @@ describe('ReconciliationService', () => {
       const calls = (ds.query as jest.Mock).mock.calls as Array<[string]>;
       expect(calls.length).toBeGreaterThan(0);
       for (const [sql] of calls) {
-        expect(sql.trim().toUpperCase().startsWith('SELECT')).toBe(true);
+        expect(sql.trim().toUpperCase()).toMatch(/^(SELECT|WITH)\b/);
         expect(sql).not.toMatch(/\b(UPDATE|DELETE|INSERT|TRUNCATE)\b/i);
       }
     });

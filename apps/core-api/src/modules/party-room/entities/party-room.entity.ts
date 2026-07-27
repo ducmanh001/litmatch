@@ -40,6 +40,9 @@ export enum PartyRoomCloseReason {
  */
 @Entity({ name: 'party_rooms' })
 @Index('idx_party_rooms_status_created', ['status', 'createdAt'])
+@Index('idx_party_rooms_active_host_grace', ['hostDisconnectedAt', 'id'], {
+  where: '"status" = \'active\'',
+})
 export class PartyRoom {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

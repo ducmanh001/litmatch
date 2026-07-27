@@ -13,6 +13,8 @@ import { ConversationStreak } from '../entities/conversation-streak.entity';
 import type { Conversation } from '../entities/conversation.entity';
 import type { CoreApiEnv } from '../../../config/env.validation';
 
+const STREAK_WARNING_BATCH_SIZE = 200;
+
 export interface RecordActivityResult {
   streak: ConversationStreak;
   /** Số ngày streak vừa chạm — chỉ khác `null` đúng lúc streak tăng VÀ trúng mốc milestone. */
@@ -144,6 +146,9 @@ export class StreakService {
         '(cs.lastWarningSentAt IS NULL OR cs.lastWarningSentAt < :startOfToday)',
         { startOfToday: new Date(`${today}T00:00:00.000Z`) },
       )
+      .orderBy('cs.lastConfirmedDate', 'ASC')
+      .addOrderBy('cs.conversationId', 'ASC')
+      .limit(STREAK_WARNING_BATCH_SIZE)
       .getMany();
     return rows.map((r) => r.conversationId);
   }

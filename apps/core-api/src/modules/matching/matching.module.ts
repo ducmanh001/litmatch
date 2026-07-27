@@ -9,6 +9,7 @@ import { InviteService } from './services/invite.service';
 import { MatcherWorkerService } from './jobs/matcher-worker.service';
 import { TicketSweeperService } from './jobs/ticket-sweeper.service';
 import { InviteSweeperService } from './jobs/invite-sweeper.service';
+import { MatcherWakeup } from './matcher-wakeup';
 import { MatchTicket } from './entities/match-ticket.entity';
 import { MatchSession } from './entities/match-session.entity';
 import { MatchInvite } from './entities/match-invite.entity';
@@ -38,6 +39,7 @@ import type Redis from 'ioredis';
     InviteService,
     MatchingMetrics,
     MatcherWorkerService,
+    MatcherWakeup,
     TicketSweeperService,
     InviteSweeperService,
     matchingRedisProvider,

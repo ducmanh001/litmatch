@@ -40,6 +40,7 @@ import {
 } from './redis/matching-redis.provider';
 import { EconomyService, TransactionType } from '../economy';
 import { NotificationService, NotificationType } from '../notification';
+import { MatcherWakeup } from './matcher-wakeup';
 import { UserService, UserStatus } from '../user';
 
 import type {
@@ -86,6 +87,7 @@ export class MatchingService {
     private readonly notificationService: NotificationService,
     private readonly config: ConfigService<CoreApiEnv, true>,
     @Inject(MATCHING_REDIS) private readonly redis: Redis,
+    private readonly matcherWakeup: MatcherWakeup,
   ) {}
 
   /**
@@ -540,6 +542,7 @@ export class MatchingService {
     await this.redis.zadd(shard, 'NX', String(ticketScore(ticket)), ticket.id);
     // SADD SAU ZADD: nếu matcher vừa SREM shard rỗng giữa 2 lệnh, SADD này khôi phục lại
     await this.redis.sadd(MATCHING_ACTIVE_SHARDS_KEY, shard);
+    this.matcherWakeup.notify();
   }
 
   // ---------- nội bộ ----------

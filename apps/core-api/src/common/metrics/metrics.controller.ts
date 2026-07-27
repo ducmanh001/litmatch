@@ -1,6 +1,6 @@
 import { Controller, Get, Inject, Res } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
-import { SkipThrottle } from '@nestjs/throttler';
+import { Throttle, minutes } from '@nestjs/throttler';
 
 import { Public } from '../decorators/public.decorator';
 import { METRICS_REGISTRY } from './metrics.constants';
@@ -15,7 +15,7 @@ export class MetricsController {
   constructor(@Inject(METRICS_REGISTRY) private readonly registry: Registry) {}
 
   @Public()
-  @SkipThrottle()
+  @Throttle({ default: { limit: 30, ttl: minutes(1) } })
   @Get()
   async metrics(
     @Res({ passthrough: true }) response: Response,

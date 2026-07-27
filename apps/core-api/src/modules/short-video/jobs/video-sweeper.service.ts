@@ -15,6 +15,7 @@ import { VideoStatus } from '../entities/video.entity';
 import type { CoreApiEnv } from '../../../config/env.validation';
 
 const VIDEO_SWEEPER_JOB = 'short-video-sweeper';
+const VIDEO_SWEEP_BATCH = 200;
 
 /**
  * Dọn video kẹt ở `uploading` quá lâu (client bỏ dở/crash giữa chừng — docs/services/
@@ -60,8 +61,19 @@ export class VideoSweeperService
       const [, count] = (await this.dataSource.query(
         `UPDATE videos
             SET status = $1, updated_at = now()
-          WHERE status = $2 AND created_at < now() - make_interval(secs => $3)`,
-        [VideoStatus.Failed, VideoStatus.Uploading, timeoutSeconds],
+          WHERE status = $2 AND id IN (
+            SELECT id FROM videos
+             WHERE status = $2
+               AND created_at < now() - make_interval(secs => $3)
+             ORDER BY created_at ASC, id ASC
+             LIMIT $4
+          )`,
+        [
+          VideoStatus.Failed,
+          VideoStatus.Uploading,
+          timeoutSeconds,
+          VIDEO_SWEEP_BATCH,
+        ],
       )) as [unknown, number];
       return count;
     }, 0);

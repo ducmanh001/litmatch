@@ -26,6 +26,9 @@ import type {
 } from '@litmatch/common-dtos';
 import type Redis from 'ioredis';
 import type { CoreApiEnv } from '../../config/env.validation';
+
+/** Giới hạn vận hành cho các composition đọc toàn bộ graph; pagination là việc riêng của API. */
+const FRIEND_GRAPH_READ_LIMIT = 500;
 import type { MessageAttachment } from './entities/message.entity';
 import type { DisplayStreak } from './services/streak.service';
 
@@ -131,6 +134,8 @@ export class FriendService {
         'f.user_high_id AS user_high_id',
       ])
       .where('f.userLowId = :userId OR f.userHighId = :userId', { userId })
+      .orderBy('f.createdAt', 'DESC')
+      .limit(FRIEND_GRAPH_READ_LIMIT)
       .getRawMany<{ user_low_id: string; user_high_id: string }>();
     return rows.map((r) =>
       r.user_low_id === userId ? r.user_high_id : r.user_low_id,
@@ -179,6 +184,7 @@ export class FriendService {
       .where('f.user_low_id = :userId OR f.user_high_id = :userId', { userId })
       .orderBy('c.last_message_at', 'DESC', 'NULLS LAST')
       .addOrderBy('f.created_at', 'DESC')
+      .limit(FRIEND_GRAPH_READ_LIMIT)
       .getRawMany<{
         user_low_id: string;
         user_high_id: string;

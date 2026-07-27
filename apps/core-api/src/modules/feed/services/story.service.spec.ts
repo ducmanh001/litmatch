@@ -53,7 +53,7 @@ describe('StoryService (unit — mock repo/FriendService/SafetyService)', () => 
     >
   >;
   let viewRepo: jest.Mocked<
-    Pick<Repository<StoryView>, 'save' | 'create' | 'findBy'>
+    Pick<Repository<StoryView>, 'save' | 'create' | 'find'>
   >;
   let friendService: {
     areFriends: jest.Mock;
@@ -74,7 +74,7 @@ describe('StoryService (unit — mock repo/FriendService/SafetyService)', () => 
     viewRepo = {
       save: jest.fn(async (v) => v),
       create: jest.fn((input) => input),
-      findBy: jest.fn(async () => []),
+      find: jest.fn(async () => []),
     } as never;
     friendService = {
       areFriends: jest.fn(async () => true),
@@ -240,7 +240,7 @@ describe('StoryService (unit — mock repo/FriendService/SafetyService)', () => 
       storyRepo.findOneBy.mockResolvedValue(
         makeStory({ authorUserId: me.userId }),
       );
-      viewRepo.findBy.mockResolvedValue([
+      viewRepo.find.mockResolvedValue([
         { viewerId: 'v1' },
         { viewerId: 'v2' },
       ] as never);
@@ -292,6 +292,7 @@ describe('StoryService (unit — mock repo/FriendService/SafetyService)', () => 
         andWhere: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
         addOrderBy: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
         getMany: jest.fn(async () => []),
       };
       storyRepo.createQueryBuilder.mockReturnValue(qb as never);
