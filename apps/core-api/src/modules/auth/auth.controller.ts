@@ -45,6 +45,7 @@ export class AuthController {
 
   @Post('guest')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: minutes(1) } })
   @ApiOperation({
     summary:
       'Đăng nhập guest bằng deviceId (tài khoản dùng thử, tính năng bị giới hạn — docs/06)',

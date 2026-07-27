@@ -20,7 +20,13 @@ export class SignalingRedisAdapterService implements OnApplicationShutdown {
   async connect(
     redisUrl: string,
   ): Promise<NonNullable<ServerOptions['adapter']>> {
-    this.pubClient = new Redis(redisUrl);
+    this.pubClient = new Redis(redisUrl, {
+      connectTimeout: 1_000,
+      commandTimeout: 1_000,
+      maxRetriesPerRequest: 1,
+      enableOfflineQueue: false,
+      retryStrategy: (attempt) => Math.min(attempt * 100, 1_000),
+    });
     this.subClient = this.pubClient.duplicate();
     // Listener bền vững — không có listener 'error' thì ioredis ném exception làm crash process
     // mỗi lần reconnect drop giữa chừng (khác với race connect ban đầu bên dưới).

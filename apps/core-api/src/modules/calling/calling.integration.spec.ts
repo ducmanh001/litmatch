@@ -23,6 +23,7 @@ import {
   CallSessionStatus,
 } from './entities/call-session.entity';
 import { MatchingService } from '../matching';
+import { MatcherWakeup } from '../matching/matcher-wakeup';
 import {
   MatchTicket,
   MatchTicketStatus,
@@ -295,6 +296,7 @@ d('Calling integration (Postgres thật)', () => {
       } as never,
       configStub,
       {} as never,
+      new MatcherWakeup(),
     );
     calling = new CallingService(
       ds,

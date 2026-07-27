@@ -25,6 +25,7 @@ import {
 } from '../entities/match-session.entity';
 import { MatchingMetrics } from '../matching.metrics';
 import { MATCH_INTERACTION_POLICY } from '../ports/interaction-policy';
+import { MatcherWakeup } from '../matcher-wakeup';
 import {
   MATCHING_ACTIVE_SHARDS_KEY,
   MATCHING_REDIS,
@@ -42,6 +43,10 @@ import type { CoreApiEnv } from '../../../config/env.validation';
 import type { MatchInteractionPolicy } from '../ports/interaction-policy';
 
 const MATCHER_JOB = 'matching-matcher';
+const MATCHER_WAKE_DEBOUNCE_MS = 50;
+const MATCHER_WAKE_MAX_DELAY_MS = 250;
+/** Không để sustained enqueue biến wake-up thành một tight polling loop. */
+const MATCHER_WAKE_MIN_INTERVAL_MS = 1_000;
 
 interface PoppedTicket {
   id: string;
@@ -68,6 +73,10 @@ export class MatcherWorkerService
 {
   private readonly logger = new Logger(MatcherWorkerService.name);
   private readonly job = new ManagedInterval();
+  private wakeTimer: NodeJS.Timeout | undefined;
+  private wakeDeadlineTimer: NodeJS.Timeout | undefined;
+  private unsubscribeWakeup: (() => void) | undefined;
+  private lastWakeRunAt = 0;
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
@@ -78,9 +87,13 @@ export class MatcherWorkerService
     private readonly interactionPolicy: MatchInteractionPolicy,
     private readonly metrics: MatchingMetrics,
     private readonly notificationService: NotificationService,
+    private readonly matcherWakeup: MatcherWakeup,
   ) {}
 
   onApplicationBootstrap(): void {
+    this.unsubscribeWakeup = this.matcherWakeup.subscribe(() =>
+      this.scheduleWakeRun(),
+    );
     this.job.start(this.scheduler, {
       jobName: MATCHER_JOB,
       intervalMs: this.config.getOrThrow('MATCHING_MATCHER_INTERVAL_MS', {
@@ -94,6 +107,58 @@ export class MatcherWorkerService
 
   onApplicationShutdown(): void {
     this.job.stop();
+    this.unsubscribeWakeup?.();
+    this.unsubscribeWakeup = undefined;
+    if (this.wakeTimer) {
+      clearTimeout(this.wakeTimer);
+      this.wakeTimer = undefined;
+    }
+    if (this.wakeDeadlineTimer) {
+      clearTimeout(this.wakeDeadlineTimer);
+      this.wakeDeadlineTimer = undefined;
+    }
+  }
+
+  /** Gom enqueue liên tiếp thành batch, nhưng không trì hoãn vô hạn khi traffic liên tục. */
+  private scheduleWakeRun(): void {
+    if (!this.wakeDeadlineTimer) {
+      this.wakeDeadlineTimer = setTimeout(
+        () => this.runScheduledWake(),
+        MATCHER_WAKE_MAX_DELAY_MS,
+      );
+      this.wakeDeadlineTimer.unref();
+    }
+    if (this.wakeTimer) clearTimeout(this.wakeTimer);
+    this.wakeTimer = setTimeout(
+      () => this.runScheduledWake(),
+      MATCHER_WAKE_DEBOUNCE_MS,
+    );
+    this.wakeTimer.unref();
+  }
+
+  private runScheduledWake(): void {
+    const notBefore =
+      this.lastWakeRunAt + MATCHER_WAKE_MIN_INTERVAL_MS - Date.now();
+    if (notBefore > 0) {
+      if (this.wakeTimer) clearTimeout(this.wakeTimer);
+      if (this.wakeDeadlineTimer) clearTimeout(this.wakeDeadlineTimer);
+      this.wakeDeadlineTimer = undefined;
+      this.wakeTimer = setTimeout(() => this.runScheduledWake(), notBefore);
+      this.wakeTimer.unref();
+      return;
+    }
+    if (this.wakeTimer) {
+      clearTimeout(this.wakeTimer);
+      this.wakeTimer = undefined;
+    }
+    if (this.wakeDeadlineTimer) {
+      clearTimeout(this.wakeDeadlineTimer);
+      this.wakeDeadlineTimer = undefined;
+    }
+    this.lastWakeRunAt = Date.now();
+    void this.runOnce().catch((error: unknown) =>
+      this.logger.error({ err: `${error}` }, 'Matcher wake-up lỗi'),
+    );
   }
 
   /** 1 tick — public để test/chạy tay. Trả về số cặp ghép được. */

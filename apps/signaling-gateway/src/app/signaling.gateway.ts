@@ -29,6 +29,9 @@ function userRoom(userId: string): string {
   return `user:${userId}`;
 }
 
+/** Một tab lỗi/reconnect không được nhân socket vô hạn cho cùng một user. */
+const MAX_CONNECTIONS_PER_USER = 3;
+
 /**
  * Tầng fanout realtime (docs/services/realtime-gateway.md, docs/03 § 3.3): gateway KHÔNG chứa
  * business logic — authz/membership/ẩn danh do core-api quyết TẠI THỜI ĐIỂM PUBLISH vào channel
@@ -49,6 +52,7 @@ export class SignalingGateway
   private subscriber?: Redis;
   private subscriptionReady = false;
   private subscriptionInFlight?: Promise<void>;
+  private readonly connectionsByUser = new Map<string, number>();
 
   @WebSocketServer()
   private readonly server!: Namespace;
@@ -62,12 +66,25 @@ export class SignalingGateway
     // Middleware handshake: connection KHÔNG token hợp lệ bị từ chối trước khi thành socket
     server.use((socket, next) => {
       void this.authenticate(socket)
-        .then(() => next())
+        .then(() => {
+          const userId = (socket.data as { userId?: string }).userId;
+          if (!userId || !this.admitConnection(socket, userId)) {
+            throw new Error('CONNECTION_LIMIT');
+          }
+          next();
+        })
         .catch((err: Error) => next(err));
     });
 
     this.subscriber = new Redis(
       this.config.getOrThrow('REDIS_URL', { infer: true }),
+      {
+        connectTimeout: 1_000,
+        commandTimeout: 1_000,
+        maxRetriesPerRequest: 1,
+        enableOfflineQueue: false,
+        retryStrategy: (attempt) => Math.min(attempt * 100, 1_000),
+      },
     );
     this.subscriber.on('ready', () => this.ensureSubscribed());
     this.subscriber.on('close', () => {
@@ -84,6 +101,7 @@ export class SignalingGateway
 
   async onApplicationShutdown(): Promise<void> {
     this.subscriptionReady = false;
+    this.connectionsByUser.clear();
     await this.subscriber?.quit().catch(() => undefined);
   }
 
@@ -104,6 +122,16 @@ export class SignalingGateway
   }
 
   handleDisconnect(client: Socket): void {
+    const data = client.data as {
+      userId?: string;
+      connectionAdmitted?: boolean;
+    };
+    if (data.connectionAdmitted && data.userId) {
+      const current = this.connectionsByUser.get(data.userId) ?? 0;
+      if (current <= 1) this.connectionsByUser.delete(data.userId);
+      else this.connectionsByUser.set(data.userId, current - 1);
+      data.connectionAdmitted = false;
+    }
     this.logger.debug(`Client disconnected: ${client.id}`);
   }
 
@@ -128,6 +156,14 @@ export class SignalingGateway
     } catch {
       throw new Error(RealtimeConnectionErrors.Unauthorized);
     }
+  }
+
+  private admitConnection(client: Socket, userId: string): boolean {
+    const current = this.connectionsByUser.get(userId) ?? 0;
+    if (current >= MAX_CONNECTIONS_PER_USER) return false;
+    this.connectionsByUser.set(userId, current + 1);
+    (client.data as { connectionAdmitted?: boolean }).connectionAdmitted = true;
+    return true;
   }
 
   /** Relay Redis → socket room của đúng user; payload không đọc/sửa (public để unit test). */

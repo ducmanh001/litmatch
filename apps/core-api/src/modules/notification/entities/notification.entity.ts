@@ -25,6 +25,9 @@ export enum NotificationType {
  */
 @Entity({ name: 'notifications' })
 @Index('idx_notifications_user_seq', ['userId', 'seq'])
+@Index('idx_notifications_unread_user', ['userId'], {
+  where: '"read_at" IS NULL',
+})
 export class Notification {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

@@ -33,6 +33,8 @@ import type { CoreApiEnv } from '../../../config/env.validation';
 const SWEEPER_JOB = 'matching-ticket-sweeper';
 /** Giới hạn số session xử lý mỗi tick — batch vận hành nội bộ, không phải rule nghiệp vụ. */
 const SESSION_SWEEP_BATCH = 200;
+/** Giới hạn ticket queued expire mỗi tick — backlog sẽ được xử lý dần. */
+const QUEUED_TICKET_SWEEP_BATCH = 200;
 
 /**
  * Sweeper (docs/services/matching-service.md § 3) — chốt chặn cuối cho "zombie" chiếm chỗ
@@ -102,9 +104,20 @@ export class TicketSweeperService
     const [rows] = (await this.dataSource.query(
       `UPDATE match_tickets
           SET status = $1, updated_at = now()
-        WHERE status = $2 AND enqueued_at < now() - make_interval(secs => $3)
+        WHERE status = $2 AND id IN (
+          SELECT id FROM match_tickets
+           WHERE status = $2
+             AND enqueued_at < now() - make_interval(secs => $3)
+           ORDER BY enqueued_at ASC, id ASC
+           LIMIT $4
+        )
         RETURNING id, match_type, region, age_band`,
-      [MatchTicketStatus.Expired, MatchTicketStatus.Queued, maxWaitSeconds],
+      [
+        MatchTicketStatus.Expired,
+        MatchTicketStatus.Queued,
+        maxWaitSeconds,
+        QUEUED_TICKET_SWEEP_BATCH,
+      ],
     )) as [
       Array<{
         id: string;
