@@ -48,14 +48,14 @@ describe('startTracing', () => {
     await sdk?.shutdown();
   });
 
-  it('nhận diện Prometheus remote_write URL để log cảnh báo cấu hình', () => {
+  it('từ chối Prometheus remote_write URL để không gửi sai giao thức', () => {
     process.env['GRAFANA_CLOUD_PROMETHEUS_URL'] =
       'https://prometheus-prod.grafana.net/api/prom/push';
     const errorSpy = jest
       .spyOn(console, 'error')
       .mockImplementation(() => undefined);
 
-    expect(resolveMetricsEndpoint()).toContain('/api/prom/push');
+    expect(resolveMetricsEndpoint()).toBeUndefined();
     expect(errorSpy).toHaveBeenCalledWith(
       expect.stringContaining('Prometheus remote_write URL'),
     );

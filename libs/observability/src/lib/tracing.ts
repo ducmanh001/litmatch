@@ -41,14 +41,9 @@ export function startTracing(input: StartTracingInput): NodeSDK | null {
     process.env['OTEL_EXPORTER_OTLP_TRACES_ENDPOINT'];
   const metricsEndpoint = resolveMetricsEndpoint();
   if (!traceEndpoint && !metricsEndpoint) {
-    if (
-      process.env['GRAFANA_CLOUD_PROMETHEUS_USER'] ||
-      process.env['GRAFANA_CLOUD_API_TOKEN']
-    ) {
-      console.warn(
-        '[metrics] OTLP exporter disabled: GRAFANA_CLOUD_PROMETHEUS_URL is missing or invalid',
-      );
-    }
+    console.warn(
+      '[metrics] OTLP exporter disabled: GRAFANA_CLOUD_PROMETHEUS_URL is missing or invalid',
+    );
     return null;
   }
 
@@ -119,13 +114,19 @@ export function resolveMetricsEndpoint(): string | undefined {
 
   try {
     const url = new URL(configured);
-    if (url.pathname.endsWith('/api/prom/push')) {
+    const pathname = url.pathname.replace(/\/+$/, '');
+    if (pathname.endsWith('/api/prom/push')) {
       console.error(
         '[metrics] GRAFANA_CLOUD_PROMETHEUS_URL đang là Prometheus remote_write URL (/api/prom/push), cần thay bằng URL Grafana Cloud OpenTelemetry (/otlp hoặc /otlp/v1/metrics)',
       );
+      return undefined;
     }
-    if (url.pathname.replace(/\/$/, '').endsWith('/otlp')) {
-      url.pathname = `${url.pathname.replace(/\/$/, '')}/v1/metrics`;
+    if (pathname.endsWith('/otlp')) {
+      url.pathname = `${pathname}/v1/metrics`;
+    } else if (!pathname.endsWith('/v1/metrics')) {
+      console.warn(
+        '[metrics] GRAFANA_CLOUD_PROMETHEUS_URL nên là Grafana Cloud OTLP URL (/otlp hoặc /otlp/v1/metrics)',
+      );
     }
     return url.toString();
   } catch (err) {
