@@ -15,6 +15,9 @@ const runtimeDockerfiles = [
 
 function dryRun(profile, ...args) {
   const {
+    LOCAL_CI_DATABASE_URL: _databaseUrl,
+    LOCAL_CI_REDIS_URL: _redisUrl,
+    LOCAL_CI_INTEGRATION_DB_URL: _integrationDatabaseUrl,
     LOCAL_CI_SERVICES_READY: _servicesReady,
     LOCAL_CI_DATABASE_READY: _databaseReady,
     ...testEnvironment
