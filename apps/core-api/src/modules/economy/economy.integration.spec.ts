@@ -1,4 +1,4 @@
-import { Registry } from 'prom-client';
+import { metrics } from '@opentelemetry/api';
 import { DataSource } from 'typeorm';
 
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
@@ -119,7 +119,10 @@ d('Economy integration (Postgres thật)', () => {
     await ds.initialize();
     await ds.runMigrations();
 
-    ledger = new LedgerService(ds, new EconomyMetrics(new Registry()));
+    ledger = new LedgerService(
+      ds,
+      new EconomyMetrics(metrics.getMeter('economy-integration')),
+    );
     economy = new EconomyService(
       ds.getRepository(Wallet),
       ds.getRepository(IapProduct),
@@ -319,7 +322,7 @@ d('Economy integration (Postgres thật)', () => {
       ds,
       stubConfig,
       { addInterval: () => undefined } as unknown as SchedulerRegistry,
-      new EconomyMetrics(new Registry()),
+      new EconomyMetrics(metrics.getMeter('economy-integration')),
     );
 
     expect((await recon.runOnce()).ok).toBe(true);
@@ -428,7 +431,7 @@ d('Economy integration (Postgres thật)', () => {
       ds,
       { getOrThrow: () => true } as unknown as ConfigService<CoreApiEnv, true>,
       { addInterval: () => undefined } as unknown as SchedulerRegistry,
-      new EconomyMetrics(new Registry()),
+      new EconomyMetrics(metrics.getMeter('economy-integration')),
     );
     expect((await recon.runOnce()).ok).toBe(true);
   });
@@ -450,7 +453,7 @@ d('Economy integration (Postgres thật)', () => {
       ds,
       { getOrThrow: () => true } as unknown as ConfigService<CoreApiEnv, true>,
       { addInterval: () => undefined } as unknown as SchedulerRegistry,
-      new EconomyMetrics(new Registry()),
+      new EconomyMetrics(metrics.getMeter('economy-integration')),
     );
     const products = [
       'com.litmatch.diamond.100',

@@ -1,21 +1,22 @@
-import { createMetricsRegistry } from './metrics-registry';
+import { metrics } from '@opentelemetry/api';
 
-describe('createMetricsRegistry', () => {
-  it('gắn nhãn app vào metric + có sẵn default metrics (process/nodejs)', async () => {
-    const registry = createMetricsRegistry({ appName: 'core-api' });
-    const text = await registry.metrics();
+import { createMetricsMeter } from './metrics-registry';
 
-    expect(text).toContain('app="core-api"');
-    // collectDefaultMetrics đăng ký ít nhất 1 metric process_* chuẩn của prom-client
-    expect(text).toMatch(/process_cpu_user_seconds_total/);
-  });
+describe('createMetricsMeter', () => {
+  afterEach(() => jest.restoreAllMocks());
 
-  it('2 registry riêng biệt không đụng metric của nhau', async () => {
-    const a = createMetricsRegistry({ appName: 'core-api' });
-    const b = createMetricsRegistry({ appName: 'signaling-gateway' });
+  it('lấy Meter OTel và đăng ký heartbeat/process gauges', () => {
+    const meter = {
+      createObservableGauge: jest.fn(() => ({ addCallback: jest.fn() })),
+    };
+    jest.spyOn(metrics, 'getMeter').mockReturnValue(meter as never);
 
-    expect(await a.metrics()).toContain('app="core-api"');
-    expect(await b.metrics()).toContain('app="signaling-gateway"');
-    expect(await a.metrics()).not.toContain('signaling-gateway');
+    expect(createMetricsMeter({ appName: 'core-api' })).toBe(meter);
+    expect(meter.createObservableGauge).toHaveBeenCalledTimes(3);
+    expect(meter.createObservableGauge).toHaveBeenNthCalledWith(
+      1,
+      'litmatch_up',
+      expect.any(Object),
+    );
   });
 });

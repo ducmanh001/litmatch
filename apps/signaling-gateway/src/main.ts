@@ -11,17 +11,17 @@ import { Logger } from 'nestjs-pino';
 
 import { AppModule } from './app/app.module';
 import { CorsIoAdapter } from './app/cors-io.adapter';
-import { METRICS_REGISTRY } from './app/metrics.constants';
 import { SignalingRedisAdapterService } from './app/redis-adapter.service';
+import { METRICS_METER } from './app/metrics.constants';
 
 import type { SignalingEnv } from './config/env.validation';
-import type { Registry } from 'prom-client';
+import type { Meter } from '@opentelemetry/api';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   app.useLogger(app.get(Logger));
   app.use(helmet());
-  app.use(createHttpMetricsMiddleware(app.get<Registry>(METRICS_REGISTRY))); // docs/07 GĐ6
+  app.use(createHttpMetricsMiddleware(app.get<Meter>(METRICS_METER))); // OTLP push
 
   const config = app.get<ConfigService<SignalingEnv, true>>(ConfigService);
   initializeSentry({

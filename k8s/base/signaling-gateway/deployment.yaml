@@ -30,11 +30,6 @@ spec:
       labels:
         app.kubernetes.io/name: signaling-gateway
         app.kubernetes.io/part-of: litmatch
-      annotations:
-        # docs/07 GĐ6 — /metrics không cần @Public()/JWT (gateway không có guard auth global trên HTTP)
-        prometheus.io/scrape: 'true'
-        prometheus.io/port: '3001'
-        prometheus.io/path: /metrics
     spec:
       securityContext:
         runAsNonRoot: true

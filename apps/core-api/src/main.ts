@@ -19,11 +19,11 @@ import {
   buildOpenApiDocument,
 } from './app/openapi';
 import { parseCorsOrigins } from './common/cors/cors-origins';
-import { METRICS_REGISTRY } from './common/metrics/metrics.constants';
 
 import type { CoreApiEnv } from './config/env.validation';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import type { Registry } from 'prom-client';
+import type { Meter } from '@opentelemetry/api';
+import { METRICS_METER } from './common/metrics/metrics.constants';
 
 async function bootstrap(): Promise<void> {
   // rawBody: webhook LiveKit verify chữ ký trên NGUYÊN VĂN body (calling/webhooks — spec § 3).
@@ -60,7 +60,7 @@ async function bootstrap(): Promise<void> {
   }); // version trong URI ngay từ đầu (docs/05 § 5.4)
   app.use(helmet());
   app.use(cookieParser()); // đọc refresh_token/csrf_token httpOnly (ADR 0007) — trước mọi guard
-  app.use(createHttpMetricsMiddleware(app.get<Registry>(METRICS_REGISTRY))); // docs/07 Giai đoạn 6 — http_request_duration_seconds
+  app.use(createHttpMetricsMiddleware(app.get<Meter>(METRICS_METER))); // OTLP push — http_request_duration_seconds
 
   // Đã validate format lúc boot ở env.validation.ts (Joi custom) — parse lại đây chỉ để lấy
   // mảng, không throw lần 2 trong điều kiện bình thường.

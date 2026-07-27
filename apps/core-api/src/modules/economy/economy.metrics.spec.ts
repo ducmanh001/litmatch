@@ -1,99 +1,104 @@
-import { Registry } from 'prom-client';
+import type { Meter } from '@opentelemetry/api';
 
 import { EconomyMetrics } from './economy.metrics';
 
 describe('EconomyMetrics', () => {
-  it('record cộng dồn economy_transaction_total theo type + result', async () => {
-    const registry = new Registry();
-    const metrics = new EconomyMetrics(registry);
+  function makeMeter() {
+    const transactionCounter = { add: jest.fn() };
+    const mismatchCounter = { add: jest.fn() };
+    const gauge = { addCallback: jest.fn() };
+    const histogram = { record: jest.fn() };
+    const meter = {
+      createCounter: jest
+        .fn()
+        .mockReturnValueOnce(transactionCounter)
+        .mockReturnValueOnce(mismatchCounter),
+      createObservableGauge: jest.fn(() => gauge),
+      createHistogram: jest.fn(() => histogram),
+    } as unknown as Meter;
+    return { meter, transactionCounter, mismatchCounter, gauge, histogram };
+  }
+
+  it('record ghi economy_transaction_total theo type + result', () => {
+    const { meter, transactionCounter } = makeMeter();
+    const metrics = new EconomyMetrics(meter);
 
     metrics.record('gift_send', 'success');
     metrics.record('gift_send', 'success');
     metrics.record('gift_send', 'failed');
     metrics.record('vip_purchase', 'replayed');
 
-    const text = await registry.metrics();
-    expect(text).toContain(
-      'economy_transaction_total{type="gift_send",result="success"} 2',
-    );
-    expect(text).toContain(
-      'economy_transaction_total{type="gift_send",result="failed"} 1',
-    );
-    expect(text).toContain(
-      'economy_transaction_total{type="vip_purchase",result="replayed"} 1',
-    );
+    expect(transactionCounter.add).toHaveBeenNthCalledWith(1, 1, {
+      type: 'gift_send',
+      result: 'success',
+    });
+    expect(transactionCounter.add).toHaveBeenNthCalledWith(4, 1, {
+      type: 'vip_purchase',
+      result: 'replayed',
+    });
   });
 
-  it('lỗi ghi metric (best-effort) không được throw ra caller — không được chặn giao dịch đã ghi sổ xong', () => {
-    const registry = new Registry();
-    const metrics = new EconomyMetrics(registry);
-    const counter = (
-      metrics as unknown as { transactionsTotal: { inc: () => void } }
-    ).transactionsTotal;
-    jest.spyOn(counter, 'inc').mockImplementation(() => {
+  it('lỗi ghi metric best-effort không throw ra caller', () => {
+    const { meter, transactionCounter } = makeMeter();
+    transactionCounter.add.mockImplementation(() => {
       throw new Error('boom');
     });
+    const metrics = new EconomyMetrics(meter);
 
     expect(() => metrics.record('gift_send', 'success')).not.toThrow();
   });
 
-  it('recordReconciliationMismatch cộng theo check + currency; count=0 không tạo series rác', async () => {
-    const registry = new Registry();
-    const metrics = new EconomyMetrics(registry);
+  it('recordReconciliationMismatch bỏ qua count=0', () => {
+    const { meter, mismatchCounter } = makeMeter();
+    const metrics = new EconomyMetrics(meter);
 
     metrics.recordReconciliationMismatch('invariant', 'DIA');
     metrics.recordReconciliationMismatch('orphan_receipt', 'DIA', 3);
     metrics.recordReconciliationMismatch('wallet_sample', 'DIA', 0);
 
-    const text = await registry.metrics();
-    expect(text).toContain(
-      'economy_reconciliation_mismatch_total{check="invariant",currency="DIA"} 1',
-    );
-    expect(text).toContain(
-      'economy_reconciliation_mismatch_total{check="orphan_receipt",currency="DIA"} 3',
-    );
-    expect(text).not.toContain('check="wallet_sample"');
+    expect(mismatchCounter.add).toHaveBeenNthCalledWith(1, 1, {
+      check: 'invariant',
+      currency: 'DIA',
+    });
+    expect(mismatchCounter.add).toHaveBeenNthCalledWith(2, 3, {
+      check: 'orphan_receipt',
+      currency: 'DIA',
+    });
+    expect(mismatchCounter.add).toHaveBeenCalledTimes(2);
   });
 
-  it('recordReconciliationRun set gauge status theo tier + observe duration; run lỗi bỏ qua duration', async () => {
-    const registry = new Registry();
-    const metrics = new EconomyMetrics(registry);
+  it('recordReconciliationRun cập nhật status callback và duration', () => {
+    const { meter, gauge, histogram } = makeMeter();
+    const metrics = new EconomyMetrics(meter);
 
     metrics.recordReconciliationRun('fast', true, 0.12);
-    metrics.recordReconciliationRun('deep', false); // run lỗi: không có duration
+    metrics.recordReconciliationRun('deep', false);
 
-    const text = await registry.metrics();
-    expect(text).toContain(
-      'economy_reconciliation_last_run_status{tier="fast"} 1',
-    );
-    expect(text).toContain(
-      'economy_reconciliation_last_run_status{tier="deep"} 0',
-    );
-    expect(text).toContain(
-      'economy_reconciliation_run_duration_seconds_count{tier="fast"} 1',
-    );
-    expect(text).not.toContain(
-      'economy_reconciliation_run_duration_seconds_count{tier="deep"}',
+    expect(gauge.addCallback).toHaveBeenCalledTimes(1);
+    expect(histogram.record).toHaveBeenCalledWith(0.12, { tier: 'fast' });
+    expect(
+      (
+        metrics as unknown as {
+          reconciliationStatusByTier: Map<string, number>;
+        }
+      ).reconciliationStatusByTier,
+    ).toEqual(
+      new Map([
+        ['fast', 1],
+        ['deep', 0],
+      ]),
     );
   });
 
-  it('lỗi ghi metric đối soát (best-effort) không throw ra job — không được che mất log lệch', () => {
-    const registry = new Registry();
-    const metrics = new EconomyMetrics(registry);
-    const internals = metrics as unknown as {
-      reconciliationMismatchTotal: { inc: () => void };
-      reconciliationLastRunStatus: { set: () => void };
-    };
-    jest
-      .spyOn(internals.reconciliationMismatchTotal, 'inc')
-      .mockImplementation(() => {
-        throw new Error('boom');
-      });
-    jest
-      .spyOn(internals.reconciliationLastRunStatus, 'set')
-      .mockImplementation(() => {
-        throw new Error('boom');
-      });
+  it('lỗi ghi metric đối soát best-effort không throw ra job', () => {
+    const { meter, mismatchCounter, histogram } = makeMeter();
+    mismatchCounter.add.mockImplementation(() => {
+      throw new Error('boom');
+    });
+    histogram.record.mockImplementation(() => {
+      throw new Error('boom');
+    });
+    const metrics = new EconomyMetrics(meter);
 
     expect(() =>
       metrics.recordReconciliationMismatch('invariant', 'DIA'),

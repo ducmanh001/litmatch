@@ -61,9 +61,14 @@ ledger. Kafka giữ `ECONOMY_OUTBOX_RELAY_ENABLED=false`; event vẫn nằm tron
 2. Tạo bốn Sentry projects (core-api, signaling-gateway, web, admin). DSN backend là biến runtime
    `SENTRY_DSN` của từng Northflank service; DSN browser là hai GitHub Variables
    `NEXT_PUBLIC_SENTRY_DSN`/`VITE_SENTRY_DSN`. Đặt `SENTRY_RELEASE` bằng commit SHA deploy.
-3. Trong Grafana Cloud, tạo OTLP connection. Điền `OTEL_EXPORTER_OTLP_ENDPOINT` và
-   `OTEL_EXPORTER_OTLP_HEADERS` (Authorization header do connection cấp) vào cả hai service
-   Northflank. Đây chỉ là trace; metrics/logs của profile này chưa bật vì Alloy cần collector host.
-4. Tạo Sentry alerts ban đầu: error mới, 5xx/error event tăng bất thường. Với Grafana, alert
-   service mất trace/latency chỉ là signal phụ; SLO metrics/logs đầy đủ dùng profile Compose/K8s
-   - Alloy theo `docs/runbooks/grafana-cloud.md`.
+3. Trong Grafana Cloud, vào **Connections > OpenTelemetry**, lấy OTLP base endpoint dạng
+   `https://otlp-gateway-<region>.grafana.net/otlp`, username và token. Điền
+   `GRAFANA_CLOUD_PROMETHEUS_URL`, `GRAFANA_CLOUD_PROMETHEUS_USER`,
+   `GRAFANA_CLOUD_API_TOKEN` vào cả hai service Northflank. Code tự gửi metrics tới
+   `/v1/metrics` mỗi 15 giây và log `[metrics] gửi thành công/thất bại` ra console.
+   Không dùng Prometheus remote-write URL `/api/prom/push` cho biến này.
+4. Nếu cần tracing, giữ thêm `OTEL_EXPORTER_OTLP_ENDPOINT` và `OTEL_EXPORTER_OTLP_HEADERS`
+   từ cùng OpenTelemetry connection.
+5. Tạo Sentry alerts ban đầu: error mới, 5xx/error event tăng bất thường. Metrics app đã push
+   trực tiếp lên Grafana; Alloy trong profile Compose/K8s vẫn hữu ích cho LiveKit và logs theo
+   `docs/runbooks/grafana-cloud.md`.
