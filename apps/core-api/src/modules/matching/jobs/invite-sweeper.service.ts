@@ -15,6 +15,7 @@ import { MatchInviteStatus } from '../entities/match-invite.entity';
 import type { CoreApiEnv } from '../../../config/env.validation';
 
 const INVITE_SWEEPER_JOB = 'matching-invite-sweeper';
+const INVITE_SWEEP_BATCH = 200;
 
 /**
  * Dọn invite Pending quá hạn → Expired (docs/services/matching-service.md § Invite) — housekeeping
@@ -60,8 +61,17 @@ export class InviteSweeperService
       const [, count] = (await this.dataSource.query(
         `UPDATE match_invites
             SET status = $1, updated_at = now()
-          WHERE status = $2 AND expires_at < now()`,
-        [MatchInviteStatus.Expired, MatchInviteStatus.Pending],
+          WHERE status = $2 AND id IN (
+            SELECT id FROM match_invites
+             WHERE status = $2 AND expires_at < now()
+             ORDER BY expires_at ASC, id ASC
+             LIMIT $3
+          )`,
+        [
+          MatchInviteStatus.Expired,
+          MatchInviteStatus.Pending,
+          INVITE_SWEEP_BATCH,
+        ],
       )) as [unknown, number];
       return count;
     }, 0);

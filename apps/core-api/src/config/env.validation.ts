@@ -250,8 +250,8 @@ export const coreApiEnvSchema = Joi.object({
     .default(3_600_000),
   ECONOMY_REFUND_POLL_WINDOW_DAYS: Joi.number().integer().min(1).default(60),
 
-  // Matching — Giai đoạn 2 M1 (docs/services/matching-service.md § 8); default khớp .env.example
-  MATCHING_MATCHER_INTERVAL_MS: Joi.number().integer().min(50).default(300),
+  // Matching — event wake-up là đường chính; interval chỉ là backstop thưa (docs/services/matching-service.md § 8)
+  MATCHING_MATCHER_INTERVAL_MS: Joi.number().integer().min(50).default(10_000),
   MATCHING_MATCHER_BATCH_SIZE: Joi.number().integer().min(1).default(20),
   MATCHING_SWEEPER_INTERVAL_MS: Joi.number().integer().min(500).default(5000),
   MATCHING_QUEUE_MAX_WAIT_SECONDS: Joi.number().integer().min(5).default(120),

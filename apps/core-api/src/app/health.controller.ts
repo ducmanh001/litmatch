@@ -1,6 +1,6 @@
 import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { SkipThrottle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle, minutes } from '@nestjs/throttler';
 
 import { Public } from '../common/decorators/public.decorator';
 import { ReadinessService } from './readiness.service';
@@ -32,7 +32,7 @@ export class HealthController {
   }
 
   @Public()
-  @SkipThrottle()
+  @Throttle({ default: { limit: 30, ttl: minutes(1) } })
   @Get('ready')
   @ApiOperation({
     summary: 'Readiness: Postgres và Redis sẵn sàng nhận traffic',

@@ -40,6 +40,7 @@ import { MatchingErrors } from './matching.errors';
 import { InviteService } from './services/invite.service';
 import { InviteSweeperService } from './jobs/invite-sweeper.service';
 import { MatcherWorkerService } from './jobs/matcher-worker.service';
+import { MatcherWakeup } from './matcher-wakeup';
 import { TicketSweeperService } from './jobs/ticket-sweeper.service';
 import {
   GenderPreference,
@@ -280,6 +281,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
       },
       sendPush: async () => undefined,
     };
+    const matcherWakeup = new MatcherWakeup();
     matching = new MatchingService(
       ds,
       ds.getRepository(MatchTicket),
@@ -288,6 +290,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
       notificationStub as never,
       configStub,
       redis,
+      matcherWakeup,
     );
     const metrics = new MatchingMetrics(new Registry());
     worker = new MatcherWorkerService(
@@ -298,6 +301,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
       policyStub,
       metrics,
       notificationStub as never,
+      matcherWakeup,
     );
     workerB = new MatcherWorkerService(
       ds,
@@ -307,6 +311,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
       policyStub,
       metrics,
       notificationStub as never,
+      matcherWakeup,
     );
     sweeper = new TicketSweeperService(ds, configStub, schedulerStub, redis);
     invite = new InviteService(

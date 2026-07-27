@@ -15,6 +15,7 @@ import { VideoStatus } from '../entities/video.entity';
 import type { CoreApiEnv } from '../../../config/env.validation';
 
 const VIDEO_RANKING_JOB = 'short-video-ranking';
+const VIDEO_RANKING_BATCH = 1000;
 
 /**
  * Ranking v1 (docs/services/short-video-service.md § 4): `rankScore` = engagement có trọng số,
@@ -71,16 +72,22 @@ export class VideoRankingService
 
       const [, count] = (await this.dataSource.query(
         `UPDATE videos
-            SET rank_score = (view_count * $1 + like_count * $2 + comment_count * $3)
+          SET rank_score = (view_count * $1 + like_count * $2 + comment_count * $3)
                               / (1 + EXTRACT(EPOCH FROM (now() - created_at)) / 3600.0 / $4),
                 updated_at = now()
-          WHERE status = $5`,
+          WHERE status = $5 AND id IN (
+            SELECT id FROM videos
+             WHERE status = $5
+             ORDER BY updated_at ASC, id ASC
+             LIMIT $6
+          )`,
         [
           weightView,
           weightLike,
           weightComment,
           decayHours,
           VideoStatus.Published,
+          VIDEO_RANKING_BATCH,
         ],
       )) as [unknown, number];
       return count;

@@ -33,34 +33,6 @@ services:
     restart: unless-stopped
     mem_limit: 512m
 
-  kafka:
-    image: apache/kafka:3.9.0@sha256:fbc7d7c428e3755cf36518d4976596002477e4c052d1f80b5b9eafd06d0fff2f
-    environment:
-      KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      KAFKA_LISTENERS: PLAINTEXT://:19092,CONTROLLER://:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:19092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
-      KAFKA_HEAP_OPTS: -Xms512m -Xmx1g
-    volumes:
-      - kafka_data:/var/lib/kafka/data
-    healthcheck:
-      test:
-        [
-          'CMD-SHELL',
-          '/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:19092 >/dev/null 2>&1',
-        ]
-      interval: 10s
-      timeout: 10s
-      retries: 20
-    restart: unless-stopped
-    mem_limit: 2g
-
   livekit:
     image: livekit/livekit-server:v1.13.1@sha256:2c6869d2d5ff6c9c0166f47be1c92dad6928bfecfa5e4060a6ece48db8accfa3
     command: --config /etc/livekit.yaml
@@ -89,7 +61,6 @@ services:
       CORS_ORIGINS: https://app.${DOMAIN},https://admin.${DOMAIN}
       DATABASE_URL: ${DATABASE_URL:?required}
       REDIS_URL: redis://redis:6379
-      KAFKA_BROKERS: kafka:19092
       JWT_SECRET: ${JWT_SECRET:?required}
       AUTH_OTP_PEPPER: ${AUTH_OTP_PEPPER:?required}
       AUTH_PHONE_OTP_ENABLED: 'true'
@@ -115,8 +86,6 @@ services:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      kafka:
         condition: service_healthy
       livekit:
         condition: service_started
@@ -208,7 +177,6 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  kafka_data:
   caddy_data:
   caddy_config:
   alloy_data:

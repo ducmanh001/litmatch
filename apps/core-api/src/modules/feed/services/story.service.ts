@@ -16,6 +16,9 @@ import type { AuthenticatedUser } from '../../../common/decorators/current-user.
 import type { Message } from '../../friend';
 import type { CoreApiEnv } from '../../../config/env.validation';
 
+const STORY_RING_BATCH_LIMIT = 1_000;
+const STORY_VIEWER_BATCH_LIMIT = 500;
+
 export interface CreateStoryInput {
   mediaUrl: string;
   caption?: string;
@@ -99,6 +102,7 @@ export class StoryService {
       .andWhere('s.expiresAt > :now', { now: new Date() })
       .orderBy('s.authorUserId', 'ASC')
       .addOrderBy('s.createdAt', 'DESC')
+      .limit(STORY_RING_BATCH_LIMIT)
       .getMany();
   }
 
@@ -167,7 +171,11 @@ export class StoryService {
       );
     }
     const blockedIds = await this.safetyService.getBlockedUserIds(user.userId);
-    const views = await this.viewRepo.findBy({ storyId });
+    const views = await this.viewRepo.find({
+      where: { storyId },
+      order: { createdAt: 'DESC', viewerId: 'ASC' },
+      take: STORY_VIEWER_BATCH_LIMIT,
+    });
     return views
       .map((v) => v.viewerId)
       .filter((viewerId) => !blockedIds.includes(viewerId));

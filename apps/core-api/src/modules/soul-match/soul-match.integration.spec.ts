@@ -29,6 +29,7 @@ import {
 } from '../friend';
 import { ConversationService } from '../friend/services/conversation.service';
 import { MatchingService } from '../matching';
+import { MatcherWakeup } from '../matching/matcher-wakeup';
 import {
   MatchTicket,
   MatchTicketStatus,
@@ -239,6 +240,7 @@ d('Soul Match integration (Postgres thật)', () => {
       notificationStub as never,
       configStub,
       {} as never,
+      new MatcherWakeup(),
     );
     service = new SoulMatchService(
       ds,
