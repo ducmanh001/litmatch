@@ -14,9 +14,28 @@ const runtimeDockerfiles = [
 ];
 
 function dryRun(profile, ...args) {
+  const {
+    LOCAL_CI_SERVICES_READY: _servicesReady,
+    LOCAL_CI_DATABASE_READY: _databaseReady,
+    ...testEnvironment
+  } = process.env;
+
   return spawnSync(process.execPath, [script, profile, '--dry-run', ...args], {
     cwd: root,
     encoding: 'utf8',
+    env: testEnvironment,
+  });
+}
+
+function dryRunWithCiServices(profile, ...args) {
+  return spawnSync(process.execPath, [script, profile, '--dry-run', ...args], {
+    cwd: root,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      LOCAL_CI_SERVICES_READY: 'true',
+      LOCAL_CI_DATABASE_READY: 'true',
+    },
   });
 }
 
@@ -127,6 +146,16 @@ test('all local CI profile plans quality, test, and Docker smoke stages', () => 
     /litmatch_local@localhost:5432\/litmatch_ci/u,
   );
   assert.doesNotMatch(result.stdout, /redis:\/\/localhost:6379\/15/u);
+});
+
+test('CI-provided services are reused without creating a local database', () => {
+  const result = dryRunWithCiServices('ci');
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Reuse CI-provided PostgreSQL and Redis/u);
+  assert.match(result.stdout, /Reuse CI-provided isolated database/u);
+  assert.doesNotMatch(result.stdout, /Start local PostgreSQL and Redis/u);
+  assert.doesNotMatch(result.stdout, /Ensure isolated database litmatch_ci/u);
 });
 
 test('security local CI profile is disabled and does not run scans', () => {
