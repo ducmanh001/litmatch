@@ -1,8 +1,15 @@
 #!/usr/bin/env node
 
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+import {
+  collectWorkspaceState,
+  workspaceStateLines,
+} from './workspace-state.mjs';
 
 const root = new URL('../../', import.meta.url);
+const rootPath = fileURLToPath(root);
 const map = JSON.parse(
   readFileSync(new URL('.agents/context-map.json', root), 'utf8'),
 );
@@ -23,6 +30,10 @@ console.log('- Objective:');
 console.log('- Out of scope:');
 console.log('- Acceptance criteria:');
 console.log('- Risk/invariants:');
+console.log('\n## Shared-workspace safety');
+for (const line of workspaceStateLines(collectWorkspaceState(rootPath))) {
+  console.log(line);
+}
 console.log('\n## Read first');
 for (const path of entry.read ?? []) console.log(`- ${path}`);
 

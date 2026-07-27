@@ -82,7 +82,6 @@ const CONFIG: Record<string, unknown> = {
   CALLING_PENDING_TIMEOUT_SECONDS: 3600,
   CALLING_TICKER_INTERVAL_MS: 1000,
   USER_DEFAULT_AVATAR_ID: 'default-01',
-  AUTH_MIN_AGE: 18,
 };
 const configStub = {
   getOrThrow: (key: string) => {

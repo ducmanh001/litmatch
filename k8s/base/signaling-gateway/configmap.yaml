@@ -14,3 +14,5 @@ data:
   SIGNALING_PORT: '3001'
   # Điểm mở: điền domain FE thật khi có — KHÔNG dùng '*'
   CORS_ORIGINS: ''
+  SENTRY_DSN: ''
+  SENTRY_RELEASE: ''

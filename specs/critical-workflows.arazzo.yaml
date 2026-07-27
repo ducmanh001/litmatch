@@ -1,0 +1,36 @@
+arazzo: 1.1.0
+info:
+  title: Litmatch critical REST workflows
+  version: 1.0.0
+  description: Source-derived workflows. Authentication and request payload details are defined by the referenced OpenAPI document.
+sourceDescriptions:
+  - name: core-api
+    url: ../openapi/core-api.json
+    type: openapi
+workflows:
+  - workflowId: guest-authentication
+    summary: Establish a guest session.
+    steps:
+      - stepId: guest-login
+        operationPath: $sourceDescriptions.core-api.paths./api/v1/auth/guest.post
+  - workflowId: join-matching-queue
+    summary: Create an idempotent matching ticket after authentication.
+    dependsOn:
+      - guest-authentication
+    steps:
+      - stepId: create-ticket
+        operationPath: $sourceDescriptions.core-api.paths./api/v1/matching/tickets.post
+  - workflowId: create-party-room
+    summary: Create a party room and receive a LiveKit join token.
+    dependsOn:
+      - guest-authentication
+    steps:
+      - stepId: create-room
+        operationPath: $sourceDescriptions.core-api.paths./api/v1/party/rooms.post
+  - workflowId: purchase-vip
+    summary: Purchase VIP with an idempotency key.
+    dependsOn:
+      - guest-authentication
+    steps:
+      - stepId: purchase
+        operationPath: $sourceDescriptions.core-api.paths./api/v1/economy/vip/purchase.post

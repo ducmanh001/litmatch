@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 
+import { ProductAnalyticsPreference } from '../../../shared/analytics/product-analytics-components';
 import { showToast } from '../../../shared/lib/toast-store';
 
 const VISIBILITY_SETTINGS = [
@@ -172,6 +173,8 @@ export default function PrivacyPage() {
             </Link>
           </div>
         </div>
+
+        <ProductAnalyticsPreference />
       </div>
     </main>
   );

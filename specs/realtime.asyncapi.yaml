@@ -1,0 +1,39 @@
+asyncapi: 3.1.0
+info:
+  title: Litmatch realtime fanout
+  version: 1.0.0
+  description: Authenticated Socket.IO fanout. Event names are owned by @litmatch/common-dtos; payload schemas intentionally remain source types until a generated schema boundary is introduced.
+servers:
+  signaling:
+    host: '{signalingHost}'
+    protocol: socket.io
+    description: Connect to namespace /signaling with auth.token containing a core-api access token.
+    variables:
+      signalingHost:
+        default: localhost:3001
+channels:
+  signaling:
+    address: /signaling
+    messages:
+      soulMessage:
+        name: soul.message
+      matchConfirmed:
+        name: match.confirmed
+      callEnded:
+        name: call.ended
+      friendMessage:
+        name: friend.message
+      partyRoomClosed:
+        name: party.room.closed
+      giftSent:
+        name: gift.sent
+      movieStateChanged:
+        name: movie.state.changed
+      miniGameResolved:
+        name: minigame.session.resolved
+operations:
+  receiveRealtimeEvent:
+    action: receive
+    channel:
+      $ref: '#/channels/signaling'
+    summary: Receive a best-effort event addressed to the authenticated user.

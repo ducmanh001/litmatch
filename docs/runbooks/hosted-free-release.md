@@ -34,7 +34,9 @@ Secrets: `NORTHFLANK_API_TOKEN`, `HOSTED_DATABASE_URL`, `CLOUDFLARE_API_TOKEN`,
 Variables: `NORTHFLANK_PROJECT_ID`, `NORTHFLANK_CORE_SERVICE_ID`,
 `NORTHFLANK_SIGNALING_SERVICE_ID`, `PUBLIC_API_URL`, `PUBLIC_SIGNALING_URL`,
 `PUBLIC_LIVEKIT_URL`, `PUBLIC_WEB_URL`, `PUBLIC_ADMIN_URL`, `GOOGLE_OAUTH_CLIENT_ID` (được để
-trống), và cuối cùng `HOSTED_RELEASE_ENABLED=true`.
+trống), `FACEBOOK_APP_ID`, `FACEBOOK_API_VERSION` (mặc định `v24.0`),
+`NEXT_PUBLIC_SENTRY_DSN`, `VITE_SENTRY_DSN` (đều có thể để trống), và cuối cùng
+`HOSTED_RELEASE_ENABLED=true`.
 
 Không bật gate cuối cho tới khi mọi URL/env ở Northflank đã khớp. Core `CORS_ORIGINS` phải chứa
 chính xác `PUBLIC_WEB_URL,PUBLIC_ADMIN_URL`; profile khác site phải giữ
@@ -49,3 +51,19 @@ Workflow `Hosted release` tự chạy sau khi workflow `CI` của `main` thành 
 Release lỗi dừng tại bước lỗi và không tự nâng plan. Khi Upstash free bị archive do không hoạt
 động, restore database trong console rồi cập nhật `REDIS_URL`; Redis không phải nguồn sự thật của
 ledger. Kafka giữ `ECONOMY_OUTBOX_RELAY_ENABLED=false`; event vẫn nằm trong outbox để replay sau.
+
+## 4. Facebook Login và observability
+
+1. Trong Meta for Developers tạo app loại Consumer, thêm Facebook Login/Web, khai **App Domains**
+   là domain Web thật và thêm URL Web thật vào **Valid OAuth Redirect URIs**. Lấy App ID và App
+   Secret; chỉ App ID đi vào GitHub Variable `FACEBOOK_APP_ID` (build public), còn cả hai đi vào
+   biến runtime Core `AUTH_FACEBOOK_APP_ID`/`AUTH_FACEBOOK_APP_SECRET` trên Northflank.
+2. Tạo bốn Sentry projects (core-api, signaling-gateway, web, admin). DSN backend là biến runtime
+   `SENTRY_DSN` của từng Northflank service; DSN browser là hai GitHub Variables
+   `NEXT_PUBLIC_SENTRY_DSN`/`VITE_SENTRY_DSN`. Đặt `SENTRY_RELEASE` bằng commit SHA deploy.
+3. Trong Grafana Cloud, tạo OTLP connection. Điền `OTEL_EXPORTER_OTLP_ENDPOINT` và
+   `OTEL_EXPORTER_OTLP_HEADERS` (Authorization header do connection cấp) vào cả hai service
+   Northflank. Đây chỉ là trace; metrics/logs của profile này chưa bật vì Alloy cần collector host.
+4. Tạo Sentry alerts ban đầu: error mới, 5xx/error event tăng bất thường. Với Grafana, alert
+   service mất trace/latency chỉ là signal phụ; SLO metrics/logs đầy đủ dùng profile Compose/K8s
+   - Alloy theo `docs/runbooks/grafana-cloud.md`.

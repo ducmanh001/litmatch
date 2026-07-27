@@ -9,6 +9,13 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 const profile = process.argv[2] ?? 'ci';
 const dryRun = process.argv.includes('--dry-run');
+const bypassRequested =
+  process.argv.includes('--bypass') ||
+  ['1', 'true', 'yes', 'on'].includes(
+    (process.env['LITMATCH_CI_BYPASS'] ?? process.env['CI_BYPASS'] ?? '')
+      .trim()
+      .toLowerCase(),
+  );
 const cleanRunnerImage =
   process.env['LOCAL_CI_NODE_IMAGE'] ??
   'node:22-bookworm@sha256:a25c9934ff6382cd4f08b6bc26c82bf4ea69b1e6f8dabfb2ead457374127c365';
@@ -29,6 +36,17 @@ if (!supportedProfiles.has(profile)) {
     `Local CI profile không hợp lệ: ${profile}. Hỗ trợ: ${[...supportedProfiles].join(', ')}`,
   );
   process.exit(1);
+}
+
+if (bypassRequested) {
+  console.log(
+    `[ci-local] Bypass enabled for profile ${profile}${
+      process.env['LITMATCH_CI_BYPASS_REASON']
+        ? `: ${process.env['LITMATCH_CI_BYPASS_REASON']}`
+        : ''
+    }`,
+  );
+  process.exit(0);
 }
 
 const environment = {
@@ -112,6 +130,11 @@ function prepareNx() {
 }
 
 function startTestServices() {
+  if (process.env['LOCAL_CI_SERVICES_READY'] === 'true') {
+    console.log('\n[ci-local] Reuse CI-provided PostgreSQL and Redis');
+    return;
+  }
+
   const postgresReady =
     !dryRun &&
     commandSucceeds('docker', [
@@ -143,6 +166,7 @@ function startTestServices() {
 function runQuality() {
   prepareDependencies();
   prepareNx();
+  run('Auto-fix formatting before quality checks', pnpm, ['format']);
   run('Agent contract and guard checks', pnpm, ['agent:check']);
   run('Agent guard tests', pnpm, ['agent:test']);
   runWorkflowLint();
@@ -158,6 +182,7 @@ function runCleanQuality() {
     'corepack enable',
     'pnpm install --store-dir /pnpm/store --frozen-lockfile',
     'pnpm nx reset',
+    'pnpm format',
     'pnpm agent:check',
     'pnpm agent:test',
     'SHELLCHECK="$(node scripts/ci/security-tools.mjs shellcheck --print-path)"',
@@ -238,6 +263,11 @@ function localCiDatabaseName() {
 }
 
 function ensureLocalCiDatabase() {
+  if (process.env['LOCAL_CI_DATABASE_READY'] === 'true') {
+    console.log('\n[ci-local] Reuse CI-provided isolated database');
+    return;
+  }
+
   const databaseName = localCiDatabaseName();
   if (dryRun) {
     console.log(`\n[ci-local] Ensure isolated database ${databaseName}`);
@@ -553,10 +583,10 @@ function runProfile() {
     runQuality();
     return;
   }
-  // if (profile === 'clean') {
-  //   runCleanQuality();
-  //   return;
-  // }
+  if (profile === 'clean') {
+    runCleanQuality();
+    return;
+  }
   if (profile === 'ci') {
     runQuality();
     runTestAndBuild();

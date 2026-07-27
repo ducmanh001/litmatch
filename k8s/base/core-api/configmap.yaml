@@ -36,9 +36,12 @@ data:
   AUTH_OTP_MAX_ATTEMPTS: '5'
   AUTH_OTP_REQUESTS_PER_HOUR: '5'
   AUTH_PHONE_OTP_ENABLED: 'true'
-  AUTH_MIN_AGE: '18'
   AUTH_GOOGLE_CLIENT_ID: ''
   AUTH_APPLE_CLIENT_ID: ''
+  AUTH_FACEBOOK_APP_ID: ''
+  # DSN là ingest identifier công khai; App Secret Facebook ở Secret bên dưới.
+  SENTRY_DSN: ''
+  SENTRY_RELEASE: ''
 
   USER_DEFAULT_AVATAR_ID: 'default-01'
 

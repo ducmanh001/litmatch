@@ -478,7 +478,7 @@ export class ShortVideoService {
     reason: ReportReason,
     description?: string,
   ): Promise<void> {
-    await this.getVideoOrThrow(user, videoId);
+    await this.getVideoOrThrow(user, videoId); // Chốt target tồn tại/visible trước khi ghi report.
     const { distinctReporterCount } = await this.safetyService.reportVideo(
       user.userId,
       videoId,

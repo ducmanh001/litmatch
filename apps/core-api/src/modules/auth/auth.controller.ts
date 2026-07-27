@@ -88,8 +88,10 @@ export class AuthController {
 
   @Post('social')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: minutes(1) } })
   @ApiOperation({
-    summary: 'Đăng nhập bằng Google/Apple ID token (server tự verify chữ ký)',
+    summary:
+      'Đăng nhập bằng Google/Apple ID token hoặc Facebook access token (server tự verify)',
   })
   @ApiOkResponse({ type: AuthTokensDto })
   async social(

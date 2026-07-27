@@ -1,0 +1,865 @@
+{
+  "schemaVersion": 1,
+  "title": "Litmatch feature evidence registry",
+  "sourceOfTruth": "This registry is the canonical status index. Product intent remains in docs/01-product-features.md and architectural rules remain in docs/03-architecture.md and docs/11-engineering-principles.md.",
+  "features": [
+    {
+      "id": "auth-session",
+      "title": "Guest, OTP, social login and rotating browser sessions",
+      "status": "implemented",
+      "owner": "core-api/auth",
+      "contracts": [
+        "openapi/core-api.json",
+        "docs/06-domain-rules.md",
+        "docs/adr/0007-httponly-cookie-refresh-token.md"
+      ],
+      "evidence": [
+        {
+          "path": "apps/core-api/src/modules/auth/auth.controller.ts",
+          "contains": "@Controller('auth')"
+        }
+      ],
+      "verification": {
+        "kind": "automated-test-source",
+        "evidence": [
+          {
+            "path": "apps/core-api/src/modules/auth/auth.service.spec.ts",
+            "contains": "AuthService"
+          }
+        ]
+      }
+    },
+    {
+      "id": "economy-ledger",
+      "title": "Wallet, IAP catalog, VIP and double-entry ledger",
+      "status": "implemented",
+      "owner": "core-api/economy",
+      "contracts": [
+        "openapi/core-api.json",
+        "docs/services/economy-service.md",
+        "docs/06-domain-rules.md"
+      ],
+      "evidence": [
+        {
+          "path": "apps/core-api/src/modules/economy/economy.controller.ts",
+          "contains": "@Controller('economy')"
+        },
+        {
+          "path": "apps/core-api/src/modules/economy/services/ledger.service.ts",
+          "contains": "LedgerService"
+        }
+      ],
+      "verification": {
+        "kind": "automated-test-source",
+        "evidence": [
+          {
+            "path": "apps/core-api/src/modules/economy/economy.integration.spec.ts",
+            "contains": "Economy"
+          }
+        ]
+      }
+    },
+    {
+      "id": "matching",
+      "title": "Queue ticket, pairing and paid speed-up",
+      "status": "implemented",
+      "owner": "core-api/matching",
+      "contracts": [
+        "openapi/core-api.json",
+        "docs/services/matching-service.md",
+        "docs/06-domain-rules.md"
+      ],
+      "evidence": [
+        {
+          "path": "apps/core-api/src/modules/matching/matching.controller.ts",
+          "contains": "@Controller('matching')"
+        },
+        {
+          "path": "apps/core-api/src/modules/matching/jobs/matcher-worker.service.ts",
+          "contains": "MatcherWorkerService"
+        }
+      ],
+      "verification": {
+        "kind": "automated-test-source",
+        "evidence": [
+          {
+            "path": "apps/core-api/src/modules/matching/matching.integration.spec.ts",
+            "contains": "Matching"
+          }
+        ]
+      }
+    },
+    {
+      "id": "soul-match",
+      "title": "Anonymous text match, rating and friendship unlock",
+      "status": "implemented",
+      "owner": "core-api/soul-match",
+      "contracts": [
+        "openapi/core-api.json",
+        "docs/services/soul-match-service.md",
+        "docs/services/realtime-gateway.md"
+      ],
+      "evidence": [
+        {
+          "path": "apps/core-api/src/modules/soul-match/soul-match.controller.ts",
+          "contains": "@Controller('soul-match')"
+        }
+      ],
+      "verification": {
+        "kind": "automated-test-source",
+        "evidence": [
+          {
+            "path": "apps/core-api/src/modules/soul-match/soul-match.integration.spec.ts",
+            "contains": "Soul"
+          }
+        ]
+      }
+    },
+    {
+      "id": "calling",
+      "title": "Voice-call lifecycle and settlement",
+      "status": "implemented",
+      "owner": "core-api/calling",
+      "contracts": [
+        "openapi/core-api.json",
+        "docs/services/calling-service.md",
+        "docs/06-domain-rules.md"
+      ],
+      "evidence": [
+        {
+          "path": "apps/core-api/src/modules/calling/calling.controller.ts",
+          "contains": "@Controller('calling')"
+        }
+      ],
+      "verification": {
+        "kind": "automated-test-source",
+        "evidence": [
+          {
+            "path": "apps/core-api/src/modules/calling/calling.integration.spec.ts",
+            "contains": "Calling"
+          }
+        ]
+      }
+    },
+    {
+      "id": "party-room",
+      "title": "Party-room lifecycle, LiveKit token and member roles",
+      "status": "implemented",
+      "owner": "core-api/party-room",
+      "contracts": [
+        "openapi/core-api.json",
+        "docs/services/party-room-service.md",
+        "docs/services/realtime-gateway.md"
+      ],
+      "evidence": [
+        {
+          "path": "apps/core-api/src/modules/party-room/party-room.controller.ts",
+          "contains": "@Controller('party/rooms')"
+        }
+      ],
+      "verification": {
+        "kind": "automated-test-source",
+        "evidence": [
+          {
+            "path": "apps/core-api/src/modules/party-room/party-room.integration.spec.ts",
+            "contains": "Party"
+          }
+        ]
+      }
+    },
+    {
+      "id": "gift",
+      "title": "Party-room gifts through Economy",
+      "status": "implemented",
+      "owner": "core-api/gift",
+      "contracts": [
+        "openapi/core-api.json",
+        "docs/services/gift-service.md",
+        "docs/services/economy-service.md"
+      ],
+      "evidence": [
+        {
+          "path": "apps/core-api/src/modules/gift/gift.controller.ts",
+          "contains": "export class GiftController"
+        }
+      ],
+      "verification": {
+        "kind": "automated-test-source",
+        "evidence": [
+          {
+            "path": "apps/core-api/src/modules/gift/gift.integration.spec.ts",
+            "contains": "Gift"
+          }
+        ]
+      }
+    },
+    {
+      "id": "friend-chat-streak",
+      "title": "Friendship, direct chat and streak",
+      "status": "implemented",
+      "owner": "core-api/friend",
+      "contracts": [
+        "openapi/core-api.json",
+        "docs/services/friend-service.md",
+        "docs/services/streak-service.md"
+      ],
+      "evidence": [
+        {
+          "path": "apps/core-api/src/modules/friend/friend.controller.ts",
+          "contains": "export class FriendController"
+        },
+        {
+          "path": "apps/core-api/src/modules/friend/services/streak.service.ts",
+          "contains": "StreakService"
+        }
+      ],
+      "verification": {
+        "kind": "automated-test-source",
+        "evidence": [
+          {
+            "path": "apps/core-api/src/modules/friend/friend.integration.spec.ts",
+            "contains": "Friend"
+          }
+        ]
+      }
+    },
+    {
+      "id": "feed-stories",
+      "title": "Feed, reactions, comments and expiring stories",
+      "status": "implemented",
+      "owner": "core-api/feed",
+      "contracts": ["openapi/core-api.json", "docs/services/feed-service.md"],
+      "evidence": [
+        {
+          "path": "apps/core-api/src/modules/feed/feed.controller.ts",
+          "contains": "@Controller('feed')"
+        },
+        {
+          "path": "apps/core-api/src/modules/feed/controllers/story.controller.ts",
+          "contains": "@Controller('stories')"
+        }
+      ],
+      "verification": {
+        "kind": "automated-test-source",
+        "evidence": [
+          {
+            "path": "apps/core-api/src/modules/feed/feed.integration.spec.ts",
+            "contains": "Feed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "safety",
+      "title": "Report, block and trust-safety decisions",
+      "status": "implemented",
+      "owner": "core-api/safety",
+      "contracts": [
+        "openapi/core-api.json",
+        "docs/services/safety-service.md",
+        "docs/06-domain-rules.md"
+      ],
+      "evidence": [
+        {
+          "path": "apps/core-api/src/modules/safety/safety.controller.ts",
+          "contains": "@Controller('safety')"
+        }
+      ],
+      "verification": {
+        "kind": "automated-test-source",
+        "evidence": [
+          {
+            "path": "apps/core-api/src/modules/safety/safety.service.spec.ts",
+            "contains": "SafetyService"
+          }
+        ]
+      }
+    },
+    {
+      "id": "avatar-discovery-mood",
+      "title": "Avatar, discovery/nearby and mood",
+      "status": "implemented",
+      "owner": "core-api/avatar, core-api/discovery, core-api/mood",
+      "contracts": [
+        "openapi/core-api.json",
+        "docs/services/avatar-service.md",
+        "docs/services/discovery-service.md",
+        "docs/services/mood-service.md"
+      ],
+      "evidence": [
+        {
+          "path": "apps/core-api/src/modules/avatar/avatar.controller.ts",
+          "contains": "@Controller('avatar')"
+        },
+        {
+          "path": "apps/core-api/src/modules/discovery/discovery.controller.ts",
+          "contains": "@Controller('discovery')"
+        },
+        {
+          "path": "apps/core-api/src/modules/mood/mood.controller.ts",
+          "contains": "@Controller('mood')"
+        }
+      ],
+      "verification": {
+        "kind": "automated-test-source",
+        "evidence": [
+          {
+            "path": "apps/core-api/src/modules/avatar/avatar.integration.spec.ts",
+            "contains": "Avatar"
+          },
+          {
+            "path": "apps/core-api/src/modules/discovery/discovery.integration.spec.ts",
+            "contains": "Discovery"
+          },
+          {
+            "path": "apps/core-api/src/modules/mood/mood.integration.spec.ts",
+            "contains": "Mood"
+          }
+        ]
+      }
+    },
+    {
+      "id": "notification",
+      "title": "In-process notification dispatch and development push provider",
+      "status": "implemented",
+      "owner": "core-api/notification",
+      "contracts": [
+        "openapi/core-api.json",
+        "docs/services/notification-service.md"
+      ],
+      "evidence": [
+        {
+          "path": "apps/core-api/src/modules/notification/notification.controller.ts",
+          "contains": "@Controller('notifications')"
+        }
+      ],
+      "verification": {
+        "kind": "automated-test-source",
+        "evidence": [
+          {
+            "path": "apps/core-api/src/modules/notification/notification.service.spec.ts",
+            "contains": "NotificationService"
+          }
+        ]
+      }
+    },
+    {
+      "id": "support-tickets",
+      "title": "Idempotent support tickets with customer tracking and staff workflow",
+      "status": "implemented",
+      "owner": "core-api/support with core-api/admin",
+      "contracts": [
+        "openapi/core-api.json",
+        "docs/plans/2026-07-15-ui-contract-completion.md"
+      ],
+      "evidence": [
+        {
+          "path": "apps/core-api/src/modules/support/support.controller.ts",
+          "contains": "@Controller('support/tickets')"
+        },
+        {
+          "path": "apps/core-api/src/modules/support/entities/support-ticket.entity.ts",
+          "contains": "uq_support_ticket_user_idempotency"
+        }
+      ],
+      "verification": {
+        "kind": "automated-test-source",
+        "evidence": [
+          {
+            "path": "apps/core-api/src/modules/support/support.service.spec.ts",
+            "contains": "listMine khóa ownership"
+          }
+        ]
+      }
+    },
+    {
+      "id": "mini-game",
+      "title": "Two-player rock-paper-scissors mini game",
+      "status": "implemented",
+      "owner": "core-api/mini-game",
+      "contracts": [
+        "openapi/core-api.json",
+        "docs/services/mini-game-service.md",
+        "docs/services/realtime-gateway.md"
+      ],
+      "evidence": [
+        {
+          "path": "apps/core-api/src/modules/mini-game/mini-game.controller.ts",
+          "contains": "@Controller('mini-game')"
+        }
+      ],
+      "verification": {
+        "kind": "automated-test-source",
+        "evidence": [
+          {
+            "path": "apps/core-api/src/modules/mini-game/mini-game.integration.spec.ts",
+            "contains": "Mini"
+          }
+        ]
+      }
+    },
+    {
+      "id": "movie-match",
+      "title": "Shared video playback and anonymous movie match",
+      "status": "implemented",
+      "owner": "core-api/movie-match",
+      "contracts": [
+        "openapi/core-api.json",
+        "docs/services/movie-match-service.md",
+        "docs/services/realtime-gateway.md"
+      ],
+      "evidence": [
+        {
+          "path": "apps/core-api/src/modules/movie-match/movie-match.controller.ts",
+          "contains": "@Controller('movie-match')"
+        }
+      ],
+      "verification": {
+        "kind": "automated-test-source",
+        "evidence": [
+          {
+            "path": "apps/core-api/src/modules/movie-match/movie-match.integration.spec.ts",
+            "contains": "Movie"
+          }
+        ]
+      }
+    },
+    {
+      "id": "palm-match",
+      "title": "Deterministic palm reading and anonymous palm match",
+      "status": "implemented",
+      "owner": "core-api/palm-match",
+      "contracts": [
+        "openapi/core-api.json",
+        "docs/services/palm-match-service.md"
+      ],
+      "evidence": [
+        {
+          "path": "apps/core-api/src/modules/palm-match/palm-match.controller.ts",
+          "contains": "@Controller('palm-match')"
+        }
+      ],
+      "verification": {
+        "kind": "automated-test-source",
+        "evidence": [
+          {
+            "path": "apps/core-api/src/modules/palm-match/palm-match.integration.spec.ts",
+            "contains": "Palm"
+          }
+        ]
+      }
+    },
+    {
+      "id": "short-video",
+      "title": "Short-video lifecycle, moderation and derived ranking",
+      "status": "implemented",
+      "owner": "core-api/short-video",
+      "contracts": [
+        "openapi/core-api.json",
+        "docs/services/short-video-service.md",
+        "docs/services/safety-service.md"
+      ],
+      "evidence": [
+        {
+          "path": "apps/core-api/src/modules/short-video/short-video.controller.ts",
+          "contains": "@Controller('videos')"
+        },
+        {
+          "path": "apps/core-api/src/modules/short-video/jobs/video-ranking.service.ts",
+          "contains": "VideoRankingService"
+        }
+      ],
+      "verification": {
+        "kind": "automated-test-source",
+        "evidence": [
+          {
+            "path": "apps/core-api/src/modules/short-video/short-video.integration.spec.ts",
+            "contains": "Short"
+          }
+        ]
+      }
+    },
+    {
+      "id": "user-profile-open-entry",
+      "title": "Optional profile birth date without an age-based access gate",
+      "status": "implemented",
+      "owner": "core-api/user",
+      "contracts": [
+        "openapi/core-api.json",
+        "docs/01-product-features.md",
+        "docs/06-domain-rules.md"
+      ],
+      "evidence": [
+        {
+          "path": "apps/core-api/src/modules/user/user.service.ts",
+          "contains": "Ngày sinh là dữ liệu profile tự chọn"
+        },
+        {
+          "path": "apps/core-api/src/modules/user/dto/update-profile.dto.ts",
+          "contains": "không cho ngày trong tương lai"
+        }
+      ],
+      "verification": {
+        "kind": "automated-test-source",
+        "evidence": [
+          {
+            "path": "apps/core-api/src/modules/user/user.service.spec.ts",
+            "contains": "birthDate không phải access gate"
+          }
+        ]
+      }
+    },
+    {
+      "id": "privacy-analytics-consent",
+      "title": "Non-blocking analytics preference and private session-replay defaults",
+      "status": "implemented",
+      "owner": "web/shared-analytics",
+      "contracts": [
+        "docs/runbooks/posthog-cloud.md",
+        "docs/06-domain-rules.md"
+      ],
+      "evidence": [
+        {
+          "path": "apps/web/src/shared/analytics/product-analytics.ts",
+          "contains": "const CONSENT_COOKIE_NAME"
+        },
+        {
+          "path": "apps/web/src/shared/analytics/product-analytics.ts",
+          "contains": "maskAllInputs: true"
+        },
+        {
+          "path": "apps/web/src/shared/analytics/product-analytics.ts",
+          "contains": "autocapture: false"
+        },
+        {
+          "path": "apps/web/src/shared/analytics/product-analytics-components.tsx",
+          "contains": "Analytics là một tùy chọn trong trang cài đặt"
+        }
+      ],
+      "verification": {
+        "kind": "automated-test-source",
+        "evidence": [
+          {
+            "path": "apps/web/src/shared/analytics/product-analytics.spec.ts",
+            "contains": "không khởi tạo SDK hoặc gửi request trước khi có consent"
+          },
+          {
+            "path": "apps/web/src/shared/analytics/product-analytics.spec.ts",
+            "contains": "không gửi nickname"
+          },
+          {
+            "path": "apps/web/src/shared/analytics/product-analytics-components.spec.tsx",
+            "contains": "không hiện dialog"
+          }
+        ]
+      }
+    },
+    {
+      "id": "short-video-reporting-ui",
+      "title": "Short-video report action in the web client",
+      "status": "implemented",
+      "owner": "web/short-video with core-api/safety",
+      "contracts": [
+        "openapi/core-api.json",
+        "docs/services/short-video-service.md",
+        "docs/services/safety-service.md"
+      ],
+      "evidence": [
+        {
+          "path": "apps/web/src/features/short-video/components/video-reel-feed.tsx",
+          "contains": "function VideoReportButton"
+        },
+        {
+          "path": "apps/web/src/features/short-video/components/video-reel-feed.tsx",
+          "contains": "useReportVideo(videoId)"
+        }
+      ],
+      "verification": {
+        "kind": "automated-test-source",
+        "evidence": [
+          {
+            "path": "apps/web/src/features/short-video/components/video-reel-feed.spec.tsx",
+            "contains": "/api/v1/videos/{id}/report"
+          }
+        ]
+      }
+    },
+    {
+      "id": "realtime-fanout",
+      "title": "Authenticated Socket.IO user fanout through Redis",
+      "status": "implemented",
+      "owner": "signaling-gateway with core-api producers",
+      "contracts": [
+        "libs/common-dtos/src/lib/realtime-events.ts",
+        "docs/services/realtime-gateway.md",
+        "specs/realtime.asyncapi.yaml"
+      ],
+      "evidence": [
+        {
+          "path": "apps/signaling-gateway/src/app/signaling.gateway.ts",
+          "contains": "@WebSocketGateway"
+        },
+        {
+          "path": "libs/common-dtos/src/lib/realtime-events.ts",
+          "contains": "export const RealtimeEvents"
+        }
+      ],
+      "verification": {
+        "kind": "automated-test-source",
+        "evidence": [
+          {
+            "path": "apps/signaling-gateway/src/app/signaling.integration.spec.ts",
+            "contains": "event chỉ tới ĐÚNG user"
+          }
+        ]
+      }
+    }
+  ],
+  "deferredDecisions": [
+    {
+      "id": "production-cache-policy",
+      "status": "deferred",
+      "owner": "architecture/platform",
+      "reason": "Redis and derived ranking are already documented as projections or transport support. No production read/write, hit-rate, latency, or eviction evidence is checked into this repository to justify a new cache layer or TTL policy.",
+      "evidence": [
+        {
+          "path": "docs/11-engineering-principles.md",
+          "contains": "Correctness trước performance"
+        }
+      ]
+    },
+    {
+      "id": "algorithm-upgrades",
+      "status": "deferred",
+      "owner": "product/domain owners",
+      "reason": "Matching shard expansion, feed CQRS and richer video ranking need observed traffic and SLO evidence. The current code keeps the documented bounded algorithms rather than adding speculative infrastructure.",
+      "evidence": [
+        {
+          "path": "docs/07-roadmap.md",
+          "contains": "số liệu traffic production thật"
+        }
+      ]
+    }
+  ],
+  "recordedChecks": [
+    {
+      "scope": "Web privacy analytics and short-video reporting",
+      "result": "14 tests passed on 2026-07-24",
+      "command": "NX_DAEMON=false nx test web --run src/shared/analytics/product-analytics.spec.ts src/shared/analytics/product-analytics-components.spec.tsx src/features/short-video/components/video-reel-feed.spec.tsx",
+      "evidence": [
+        {
+          "path": "apps/web/src/shared/analytics/product-analytics.spec.ts",
+          "contains": "không khởi tạo SDK hoặc gửi request trước khi có consent"
+        },
+        {
+          "path": "apps/web/src/features/short-video/components/video-reel-feed.spec.tsx",
+          "contains": "/api/v1/videos/{id}/report"
+        }
+      ],
+      "caveat": "Recorded handoff evidence only; it does not prove browser RUM, vendor ingestion, or production consent behavior."
+    },
+    {
+      "scope": "Core API module layout and moved secondary controller",
+      "result": "64 tests passed on 2026-07-24",
+      "command": "NX_DAEMON=false nx test core-api --runTestsByPath src/arch/module-layout.spec.ts src/arch/module-boundaries.spec.ts src/modules/matching/controllers/invite.controller.spec.ts",
+      "evidence": [
+        {
+          "path": "apps/core-api/src/arch/module-layout.spec.ts",
+          "contains": "chỉ để HTTP facade chính ở root"
+        },
+        {
+          "path": "apps/core-api/src/modules/matching/controllers/invite.controller.spec.ts",
+          "contains": "InviteController"
+        }
+      ],
+      "caveat": "This proves the checked repository structure and controller contract tests, not production traffic behavior."
+    },
+    {
+      "scope": "Short-video report persistence and auto-hide",
+      "result": "21 unit tests and 11 PostgreSQL integration tests passed on 2026-07-24",
+      "command": "NX_DAEMON=false nx test core-api --runTestsByPath src/modules/short-video/short-video.service.spec.ts && INTEGRATION_DB_URL=<postgres-test-url> NX_DAEMON=false nx test core-api --skip-nx-cache --runTestsByPath src/modules/short-video/short-video.integration.spec.ts",
+      "evidence": [
+        {
+          "path": "apps/core-api/src/modules/short-video/short-video.service.spec.ts",
+          "contains": "vượt ngưỡng distinct reporter"
+        },
+        {
+          "path": "apps/core-api/src/modules/short-video/short-video.integration.spec.ts",
+          "contains": "cùng 1 người report lặp lại 1 video"
+        }
+      ],
+      "caveat": "The integration suite uses PostgreSQL with development storage/transcode adapters; it does not verify a production video provider."
+    },
+    {
+      "scope": "Support service ownership, idempotency and workflow",
+      "result": "5 unit tests passed on 2026-07-24",
+      "command": "NX_DAEMON=false nx test core-api --skip-nx-cache --runTestsByPath src/modules/support/support.service.spec.ts",
+      "evidence": [
+        {
+          "path": "apps/core-api/src/modules/support/support.service.spec.ts",
+          "contains": "unique violation cùng payload"
+        },
+        {
+          "path": "apps/core-api/src/modules/support/support.service.spec.ts",
+          "contains": "setStatusWithManager khóa row"
+        }
+      ],
+      "caveat": "This unit suite proves service ownership and transition behavior with mocked persistence; the existing admin integration suite remains the PostgreSQL-level owner."
+    },
+    {
+      "scope": "Open-entry user profile birth date",
+      "result": "11 user-service tests passed on 2026-07-24",
+      "command": "NX_DAEMON=false nx test core-api --skip-nx-cache --runTestsByPath src/modules/user/user.service.spec.ts",
+      "evidence": [
+        {
+          "path": "apps/core-api/src/modules/user/user.service.spec.ts",
+          "contains": "birthDate không phải access gate"
+        },
+        {
+          "path": "apps/core-api/src/modules/user/user.service.spec.ts",
+          "contains": "chặn birthDate ở tương lai"
+        }
+      ],
+      "caveat": "This confirms core profile behavior only; optional market-specific policy would require a separate explicit product decision."
+    },
+    {
+      "scope": "Repository policy, contracts, formatting, builds and unit suites",
+      "result": "PASS on 2026-07-24: agent check; 76 agent/tool tests; OpenAPI and formatting; lint/build for core-api, web, admin and api-client; core 551, web 230, admin 52 and api-client 23 tests",
+      "command": "pnpm agent:check; pnpm agent:test; pnpm openapi:check; pnpm format:check; NX_DAEMON=false nx run-many -t lint build test -p core-api web admin api-client --skip-nx-cache",
+      "evidence": [
+        {
+          "path": "package.json",
+          "contains": "\"agent:check\":"
+        },
+        {
+          "path": "scripts/agent/verify.mjs",
+          "contains": "requiredTargets: ['lint', 'test', 'build']"
+        }
+      ],
+      "caveat": "The core unit command intentionally skipped 16 integration suites without a shared integration URL. The changed short-video PostgreSQL integration suite is recorded separately. Canonical verify wrappers exceeded the mandatory 45-second shell budget, so their underlying commands were run separately and passed."
+    }
+  ],
+  "moduleReviews": [
+    {
+      "scope": "Trust & Safety / short-video reporting",
+      "mode": "verify",
+      "reviewedAt": "2026-07-24",
+      "result": "PASS",
+      "flow": "Viewer opens the report action → confirms intent → authenticated POST /videos/:id/report → server validates the video → append/idempotently reuse the report → count distinct reporters → conditionally auto-hide a published video.",
+      "assumptions": [
+        {
+          "assumption": "The client confirmation is only UX; a custom client may call the report endpoint directly.",
+          "breakVector": "A caller bypasses the button or confirmation dialog.",
+          "guard": [
+            {
+              "path": "apps/core-api/src/app/app.module.ts",
+              "contains": "{ provide: APP_GUARD, useClass: JwtAuthGuard }"
+            },
+            {
+              "path": "apps/core-api/src/modules/short-video/short-video.controller.ts",
+              "contains": "await this.videoService.reportVideo(user, id, dto.reason, dto.description);"
+            }
+          ],
+          "verdict": "PASS"
+        },
+        {
+          "assumption": "A caller cannot create report evidence for a video that does not exist or is not visible to that caller.",
+          "breakVector": "A guessed, stale, or unauthorized video UUID is submitted.",
+          "guard": [
+            {
+              "path": "apps/core-api/src/modules/short-video/short-video.service.ts",
+              "contains": "Chốt target tồn tại/visible trước khi ghi report"
+            },
+            {
+              "path": "apps/core-api/src/modules/short-video/short-video.service.spec.ts",
+              "contains": "validate video tồn tại trước khi gọi Safety"
+            }
+          ],
+          "verdict": "PASS"
+        },
+        {
+          "assumption": "Retry or rapid double-submit by one reporter does not inflate the distinct-reporter count.",
+          "breakVector": "The same user repeats or races the request.",
+          "guard": [
+            {
+              "path": "apps/core-api/src/database/migrations/1754900000000-report-target-video.ts",
+              "contains": "CREATE UNIQUE INDEX uq_reports_video_reporter"
+            },
+            {
+              "path": "apps/core-api/src/modules/safety/safety.service.ts",
+              "contains": "if (!isUniqueViolation(err)) throw err;"
+            }
+          ],
+          "verdict": "PASS"
+        },
+        {
+          "assumption": "The client cannot choose the moderation threshold or force an arbitrary status transition.",
+          "breakVector": "A forged body claims a higher report count or requests removal directly.",
+          "guard": [
+            {
+              "path": "apps/core-api/src/modules/short-video/short-video.service.ts",
+              "contains": "if (distinctReporterCount >= threshold)"
+            },
+            {
+              "path": "apps/core-api/src/modules/short-video/short-video.service.ts",
+              "contains": "return this.transition(videoId, VideoStatus.Published, VideoStatus.Removed);"
+            }
+          ],
+          "verdict": "PASS"
+        },
+        {
+          "assumption": "Reporting a video must not reduce the author's personal trust score.",
+          "breakVector": "Content moderation is incorrectly treated as a user report.",
+          "guard": [
+            {
+              "path": "apps/core-api/src/modules/safety/safety.service.ts",
+              "contains": "trustPenaltyApplied: 0"
+            },
+            {
+              "path": "apps/core-api/src/modules/short-video/short-video.integration.spec.ts",
+              "contains": "report vượt VIDEO_REPORT_AUTOHIDE_THRESHOLD"
+            }
+          ],
+          "verdict": "PASS"
+        }
+      ],
+      "checklist": [
+        {
+          "item": "Server-authoritative validation and moderation threshold",
+          "result": "PASS",
+          "note": "The web sends only reason/description; existence, visibility, distinct count, threshold, and transition are decided server-side."
+        },
+        {
+          "item": "Duplicate/race handling",
+          "result": "PASS",
+          "note": "A partial unique database index is the final guard and the integration test proves repeated reports remain one row."
+        },
+        {
+          "item": "Short-video status transition",
+          "result": "PASS",
+          "note": "Auto-hide uses a conditional published-to-removed update instead of a pessimistic lock."
+        },
+        {
+          "item": "Trust-score separation",
+          "result": "PASS",
+          "note": "Video reports record zero trust penalty and do not call user trust-score adjustment."
+        },
+        {
+          "item": "Age-verification policy",
+          "result": "N/A",
+          "note": "This change restores an existing report action and does not add an account eligibility or age gate; the requested scope explicitly excludes that restriction."
+        }
+      ],
+      "recordedCheckScopes": [
+        "Web privacy analytics and short-video reporting",
+        "Short-video report persistence and auto-hide"
+      ]
+    }
+  ],
+  "outOfScope": [
+    {
+      "id": "github-ci-cd",
+      "reason": "The audit explicitly excludes GitHub CI/CD. This change does not edit .github, CI workflows, deployment manifests or release automation."
+    }
+  ]
+}

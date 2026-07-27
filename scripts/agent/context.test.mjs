@@ -32,6 +32,8 @@ test('agent:context in rõ routing điều kiện', async () => {
 
   assert.match(stdout, /## Read first/u);
   assert.match(stdout, /## Read when applicable/u);
+  assert.match(stdout, /## Shared-workspace safety/u);
+  assert.match(stdout, /Local changes có sẵn:/u);
   assert.match(
     stdout,
     /docs\/services\/movie-match-service\.md — chạm Movie Match/u,

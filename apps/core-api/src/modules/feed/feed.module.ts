@@ -3,7 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { FeedController } from './feed.controller';
 import { FeedService } from './feed.service';
-import { StoryController } from './story.controller';
+import { StoryController } from './controllers/story.controller';
 import { Comment } from './entities/comment.entity';
 import { Post } from './entities/post.entity';
 import { Reaction } from './entities/reaction.entity';

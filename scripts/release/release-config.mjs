@@ -99,6 +99,16 @@ export function validateReleaseConfig(values) {
     );
   }
 
+  const facebookKeys = ['FACEBOOK_APP_ID', 'FACEBOOK_APP_SECRET'];
+  const facebookCount = facebookKeys.filter((key) =>
+    Boolean(values[key]),
+  ).length;
+  if (facebookCount !== 0 && facebookCount !== facebookKeys.length) {
+    errors.push(
+      'Facebook App ID và App Secret phải cùng có giá trị hoặc cùng để trống',
+    );
+  }
+
   return errors;
 }
 
@@ -107,6 +117,7 @@ export function createRuntimeEnv(values, releaseTag) {
   return {
     ...process.env,
     ...values,
+    SENTRY_RELEASE: values.SENTRY_RELEASE || releaseTag,
     DATABASE_URL: databaseUrl,
     CORE_IMAGE: `litmatch/core-api:${releaseTag}`,
     SIGNALING_IMAGE: `litmatch/signaling-gateway:${releaseTag}`,

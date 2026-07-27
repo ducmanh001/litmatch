@@ -192,6 +192,8 @@ const ignoredDirectories = new Set([
   'coverage',
   'dist',
   'node_modules',
+  '.next',
+  'out',
   // Thư mục cấu hình riêng 1 công cụ (đặt tên theo đúng công cụ đó, chỉ công cụ đó đọc) —
   // được phép nêu tên công cụ trong nội dung (vd $schema URL, ghi chú quirk riêng).
   // Nguyên tắc trung lập áp cho bề mặt DÙNG CHUNG (AGENTS.md, docs/, scripts/agent/),

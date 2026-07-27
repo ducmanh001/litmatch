@@ -16,21 +16,21 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
-import { StoryService } from './services/story.service';
+import { StoryService } from '../services/story.service';
 import {
   CreateStoryDto,
   ReplyToStoryDto,
   StoryDto,
   StoryViewersDto,
-} from './dto/story.dtos';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
+} from '../dto/story.dtos';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import {
   ApiIdempotencyKeyHeader,
   IdempotencyKey,
-} from '../../common/decorators/idempotency-key.decorator';
-import { MessageDto } from '../friend';
+} from '../../../common/decorators/idempotency-key.decorator';
+import { MessageDto } from '../../friend';
 
-import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../../../common/decorators/current-user.decorator';
 
 @ApiTags('stories')
 @ApiBearerAuth()

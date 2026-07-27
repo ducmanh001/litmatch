@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { CommonErrors, DomainException } from '@litmatch/common-exceptions';
+import { captureSentryException } from '@litmatch/observability';
 
 import {
   localizeErrorMessage,
@@ -71,6 +72,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         },
         'Unhandled exception',
       );
+      captureSentryException(exception, traceId);
     }
 
     const payload: ApiErrorBody = {

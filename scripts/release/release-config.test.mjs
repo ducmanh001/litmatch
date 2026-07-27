@@ -22,6 +22,9 @@ const validConfig = {
   GRAFANA_CLOUD_LOKI_URL: '',
   GRAFANA_CLOUD_LOKI_USER: '',
   GRAFANA_CLOUD_API_TOKEN: '',
+  FACEBOOK_APP_ID: '',
+  FACEBOOK_APP_SECRET: '',
+  SENTRY_RELEASE: '',
 };
 
 test('release config hợp lệ tạo image tag và DATABASE_URL nội bộ từ một nguồn', () => {
@@ -32,6 +35,7 @@ test('release config hợp lệ tạo image tag và DATABASE_URL nội bộ từ
     env.DATABASE_URL,
     'postgresql://litmatch:safe_password-123@postgres:5432/litmatch',
   );
+  assert.equal(env.SENTRY_RELEASE, 'abc123');
 });
 
 test('release config từ chối placeholder, secret ngắn và cấu hình hosted thiếu một nửa', () => {
@@ -40,8 +44,10 @@ test('release config từ chối placeholder, secret ngắn và cấu hình host
     DOMAIN: 'example.com',
     JWT_SECRET: 'short',
     GRAFANA_CLOUD_API_TOKEN: 'token',
+    FACEBOOK_APP_ID: 'facebook-app-id',
   });
   assert.ok(errors.some((error) => error.includes('placeholder')));
   assert.ok(errors.some((error) => error.includes('JWT_SECRET')));
   assert.ok(errors.some((error) => error.includes('Grafana Cloud')));
+  assert.ok(errors.some((error) => error.includes('Facebook App ID')));
 });

@@ -32,13 +32,15 @@ export class VerifyOtpDto {
 }
 
 export class SocialLoginDto {
-  @ApiProperty({ enum: [AuthProvider.Google, AuthProvider.Apple] })
+  @ApiProperty({
+    enum: [AuthProvider.Google, AuthProvider.Apple, AuthProvider.Facebook],
+  })
   @IsEnum(AuthProvider)
   provider!: AuthProvider;
 
   @ApiProperty({
     description:
-      'ID token từ SDK của provider — server tự verify, không tin client',
+      'ID token (Google/Apple) hoặc access token (Facebook) từ SDK — server tự verify, không tin client',
   })
   @IsString()
   @IsNotEmpty()

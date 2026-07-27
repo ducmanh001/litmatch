@@ -13,10 +13,32 @@ const runtimeDockerfiles = [
   'deploy/hosted/Dockerfile.signaling-gateway',
 ];
 
-function dryRun(profile) {
-  return spawnSync(process.execPath, [script, profile, '--dry-run'], {
+function dryRun(profile, ...args) {
+  const {
+    LOCAL_CI_DATABASE_URL: _databaseUrl,
+    LOCAL_CI_REDIS_URL: _redisUrl,
+    LOCAL_CI_INTEGRATION_DB_URL: _integrationDatabaseUrl,
+    LOCAL_CI_SERVICES_READY: _servicesReady,
+    LOCAL_CI_DATABASE_READY: _databaseReady,
+    ...testEnvironment
+  } = process.env;
+
+  return spawnSync(process.execPath, [script, profile, '--dry-run', ...args], {
     cwd: root,
     encoding: 'utf8',
+    env: testEnvironment,
+  });
+}
+
+function dryRunWithCiServices(profile, ...args) {
+  return spawnSync(process.execPath, [script, profile, '--dry-run', ...args], {
+    cwd: root,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      LOCAL_CI_SERVICES_READY: 'true',
+      LOCAL_CI_DATABASE_READY: 'true',
+    },
   });
 }
 
@@ -24,16 +46,59 @@ test('quick local CI profile resets Nx and runs the quality gate', () => {
   const result = dryRun('quick');
 
   assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Auto-fix formatting before quality checks/u);
   assert.match(result.stdout, /Reset Nx daemon and project-graph cache/u);
   assert.match(result.stdout, /Validate every GitHub Actions workflow/u);
   assert.match(result.stdout, /Lint every Nx project/u);
 });
 
-test('pre-push runs the complete CI preflight instead of a partial quality gate', () => {
-  const hook = readFileSync('.husky/pre-push', 'utf8');
+test('commit owns formatting and staged guard checks; push owns the complete preflight', () => {
+  const commitHook = readFileSync('.husky/pre-commit', 'utf8');
+  const pushHook = readFileSync('.husky/pre-push', 'utf8');
 
-  assert.match(hook, /^pnpm ci:preflight\s*$/u);
-  assert.doesNotMatch(hook, /ci:local:clean/u);
+  assert.match(commitHook, /lint-staged[\s\S]*agent:check -- --staged/u);
+  assert.match(pushHook, /pnpm ci:preflight/u);
+  assert.doesNotMatch(pushHook, /ci:local:clean/u);
+  assert.match(commitHook, /LITMATCH_CI_BYPASS/u);
+  assert.match(pushHook, /LITMATCH_CI_BYPASS/u);
+});
+
+test('Husky hooks remain POSIX-shell compatible', () => {
+  for (const hook of ['.husky/pre-commit', '.husky/pre-push']) {
+    const result = spawnSync('sh', ['-n', hook], {
+      cwd: root,
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 0, `${hook}: ${result.stderr}`);
+  }
+});
+
+test('local CI bypass exits cleanly before any stage', () => {
+  const result = dryRun('all', '--bypass');
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Bypass enabled for profile all/u);
+  assert.doesNotMatch(result.stdout, /Install dependencies/u);
+});
+
+test('GitHub CI uses the same local profiles for quality, tests, and containers', () => {
+  const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
+
+  assert.match(workflow, /run: pnpm ci:local:quick/u);
+  assert.match(workflow, /run: pnpm ci:local\s*$/mu);
+  assert.match(workflow, /run: pnpm ci:local:docker/u);
+  assert.match(workflow, /needs: \[quality, test\]/u);
+  assert.match(workflow, /bypass_ci:/u);
+  assert.match(
+    workflow,
+    /LOCAL_CI_DATABASE_URL:\s*postgresql:\/\/litmatch:litmatch_local@localhost:5432\/litmatch/u,
+  );
+  assert.match(
+    workflow,
+    /LOCAL_CI_INTEGRATION_DB_URL:\s*postgresql:\/\/litmatch:litmatch_local@localhost:5432\/litmatch_test/u,
+  );
+  assert.match(workflow, /LOCAL_CI_SERVICES_READY:\s*['"]true['"]/u);
+  assert.match(workflow, /LOCAL_CI_DATABASE_READY:\s*['"]true['"]/u);
 });
 
 test('backend runtime images install with the canonical pnpm settings', () => {
@@ -94,6 +159,16 @@ test('all local CI profile plans quality, test, and Docker smoke stages', () => 
     /litmatch_local@localhost:5432\/litmatch_ci/u,
   );
   assert.doesNotMatch(result.stdout, /redis:\/\/localhost:6379\/15/u);
+});
+
+test('CI-provided services are reused without creating a local database', () => {
+  const result = dryRunWithCiServices('ci');
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Reuse CI-provided PostgreSQL and Redis/u);
+  assert.match(result.stdout, /Reuse CI-provided isolated database/u);
+  assert.doesNotMatch(result.stdout, /Start local PostgreSQL and Redis/u);
+  assert.doesNotMatch(result.stdout, /Ensure isolated database litmatch_ci/u);
 });
 
 test('security local CI profile is disabled and does not run scans', () => {

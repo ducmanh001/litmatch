@@ -17,6 +17,8 @@ export interface SignalingEnv {
   JWT_SECRET: string;
   /** Cùng Redis với core-api — subscribe channel realtime:user:* (docs/services/realtime-gateway.md). */
   REDIS_URL: string;
+  SENTRY_DSN: string;
+  SENTRY_RELEASE: string;
 }
 
 export const signalingEnvSchema = Joi.object({
@@ -27,6 +29,11 @@ export const signalingEnvSchema = Joi.object({
   REDIS_URL: Joi.string()
     .uri({ scheme: ['redis', 'rediss'] })
     .default('redis://localhost:6379'),
+  SENTRY_DSN: Joi.string()
+    .uri({ scheme: ['http', 'https'] })
+    .allow('')
+    .default(''),
+  SENTRY_RELEASE: Joi.string().max(200).allow('').default(''),
 });
 
 export const validateSignalingEnv = createConfigValidator(signalingEnvSchema);

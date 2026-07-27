@@ -19,20 +19,20 @@ import {
 import { Throttle, minutes } from '@nestjs/throttler';
 import { CursorPageQueryDto } from '@litmatch/common-dtos';
 
-import { InviteService } from './services/invite.service';
+import { InviteService } from '../services/invite.service';
 import {
   CreateInviteDto,
   MatchInviteAcceptedDto,
   MatchInviteDto,
   MatchInvitesPageDto,
-} from './dto/invite.dtos';
-import { ApiCursorPageQuery } from '../../common/decorators/cursor-page-query.decorator';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { UserService } from '../user';
+} from '../dto/invite.dtos';
+import { ApiCursorPageQuery } from '../../../common/decorators/cursor-page-query.decorator';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { UserService } from '../../user';
 
-import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
-import type { MatchInvite } from './entities/match-invite.entity';
-import type { User } from '../user';
+import type { AuthenticatedUser } from '../../../common/decorators/current-user.decorator';
+import type { MatchInvite } from '../entities/match-invite.entity';
+import type { User } from '../../user';
 import type { CursorPage } from '@litmatch/common-dtos';
 
 /**

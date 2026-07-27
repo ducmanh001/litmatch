@@ -95,7 +95,11 @@ services:
       AUTH_PHONE_OTP_ENABLED: 'true'
       AUTH_GOOGLE_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:?required}
       AUTH_APPLE_CLIENT_ID: ''
+      AUTH_FACEBOOK_APP_ID: ${FACEBOOK_APP_ID:-}
+      AUTH_FACEBOOK_APP_SECRET: ${FACEBOOK_APP_SECRET:-}
       AUTH_CROSS_ORIGIN_DEV: 'false'
+      SENTRY_DSN: ${SENTRY_CORE_API_DSN:-}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
       ECONOMY_IAP_VERIFIER: disabled
       ECONOMY_OUTBOX_RELAY_ENABLED: 'false'
       ECONOMY_APPLE_WEBHOOK_VERIFIER: store
@@ -128,6 +132,8 @@ services:
       CORS_ORIGINS: https://app.${DOMAIN},https://admin.${DOMAIN}
       JWT_SECRET: ${JWT_SECRET:?required}
       REDIS_URL: redis://redis:6379
+      SENTRY_DSN: ${SENTRY_SIGNALING_DSN:-}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
     depends_on:
       redis:
         condition: service_healthy

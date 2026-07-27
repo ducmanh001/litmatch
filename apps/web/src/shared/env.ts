@@ -17,6 +17,19 @@ const envSchema = z
     NEXT_PUBLIC_AUTH_GOOGLE_CLIENT_ID: z.string().optional(),
     /** Service id Sign in with Apple (web) — trống = nút Apple báo "chưa cấu hình". */
     NEXT_PUBLIC_AUTH_APPLE_CLIENT_ID: z.string().optional(),
+    /** Facebook App ID is public; the server-only App Secret verifies its access token. */
+    NEXT_PUBLIC_AUTH_FACEBOOK_APP_ID: z.string().optional(),
+    /** Pin the Facebook SDK/Graph API generation; update through env before Meta retires it. */
+    NEXT_PUBLIC_AUTH_FACEBOOK_API_VERSION: z
+      .string()
+      .regex(/^v\d+\.\d+$/u)
+      .default('v24.0'),
+    /** Browser error-monitoring DSN; empty means Sentry is off. */
+    NEXT_PUBLIC_SENTRY_DSN: z.url().optional(),
+    /** Release environment attached to browser error events. */
+    NEXT_PUBLIC_SENTRY_ENVIRONMENT: z.string().min(1).default('production'),
+    /** Immutable release identifier attached to browser error events. */
+    NEXT_PUBLIC_SENTRY_RELEASE: z.string().max(200).optional(),
     /** Hiển thị flow OTP; phải khớp `AUTH_PHONE_OTP_ENABLED` của core-api. */
     NEXT_PUBLIC_PHONE_OTP_ENABLED: z
       .enum(['true', 'false'])
@@ -47,6 +60,15 @@ export const env = envSchema.parse({
     process.env['NEXT_PUBLIC_AUTH_GOOGLE_CLIENT_ID'] || undefined,
   NEXT_PUBLIC_AUTH_APPLE_CLIENT_ID:
     process.env['NEXT_PUBLIC_AUTH_APPLE_CLIENT_ID'] || undefined,
+  NEXT_PUBLIC_AUTH_FACEBOOK_APP_ID:
+    process.env['NEXT_PUBLIC_AUTH_FACEBOOK_APP_ID'] || undefined,
+  NEXT_PUBLIC_AUTH_FACEBOOK_API_VERSION:
+    process.env['NEXT_PUBLIC_AUTH_FACEBOOK_API_VERSION'] || undefined,
+  NEXT_PUBLIC_SENTRY_DSN: process.env['NEXT_PUBLIC_SENTRY_DSN'] || undefined,
+  NEXT_PUBLIC_SENTRY_ENVIRONMENT:
+    process.env['NEXT_PUBLIC_SENTRY_ENVIRONMENT'] || undefined,
+  NEXT_PUBLIC_SENTRY_RELEASE:
+    process.env['NEXT_PUBLIC_SENTRY_RELEASE'] || undefined,
   NEXT_PUBLIC_PHONE_OTP_ENABLED:
     process.env['NEXT_PUBLIC_PHONE_OTP_ENABLED'] || undefined,
   NEXT_PUBLIC_ENABLE_ERUDA:

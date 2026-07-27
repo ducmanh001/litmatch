@@ -4,7 +4,10 @@
  * client. SDK chỉ tải khi user bấm nút (lazy), không nhúng sẵn vào bundle.
  */
 
-export { getGoogleIdToken } from '@litmatch/browser-auth';
+export {
+  getFacebookAccessToken,
+  getGoogleIdToken,
+} from '@litmatch/browser-auth';
 
 let appleScriptPromise: Promise<void> | undefined;
 
