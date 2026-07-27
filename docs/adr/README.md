@@ -43,3 +43,4 @@ Quan hệ với `docs/03-architecture.md`: file 03 mô tả kiến trúc **hiệ
 | [0007](./0007-httponly-cookie-refresh-token.md)         | Refresh token = httpOnly cookie + CSRF double-submit     | 2026-07-14 | Accepted   |
 | [0008](./0008-zero-cost-single-node-release-profile.md) | Profile release một máy chi phí 0                        | 2026-07-18 | Accepted   |
 | [0009](./0009-hosted-free-alpha-release-profile.md)     | Profile alpha hosted-free đa nhà cung cấp                | 2026-07-22 | Accepted   |
+| [0010](./0010-hosted-observability-error-monitoring.md) | Sentry Cloud cho lỗi, Grafana Cloud cho vận hành hosted  | 2026-07-24 | Accepted   |

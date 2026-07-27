@@ -83,7 +83,6 @@ jest.setTimeout(60_000);
 
 const CONFIG: Record<string, unknown> = {
   USER_DEFAULT_AVATAR_ID: 'default-01',
-  AUTH_MIN_AGE: 18,
 };
 const configStub = {
   getOrThrow: (key: string) => {

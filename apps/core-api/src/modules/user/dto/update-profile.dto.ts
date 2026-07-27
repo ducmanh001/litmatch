@@ -36,7 +36,8 @@ export class UpdateProfileDto {
 
   @ApiPropertyOptional({
     example: '2000-01-31',
-    description: 'Ngày sinh ISO — server kiểm tra tuổi tối thiểu (docs/06)',
+    description:
+      'Ngày sinh ISO tự chọn — chỉ kiểm tra định dạng và không cho ngày trong tương lai',
   })
   @IsOptional()
   @IsISO8601({ strict: true })

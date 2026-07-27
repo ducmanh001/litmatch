@@ -45,7 +45,7 @@ export function PlaceholderAvatar({
     >
       <div className="w-full h-full relative inline-block shrink-0 border-paper dark:border-ink rounded-full">
         <img
-          src={placeholderAvatarUrl('Ngoc2')}
+          src={placeholderAvatarUrl(seed)}
           alt={alt}
           width={size}
           height={size}

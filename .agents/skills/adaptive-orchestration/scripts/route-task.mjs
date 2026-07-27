@@ -15,6 +15,7 @@ const VALUES = Object.freeze({
 const DEFAULTS = Object.freeze({
   action: 'change',
   workstreams: 1,
+  parallelizableWorkstreams: 0,
   risk: 'medium',
   uncertainty: 'medium',
   context: 'medium',
@@ -48,7 +49,11 @@ function normalize(input) {
     throw new TypeError('Input phải là một JSON object.');
   }
 
-  const allowedKeys = new Set([...Object.keys(VALUES), 'workstreams']);
+  const allowedKeys = new Set([
+    ...Object.keys(VALUES),
+    'workstreams',
+    'parallelizableWorkstreams',
+  ]);
   const unknownKeys = Object.keys(input).filter((key) => !allowedKeys.has(key));
   if (unknownKeys.length > 0) {
     throw new TypeError(`Field không hỗ trợ: ${unknownKeys.join(', ')}.`);
@@ -67,6 +72,16 @@ function normalize(input) {
     task.workstreams > 4
   ) {
     throw new TypeError('workstreams phải là số nguyên từ 1 đến 4.');
+  }
+
+  if (
+    !Number.isInteger(task.parallelizableWorkstreams) ||
+    task.parallelizableWorkstreams < 0 ||
+    task.parallelizableWorkstreams > task.workstreams
+  ) {
+    throw new TypeError(
+      'parallelizableWorkstreams phải là số nguyên từ 0 đến workstreams.',
+    );
   }
 
   return task;
@@ -90,8 +105,11 @@ function classify(task, score) {
 }
 
 function makeWorker(task, complexity, maxWorkers) {
+  if (maxWorkers < 1) return null;
   const readOnly = ['answer', 'inspect', 'review'].includes(task.action);
   const review = task.action === 'review';
+  const requestedWorkers =
+    task.parallelizableWorkstreams > 1 ? task.parallelizableWorkstreams : 1;
   return {
     role: review ? 'reviewer' : readOnly ? 'explorer' : 'worker',
     promptType: review
@@ -99,7 +117,7 @@ function makeWorker(task, complexity, maxWorkers) {
       : readOnly
         ? 'evidence'
         : 'owned-implementation',
-    count: Math.min(task.workstreams, maxWorkers),
+    count: Math.min(requestedWorkers, maxWorkers),
     modelTier:
       readOnly && task.risk === 'low' && complexity !== 'critical'
         ? 'economy'
@@ -128,9 +146,12 @@ export function routeTask(input) {
     task.verification === 'strict';
   const agentCeiling = ['critical', 'complex'].includes(complexity) ? 2 : 0;
   if (!direct) {
-    delegates.push(
-      makeWorker(task, complexity, agentCeiling - (independentReview ? 1 : 0)),
+    const worker = makeWorker(
+      task,
+      complexity,
+      agentCeiling - (independentReview ? 1 : 0),
     );
+    if (worker) delegates.push(worker);
   }
   if (independentReview) {
     delegates.push({
@@ -143,19 +164,42 @@ export function routeTask(input) {
   }
 
   const agentCount = delegates.reduce((total, item) => total + item.count, 0);
+  const primaryDelegate = delegates[0];
   const strategy =
     agentCount === 0
       ? 'direct'
-      : agentCount === 1
-        ? 'single-delegate'
-        : 'parallel-delegates';
+      : independentReview && task.action !== 'review' && primaryDelegate
+        ? 'delegate-then-independent-review'
+        : agentCount === 1
+          ? 'single-delegate'
+          : primaryDelegate?.count > 1 ||
+              (task.action === 'review' && task.parallelizableWorkstreams >= 2)
+            ? 'parallel-delegates'
+            : 'sequential-delegates';
+  const reasons = [`Complexity ${complexity} from normalized score ${score}.`];
+  if (task.workstreams > 1 && task.parallelizableWorkstreams < 2) {
+    reasons.push(
+      'Multiple workstreams are treated as sequential because fewer than two were declared parallelizable.',
+    );
+  }
+  if (task.parallelizableWorkstreams > 1) {
+    reasons.push(
+      `${task.parallelizableWorkstreams} workstreams are declared parallelizable; delegate fan-out is capped at two agents.`,
+    );
+  }
+  if (independentReview) {
+    reasons.push(
+      'Independent review is required by risk or strict verification.',
+    );
+  }
 
   return {
-    version: 1,
+    version: 2,
     complexity,
     score,
     strategy,
     agentCount,
+    reasons,
     owner: {
       modelTier: 'current',
       reasoningEffort:

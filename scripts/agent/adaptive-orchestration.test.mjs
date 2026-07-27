@@ -40,6 +40,7 @@ test('điều tra read-only ít rủi ro fan-out bằng economy tier và cap hai
   const route = routeTask({
     action: 'inspect',
     workstreams: 4,
+    parallelizableWorkstreams: 4,
     risk: 'low',
     uncertainty: 'high',
     context: 'large',
@@ -59,6 +60,25 @@ test('điều tra read-only ít rủi ro fan-out bằng economy tier và cap hai
   });
 });
 
+test('multiple workstreams do not imply parallel execution', () => {
+  const route = routeTask({
+    action: 'inspect',
+    workstreams: 4,
+    parallelizableWorkstreams: 0,
+    risk: 'low',
+    uncertainty: 'high',
+    context: 'large',
+    changeSize: 'none',
+    verification: 'standard',
+  });
+
+  assert.equal(route.complexity, 'complex');
+  assert.equal(route.strategy, 'single-delegate');
+  assert.equal(route.agentCount, 1);
+  assert.equal(route.delegates[0].count, 1);
+  assert.match(route.reasons.join(' '), /treated as sequential/u);
+});
+
 test('strict high-risk change dùng worker balanced và reviewer frontier khi critical', () => {
   const route = routeTask({
     action: 'change',
@@ -71,7 +91,7 @@ test('strict high-risk change dùng worker balanced và reviewer frontier khi cr
   });
 
   assert.equal(route.complexity, 'critical');
-  assert.equal(route.strategy, 'parallel-delegates');
+  assert.equal(route.strategy, 'delegate-then-independent-review');
   assert.equal(route.agentCount, 2);
   assert.equal(route.delegates[0].count, 1);
   assert.equal(route.delegates[0].modelTier, 'balanced');
@@ -108,9 +128,43 @@ test('complex high-risk giữ một worker và một reviewer trong cap hai', ()
   });
 
   assert.equal(route.complexity, 'complex');
+  assert.equal(route.strategy, 'delegate-then-independent-review');
   assert.equal(route.agentCount, 2);
   assert.equal(route.delegates[0].count, 1);
   assert.equal(route.delegates[1].role, 'reviewer');
+});
+
+test('critical review mặc định chạy tuần tự khi chưa xác minh parallelizable', () => {
+  const route = routeTask({
+    action: 'review',
+    workstreams: 1,
+    risk: 'critical',
+    uncertainty: 'low',
+    context: 'small',
+    changeSize: 'none',
+    verification: 'light',
+  });
+
+  assert.equal(route.strategy, 'sequential-delegates');
+  assert.equal(route.agentCount, 2);
+  assert.ok(route.delegates.every((delegate) => delegate.count > 0));
+  assert.match(route.reasons.at(-1), /Independent review/u);
+});
+
+test('critical review chỉ chạy song song khi có hai workstream độc lập', () => {
+  const route = routeTask({
+    action: 'review',
+    workstreams: 2,
+    parallelizableWorkstreams: 2,
+    risk: 'critical',
+    uncertainty: 'low',
+    context: 'small',
+    changeSize: 'none',
+    verification: 'light',
+  });
+
+  assert.equal(route.strategy, 'parallel-delegates');
+  assert.equal(route.agentCount, 2);
 });
 
 test('route luôn phát execution limits chống chảy máu token', () => {
@@ -141,5 +195,9 @@ test('từ chối field lạ để không nhận cả prompt hoặc dữ liệu 
   assert.throws(
     () => routeTask({ workstreams: 0 }),
     /workstreams phải là số nguyên từ 1 đến 4/u,
+  );
+  assert.throws(
+    () => routeTask({ workstreams: 1, parallelizableWorkstreams: 2 }),
+    /parallelizableWorkstreams phải là số nguyên từ 0 đến workstreams/u,
   );
 });

@@ -2,7 +2,7 @@ import { Inject, Module, OnApplicationShutdown } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { MatchingController } from './matching.controller';
-import { InviteController } from './invite.controller';
+import { InviteController } from './controllers/invite.controller';
 import { MatchingMetrics } from './matching.metrics';
 import { MatchingService } from './matching.service';
 import { InviteService } from './services/invite.service';

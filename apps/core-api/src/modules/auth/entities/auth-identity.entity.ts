@@ -12,6 +12,7 @@ export enum AuthProvider {
   Phone = 'phone',
   Google = 'google',
   Apple = 'apple',
+  Facebook = 'facebook',
 }
 
 /**

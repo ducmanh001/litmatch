@@ -7,6 +7,7 @@ import type { CoreApiEnv } from '../../../config/env.validation';
 import {
   APPLE_OIDC_ISSUER,
   APPLE_OIDC_JWKS_URL,
+  FACEBOOK_DEBUG_TOKEN_URL,
   GOOGLE_JWKS_URL,
   GOOGLE_OIDC_ISSUERS,
 } from '../../../common/constants/oauth-providers.constants';
@@ -20,7 +21,7 @@ export interface SocialIdentity {
 /**
  * Verify ID token của social provider Ở SERVER (docs/10 § 10.0.B — không tin token client đưa lên
  * mà không kiểm chữ ký + issuer + audience). Google/Apple đều là OIDC JWT + JWKS công khai.
- * Facebook (access token, không phải OIDC) chưa hỗ trợ ở Giai đoạn 0 — bổ sung khi cần.
+ * Facebook dùng opaque access token, nên server xác minh qua Graph debug_token với App Secret.
  */
 @Injectable()
 export class SocialVerifierService {
@@ -37,6 +38,9 @@ export class SocialVerifierService {
     provider: AuthProvider,
     idToken: string,
   ): Promise<SocialIdentity> {
+    if (provider === AuthProvider.Facebook) {
+      return this.verifyFacebookAccessToken(idToken);
+    }
     if (provider !== AuthProvider.Google && provider !== AuthProvider.Apple) {
       throw new DomainException(
         AuthErrors.SOCIAL_PROVIDER_NOT_SUPPORTED,
@@ -78,6 +82,54 @@ export class SocialVerifierService {
       throw new DomainException(
         AuthErrors.SOCIAL_TOKEN_INVALID,
         'ID token không hợp lệ',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+  }
+
+  private async verifyFacebookAccessToken(
+    accessToken: string,
+  ): Promise<SocialIdentity> {
+    const appId = this.config.getOrThrow('AUTH_FACEBOOK_APP_ID', {
+      infer: true,
+    });
+    const appSecret = this.config.getOrThrow('AUTH_FACEBOOK_APP_SECRET', {
+      infer: true,
+    });
+    if (!appId || !appSecret) {
+      throw new DomainException(
+        AuthErrors.SOCIAL_PROVIDER_NOT_SUPPORTED,
+        'Provider facebook chưa được cấu hình',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    try {
+      const url = new URL(FACEBOOK_DEBUG_TOKEN_URL);
+      url.searchParams.set('input_token', accessToken);
+      url.searchParams.set('access_token', `${appId}|${appSecret}`);
+      const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+      if (!response.ok)
+        throw new Error(`Facebook debug_token ${response.status}`);
+      const body = (await response.json()) as {
+        data?: { app_id?: string; is_valid?: boolean; user_id?: string };
+      };
+      const identity = body.data;
+      if (
+        identity?.is_valid !== true ||
+        identity.app_id !== appId ||
+        !identity.user_id
+      ) {
+        throw new Error('Facebook token không hợp lệ cho app này');
+      }
+      return { uid: identity.user_id };
+    } catch (err) {
+      this.logger.warn(
+        `Social token verify thất bại (facebook): ${String(err)}`,
+      );
+      throw new DomainException(
+        AuthErrors.SOCIAL_TOKEN_INVALID,
+        'Access token không hợp lệ',
         HttpStatus.UNAUTHORIZED,
       );
     }

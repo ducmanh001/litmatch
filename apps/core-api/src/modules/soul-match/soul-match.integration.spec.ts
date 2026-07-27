@@ -69,7 +69,6 @@ const CONFIG: Record<string, unknown> = {
   SOUL_RATING_WINDOW_SECONDS: 120,
   SOUL_CHAT_MESSAGE_MAX_LENGTH: 500,
   USER_DEFAULT_AVATAR_ID: 'default-01',
-  AUTH_MIN_AGE: 18,
 };
 const configStub = {
   getOrThrow: (key: string) => {

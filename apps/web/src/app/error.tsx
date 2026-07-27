@@ -1,6 +1,9 @@
 'use client';
 
 import { isApiError } from '@litmatch/api-client';
+import { useEffect } from 'react';
+
+import { captureBrowserException } from '../shared/monitoring/sentry';
 
 /** Error boundary cấp route (docs/13 § 13.7) — 1 màn vỡ không kéo sập cả app. */
 export default function RouteError({
@@ -10,6 +13,7 @@ export default function RouteError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => captureBrowserException(error), [error]);
   const apiError = isApiError(error) ? error : null;
   return (
     <main

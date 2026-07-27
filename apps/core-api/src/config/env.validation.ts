@@ -30,11 +30,14 @@ export interface CoreApiEnv {
   AUTH_OTP_REQUESTS_PER_HOUR: number;
   AUTH_OTP_PEPPER: string;
   AUTH_PHONE_OTP_ENABLED: boolean;
-  AUTH_MIN_AGE: number;
   AUTH_GOOGLE_CLIENT_ID: string;
   AUTH_APPLE_CLIENT_ID: string;
+  AUTH_FACEBOOK_APP_ID: string;
+  AUTH_FACEBOOK_APP_SECRET: string;
   AUTH_CROSS_ORIGIN_DEV: boolean;
   AUTH_COOKIE_SAME_SITE: 'strict' | 'none';
+  SENTRY_DSN: string;
+  SENTRY_RELEASE: string;
   USER_DEFAULT_AVATAR_ID: string;
   ECONOMY_IAP_VERIFIER: 'dev' | 'store' | 'disabled';
   ECONOMY_APPLE_SHARED_SECRET: string;
@@ -178,11 +181,17 @@ export const coreApiEnvSchema = Joi.object({
   AUTH_OTP_REQUESTS_PER_HOUR: Joi.number().integer().min(1).default(5),
   AUTH_OTP_PEPPER: Joi.string().min(16).required(),
   AUTH_PHONE_OTP_ENABLED: Joi.boolean().default(true),
-  AUTH_MIN_AGE: Joi.number().integer().min(13).default(18),
   AUTH_GOOGLE_CLIENT_ID: Joi.string().allow('').default(''),
   AUTH_APPLE_CLIENT_ID: Joi.string().allow('').default(''),
+  AUTH_FACEBOOK_APP_ID: Joi.string().allow('').default(''),
+  AUTH_FACEBOOK_APP_SECRET: Joi.string().allow('').default(''),
   AUTH_CROSS_ORIGIN_DEV: Joi.boolean().default(false),
   AUTH_COOKIE_SAME_SITE: Joi.string().valid('strict', 'none').default('strict'),
+  SENTRY_DSN: Joi.string()
+    .uri({ scheme: ['http', 'https'] })
+    .allow('')
+    .default(''),
+  SENTRY_RELEASE: Joi.string().max(200).allow('').default(''),
 
   USER_DEFAULT_AVATAR_ID: Joi.string().default('default-01'),
 

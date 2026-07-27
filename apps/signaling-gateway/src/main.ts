@@ -2,7 +2,10 @@ import './tracing'; // PHẢI đứng đầu file — docs/07 GĐ6, xem libs/obs
 
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import { createHttpMetricsMiddleware } from '@litmatch/observability';
+import {
+  createHttpMetricsMiddleware,
+  initializeSentry,
+} from '@litmatch/observability';
 import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 
@@ -21,6 +24,12 @@ async function bootstrap(): Promise<void> {
   app.use(createHttpMetricsMiddleware(app.get<Registry>(METRICS_REGISTRY))); // docs/07 GĐ6
 
   const config = app.get<ConfigService<SignalingEnv, true>>(ConfigService);
+  initializeSentry({
+    dsn: config.getOrThrow('SENTRY_DSN', { infer: true }),
+    environment: config.getOrThrow('NODE_ENV', { infer: true }),
+    release: config.getOrThrow('SENTRY_RELEASE', { infer: true }),
+    serviceName: 'signaling-gateway',
+  });
   const corsOrigins = config
     .getOrThrow('CORS_ORIGINS', { infer: true })
     .split(',')

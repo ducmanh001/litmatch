@@ -30,6 +30,8 @@
     "e2e": "nx run-many -t e2e",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "docs:generate": "node scripts/docs/generate.mjs",
+    "docs:check": "node --test scripts/docs/*.test.mjs && node scripts/docs/generate.mjs --check",
     "agent:context": "node scripts/agent/context.mjs",
     "agent:verify": "node scripts/agent/verify.mjs",
     "agent:check": "node scripts/agent/repository-check.mjs",
@@ -67,6 +69,7 @@
     "*": "prettier --write --ignore-unknown"
   },
   "devDependencies": {
+    "@asyncapi/parser": "^3.6.0",
     "@eslint/compat": "^2.1.0",
     "@eslint/js": "^10.0.1",
     "@nestjs/schematics": "^11.0.0",
@@ -108,6 +111,8 @@
     "@vitejs/plugin-react": "^6.0.3",
     "@vitest/coverage-v8": "~4.1.0",
     "@vitest/ui": "~4.1.0",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "dotenv": "^17.4.2",
     "eslint": "^10.6.0",
     "eslint-config-next": "^16.1.6",
@@ -144,7 +149,8 @@
     "webpack": "^5.101.3",
     "webpack-cli": "^7.0.0",
     "webpack-dev-server": "^5.2.1",
-    "wrangler": "^4.112.0"
+    "wrangler": "^4.112.0",
+    "yaml": "^2.9.0"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
@@ -167,6 +173,8 @@
     "@opentelemetry/sdk-trace-base": "2.9.0",
     "@opentelemetry/sdk-trace-node": "2.9.0",
     "@opentelemetry/semantic-conventions": "1.43.0",
+    "@sentry/browser": "^10.67.0",
+    "@sentry/node": "^10.67.0",
     "@socket.io/redis-adapter": "^8.3.0",
     "@tanstack/react-query": "^5.101.2",
     "axios": "^1.18.1",

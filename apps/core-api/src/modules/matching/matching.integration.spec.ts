@@ -101,7 +101,6 @@ const CONFIG: Record<string, unknown> = {
   MATCHING_TRUST_PENALTY_MS_PER_POINT: 2000,
   MATCHING_TRUST_PENALTY_MAX_MS: 120_000,
   USER_DEFAULT_AVATAR_ID: 'default-01',
-  AUTH_MIN_AGE: 18,
   // timeout lớn để invite không tự "già" giữa lúc suite chạy chậm; test hết hạn tự backdate thủ công
   MATCHING_INVITE_TTL_SECONDS: 3600,
   MATCHING_INVITE_RATE_LIMIT_PER_HOUR: 10,

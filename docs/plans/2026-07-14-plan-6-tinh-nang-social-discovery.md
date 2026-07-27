@@ -221,8 +221,8 @@ logic (docs/12).
    nhiều friendship hơn → supply cho stories/streak. Theo dõi số liệu friendship sau W4; nếu
    vẫn thiếu, friend-request flow là quyết định riêng sau.
 2. **Moderation debt**: mood free-text, video UGC, stories media đều cần moderation; repo hiện
-   chưa có nền text/media moderation. Litmatch thật từng dính tai tiếng an toàn với minor —
-   age-gate + moderation không phải việc để sau với dating app tại VN.
+   chưa có nền text/media moderation. Age gate trong bản plan cũ đã bị quyết định sản phẩm
+   2026-07-24 thay thế; hướng hiện tại là report/moderation không chặn core flow theo tuổi.
 3. **Nearby safety**: mọi mitigation (quantize/jitter/bucket) giảm mạnh nhưng không triệt tiêu
    trilateration bởi attacker kiên nhẫn — ghi rõ trong docs/06 là mitigation, không phải guarantee;
    kèm guard metric tắt theo khu vực.

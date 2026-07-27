@@ -3,6 +3,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import {
+  collectWorkspaceState,
+  workspaceStateLines,
+} from './workspace-state.mjs';
+
 try {
   const root = process.env.AGENT_PROJECT_DIR || process.cwd();
   const roadmap = readFileSync(join(root, 'docs/07-roadmap.md'), 'utf8').split(
@@ -45,6 +50,11 @@ try {
   console.log(
     '- Task không tầm thường: adaptive-orchestration. Module mới: new-module. Plan/verify: review-module.',
   );
+  for (const line of workspaceStateLines(collectWorkspaceState(root), {
+    includePaths: false,
+  })) {
+    console.log(line);
+  }
   console.log('- Guard chung: pnpm agent:check; eval: pnpm agent:test.');
 } catch {
   // Session context không được làm hỏng phiên nếu roadmap tạm thời không đọc được.

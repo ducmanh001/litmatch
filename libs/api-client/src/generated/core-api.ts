@@ -150,7 +150,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Đăng nhập bằng Google/Apple ID token (server tự verify chữ ký) */
+    /** Đăng nhập bằng Google/Apple ID token hoặc Facebook access token (server tự verify) */
     post: operations['AuthController_social'];
     delete?: never;
     options?: never;
@@ -2463,7 +2463,7 @@ export interface components {
       /** @enum {string} */
       gender?: 'unknown' | 'male' | 'female' | 'other';
       /**
-       * @description Ngày sinh ISO — server kiểm tra tuổi tối thiểu (docs/06)
+       * @description Ngày sinh ISO tự chọn — chỉ kiểm tra định dạng và không cho ngày trong tương lai
        * @example 2000-01-31
        */
       birthDate?: string;
@@ -2532,8 +2532,8 @@ export interface components {
     };
     SocialLoginDto: {
       /** @enum {string} */
-      provider: 'google' | 'apple';
-      /** @description ID token từ SDK của provider — server tự verify, không tin client */
+      provider: 'google' | 'apple' | 'facebook';
+      /** @description ID token (Google/Apple) hoặc access token (Facebook) từ SDK — server tự verify, không tin client */
       idToken: string;
     };
     WalletDto: {

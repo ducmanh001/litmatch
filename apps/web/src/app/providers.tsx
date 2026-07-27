@@ -5,7 +5,9 @@ import { useEffect, useState } from 'react';
 
 import { ProductAnalyticsIdentity } from '../shared/analytics/product-analytics-components';
 import { resetProductAnalyticsUser } from '../shared/analytics/product-analytics';
+import { WebVitals } from '../shared/analytics/web-vitals';
 import { tokenStore } from '../shared/api/client';
+import { initializeBrowserSentry } from '../shared/monitoring/sentry';
 
 import type { ReactNode } from 'react';
 
@@ -24,6 +26,7 @@ function createQueryClient(): QueryClient {
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(createQueryClient);
+  useEffect(() => initializeBrowserSentry(), []);
   useEffect(
     () =>
       tokenStore.subscribe(() => {
@@ -37,6 +40,7 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <ProductAnalyticsIdentity />
+      <WebVitals />
       {children}
     </QueryClientProvider>
   );

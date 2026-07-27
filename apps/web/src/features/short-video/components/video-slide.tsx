@@ -170,10 +170,12 @@ export function VideoSlide({
       {/* pb-24 chừa chỗ cho bottom nav di động (h-16, đè lên video full-bleed) — desktop
           không có bottom nav nên chỉ cần pb-6 như mockup. */}
       <div className="relative z-20 w-[78%] px-4 pb-24 md:pb-6">
-        {/* <p className="font-mono text-xs text-white/70">
-          {new Date(video.createdAt).toLocaleDateString('vi-VN')} ·{' '}
-          {video.viewCount} lượt xem
-        </p> */}
+        <p className="font-mono text-xs text-white/70">
+          {new Date(video.createdAt).toLocaleDateString(
+            locale === 'vi' ? 'vi-VN' : 'en-US',
+          )}{' '}
+          · {video.viewCount} lượt xem
+        </p>
         <Link
           href={`/users/${author.id}`}
           className="mt-3 inline-flex items-center gap-2 text-xs font-bold text-white hover:underline"
@@ -191,11 +193,10 @@ export function VideoSlide({
             {video.caption}
           </p>
         )}
-        <p></p>
-        {/* <p className="mt-2 flex items-center gap-1.5 text-xs text-white/90">
+        <p className="mt-2 flex items-center gap-1.5 text-xs text-white/90">
           <MusicNoteIcon />
           Âm thanh gốc · {author.nickname}
-        </p> */}
+        </p>
         <Link
           href="/matching"
           className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold text-white backdrop-blur"

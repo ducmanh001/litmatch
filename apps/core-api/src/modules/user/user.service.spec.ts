@@ -21,8 +21,7 @@ describe('UserService', () => {
   };
   const config = {
     getOrThrow: jest.fn(
-      (key: string) =>
-        ({ AUTH_MIN_AGE: 18, USER_DEFAULT_AVATAR_ID: 'default-01' })[key],
+      (key: string) => ({ USER_DEFAULT_AVATAR_ID: 'default-01' })[key],
     ),
   };
   let service: UserService;
@@ -62,19 +61,18 @@ describe('UserService', () => {
     expect(updated.birthDate).toBe('1995-05-20');
   });
 
-  it('chặn birthDate dưới tuổi tối thiểu — rule enforce ở server, không tin FE (docs/06)', async () => {
+  it('birthDate không phải access gate — cho phép lưu ngày hợp lệ ở mọi độ tuổi', async () => {
     repo.findOneBy.mockResolvedValue(activeUser());
     const recent = new Date();
     recent.setFullYear(recent.getFullYear() - 15);
+    const birthDate = recent.toISOString().slice(0, 10);
+
     await expect(
-      service.updateProfile('u1', {
-        birthDate: recent.toISOString().slice(0, 10),
-      }),
-    ).rejects.toMatchObject({
-      code: UserErrors.PROFILE_AGE_BELOW_MINIMUM,
-      httpStatus: 422,
+      service.updateProfile('u1', { birthDate }),
+    ).resolves.toMatchObject({
+      birthDate,
     });
-    expect(repo.save).not.toHaveBeenCalled();
+    expect(repo.save).toHaveBeenCalled();
   });
 
   it('chặn birthDate ở tương lai', async () => {

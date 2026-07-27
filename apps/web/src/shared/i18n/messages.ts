@@ -16,6 +16,10 @@ const MESSAGES = {
     vi: 'Cho phép phân tích trải nghiệm?',
     en: 'Allow experience analytics?',
   },
+  'analytics.settingsSection': {
+    vi: 'Cải thiện trải nghiệm',
+    en: 'Experience improvement',
+  },
   'analytics.consentDescription': {
     vi: 'Litmatch dùng phân tích thao tác và bản phát lại đã che toàn bộ nội dung chữ/input để tìm lỗi và cải thiện sản phẩm. Bạn có thể từ chối mà vẫn dùng đầy đủ tính năng.',
     en: 'Litmatch uses interaction analytics and replays with all text and inputs masked to diagnose issues and improve the product. You can decline without losing features.',

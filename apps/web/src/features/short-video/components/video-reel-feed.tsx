@@ -4,11 +4,8 @@ import { isApiError } from '@litmatch/api-client';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
-import { confirmAction } from '../../../shared/lib/confirm-store';
-import { showToast } from '../../../shared/lib/toast-store';
-import { FlagIcon } from '../../../shared/ui/icons';
 import { PlaceholderAvatar } from '../../../shared/ui/placeholder-avatar';
-import { useReportVideo, useVideoFeed } from '../api';
+import { useVideoFeed } from '../api';
 import { VideoCommentsSheet } from './video-comments-sheet';
 import { VideoGiftSheet } from './video-gift-sheet';
 import { VideoLikeButton } from './video-like-button';
@@ -96,41 +93,6 @@ function GiftIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-function VideoReportButton({ videoId }: { videoId: string }) {
-  const report = useReportVideo(videoId);
-
-  const onReport = async () => {
-    const confirmed = await confirmAction({
-      title: 'Báo cáo video?',
-      message:
-        'Video sẽ được gửi tới đội ngũ kiểm duyệt với lý do nội dung không phù hợp.',
-      actionLabel: 'Gửi báo cáo',
-      tone: 'danger',
-    });
-    if (!confirmed) return;
-    report.mutate(
-      { reason: 'inappropriate_content' },
-      {
-        onSuccess: () => showToast('Đã gửi báo cáo. Cảm ơn bạn.'),
-        onError: () => showToast('Không thể gửi báo cáo, thử lại.', 'warn'),
-      },
-    );
-  };
-
-  return (
-    <button
-      type="button"
-      disabled={report.isPending}
-      onClick={() => void onReport()}
-      aria-label="Báo cáo video có nội dung không phù hợp"
-      className="flex flex-col items-center gap-1 text-white transition-transform active:scale-90 disabled:opacity-50"
-    >
-      <FlagIcon />
-      <span className="text-xs font-bold">Báo cáo</span>
-    </button>
-  );
-}
-
 /**
  * Cột hành động (avatar/thích/bình luận/tặng/report) — DÙNG CHUNG 1 instance cho video đang
  * active, chỉ đổi vị trí bằng className theo breakpoint (mobile: overlay tuyệt đối trên video;
@@ -194,8 +156,6 @@ function VideoActionRail({
         <GiftIcon />
         <span className="text-xs font-bold">Tặng</span>
       </button>
-
-      {/* <VideoReportButton videoId={video.id} /> */}
 
       <button
         type="button"

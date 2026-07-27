@@ -30,12 +30,12 @@ test('đăng nhập OTP, session sống sót qua reload, vào hàng đợi ghép
   for (const [index, digit] of [...code].entries()) {
     await expect(otpDigitInputs.nth(index)).toHaveValue(digit);
   }
-  await page.getByRole('button', { name: 'Đăng nhập' }).click();
-
-  // FIX: Điền từng chữ số OTP vào từng ô input để trigger đúng event của frontend
+  // Điền từng chữ số OTP vào từng ô input để trigger đúng event của frontend.
   for (const [index, digit] of [...code].entries()) {
     await otpDigitInputs.nth(index).fill(digit);
   }
+
+  await page.getByRole('button', { name: 'Đăng nhập' }).click();
 
   await expect(page).toHaveURL(/\/home$/);
 

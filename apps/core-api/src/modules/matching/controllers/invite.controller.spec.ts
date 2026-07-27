@@ -1,11 +1,14 @@
 import { InviteController } from './invite.controller';
-import { MatchInvite, MatchInviteStatus } from './entities/match-invite.entity';
-import { MatchType } from './entities/match-ticket.entity';
-import { Gender, User, UserStatus } from '../user';
+import {
+  MatchInvite,
+  MatchInviteStatus,
+} from '../entities/match-invite.entity';
+import { MatchType } from '../entities/match-ticket.entity';
+import { Gender, User, UserStatus } from '../../user';
 
-import type { InviteService } from './services/invite.service';
-import type { UserService } from '../user';
-import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
+import type { InviteService } from '../services/invite.service';
+import type { UserService } from '../../user';
+import type { AuthenticatedUser } from '../../../common/decorators/current-user.decorator';
 
 const invitee: AuthenticatedUser = {
   userId: '00000000-0000-4000-8000-000000000002',
