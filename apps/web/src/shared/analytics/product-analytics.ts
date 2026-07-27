@@ -42,7 +42,7 @@ export const productAnalyticsConfig: ProductAnalyticsConfig | null =
 export function initializeProductAnalytics(
   config: ProductAnalyticsConfig | null = productAnalyticsConfig,
 ): boolean {
-  if (config === null || getProductAnalyticsConsent() !== 'accepted') {
+  if (config === null) {
     return false;
   }
   if (posthog.__loaded) return true;
@@ -50,13 +50,13 @@ export function initializeProductAnalytics(
   posthog.init(config.projectToken, {
     api_host: config.host,
     defaults: '2026-05-30',
-    autocapture: false,
+    autocapture: true,
     capture_pageview: 'history_change',
     capture_pageleave: false,
     person_profiles: 'identified_only',
     session_recording: {
-      maskAllInputs: true,
-      maskTextSelector: '*',
+      maskAllInputs: false,
+      maskTextSelector: undefined,
     },
   });
 
@@ -104,11 +104,7 @@ export function identifyProductAnalyticsUser(
   user: AnalyticsUser,
   config: ProductAnalyticsConfig | null = productAnalyticsConfig,
 ): void {
-  if (
-    config === null ||
-    getProductAnalyticsConsent() !== 'accepted' ||
-    !posthog.__loaded
-  ) {
+  if (config === null || !posthog.__loaded) {
     return;
   }
   posthog.identify(user.id, {
@@ -135,7 +131,6 @@ export function captureProductWebVital(
 ): void {
   if (
     config === null ||
-    getProductAnalyticsConsent() !== 'accepted' ||
     !posthog.__loaded ||
     !CORE_WEB_VITAL_NAMES.has(metric.name) ||
     webVitalsSampleBucket(metric.id) >= WEB_VITALS_SAMPLE_PERCENT

@@ -35,6 +35,13 @@ export const metadata: Metadata = {
     'Ghép đôi ẩn danh, voice call, party room và kết bạn qua giọng nói. Tham gia Litmatch ngay trên trình duyệt.',
 };
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  interactiveWidget: 'overlays-content',
+} as const;
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html

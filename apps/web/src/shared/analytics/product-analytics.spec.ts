@@ -39,13 +39,12 @@ describe('product analytics tracking', () => {
     expect(posthogMock.init).not.toHaveBeenCalled();
   });
 
-  it('không khởi tạo SDK hoặc gửi request trước khi có consent', () => {
-    expect(initializeProductAnalytics(config)).toBe(false);
-    expect(posthogMock.init).not.toHaveBeenCalled();
-    expect(posthogMock.opt_in_capturing).not.toHaveBeenCalled();
+  it('khởi tạo SDK ngay cả khi chưa có cookie consent', () => {
+    expect(initializeProductAnalytics(config)).toBe(true);
+    expect(posthogMock.init).toHaveBeenCalled();
   });
 
-  it('chỉ khởi tạo sau consent và che text/input của session replay', () => {
+  it('bật autocapture và không che text/input của session replay', () => {
     setProductAnalyticsConsent('accepted', config);
 
     expect(getProductAnalyticsConsent()).toBe('accepted');
@@ -55,11 +54,11 @@ describe('product analytics tracking', () => {
       config.projectToken,
       expect.objectContaining({
         api_host: config.host,
-        autocapture: false,
+        autocapture: true,
         capture_pageleave: false,
         session_recording: {
-          maskAllInputs: true,
-          maskTextSelector: '*',
+          maskAllInputs: false,
+          maskTextSelector: undefined,
         },
       }),
     );
