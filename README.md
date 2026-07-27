@@ -121,23 +121,30 @@ Các lệnh hạ tầng thường dùng:
 | `pnpm docs:generate` / `pnpm docs:check` | Sinh/kiểm tra registry report + DOCX từ evidence local; không xác minh production      |
 | `pnpm ci:local:quick`                    | Mô phỏng job Format and lint của GitHub Actions, reset Nx cache để không tin cache cũ  |
 | `pnpm ci:local:clean`                    | Chạy quality gate trong Node 22 Linux container + `node_modules` rỗng, gần CI nhất     |
-| `pnpm ci:local`                          | Chạy quick + Postgres/Redis + frontend/core test, build và E2E như CI                  |
-| `pnpm ci:local:docker`                   | Build, quét Trivy image Core API/Signaling và smoke health-check local; không deploy   |
-| `pnpm ci:local:security`                 | Chạy Gitleaks, `pnpm audit` và Trivy local; CLI tự tải theo version/SHA đã pin         |
-| `pnpm ci:preflight`                      | Một lệnh trước PR: clean quality + security + test/build/E2E + image scan/smoke        |
-| `pnpm ci:local:all`                      | Alias đầy đủ của preflight; CodeQL/dependency review vẫn chạy trên GitHub              |
+| `pnpm ci:local`                          | Chạy quality + Postgres/Redis + frontend/core test, build và E2E như CI                |
+| `pnpm ci:local:docker`                   | Build image và smoke health-check local; không deploy                                  |
+| `pnpm ci:local:security`                 | Profile security không blocking, hiện bỏ qua vulnerability/secret scans                |
+| `pnpm ci:preflight`                      | Một lệnh trước push: clean quality + test/build/E2E + image smoke                      |
+| `pnpm ci:local:all`                      | Alias đầy đủ của preflight; security scan nằm ngoài blocking gate hiện tại             |
 
 Nên chạy `pnpm ci:local:quick` trong vòng lặp hằng ngày và `pnpm ci:preflight` trước khi mở/cập
-nhật PR. Hook `pre-push` tự chạy quality gate trong Node 22 Linux với `node_modules` rỗng, nên lỗi
-dependency ẩn bởi máy local bị chặn trước khi code lên GitHub. Lệnh Docker dùng database cô lập
-`litmatch_ci` thay vì database dev; xem trước toàn bộ kế hoạch bằng `pnpm ci:local:plan`.
+nhật PR. `pre-commit` chỉ auto-format file staged rồi chạy guard staged; `pre-push` chạy full
+preflight trong Node 22 Linux. Lệnh Docker dùng database cô lập `litmatch_ci` thay vì database
+dev; xem trước toàn bộ kế hoạch bằng `pnpm ci:local:plan`.
 
-Các profile CI tắt Nx daemon/Husky và chạy actionlint + ShellCheck đã pin checksum, nên hành vi gần runner
-GitHub và lỗi workflow YAML/expression được phát hiện ngay local.
+Khi cần bypass có kiểm soát: dùng `LITMATCH_CI_BYPASS=1 git commit ...` hoặc
+`LITMATCH_CI_BYPASS=1 git push ...`; runner cũng nhận `pnpm ci:preflight -- --bypass`.
+GitHub Actions có cùng cờ ở `workflow_dispatch` (`bypass_ci` và `bypass_reason`), để lại log
+lý do rõ ràng trong lần chạy ngoại lệ.
 
-Gitleaks quét cả lịch sử Git và dùng [baseline](./.gitleaks-baseline.json) gồm đúng ba finding
-test giả lập đã xác minh. Baseline không phải allowlist chung: finding mới vẫn fail; chỉ cập nhật
-khi đã review từng fingerprint.
+Các profile CI tắt Nx daemon/Husky, tự chạy Prettier trước quality check và chạy actionlint +
+ShellCheck đã pin checksum, nên hành vi gần runner GitHub và lỗi workflow YAML/expression được
+phát hiện ngay local. Vulnerability/secret scan không nằm trong blocking gate hiện tại theo quyết
+định vận hành.
+
+Các công cụ vulnerability/secret và [baseline](./.gitleaks-baseline.json) vẫn được giữ để bật
+lại khi có quyết định riêng; hiện chúng không được gọi bởi blocking gate. Baseline không phải
+allowlist chung: nếu bật scan, finding mới vẫn phải được review theo fingerprint.
 
 ## Nguyên tắc cốt lõi (chi tiết đầy đủ trong `docs/`, xem `AGENTS.md` cho bản tóm tắt agent dùng)
 
