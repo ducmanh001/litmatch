@@ -1,45 +1,46 @@
-import { Registry } from 'prom-client';
+import type { Meter } from '@opentelemetry/api';
 
 import { MatchingMetrics } from './matching.metrics';
 
 describe('MatchingMetrics', () => {
-  it('observeMatched ghi histogram matching_ticket_wait_seconds theo matchType', async () => {
-    const registry = new Registry();
-    const metrics = new MatchingMetrics(registry);
+  function makeMeter() {
+    const histogram = { record: jest.fn() };
+    const meter = {
+      createHistogram: jest.fn(() => histogram),
+    } as unknown as Meter;
+    return { meter, histogram };
+  }
+
+  it('observeMatched ghi histogram theo matchType để OTLP reader export định kỳ', () => {
+    const { meter, histogram } = makeMeter();
+    const metrics = new MatchingMetrics(meter);
 
     metrics.observeMatched('voice', 3.4);
     metrics.observeMatched('soul', 12);
 
-    const text = await registry.metrics();
-    expect(text).toContain(
-      'matching_ticket_wait_seconds_count{matchType="voice"} 1',
-    );
-    expect(text).toContain(
-      'matching_ticket_wait_seconds_count{matchType="soul"} 1',
-    );
+    expect(histogram.record).toHaveBeenNthCalledWith(1, 3.4, {
+      matchType: 'voice',
+    });
+    expect(histogram.record).toHaveBeenNthCalledWith(2, 12, {
+      matchType: 'soul',
+    });
   });
 
-  it('wait âm (đồng hồ lệch) → clamp về 0, không ghi số âm', async () => {
-    const registry = new Registry();
-    const metrics = new MatchingMetrics(registry);
+  it('wait âm (đồng hồ lệch) → clamp về 0', () => {
+    const { meter, histogram } = makeMeter();
+    const metrics = new MatchingMetrics(meter);
 
     metrics.observeMatched('voice', -5);
 
-    const text = await registry.metrics();
-    expect(text).toContain(
-      'matching_ticket_wait_seconds_bucket{le="0.1",matchType="voice"} 1',
-    );
+    expect(histogram.record).toHaveBeenCalledWith(0, { matchType: 'voice' });
   });
 
-  it('lỗi ghi metric (best-effort) không được throw ra caller — không được chặn publish match.matched', () => {
-    const registry = new Registry();
-    const metrics = new MatchingMetrics(registry);
-    const histogram = (
-      metrics as unknown as { ticketWaitSeconds: { observe: () => void } }
-    ).ticketWaitSeconds;
-    jest.spyOn(histogram, 'observe').mockImplementation(() => {
+  it('lỗi ghi metric (best-effort) không được throw ra caller', () => {
+    const { meter, histogram } = makeMeter();
+    histogram.record.mockImplementation(() => {
       throw new Error('boom');
     });
+    const metrics = new MatchingMetrics(meter);
 
     expect(() => metrics.observeMatched('voice', 1)).not.toThrow();
   });

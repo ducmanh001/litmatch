@@ -1,4 +1,4 @@
-import { Registry } from 'prom-client';
+import type { Meter } from '@opentelemetry/api';
 
 import { EconomyMetrics } from '../economy.metrics';
 import { ReconciliationService } from './reconciliation.service';
@@ -71,14 +71,24 @@ function makeService(
   config = stubConfig(ENABLED_CONFIG),
   scheduler = stubScheduler().scheduler,
 ) {
-  const registry = new Registry();
-  const service = new ReconciliationService(
-    ds,
-    config,
-    scheduler,
-    new EconomyMetrics(registry),
-  );
-  return { service, registry };
+  const mismatchCounter = { add: jest.fn() };
+  const gauge = { addCallback: jest.fn() };
+  const histogram = { record: jest.fn() };
+  const meter = {
+    createCounter: jest
+      .fn()
+      .mockReturnValueOnce({ add: jest.fn() })
+      .mockReturnValueOnce(mismatchCounter),
+    createObservableGauge: jest.fn(() => gauge),
+    createHistogram: jest.fn(() => histogram),
+  } as unknown as Meter;
+  const metrics = new EconomyMetrics(meter);
+  const service = new ReconciliationService(ds, config, scheduler, metrics);
+  return {
+    service,
+    metrics,
+    metricState: { mismatchCounter, gauge, histogram },
+  };
 }
 
 describe('ReconciliationService', () => {
@@ -145,7 +155,7 @@ describe('ReconciliationService', () => {
         }),
       } as unknown as DataSource;
       const { scheduler } = stubScheduler();
-      const { service, registry } = makeService(
+      const { service, metrics, metricState } = makeService(
         failingDs,
         stubConfig(ENABLED_CONFIG),
         scheduler,
@@ -154,21 +164,22 @@ describe('ReconciliationService', () => {
 
       await jest.advanceTimersByTimeAsync(60_000); // flush cả microtask của promise trong callback
 
-      const text = await registry.metrics();
-      expect(text).toContain(
-        'economy_reconciliation_last_run_status{tier="fast"} 0',
-      );
+      expect(
+        (
+          metrics as unknown as {
+            reconciliationStatusByTier: Map<string, number>;
+          }
+        ).reconciliationStatusByTier.get('fast'),
+      ).toBe(0);
       // run lỗi giữa chừng KHÔNG ghi duration (tránh nhiễu histogram bởi run dở dang)
-      expect(text).not.toContain(
-        'economy_reconciliation_run_duration_seconds_count{tier="fast"}',
-      );
+      expect(metricState.histogram.record).not.toHaveBeenCalled();
       service.onApplicationShutdown();
     });
   });
 
   describe('metrics tier fast', () => {
     it('lệch bất biến + orphan receipt: counter theo check/currency, status = 0', async () => {
-      const { service, registry } = makeService(
+      const { service, metricState } = makeService(
         stubDataSource({
           imbalances: [
             { currency: 'DIA', imbalance: '7' },
@@ -180,40 +191,43 @@ describe('ReconciliationService', () => {
       const report = await service.runFast();
       expect(report.ok).toBe(false);
 
-      const text = await registry.metrics();
-      expect(text).toContain(
-        'economy_reconciliation_mismatch_total{check="invariant",currency="DIA"} 1',
-      );
-      expect(text).toContain(
-        'economy_reconciliation_mismatch_total{check="invariant",currency="PTS"} 1',
-      );
-      expect(text).toContain(
-        'economy_reconciliation_mismatch_total{check="orphan_receipt",currency="DIA"} 2',
-      );
-      expect(text).toContain(
-        'economy_reconciliation_last_run_status{tier="fast"} 0',
-      );
-      expect(text).toContain(
-        'economy_reconciliation_run_duration_seconds_count{tier="fast"} 1',
+      expect(metricState.mismatchCounter.add).toHaveBeenCalledWith(1, {
+        check: 'invariant',
+        currency: 'DIA',
+      });
+      expect(metricState.mismatchCounter.add).toHaveBeenCalledWith(1, {
+        check: 'invariant',
+        currency: 'PTS',
+      });
+      expect(metricState.mismatchCounter.add).toHaveBeenCalledWith(2, {
+        check: 'orphan_receipt',
+        currency: 'DIA',
+      });
+      expect(metricState.histogram.record).toHaveBeenCalledWith(
+        expect.any(Number),
+        { tier: 'fast' },
       );
     });
 
     it('cân sổ: status = 1, không có series mismatch nào', async () => {
-      const { service, registry } = makeService(stubDataSource({}));
+      const { service, metrics, metricState } = makeService(stubDataSource({}));
       const report = await service.runFast();
       expect(report.ok).toBe(true);
 
-      const text = await registry.metrics();
-      expect(text).toContain(
-        'economy_reconciliation_last_run_status{tier="fast"} 1',
-      );
-      expect(text).not.toContain('economy_reconciliation_mismatch_total{');
+      expect(
+        (
+          metrics as unknown as {
+            reconciliationStatusByTier: Map<string, number>;
+          }
+        ).reconciliationStatusByTier.get('fast'),
+      ).toBe(1);
+      expect(metricState.mismatchCounter.add).not.toHaveBeenCalled();
     });
   });
 
   describe('metrics tier deep', () => {
     it('snapshot ví lệch ledger: counter wallet_sample, status deep = 0', async () => {
-      const { service, registry } = makeService(
+      const { service, metrics, metricState } = makeService(
         stubDataSource({
           walletMismatches: [
             { userId: 'u1', snapshot: '100', derived: '93' },
@@ -224,24 +238,33 @@ describe('ReconciliationService', () => {
       const report = await service.runDeep();
       expect(report.ok).toBe(false);
 
-      const text = await registry.metrics();
-      expect(text).toContain(
-        'economy_reconciliation_mismatch_total{check="wallet_sample",currency="DIA"} 2',
-      );
-      expect(text).toContain(
-        'economy_reconciliation_last_run_status{tier="deep"} 0',
-      );
-      expect(text).toContain(
-        'economy_reconciliation_run_duration_seconds_count{tier="deep"} 1',
+      expect(metricState.mismatchCounter.add).toHaveBeenCalledWith(2, {
+        check: 'wallet_sample',
+        currency: 'DIA',
+      });
+      expect(
+        (
+          metrics as unknown as {
+            reconciliationStatusByTier: Map<string, number>;
+          }
+        ).reconciliationStatusByTier.get('deep'),
+      ).toBe(0);
+      expect(metricState.histogram.record).toHaveBeenCalledWith(
+        expect.any(Number),
+        { tier: 'deep' },
       );
     });
 
     it('khớp hết: status deep = 1', async () => {
-      const { service, registry } = makeService(stubDataSource({}));
+      const { service, metrics } = makeService(stubDataSource({}));
       expect((await service.runDeep()).ok).toBe(true);
-      expect(await registry.metrics()).toContain(
-        'economy_reconciliation_last_run_status{tier="deep"} 1',
-      );
+      expect(
+        (
+          metrics as unknown as {
+            reconciliationStatusByTier: Map<string, number>;
+          }
+        ).reconciliationStatusByTier.get('deep'),
+      ).toBe(1);
     });
   });
 

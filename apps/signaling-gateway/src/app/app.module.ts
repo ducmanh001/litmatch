@@ -2,14 +2,13 @@ import { Module, RequestMethod } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { buildPinoHttpOptions } from '@litmatch/logger';
-import { createMetricsRegistry } from '@litmatch/observability';
+import { createMetricsMeter } from '@litmatch/observability';
 import { LoggerModule } from 'nestjs-pino';
 
 import { validateSignalingEnv } from '../config/env.validation';
 
 import { HealthController } from './health.controller';
-import { METRICS_REGISTRY } from './metrics.constants';
-import { MetricsController } from './metrics.controller';
+import { METRICS_METER } from './metrics.constants';
 import { SignalingRedisAdapterService } from './redis-adapter.service';
 import { SignalingGateway } from './signaling.gateway';
 
@@ -36,13 +35,13 @@ import type { SignalingEnv } from '../config/env.validation';
       }),
     }),
   ],
-  controllers: [HealthController, MetricsController],
+  controllers: [HealthController],
   providers: [
     SignalingGateway,
     SignalingRedisAdapterService,
     {
-      provide: METRICS_REGISTRY,
-      useFactory: () => createMetricsRegistry({ appName: 'signaling-gateway' }),
+      provide: METRICS_METER,
+      useFactory: () => createMetricsMeter({ appName: 'signaling-gateway' }),
     },
   ],
 })
