@@ -78,9 +78,10 @@
       `core-api` + `signaling-gateway`, Deployment/Service/ConfigMap riêng cho `media-server`
       (KHÔNG HPA — một room vẫn phải vừa một node theo docs/03 § 3.5, networking RTC multi-node
       thật cần ADR riêng, chưa quyết ở đây). Xem giả định/điểm mở trong `k8s/README.md`.
-- [x] Monitoring: Prometheus metrics (matching latency, call drop rate, transaction failure rate):
-      `libs/observability` (`prom-client`, registry riêng mỗi process + `http_request_duration_seconds`
-      dùng chung) + `/metrics` (không JWT, không throttle) trên `core-api`/`signaling-gateway`;
+- [x] Monitoring: OTel metrics push trực tiếp Grafana Cloud (matching latency, call drop rate,
+      transaction failure rate): `libs/observability` dùng OTel Meter + `PeriodicExportingMetricReader`
+      và `@opentelemetry/exporter-metrics-otlp-http`; không phụ thuộc `/metrics` hay Alloy trên
+      `core-api`/`signaling-gateway`;
       LiveKit tự phơi `prometheus_port` riêng (`media-server-config`). 3 metric domain theo đúng
       yêu cầu: `matching_ticket_wait_seconds` (`MatchingMetrics`, ghi trong `MatcherWorkerService.tryPair`
       lúc match), `call_ended_total{reason}` (`CallingMetrics`, ghi trong `CallingService.endById`
@@ -92,8 +93,9 @@
       `auto-instrumentations-node` (http/express/pg/ioredis/pino...) bootstrap ở `apps/*/src/tracing.ts`
       (import ĐẦU TIÊN trong `main.ts` — ràng buộc kỹ thuật thật của OTel JS, đã verify bằng script
       tay + app build thật). Opt-in qua env chuẩn OTel `OTEL_EXPORTER_OTLP_ENDPOINT` — KHÔNG khởi
-      động SDK nếu thiếu (tránh export lỗi âm thầm ở dev/test/CI chưa có collector); metrics/logs
-      của chính OTel SDK bị tắt hẳn để không chồng lấn Prometheus/pino đã chọn. HTTP request tự
+      động SDK nếu thiếu (tránh export lỗi âm thầm ở dev/test/CI chưa có collector); logs qua OTel
+      SDK bị tắt hẳn để không chồng lấn pino, còn metrics dùng reader OTLP riêng khi có Grafana
+      endpoint. HTTP request tự
       thành root span (nối Matching/Calling/Economy khi cùng 1 request chạm cả 3, vd `CallingService.joinCall`
       đọc `MatchingService`); 2 background job không có parent span tự nhiên (`MatcherWorkerService`,
       `CallTickerService` — nơi Calling thật sự chạm Economy qua `spendDiamond` mỗi phút billing)

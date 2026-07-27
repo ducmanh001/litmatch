@@ -1,30 +1,36 @@
-import { Registry } from 'prom-client';
+import type { Meter } from '@opentelemetry/api';
 
 import { CallingMetrics } from './calling.metrics';
 
 describe('CallingMetrics', () => {
-  it('recordEnded cộng dồn call_ended_total theo reason', async () => {
-    const registry = new Registry();
-    const metrics = new CallingMetrics(registry);
+  function makeMeter() {
+    const counter = { add: jest.fn() };
+    const meter = {
+      createCounter: jest.fn(() => counter),
+    } as unknown as Meter;
+    return { meter, counter };
+  }
+
+  it('recordEnded ghi counter theo reason để OTLP reader export định kỳ', () => {
+    const { meter, counter } = makeMeter();
+    const metrics = new CallingMetrics(meter);
 
     metrics.recordEnded('completed');
     metrics.recordEnded('completed');
     metrics.recordEnded('insufficient_balance');
 
-    const text = await registry.metrics();
-    expect(text).toContain('call_ended_total{reason="completed"} 2');
-    expect(text).toContain('call_ended_total{reason="insufficient_balance"} 1');
+    expect(counter.add).toHaveBeenNthCalledWith(1, 1, { reason: 'completed' });
+    expect(counter.add).toHaveBeenNthCalledWith(3, 1, {
+      reason: 'insufficient_balance',
+    });
   });
 
-  it('lỗi ghi metric (best-effort) không được throw ra caller — không được chặn dọn room SFU (endById → cleanupEndedCall)', () => {
-    const registry = new Registry();
-    const metrics = new CallingMetrics(registry);
-    const counter = (
-      metrics as unknown as { callEndedTotal: { inc: () => void } }
-    ).callEndedTotal;
-    jest.spyOn(counter, 'inc').mockImplementation(() => {
+  it('lỗi ghi metric (best-effort) không được throw ra caller', () => {
+    const { meter, counter } = makeMeter();
+    counter.add.mockImplementation(() => {
       throw new Error('boom');
     });
+    const metrics = new CallingMetrics(meter);
 
     expect(() => metrics.recordEnded('completed')).not.toThrow();
   });

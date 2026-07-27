@@ -27,11 +27,6 @@ spec:
       labels:
         app.kubernetes.io/name: core-api
         app.kubernetes.io/part-of: litmatch
-      annotations:
-        # /metrics KHÔNG có global prefix api/v1 (openapi.ts API_PREFIX_EXCLUDES) — docs/07 GĐ6
-        prometheus.io/scrape: 'true'
-        prometheus.io/port: '3000'
-        prometheus.io/path: /metrics
     spec:
       securityContext:
         runAsNonRoot: true

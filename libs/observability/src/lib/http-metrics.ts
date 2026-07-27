@@ -1,8 +1,6 @@
-import { Histogram } from 'prom-client';
+import type { Meter } from '@opentelemetry/api';
 
 import type { NextFunction, Request, Response } from 'express';
-import type { Registry } from 'prom-client';
-
 const DEFAULT_BUCKETS_SECONDS = [
   0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10,
 ];
@@ -14,14 +12,13 @@ const DEFAULT_BUCKETS_SECONDS = [
  * theo từng id — nếu Express chưa resolve được route (404, middleware global) thì fallback 'unmatched'.
  */
 export function createHttpMetricsMiddleware(
-  registry: Registry,
+  meter: Meter,
 ): (req: Request, res: Response, next: NextFunction) => void {
-  const histogram = new Histogram({
-    name: 'http_request_duration_seconds',
-    help: 'Thời gian xử lý HTTP request tính bằng giây, theo method/route/status_code',
-    labelNames: ['method', 'route', 'status_code'],
-    buckets: DEFAULT_BUCKETS_SECONDS,
-    registers: [registry],
+  const histogram = meter.createHistogram('http_request_duration_seconds', {
+    description:
+      'Thời gian xử lý HTTP request tính bằng giây, theo method/route/status_code',
+    unit: 's',
+    advice: { explicitBucketBoundaries: DEFAULT_BUCKETS_SECONDS },
   });
 
   return function httpMetricsMiddleware(
@@ -29,9 +26,11 @@ export function createHttpMetricsMiddleware(
     res: Response,
     next: NextFunction,
   ): void {
-    const endTimer = histogram.startTimer();
+    const startedAt = process.hrtime.bigint();
     res.on('finish', () => {
-      endTimer({
+      const elapsedSeconds =
+        Number(process.hrtime.bigint() - startedAt) / 1_000_000_000;
+      histogram.record(elapsedSeconds, {
         method: req.method,
         route: req.route?.path ? String(req.route.path) : 'unmatched',
         status_code: String(res.statusCode),

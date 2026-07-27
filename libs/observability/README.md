@@ -1,10 +1,11 @@
 # observability
 
-Prometheus registry + HTTP request duration middleware dùng chung cho `core-api` và
-`signaling-gateway` (docs/07 Giai đoạn 6 — Scale & Observability). Lib này CHỈ chứa phần
-trung lập (registry + default metrics + middleware đo request); metric riêng theo domain
-(matching latency, call drop rate, transaction failure rate...) sống ngay trong module sở
-hữu domain đó ở từng app — xem `docs/services/*` tương ứng.
+OpenTelemetry Meter + HTTP request duration middleware dùng chung cho `core-api` và
+`signaling-gateway`. `NodeSDK` đăng ký `PeriodicExportingMetricReader` với
+`@opentelemetry/exporter-metrics-otlp-http` để push trực tiếp lên Grafana Cloud khi có
+`GRAFANA_CLOUD_PROMETHEUS_URL`; không cần `/metrics` hoặc Alloy cho hai app này. Metric riêng
+theo domain (matching latency, call drop rate, transaction failure rate...) vẫn sống ngay trong
+module sở hữu domain đó ở từng app — xem `docs/services/*` tương ứng.
 
 ## Building
 

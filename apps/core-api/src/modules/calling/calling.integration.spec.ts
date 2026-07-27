@@ -1,4 +1,4 @@
-import { Registry } from 'prom-client';
+import { metrics } from '@opentelemetry/api';
 import { DataSource } from 'typeorm';
 
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
@@ -270,7 +270,10 @@ d('Calling integration (Postgres thật)', () => {
     await ds.runMigrations();
 
     const userService = new UserService(ds.getRepository(User), configStub);
-    const ledger = new LedgerService(ds, new EconomyMetrics(new Registry()));
+    const ledger = new LedgerService(
+      ds,
+      new EconomyMetrics(metrics.getMeter('calling-integration')),
+    );
     const stubVerifier = {
       verify: async (_p: IapProvider, payload: Record<string, unknown>) => ({
         providerTransactionId: String(payload['devTransactionId']),

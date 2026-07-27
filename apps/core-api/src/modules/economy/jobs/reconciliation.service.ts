@@ -56,7 +56,7 @@ interface ReconciliationReport {
  * - deep (ECONOMY_RECONCILIATION_INTERVAL_MS): sample ví so snapshot↔derived — scan/join theo
  *   từng ví nên đắt hơn, giữ cadence thưa như cũ.
  * Lệch = log error + metric `economy_reconciliation_*` (EconomyMetrics) để alert rule Prometheus
- * fire — repo không có channel alert nào khác ngoài scrape /metrics.
+ * fire — metrics được push trực tiếp lên Grafana Cloud qua OTLP khi đã cấu hình.
  *
  * BẤT BIẾN: job này READ-ONLY tuyệt đối — chỉ SELECT, không auto-correct. Sửa lệch thật phải đi
  * qua reversal entry ở write path chuẩn (LedgerService), không bao giờ từ job chẩn đoán này.

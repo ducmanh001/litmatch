@@ -1,9 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { Counter } from 'prom-client';
+import type { Counter, Meter } from '@opentelemetry/api';
 
-import { METRICS_REGISTRY } from '../../common/metrics/metrics.constants';
-
-import type { Registry } from 'prom-client';
+import { METRICS_METER } from '../../common/metrics/metrics.constants';
 
 /**
  * Call drop rate (docs/07 Giai đoạn 6, docs/services/calling-service.md): tổng call kết thúc
@@ -15,14 +13,11 @@ import type { Registry } from 'prom-client';
 @Injectable()
 export class CallingMetrics {
   private readonly logger = new Logger(CallingMetrics.name);
-  private readonly callEndedTotal: Counter<'reason'>;
+  private readonly callEndedTotal: Counter;
 
-  constructor(@Inject(METRICS_REGISTRY) registry: Registry) {
-    this.callEndedTotal = new Counter({
-      name: 'call_ended_total',
-      help: 'Tổng số call kết thúc, theo lý do (CallEndReason)',
-      labelNames: ['reason'],
-      registers: [registry],
+  constructor(@Inject(METRICS_METER) meter: Meter) {
+    this.callEndedTotal = meter.createCounter('call_ended_total', {
+      description: 'Tổng số call kết thúc, theo lý do (CallEndReason)',
     });
   }
 
@@ -34,7 +29,7 @@ export class CallingMetrics {
    */
   recordEnded(reason: string): void {
     try {
-      this.callEndedTotal.inc({ reason });
+      this.callEndedTotal.add(1, { reason });
     } catch (err) {
       this.logger.warn(`Ghi metric call_ended_total lỗi: ${String(err)}`);
     }

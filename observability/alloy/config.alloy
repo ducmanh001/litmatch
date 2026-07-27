@@ -6,16 +6,6 @@ logging {
 prometheus.scrape "litmatch_apps" {
   targets = [
     {
-      "__address__"      = "core-api:3000",
-      "__metrics_path__" = "/metrics",
-      "job"              = "core-api",
-    },
-    {
-      "__address__"      = "signaling-gateway:3001",
-      "__metrics_path__" = "/metrics",
-      "job"              = "signaling-gateway",
-    },
-    {
       "__address__"      = "livekit:6789",
       "__metrics_path__" = "/metrics",
       "job"              = "media-server",
@@ -26,7 +16,7 @@ prometheus.scrape "litmatch_apps" {
   forward_to      = [prometheus.relabel.litmatch_metrics.receiver]
 }
 
-// Giữ label môi trường ở collector; app/service không được tự gắn ID/cardinality cao.
+// App metrics được push OTLP trực tiếp; Alloy chỉ forward metrics của LiveKit ở profile Compose.
 prometheus.relabel "litmatch_metrics" {
   forward_to = [prometheus.remote_write.grafana_cloud.receiver]
 

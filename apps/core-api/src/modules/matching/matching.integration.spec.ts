@@ -1,5 +1,5 @@
 import Redis from 'ioredis';
-import { Registry } from 'prom-client';
+import { metrics } from '@opentelemetry/api';
 import { DataSource, In } from 'typeorm';
 
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
@@ -253,7 +253,10 @@ d('Matching integration (Postgres + Redis thật)', () => {
       db: 15,
     });
 
-    const ledger = new LedgerService(ds, new EconomyMetrics(new Registry()));
+    const ledger = new LedgerService(
+      ds,
+      new EconomyMetrics(metrics.getMeter('matching-integration')),
+    );
     const stubVerifier = {
       verify: async (_p: IapProvider, payload: Record<string, unknown>) => ({
         providerTransactionId: String(payload['devTransactionId']),
@@ -292,14 +295,16 @@ d('Matching integration (Postgres + Redis thật)', () => {
       redis,
       matcherWakeup,
     );
-    const metrics = new MatchingMetrics(new Registry());
+    const matchingMetrics = new MatchingMetrics(
+      metrics.getMeter('matching-integration'),
+    );
     worker = new MatcherWorkerService(
       ds,
       configStub,
       schedulerStub,
       redis,
       policyStub,
-      metrics,
+      matchingMetrics,
       notificationStub as never,
       matcherWakeup,
     );
@@ -309,7 +314,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
       schedulerStub,
       redis,
       policyStub,
-      metrics,
+      matchingMetrics,
       notificationStub as never,
       matcherWakeup,
     );

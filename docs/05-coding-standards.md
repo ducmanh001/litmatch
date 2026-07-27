@@ -100,9 +100,8 @@ Tóm tắt bắt buộc:
 
 - Structured JSON log (pino qua logger lib chung ở `libs/logger`) — cấm `console.log`. Mỗi line tối thiểu: timestamp, level, context (module), traceId, message.
 - **Cấm log PII/secret**: token, password, OTP, receipt IAP, nội dung tin nhắn, số dư gắn kèm danh tính đầy đủ — danh sách field cấm log (redact list) đặt tập trung trong `libs/logger`, không tự nhớ ở từng chỗ. OTP là ngoại lệ sản phẩm có chủ đích: endpoint auth trả mã qua response để client toast/tự điền; backend và frontend không log mã, gửi analytics hoặc lưu bền mã đó.
-- Metrics Prometheus đặt tên `<domain>_<subject>_<đơn_vị>` — ví dụ thật đã ship từ Giai đoạn 6
-  (`libs/observability`, đăng ký registry riêng mỗi process qua `METRICS_REGISTRY`, phơi qua
-  `/metrics` không JWT/không throttle): `matching_ticket_wait_seconds` (histogram, `MatchingMetrics`),
+- Metrics đặt tên `<domain>_<subject>_<đơn_vị>` và ghi bằng OTel Meter; exporter OTLP push định kỳ
+  trực tiếp lên Grafana Cloud (không phụ thuộc route `/metrics`/Alloy): `matching_ticket_wait_seconds` (histogram, `MatchingMetrics`),
   `call_ended_total{reason}` (counter, `CallingMetrics`), `economy_transaction_total{type,result}`
   (counter, `EconomyMetrics` — ghi tại điểm duy nhất `LedgerService.record()`), cộng
   `http_request_duration_seconds{method,route,status_code}` dùng chung mọi app.

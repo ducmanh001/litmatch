@@ -2,11 +2,12 @@
 
 ## Phần code đã làm sẵn
 
-- `core-api` và `signaling-gateway` phơi Prometheus `/metrics`; LiveKit phơi cổng `6789`.
+- `core-api` và `signaling-gateway` dùng OTel Meter và push OTLP metrics trực tiếp; LiveKit vẫn
+  phơi cổng Prometheus `6789`.
 - HTTP latency/status, Node/process, matching wait, call end và Economy/reconciliation đã có metric.
 - Pino ghi JSON kèm request ID; khi tracing bật còn có `trace_id`/`span_id`.
-- `observability/alloy/config.alloy` scrape ba backend và tail Docker logs; chỉ label theo
-  `environment`, `service`, `level` để tránh nổ cardinality/chi phí.
+- `observability/alloy/config.alloy` scrape LiveKit và tail Docker logs; metrics của hai app không
+  cần Alloy, chỉ cần `GRAFANA_CLOUD_*` trong chính process.
 - `docker-compose.observability.yml` là overlay optional; không có credential thì stack chính
   không bị ảnh hưởng.
 
@@ -17,12 +18,13 @@ quyền root theo mô hình bảo mật Docker; chỉ bật Alloy trên host tin
 ## Phần chủ hệ thống cần làm một lần
 
 1. Tạo Grafana Cloud Free tại <https://grafana.com/products/cloud/>.
-2. Vào **Connections**, lấy Prometheus remote-write URL/user và Loki URL/user.
+2. Vào **Connections**, lấy OpenTelemetry endpoint/user cho app metrics; lấy Loki URL/user nếu
+   muốn Alloy gửi logs.
 3. Tạo access policy token chỉ có `metrics:write` và `logs:write`.
 4. Điền 6 biến `GRAFANA_CLOUD_*` cùng `DEPLOY_ENVIRONMENT` vào `.env` của host.
 5. Chạy `pnpm observability:up`, rồi xem trạng thái collector tại
    `http://127.0.0.1:12345` hoặc `pnpm observability:logs`.
-6. Trong Grafana Explore, kiểm tra metric `up`/`http_request_duration_seconds_count` và log query
+6. Trong Grafana Explore, kiểm tra metric `litmatch_up`/`http_request_duration_seconds_count` và log query
    `{environment="development", service="core-api"}`.
 
 ## Dashboard/alert tối thiểu

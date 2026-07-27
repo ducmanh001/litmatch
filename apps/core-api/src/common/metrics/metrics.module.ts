@@ -1,22 +1,20 @@
 import { Global, Module } from '@nestjs/common';
-import { createMetricsRegistry } from '@litmatch/observability';
+import { createMetricsMeter } from '@litmatch/observability';
 
-import { METRICS_REGISTRY } from './metrics.constants';
-import { MetricsController } from './metrics.controller';
+import { METRICS_METER } from './metrics.constants';
 
 /**
- * Global — mọi module domain (matching/calling/economy...) inject METRICS_REGISTRY trực tiếp
+ * Global — mọi module domain (matching/calling/economy...) inject METRICS_METER trực tiếp
  * để tự đăng ký metric riêng của mình, không cần import lại module này (docs/07 Giai đoạn 6).
  */
 @Global()
 @Module({
-  controllers: [MetricsController],
   providers: [
     {
-      provide: METRICS_REGISTRY,
-      useFactory: () => createMetricsRegistry({ appName: 'core-api' }),
+      provide: METRICS_METER,
+      useFactory: () => createMetricsMeter({ appName: 'core-api' }),
     },
   ],
-  exports: [METRICS_REGISTRY],
+  exports: [METRICS_METER],
 })
 export class MetricsModule {}

@@ -233,12 +233,10 @@ compute provider cho cluster của bất kỳ region nào — việc đó vẫn 
 5. `KAFKA_BROKERS`/credential Kafka nếu production bật SASL — `env.validation.ts` hiện chưa có
    biến riêng cho credential Kafka, cần bổ sung khi cần (ngoài phạm vi PR này vì không được sửa
    code `.ts`).
-6. Prometheus metrics (`libs/observability`, `*.metrics.ts`) đang được thêm song song ở nhánh
-   khác trong cùng Giai đoạn 6 — khi endpoint `/metrics` (port/path cụ thể) ổn định, cần bổ sung
-   `containerPort` tương ứng + annotation scrape (`prometheus.io/scrape`) hoặc `ServiceMonitor`
-   (nếu cluster dùng Prometheus Operator) vào `k8s/base/core-api` và
-   `k8s/base/signaling-gateway`. Chưa làm ở PR này vì port/path metrics chưa xác định lúc viết
-   manifest này — tránh bịa annotation trỏ endpoint chưa tồn tại.
+6. Metrics của `core-api`/`signaling-gateway` push trực tiếp bằng OTel OTLP khi Secret/ConfigMap
+   khai báo `GRAFANA_CLOUD_PROMETHEUS_URL`, `GRAFANA_CLOUD_PROMETHEUS_USER` và
+   `GRAFANA_CLOUD_API_TOKEN`; không dùng annotation scrape `/metrics`. LiveKit vẫn dùng
+   Prometheus port riêng.
 7. ~~Global routing đa region~~ — **ĐÃ CHỐT: Cloudflare Load Balancing geo-steering**
    ([ADR 0006](../docs/adr/0006-cloudflare-global-routing.md)); scaffold overlay
    `production-region-b` + ConfigMap real-IP đã có, nhưng **chưa provision gì thật** (chưa có
