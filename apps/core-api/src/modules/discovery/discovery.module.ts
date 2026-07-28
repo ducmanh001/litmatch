@@ -1,6 +1,7 @@
 import { Inject, Module, OnApplicationShutdown } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { closeCoreRedisClient } from '../../common/redis/core-redis-client';
 import { DiscoveryController } from './discovery.controller';
 import { DiscoveryService } from './discovery.service';
 import { NearbyService } from './nearby.service';
@@ -30,6 +31,6 @@ export class DiscoveryModule implements OnApplicationShutdown {
   constructor(@Inject(DISCOVERY_REDIS) private readonly redis: Redis) {}
 
   async onApplicationShutdown(): Promise<void> {
-    await this.redis.quit().catch(() => undefined);
+    await closeCoreRedisClient(this.redis);
   }
 }

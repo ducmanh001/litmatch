@@ -23,5 +23,8 @@ export default new DataSource({
   migrations: ['apps/core-api/src/database/migrations/*.ts'],
   namingStrategy: new SnakeNamingStrategy(),
   synchronize: false, // cấm tuyệt đối, kể cả dev — schema chỉ đổi qua migration (docs/04)
+  // Cho phép migration index nóng opt-out transaction để dùng CREATE INDEX CONCURRENTLY.
+  // Migration bình thường vẫn atomic riêng từng file.
+  migrationsTransactionMode: 'each',
   logging: ['error', 'migration'],
 });

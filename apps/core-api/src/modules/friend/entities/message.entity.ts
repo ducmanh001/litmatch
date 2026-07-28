@@ -24,6 +24,8 @@ export interface MessageAttachment {
  */
 @Entity({ name: 'messages' })
 @Index('idx_messages_conversation_seq', ['conversationId', 'seq'])
+// Covering INCLUDE(sender_user_id) do migration quản lý; TypeORM metadata không có INCLUDE.
+@Index('idx_messages_conversation_created', { synchronize: false })
 export class Message {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
