@@ -37,10 +37,16 @@ export class SignalingRedisAdapterService implements OnApplicationShutdown {
       this.logger.warn(`Redis adapter subClient lỗi: ${String(err)}`),
     );
 
-    await Promise.all([
-      this.waitReady(this.pubClient),
-      this.waitReady(this.subClient),
-    ]);
+    try {
+      await Promise.all([
+        this.waitReady(this.pubClient),
+        this.waitReady(this.subClient),
+      ]);
+    } catch (error) {
+      // Bootstrap sẽ fail, nên không để 2 Redis client reconnect vô hạn trong process lỗi.
+      this.disconnectClients();
+      throw error;
+    }
     return createAdapter(this.pubClient, this.subClient);
   }
 
@@ -52,10 +58,29 @@ export class SignalingRedisAdapterService implements OnApplicationShutdown {
   }
 
   async onApplicationShutdown(): Promise<void> {
+    const clients = [this.pubClient, this.subClient];
+    this.pubClient = undefined;
+    this.subClient = undefined;
     await Promise.all([
-      this.pubClient?.quit().catch(() => undefined),
-      this.subClient?.quit().catch(() => undefined),
+      ...clients.map((client) => this.quitOrDisconnect(client)),
     ]);
+  }
+
+  private disconnectClients(): void {
+    this.pubClient?.disconnect();
+    this.subClient?.disconnect();
+    this.pubClient = undefined;
+    this.subClient = undefined;
+  }
+
+  private async quitOrDisconnect(client?: Redis): Promise<void> {
+    if (!client) return;
+    try {
+      await client.quit();
+    } catch {
+      // Giống subscriber fanout: Redis có thể đang reconnect và từ chối lệnh QUIT.
+      client.disconnect();
+    }
   }
 
   private waitReady(client: Redis): Promise<void> {

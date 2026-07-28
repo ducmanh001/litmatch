@@ -102,7 +102,17 @@ export class SignalingGateway
   async onApplicationShutdown(): Promise<void> {
     this.subscriptionReady = false;
     this.connectionsByUser.clear();
-    await this.subscriber?.quit().catch(() => undefined);
+    const subscriber = this.subscriber;
+    this.subscriber = undefined;
+    if (!subscriber) return;
+
+    try {
+      await subscriber.quit();
+    } catch {
+      // `quit()` không gửi được khi Redis đang reconnect (offline queue đã tắt). Đóng cưỡng bức
+      // để retry timer/socket không giữ process sống sau shutdown.
+      subscriber.disconnect();
+    }
   }
 
   /** Readiness thật: Redis đã kết nối VÀ pattern fanout đã subscribe thành công. */
