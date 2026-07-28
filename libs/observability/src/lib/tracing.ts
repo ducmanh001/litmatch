@@ -146,27 +146,16 @@ function resolveMetricsExportInterval(): number {
     : DEFAULT_METRICS_EXPORT_INTERVAL_MS;
 }
 
-function resolveMetricsHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {};
-  const configured = process.env['OTEL_EXPORTER_OTLP_HEADERS'];
-  if (configured) {
-    for (const pair of configured.split(',')) {
-      const separator = pair.indexOf('=');
-      if (separator > 0) {
-        headers[pair.slice(0, separator).trim()] = pair
-          .slice(separator + 1)
-          .trim();
-      }
-    }
-  }
-
+export function resolveMetricsHeaders(): Record<string, string> {
   const username = process.env['GRAFANA_CLOUD_PROMETHEUS_USER'];
   const token = process.env['GRAFANA_CLOUD_API_TOKEN'];
-  if (username && token) {
-    headers['authorization'] =
-      `Basic ${Buffer.from(`${username}:${token}`).toString('base64')}`;
-  }
-  return headers;
+  if (!username || !token) return {};
+
+  return {
+    Authorization: `Basic ${Buffer.from(`${username}:${token}`).toString(
+      'base64',
+    )}`,
+  };
 }
 
 function createLoggingMetricExporter(

@@ -30,6 +30,9 @@ export enum CallEndReason {
 @Entity({ name: 'call_sessions' })
 @Index('uq_call_sessions_match_session', ['matchSessionId'], { unique: true })
 @Index('idx_call_sessions_status_created', ['status', 'createdAt'])
+@Index('idx_call_sessions_active_updated', ['updatedAt', 'id'], {
+  where: "status = 'active'",
+})
 export class CallSession extends BaseAppEntity {
   @Column({ type: 'uuid' })
   matchSessionId!: string;

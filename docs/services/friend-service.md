@@ -66,9 +66,11 @@ cùng nguyên tắc đã áp dụng ở Soul Match/Calling).
 
 Mỗi (conversation, user) một dòng, **lazy** (vắng dòng ⟺ chưa đọc gì và không mute) — khác
 `Conversation.lastMessageAt` là trạng thái chung. `unreadCount` = số message của **đối
-phương** có `created_at > COALESCE(last_read_at, epoch)`. Khi người nhận đang mute,
-`FriendService.sendMessage` bỏ qua bước tạo notification (best-effort cuối luồng) — không
-ảnh hưởng persist message/streak/realtime.
+phương** có `created_at > COALESCE(last_read_at, epoch)`; covering index
+`(conversation_id, created_at) INCLUDE (sender_user_id)` giữ phép đếm này theo range của từng
+conversation thay vì quét toàn bộ lịch sử chat. Khi người nhận đang mute,
+`FriendService.sendMessage` bỏ qua bước tạo notification (best-effort cuối luồng) — không ảnh
+hưởng persist message/streak/realtime.
 
 `GET /friends/:friendUserId/conversation`: nếu `friendUserId` không phải bạn của caller →
 404 (tra theo cặp canonical, không tồn tại nghĩa là chưa/không phải bạn — không phân biệt

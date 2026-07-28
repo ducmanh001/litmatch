@@ -36,7 +36,17 @@ nguồn trạng thái feature độc lập.
 │   ├── 12-frontend-architecture.md
 │   ├── 13-frontend-coding-standards.md
 │   ├── 14-rule-enforcement-matrix.md ← rule nào được chặn bằng máy, rule nào review tay
+│   ├── 15-commit-guidelines.md
+│   ├── 16-module-blueprint.md
+│   ├── 17-naming-conventions.md
 │   ├── 18-documentation-automation.md ← registry/evidence/report generator
+│   ├── 19-project-lifecycle-and-learning.md ← vòng đời thay đổi, lỗi/sự cố và bài học
+│   ├── 20-ai-native-handbook.md ← prompt/context/harness/eval + ma trận trend
+│   ├── services/               ← đặc tả theo domain/service owner
+│   ├── runbooks/               ← thao tác release, quan sát và phục hồi
+│   ├── plans/                  ← plan/review có ngày; bằng chứng lịch sử, không phải trạng thái hiện tại
+│   ├── reference/              ← registry tra cứu ngắn, có link về nguồn canonical
+│   ├── templates/              ← mẫu ghi nhận có cấu trúc
 │   ├── feature-registry.json          ← trạng thái feature máy đọc được
 │   └── sources.md
 ├── specs/                  ← Arazzo workflow và AsyncAPI transport companion contracts
@@ -57,8 +67,17 @@ nguồn trạng thái feature độc lập.
    `pnpm bootstrap` để cài dependency, khởi động Postgres/Redis/Kafka, chạy migration và kiểm tra
    môi trường. Với host-native, những lần sau dùng `pnpm infra:up` và `pnpm doctor`.
 3. Đọc [`docs/00-overview-and-index.md`](./docs/00-overview-and-index.md) — mục lục đầy đủ.
-4. Đọc [`docs/03-architecture.md`](./docs/03-architecture.md) — quyết định kiến trúc quan trọng nhất, đặc biệt § 3.8 (SFU, matching shard, ledger cho quy mô lớn).
-5. Agent làm việc theo [`AGENTS.md`](./AGENTS.md) và quy trình ở [`docs/08-working-with-agents.md`](./docs/08-working-with-agents.md).
+4. Đọc [`docs/19-project-lifecycle-and-learning.md`](./docs/19-project-lifecycle-and-learning.md)
+   để biết đường vào dự án, vòng đời thay đổi, xử lý lỗi/sự cố và cách lưu bài học.
+5. Nếu dùng hoặc phát triển cùng agent, đọc
+   [`docs/20-ai-native-handbook.md`](./docs/20-ai-native-handbook.md) hoặc
+   [bản DOCX](./docs/generated/ai-native-handbook.docx) để hiểu prompt/context/harness/eval và
+   lý do các trend như fine-tuning, RAG, LangChain/LangGraph chưa được thêm mặc định.
+6. Đọc [`docs/03-architecture.md`](./docs/03-architecture.md) — quyết định kiến trúc quan trọng
+   nhất, đặc biệt § 3.8 (SFU, matching shard, ledger cho quy mô lớn).
+7. Agent làm việc theo [`AGENTS.md`](./AGENTS.md) và
+   [`docs/08-working-with-agents.md`](./docs/08-working-with-agents.md), chạy
+   `pnpm agent:context <scope>`; riêng thay đổi tài liệu dùng `pnpm agent:context docs`.
 
 ### Chạy toàn bộ local development bằng Docker
 

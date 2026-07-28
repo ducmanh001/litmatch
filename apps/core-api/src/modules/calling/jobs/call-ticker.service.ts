@@ -90,6 +90,7 @@ export class CallTickerService
     );
     const cutoff = new Date(Date.now() - timeoutSeconds * 1000);
     const stale = await this.dataSource.getRepository(CallSession).find({
+      select: { id: true },
       where: { status: CallSessionStatus.Pending, createdAt: LessThan(cutoff) },
       order: { createdAt: 'ASC', id: 'ASC' },
       take: TICK_BATCH_SIZE,
@@ -101,6 +102,7 @@ export class CallTickerService
 
   private async processActiveCalls(): Promise<void> {
     const active = await this.dataSource.getRepository(CallSession).find({
+      select: { id: true },
       where: { status: CallSessionStatus.Active },
       order: { updatedAt: 'ASC', id: 'ASC' },
       take: TICK_BATCH_SIZE,

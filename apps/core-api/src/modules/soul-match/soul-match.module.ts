@@ -1,6 +1,7 @@
 import { Inject, Module, OnApplicationShutdown } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { closeCoreRedisClient } from '../../common/redis/core-redis-client';
 import { SoulMatchController } from './soul-match.controller';
 import { SoulMatchService } from './soul-match.service';
 import { SoulChatMessage } from './entities/soul-chat-message.entity';
@@ -30,6 +31,6 @@ export class SoulMatchModule implements OnApplicationShutdown {
   constructor(@Inject(SOUL_MATCH_REDIS) private readonly redis: Redis) {}
 
   async onApplicationShutdown(): Promise<void> {
-    await this.redis.quit().catch(() => undefined);
+    await closeCoreRedisClient(this.redis);
   }
 }

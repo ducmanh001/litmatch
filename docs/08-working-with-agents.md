@@ -37,7 +37,13 @@ agent vẫn phải coi thay đổi có sẵn là của session khác, chốt vù
 phần ngoài scope. Session-start adapter chỉ in số lượng để giữ startup gọn.
 
 Scope chuẩn: `core`, `economy`, `matching`, `calling`, `signaling`, `content`, `media`, `frontend`,
-`infra`.
+`infra`, `docs`, `agents`. Thay đổi tài liệu/onboarding/lifecycle dùng
+`pnpm agent:context docs`; thay đổi prompt, context map, skill, harness, guard hoặc eval dùng
+`pnpm agent:context agents`. Hai scope này không nới quality gate hay canonical-source hierarchy.
+
+[20 · AI-native handbook](./20-ai-native-handbook.md) giải thích kiến trúc và ma trận
+Applied/Partial/Not applied; file này tiếp tục giữ vai trò operational contract, không lặp lại phần
+trend hoặc lý do chọn công nghệ.
 
 ## 8.3 Skills dùng chung
 
@@ -103,6 +109,24 @@ Review verdict:
 ```
 
 Không lưu suy luận nội bộ, toàn bộ prompt, token, secret hoặc dữ liệu người dùng vào repo.
+
+## 8.6.1 Lifecycle evidence and durable learning
+
+Trước khi handoff, agent route thay đổi qua [19 · Project lifecycle](./19-project-lifecycle-and-learning.md):
+discover → design → change → test/review → release → observe → learn → deprecate. Không phải task
+nào cũng chạm mọi stage, nhưng stage bị bỏ qua phải có lý do trong scope/handoff.
+
+Khi phát hiện lỗi hoặc risk, tách rõ **fact**, **historical evidence**, **inferred risk** và
+**deferred work**. Không gọi một lỗi test/review hay một commit là production incident nếu không có
+bằng chứng incident chính. Sau correction/near-miss có thể tái sử dụng, thêm record theo
+[template](./templates/learning-record.md) và, khi đủ evidence, cập nhật
+[lessons registry](./reference/lessons-registry.md) với symptom → impact → cause → guard →
+verification → status/owner. Operational incident có impact đã chứng minh dùng
+[incident record](./templates/incident-record.md) để giữ owner, severity, cadence, timeline và
+closure authority.
+
+Shared worktree luôn có thể chứa thay đổi của người khác: kiểm tra `git status` trước batch edit,
+giới hạn file ownership, không revert/format lại phần ngoài scope, và báo collision thay vì ghi đè.
 
 ## 8.7 Thay đổi hạ tầng agent
 

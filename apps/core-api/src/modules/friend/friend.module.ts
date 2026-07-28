@@ -1,6 +1,7 @@
 import { Inject, Module, OnApplicationShutdown } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { closeCoreRedisClient } from '../../common/redis/core-redis-client';
 import { FriendController } from './friend.controller';
 import { FriendService } from './friend.service';
 import { Conversation } from './entities/conversation.entity';
@@ -54,6 +55,6 @@ export class FriendModule implements OnApplicationShutdown {
   constructor(@Inject(FRIEND_REDIS) private readonly redis: Redis) {}
 
   async onApplicationShutdown(): Promise<void> {
-    await this.redis.quit().catch(() => undefined);
+    await closeCoreRedisClient(this.redis);
   }
 }

@@ -511,29 +511,26 @@
     },
     {
       "id": "privacy-analytics-consent",
-      "title": "Non-blocking analytics preference and private session-replay defaults",
+      "title": "Auto-enabled hosted analytics and explicit unmasked replay behavior",
       "status": "implemented",
       "owner": "web/shared-analytics",
-      "contracts": [
-        "docs/runbooks/posthog-cloud.md",
-        "docs/06-domain-rules.md"
-      ],
+      "contracts": ["docs/runbooks/posthog-cloud.md"],
       "evidence": [
         {
           "path": "apps/web/src/shared/analytics/product-analytics.ts",
-          "contains": "const CONSENT_COOKIE_NAME"
+          "contains": "posthog.opt_in_capturing();"
         },
         {
           "path": "apps/web/src/shared/analytics/product-analytics.ts",
-          "contains": "maskAllInputs: true"
+          "contains": "maskAllInputs: false"
         },
         {
           "path": "apps/web/src/shared/analytics/product-analytics.ts",
-          "contains": "autocapture: false"
+          "contains": "autocapture: true"
         },
         {
           "path": "apps/web/src/shared/analytics/product-analytics-components.tsx",
-          "contains": "Analytics là một tùy chọn trong trang cài đặt"
+          "contains": "Analytics luôn bật khi đã cấu hình PostHog."
         }
       ],
       "verification": {
@@ -541,45 +538,15 @@
         "evidence": [
           {
             "path": "apps/web/src/shared/analytics/product-analytics.spec.ts",
-            "contains": "không khởi tạo SDK hoặc gửi request trước khi có consent"
+            "contains": "khởi tạo SDK ngay cả khi chưa có cookie consent"
           },
           {
             "path": "apps/web/src/shared/analytics/product-analytics.spec.ts",
-            "contains": "không gửi nickname"
+            "contains": "bật autocapture và không che text/input của session replay"
           },
           {
             "path": "apps/web/src/shared/analytics/product-analytics-components.spec.tsx",
-            "contains": "không hiện dialog"
-          }
-        ]
-      }
-    },
-    {
-      "id": "short-video-reporting-ui",
-      "title": "Short-video report action in the web client",
-      "status": "implemented",
-      "owner": "web/short-video with core-api/safety",
-      "contracts": [
-        "openapi/core-api.json",
-        "docs/services/short-video-service.md",
-        "docs/services/safety-service.md"
-      ],
-      "evidence": [
-        {
-          "path": "apps/web/src/features/short-video/components/video-reel-feed.tsx",
-          "contains": "function VideoReportButton"
-        },
-        {
-          "path": "apps/web/src/features/short-video/components/video-reel-feed.tsx",
-          "contains": "useReportVideo(videoId)"
-        }
-      ],
-      "verification": {
-        "kind": "automated-test-source",
-        "evidence": [
-          {
-            "path": "apps/web/src/features/short-video/components/video-reel-feed.spec.tsx",
-            "contains": "/api/v1/videos/{id}/report"
+            "contains": "hiển thị analytics đang bật và không có thao tác opt-in riêng"
           }
         ]
       }
@@ -639,24 +606,36 @@
           "contains": "số liệu traffic production thật"
         }
       ]
+    },
+    {
+      "id": "short-video-reporting-ui",
+      "status": "deferred",
+      "owner": "web/short-video with core-api/safety",
+      "reason": "The backend report contract and web API hook remain, but the visible report action was deliberately removed from the current reel UI. Do not claim the client feature is implemented until a product decision re-enables it and a behavior test verifies the user action.",
+      "evidence": [
+        {
+          "path": "apps/web/src/features/short-video/components/video-reel-feed.spec.tsx",
+          "contains": "Báo cáo video có nội dung không phù hợp"
+        },
+        {
+          "path": "apps/web/src/features/short-video/components/video-reel-feed.spec.tsx",
+          "contains": "not.toBeInTheDocument()"
+        }
+      ]
     }
   ],
   "recordedChecks": [
     {
-      "scope": "Web privacy analytics and short-video reporting",
+      "scope": "Web privacy analytics and short-video reporting (superseded historical handoff)",
       "result": "14 tests passed on 2026-07-24",
       "command": "NX_DAEMON=false nx test web --run src/shared/analytics/product-analytics.spec.ts src/shared/analytics/product-analytics-components.spec.tsx src/features/short-video/components/video-reel-feed.spec.tsx",
       "evidence": [
         {
-          "path": "apps/web/src/shared/analytics/product-analytics.spec.ts",
-          "contains": "không khởi tạo SDK hoặc gửi request trước khi có consent"
-        },
-        {
-          "path": "apps/web/src/features/short-video/components/video-reel-feed.spec.tsx",
-          "contains": "/api/v1/videos/{id}/report"
+          "path": "docs/plans/2026-07-24-analytics-reporting-handoff.md",
+          "contains": "14 tests passed on 2026-07-24"
         }
       ],
-      "caveat": "Recorded handoff evidence only; it does not prove browser RUM, vendor ingestion, or production consent behavior."
+      "caveat": "Historical evidence only: later commits superseded both analytics privacy defaults and the visible report action. It does not prove current behavior, browser RUM, vendor ingestion, or production consent."
     },
     {
       "scope": "Core API module layout and moved secondary controller",
@@ -741,15 +720,15 @@
   ],
   "moduleReviews": [
     {
-      "scope": "Trust & Safety / short-video reporting",
+      "scope": "Trust & Safety / short-video report backend",
       "mode": "verify",
       "reviewedAt": "2026-07-24",
       "result": "PASS",
-      "flow": "Viewer opens the report action → confirms intent → authenticated POST /videos/:id/report → server validates the video → append/idempotently reuse the report → count distinct reporters → conditionally auto-hide a published video.",
+      "flow": "Authenticated client calls POST /videos/:id/report → server validates the video → append/idempotently reuse the report → count distinct reporters → conditionally auto-hide a published video. The current web reel does not expose this action.",
       "assumptions": [
         {
-          "assumption": "The client confirmation is only UX; a custom client may call the report endpoint directly.",
-          "breakVector": "A caller bypasses the button or confirmation dialog.",
+          "assumption": "Backend authorization and validation do not depend on a visible web button; a custom authenticated client may call the endpoint directly.",
+          "breakVector": "A caller invokes the API without any web confirmation flow.",
           "guard": [
             {
               "path": "apps/core-api/src/app/app.module.ts",
@@ -827,7 +806,7 @@
         {
           "item": "Server-authoritative validation and moderation threshold",
           "result": "PASS",
-          "note": "The web sends only reason/description; existence, visibility, distinct count, threshold, and transition are decided server-side."
+          "note": "The API accepts only reason/description from a client; existence, visibility, distinct count, threshold, and transition are decided server-side."
         },
         {
           "item": "Duplicate/race handling",
@@ -847,13 +826,10 @@
         {
           "item": "Age-verification policy",
           "result": "N/A",
-          "note": "This change restores an existing report action and does not add an account eligibility or age gate; the requested scope explicitly excludes that restriction."
+          "note": "This backend report flow does not add an account eligibility or age gate."
         }
       ],
-      "recordedCheckScopes": [
-        "Web privacy analytics and short-video reporting",
-        "Short-video report persistence and auto-hide"
-      ]
+      "recordedCheckScopes": ["Short-video report persistence and auto-hide"]
     }
   ],
   "outOfScope": [

@@ -14,6 +14,79 @@
     ],
     "checks": ["pnpm agent:check", "pnpm format:check", "pnpm lint"]
   },
+  "docs": {
+    "description": "Tài liệu canonical, onboarding, bằng chứng và bài học vận hành",
+    "read": [
+      "AGENTS.md",
+      "docs/00-overview-and-index.md",
+      "docs/18-documentation-automation.md",
+      "docs/19-project-lifecycle-and-learning.md"
+    ],
+    "readWhen": [
+      {
+        "path": "docs/reference/lessons-registry.md",
+        "when": "điều tra correction/near-miss/incident hoặc ghi bài học tái sử dụng"
+      },
+      {
+        "path": "docs/templates/incident-record.md",
+        "when": "đang điều phối operational incident có bằng chứng impact"
+      },
+      {
+        "path": "docs/plans/README.md",
+        "when": "tạo, cập nhật hoặc diễn giải plan/review note có ngày"
+      },
+      {
+        "path": "docs/07-roadmap.md",
+        "when": "đổi milestone, trạng thái roadmap hoặc phạm vi feature"
+      }
+    ],
+    "paths": ["README.md", "docs", "scripts/docs", ".agents/context-map.json"],
+    "checks": ["pnpm docs:check", "pnpm agent:check", "pnpm format:check"]
+  },
+  "agents": {
+    "description": "Prompt, context engineering, skills, harness, guardrails, orchestration và agent evals",
+    "read": [
+      "AGENTS.md",
+      "docs/20-ai-native-handbook.md",
+      "docs/08-working-with-agents.md",
+      "docs/14-rule-enforcement-matrix.md"
+    ],
+    "readWhen": [
+      {
+        "path": "docs/10-code-review-checklist.md",
+        "when": "đổi review methodology, golden-bug fixture hoặc cách chấm eval"
+      },
+      {
+        "path": "docs/18-documentation-automation.md",
+        "when": "đổi handbook DOCX, docs generator hoặc evidence artifact"
+      },
+      {
+        "path": "docs/19-project-lifecycle-and-learning.md",
+        "when": "đổi handoff, memory/learning, error hoặc incident workflow"
+      }
+    ],
+    "paths": [
+      "AGENTS.md",
+      ".agents",
+      "scripts/agent",
+      "scripts/docs",
+      ".github/agents",
+      ".github/prompts",
+      ".github/PULL_REQUEST_TEMPLATE.md",
+      ".husky",
+      "docs/08-working-with-agents.md",
+      "docs/14-rule-enforcement-matrix.md",
+      "docs/18-documentation-automation.md",
+      "docs/generated/ai-native-handbook.docx",
+      "docs/20-ai-native-handbook.md"
+    ],
+    "checks": [
+      "pnpm agent:check",
+      "pnpm agent:test",
+      "pnpm docs:check",
+      "pnpm format:check"
+    ]
+  },
   "core": {
     "description": "Modular monolith, module boundary và API backend",
     "read": [

@@ -10,6 +10,14 @@
 - **Baseline chỉ 3 backend deployable**: `core-api`, Signaling Gateway, Media Server. Domain mới
   luôn bắt đầu là module trong `core-api`; deployable thứ tư chỉ xuất hiện sau số liệu + ADR cập
   nhật invariant/guard theo [03 § 3.4](./03-architecture.md), không phải quyết định của feature PR.
+- **Gặp một lỗi thì đừng chỉ vá triệu chứng**: giữ evidence an toàn, xác định impact đã biết, dùng
+  runbook/check phù hợp, rồi liên kết correction với guard/test. Phân biệt lỗi local/CI, risk suy
+  luận và incident vận hành; quy trình đầy đủ ở [19 § 19.4](./19-project-lifecycle-and-learning.md#194-error-and-incident-lifecycle).
+- **Bài học phải dùng lại được**: sau một correction hoặc near-miss đã xác minh, ghi ngắn theo
+  [template](./templates/learning-record.md) và cập nhật [registry](./reference/lessons-registry.md)
+  khi có source + prevention rõ ràng. Không copy domain rule sang registry.
+- **Shared worktree là mặc định**: thay đổi có sẵn không thuộc task của mình. Check `git status`
+  trước batch edit, chỉ sửa file đã nhận ownership, và dừng/báo collision nếu path bị người khác sửa.
 
 ---
 

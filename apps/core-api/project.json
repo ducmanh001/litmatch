@@ -30,7 +30,7 @@
     "migration-run": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "ts-node --project apps/core-api/tsconfig.app.json -r tsconfig-paths/register node_modules/typeorm/cli.js migration:run -d apps/core-api/src/database/data-source.ts"
+        "command": "ts-node --project apps/core-api/tsconfig.app.json -r tsconfig-paths/register node_modules/typeorm/cli.js migration:run --transaction each -d apps/core-api/src/database/data-source.ts"
       }
     },
     "migration-show": {
@@ -42,7 +42,7 @@
     "migration-revert": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "ts-node --project apps/core-api/tsconfig.app.json -r tsconfig-paths/register node_modules/typeorm/cli.js migration:revert -d apps/core-api/src/database/data-source.ts"
+        "command": "ts-node --project apps/core-api/tsconfig.app.json -r tsconfig-paths/register node_modules/typeorm/cli.js migration:revert --transaction each -d apps/core-api/src/database/data-source.ts"
       }
     },
     "serve": {

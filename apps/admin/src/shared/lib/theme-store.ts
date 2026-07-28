@@ -3,12 +3,6 @@ export type ThemeMode = 'dark' | 'light';
 export type ThemeValue = `${ThemeColor}-${ThemeMode}`;
 
 export const THEME_STORAGE_KEY = 'litmatch-admin-theme';
-export const THEME_VALUES: ThemeValue[] = [
-  'cyan-dark',
-  'cyan-light',
-  'warm-dark',
-  'warm-light',
-];
 
 function readInitial(): ThemeValue {
   if (typeof document === 'undefined') return 'cyan-dark';

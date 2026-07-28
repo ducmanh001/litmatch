@@ -31,29 +31,28 @@ The canonical Nest rule is semantic: `<module>.controller.ts` is the primary HTT
 
 ## Implemented features (source-backed)
 
-| ID                        | Feature                                                               | Owner                                              | Verification evidence |
-| ------------------------- | --------------------------------------------------------------------- | -------------------------------------------------- | --------------------- |
-| auth-session              | Guest, OTP, social login and rotating browser sessions                | core-api/auth                                      | automated-test-source |
-| economy-ledger            | Wallet, IAP catalog, VIP and double-entry ledger                      | core-api/economy                                   | automated-test-source |
-| matching                  | Queue ticket, pairing and paid speed-up                               | core-api/matching                                  | automated-test-source |
-| soul-match                | Anonymous text match, rating and friendship unlock                    | core-api/soul-match                                | automated-test-source |
-| calling                   | Voice-call lifecycle and settlement                                   | core-api/calling                                   | automated-test-source |
-| party-room                | Party-room lifecycle, LiveKit token and member roles                  | core-api/party-room                                | automated-test-source |
-| gift                      | Party-room gifts through Economy                                      | core-api/gift                                      | automated-test-source |
-| friend-chat-streak        | Friendship, direct chat and streak                                    | core-api/friend                                    | automated-test-source |
-| feed-stories              | Feed, reactions, comments and expiring stories                        | core-api/feed                                      | automated-test-source |
-| safety                    | Report, block and trust-safety decisions                              | core-api/safety                                    | automated-test-source |
-| avatar-discovery-mood     | Avatar, discovery/nearby and mood                                     | core-api/avatar, core-api/discovery, core-api/mood | automated-test-source |
-| notification              | In-process notification dispatch and development push provider        | core-api/notification                              | automated-test-source |
-| support-tickets           | Idempotent support tickets with customer tracking and staff workflow  | core-api/support with core-api/admin               | automated-test-source |
-| mini-game                 | Two-player rock-paper-scissors mini game                              | core-api/mini-game                                 | automated-test-source |
-| movie-match               | Shared video playback and anonymous movie match                       | core-api/movie-match                               | automated-test-source |
-| palm-match                | Deterministic palm reading and anonymous palm match                   | core-api/palm-match                                | automated-test-source |
-| short-video               | Short-video lifecycle, moderation and derived ranking                 | core-api/short-video                               | automated-test-source |
-| user-profile-open-entry   | Optional profile birth date without an age-based access gate          | core-api/user                                      | automated-test-source |
-| privacy-analytics-consent | Non-blocking analytics preference and private session-replay defaults | web/shared-analytics                               | automated-test-source |
-| short-video-reporting-ui  | Short-video report action in the web client                           | web/short-video with core-api/safety               | automated-test-source |
-| realtime-fanout           | Authenticated Socket.IO user fanout through Redis                     | signaling-gateway with core-api producers          | automated-test-source |
+| ID                        | Feature                                                              | Owner                                              | Verification evidence |
+| ------------------------- | -------------------------------------------------------------------- | -------------------------------------------------- | --------------------- |
+| auth-session              | Guest, OTP, social login and rotating browser sessions               | core-api/auth                                      | automated-test-source |
+| economy-ledger            | Wallet, IAP catalog, VIP and double-entry ledger                     | core-api/economy                                   | automated-test-source |
+| matching                  | Queue ticket, pairing and paid speed-up                              | core-api/matching                                  | automated-test-source |
+| soul-match                | Anonymous text match, rating and friendship unlock                   | core-api/soul-match                                | automated-test-source |
+| calling                   | Voice-call lifecycle and settlement                                  | core-api/calling                                   | automated-test-source |
+| party-room                | Party-room lifecycle, LiveKit token and member roles                 | core-api/party-room                                | automated-test-source |
+| gift                      | Party-room gifts through Economy                                     | core-api/gift                                      | automated-test-source |
+| friend-chat-streak        | Friendship, direct chat and streak                                   | core-api/friend                                    | automated-test-source |
+| feed-stories              | Feed, reactions, comments and expiring stories                       | core-api/feed                                      | automated-test-source |
+| safety                    | Report, block and trust-safety decisions                             | core-api/safety                                    | automated-test-source |
+| avatar-discovery-mood     | Avatar, discovery/nearby and mood                                    | core-api/avatar, core-api/discovery, core-api/mood | automated-test-source |
+| notification              | In-process notification dispatch and development push provider       | core-api/notification                              | automated-test-source |
+| support-tickets           | Idempotent support tickets with customer tracking and staff workflow | core-api/support with core-api/admin               | automated-test-source |
+| mini-game                 | Two-player rock-paper-scissors mini game                             | core-api/mini-game                                 | automated-test-source |
+| movie-match               | Shared video playback and anonymous movie match                      | core-api/movie-match                               | automated-test-source |
+| palm-match                | Deterministic palm reading and anonymous palm match                  | core-api/palm-match                                | automated-test-source |
+| short-video               | Short-video lifecycle, moderation and derived ranking                | core-api/short-video                               | automated-test-source |
+| user-profile-open-entry   | Optional profile birth date without an age-based access gate         | core-api/user                                      | automated-test-source |
+| privacy-analytics-consent | Auto-enabled hosted analytics and explicit unmasked replay behavior  | web/shared-analytics                               | automated-test-source |
+| realtime-fanout           | Authenticated Socket.IO user fanout through Redis                    | signaling-gateway with core-api producers          | automated-test-source |
 
 ## Evidence details
 
@@ -78,7 +77,7 @@ The canonical Nest rule is semantic: `<module>.controller.ts` is the primary HTT
 - Status: `implemented`
 - Owner: core-api/matching
 - Contracts: `openapi/core-api.json`, `docs/services/matching-service.md`, `docs/06-domain-rules.md`
-- Implementation evidence: `apps/core-api/src/modules/matching/matching.controller.ts:38` — contains `@Controller('matching')`; `apps/core-api/src/modules/matching/jobs/matcher-worker.service.ts:66` — contains `MatcherWorkerService`
+- Implementation evidence: `apps/core-api/src/modules/matching/matching.controller.ts:38` — contains `@Controller('matching')`; `apps/core-api/src/modules/matching/jobs/matcher-worker.service.ts:71` — contains `MatcherWorkerService`
 - Verification evidence (automated-test-source): `apps/core-api/src/modules/matching/matching.integration.spec.ts:11` — contains `Matching`
 
 ### Anonymous text match, rating and friendship unlock
@@ -118,7 +117,7 @@ The canonical Nest rule is semantic: `<module>.controller.ts` is the primary HTT
 - Status: `implemented`
 - Owner: core-api/friend
 - Contracts: `openapi/core-api.json`, `docs/services/friend-service.md`, `docs/services/streak-service.md`
-- Implementation evidence: `apps/core-api/src/modules/friend/friend.controller.ts:45` — contains `export class FriendController`; `apps/core-api/src/modules/friend/services/streak.service.ts:36` — contains `StreakService`
+- Implementation evidence: `apps/core-api/src/modules/friend/friend.controller.ts:45` — contains `export class FriendController`; `apps/core-api/src/modules/friend/services/streak.service.ts:38` — contains `StreakService`
 - Verification evidence (automated-test-source): `apps/core-api/src/modules/friend/friend.integration.spec.ts:11` — contains `Friend`
 
 ### Feed, reactions, comments and expiring stories
@@ -190,7 +189,7 @@ The canonical Nest rule is semantic: `<module>.controller.ts` is the primary HTT
 - Status: `implemented`
 - Owner: core-api/short-video
 - Contracts: `openapi/core-api.json`, `docs/services/short-video-service.md`, `docs/services/safety-service.md`
-- Implementation evidence: `apps/core-api/src/modules/short-video/short-video.controller.ts:48` — contains `@Controller('videos')`; `apps/core-api/src/modules/short-video/jobs/video-ranking.service.ts:27` — contains `VideoRankingService`
+- Implementation evidence: `apps/core-api/src/modules/short-video/short-video.controller.ts:48` — contains `@Controller('videos')`; `apps/core-api/src/modules/short-video/jobs/video-ranking.service.ts:28` — contains `VideoRankingService`
 - Verification evidence (automated-test-source): `apps/core-api/src/modules/short-video/short-video.integration.spec.ts:12` — contains `Short`
 
 ### Optional profile birth date without an age-based access gate
@@ -201,38 +200,30 @@ The canonical Nest rule is semantic: `<module>.controller.ts` is the primary HTT
 - Implementation evidence: `apps/core-api/src/modules/user/user.service.ts:398` — contains `Ngày sinh là dữ liệu profile tự chọn`; `apps/core-api/src/modules/user/dto/update-profile.dto.ts:40` — contains `không cho ngày trong tương lai`
 - Verification evidence (automated-test-source): `apps/core-api/src/modules/user/user.service.spec.ts:64` — contains `birthDate không phải access gate`
 
-### Non-blocking analytics preference and private session-replay defaults
+### Auto-enabled hosted analytics and explicit unmasked replay behavior
 
 - Status: `implemented`
 - Owner: web/shared-analytics
-- Contracts: `docs/runbooks/posthog-cloud.md`, `docs/06-domain-rules.md`
-- Implementation evidence: `apps/web/src/shared/analytics/product-analytics.ts:27` — contains `const CONSENT_COOKIE_NAME`; `apps/web/src/shared/analytics/product-analytics.ts:58` — contains `maskAllInputs: true`; `apps/web/src/shared/analytics/product-analytics.ts:53` — contains `autocapture: false`; `apps/web/src/shared/analytics/product-analytics-components.tsx:35` — contains `Analytics là một tùy chọn trong trang cài đặt`
-- Verification evidence (automated-test-source): `apps/web/src/shared/analytics/product-analytics.spec.ts:42` — contains `không khởi tạo SDK hoặc gửi request trước khi có consent`; `apps/web/src/shared/analytics/product-analytics.spec.ts:69` — contains `không gửi nickname`; `apps/web/src/shared/analytics/product-analytics-components.spec.tsx:31` — contains `không hiện dialog`
-
-### Short-video report action in the web client
-
-- Status: `implemented`
-- Owner: web/short-video with core-api/safety
-- Contracts: `openapi/core-api.json`, `docs/services/short-video-service.md`, `docs/services/safety-service.md`
-- Implementation evidence: `apps/web/src/features/short-video/components/video-reel-feed.tsx:99` — contains `function VideoReportButton`; `apps/web/src/features/short-video/components/video-reel-feed.tsx:100` — contains `useReportVideo(videoId)`
-- Verification evidence (automated-test-source): `apps/web/src/features/short-video/components/video-reel-feed.spec.tsx:105` — contains `/api/v1/videos/{id}/report`
+- Contracts: `docs/runbooks/posthog-cloud.md`
+- Implementation evidence: `apps/web/src/shared/analytics/product-analytics.ts:63` — contains `posthog.opt_in_capturing();`; `apps/web/src/shared/analytics/product-analytics.ts:58` — contains `maskAllInputs: false`; `apps/web/src/shared/analytics/product-analytics.ts:53` — contains `autocapture: true`; `apps/web/src/shared/analytics/product-analytics-components.tsx:26` — contains `Analytics luôn bật khi đã cấu hình PostHog.`
+- Verification evidence (automated-test-source): `apps/web/src/shared/analytics/product-analytics.spec.ts:42` — contains `khởi tạo SDK ngay cả khi chưa có cookie consent`; `apps/web/src/shared/analytics/product-analytics.spec.ts:47` — contains `bật autocapture và không che text/input của session replay`; `apps/web/src/shared/analytics/product-analytics-components.spec.tsx:23` — contains `hiển thị analytics đang bật và không có thao tác opt-in riêng`
 
 ### Authenticated Socket.IO user fanout through Redis
 
 - Status: `implemented`
 - Owner: signaling-gateway with core-api producers
 - Contracts: `libs/common-dtos/src/lib/realtime-events.ts`, `docs/services/realtime-gateway.md`, `specs/realtime.asyncapi.yaml`
-- Implementation evidence: `apps/signaling-gateway/src/app/signaling.gateway.ts:39` — contains `@WebSocketGateway`; `libs/common-dtos/src/lib/realtime-events.ts:34` — contains `export const RealtimeEvents`
+- Implementation evidence: `apps/signaling-gateway/src/app/signaling.gateway.ts:42` — contains `@WebSocketGateway`; `libs/common-dtos/src/lib/realtime-events.ts:34` — contains `export const RealtimeEvents`
 - Verification evidence (automated-test-source): `apps/signaling-gateway/src/app/signaling.integration.spec.ts:109` — contains `event chỉ tới ĐÚNG user`
 
 ## Recorded targeted checks
 
-### Web privacy analytics and short-video reporting
+### Web privacy analytics and short-video reporting (superseded historical handoff)
 
 - Result: 14 tests passed on 2026-07-24
 - Command: `NX_DAEMON=false nx test web --run src/shared/analytics/product-analytics.spec.ts src/shared/analytics/product-analytics-components.spec.tsx src/features/short-video/components/video-reel-feed.spec.tsx`
-- Source evidence: `apps/web/src/shared/analytics/product-analytics.spec.ts:42` — contains `không khởi tạo SDK hoặc gửi request trước khi có consent`; `apps/web/src/features/short-video/components/video-reel-feed.spec.tsx:105` — contains `/api/v1/videos/{id}/report`
-- Caveat: Recorded handoff evidence only; it does not prove browser RUM, vendor ingestion, or production consent behavior.
+- Source evidence: `docs/plans/2026-07-24-analytics-reporting-handoff.md:9` — contains `14 tests passed on 2026-07-24`
+- Caveat: Historical evidence only: later commits superseded both analytics privacy defaults and the visible report action. It does not prove current behavior, browser RUM, vendor ingestion, or production consent.
 
 ### Core API module layout and moved secondary controller
 
@@ -271,27 +262,27 @@ The canonical Nest rule is semantic: `<module>.controller.ts` is the primary HTT
 
 ## Review-module verification
 
-### Trust & Safety / short-video reporting — verify — 2026-07-24 — PASS
+### Trust & Safety / short-video report backend — verify — 2026-07-24 — PASS
 
-- Business flow: Viewer opens the report action → confirms intent → authenticated POST /videos/:id/report → server validates the video → append/idempotently reuse the report → count distinct reporters → conditionally auto-hide a published video.
+- Business flow: Authenticated client calls POST /videos/:id/report → server validates the video → append/idempotently reuse the report → count distinct reporters → conditionally auto-hide a published video. The current web reel does not expose this action.
 
-| #   | Assumption                                                                                               | Break vector / consequence                                               | Guard location                                                                                                                                                                                                                                                                        | Verdict |
-| --- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| 1   | The client confirmation is only UX; a custom client may call the report endpoint directly.               | A caller bypasses the button or confirmation dialog.                     | `apps/core-api/src/app/app.module.ts:108` — contains `{ provide: APP_GUARD, useClass: JwtAuthGuard }`; `apps/core-api/src/modules/short-video/short-video.controller.ts:129` — contains `await this.videoService.reportVideo(user, id, dto.reason, dto.description);`                 | PASS    |
-| 2   | A caller cannot create report evidence for a video that does not exist or is not visible to that caller. | A guessed, stale, or unauthorized video UUID is submitted.               | `apps/core-api/src/modules/short-video/short-video.service.ts:481` — contains `Chốt target tồn tại/visible trước khi ghi report`; `apps/core-api/src/modules/short-video/short-video.service.spec.ts:402` — contains `validate video tồn tại trước khi gọi Safety`                    | PASS    |
-| 3   | Retry or rapid double-submit by one reporter does not inflate the distinct-reporter count.               | The same user repeats or races the request.                              | `apps/core-api/src/database/migrations/1754900000000-report-target-video.ts:31` — contains `CREATE UNIQUE INDEX uq_reports_video_reporter`; `apps/core-api/src/modules/safety/safety.service.ts:163` — contains `if (!isUniqueViolation(err)) throw err;`                             | PASS    |
-| 4   | The client cannot choose the moderation threshold or force an arbitrary status transition.               | A forged body claims a higher report count or requests removal directly. | `apps/core-api/src/modules/short-video/short-video.service.ts:492` — contains `if (distinctReporterCount >= threshold)`; `apps/core-api/src/modules/short-video/short-video.service.ts:499` — contains `return this.transition(videoId, VideoStatus.Published, VideoStatus.Removed);` | PASS    |
-| 5   | Reporting a video must not reduce the author's personal trust score.                                     | Content moderation is incorrectly treated as a user report.              | `apps/core-api/src/modules/safety/safety.service.ts:159` — contains `trustPenaltyApplied: 0`; `apps/core-api/src/modules/short-video/short-video.integration.spec.ts:313` — contains `report vượt VIDEO_REPORT_AUTOHIDE_THRESHOLD`                                                    | PASS    |
+| #   | Assumption                                                                                                                                | Break vector / consequence                                               | Guard location                                                                                                                                                                                                                                                                        | Verdict |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| 1   | Backend authorization and validation do not depend on a visible web button; a custom authenticated client may call the endpoint directly. | A caller invokes the API without any web confirmation flow.              | `apps/core-api/src/app/app.module.ts:108` — contains `{ provide: APP_GUARD, useClass: JwtAuthGuard }`; `apps/core-api/src/modules/short-video/short-video.controller.ts:129` — contains `await this.videoService.reportVideo(user, id, dto.reason, dto.description);`                 | PASS    |
+| 2   | A caller cannot create report evidence for a video that does not exist or is not visible to that caller.                                  | A guessed, stale, or unauthorized video UUID is submitted.               | `apps/core-api/src/modules/short-video/short-video.service.ts:481` — contains `Chốt target tồn tại/visible trước khi ghi report`; `apps/core-api/src/modules/short-video/short-video.service.spec.ts:402` — contains `validate video tồn tại trước khi gọi Safety`                    | PASS    |
+| 3   | Retry or rapid double-submit by one reporter does not inflate the distinct-reporter count.                                                | The same user repeats or races the request.                              | `apps/core-api/src/database/migrations/1754900000000-report-target-video.ts:31` — contains `CREATE UNIQUE INDEX uq_reports_video_reporter`; `apps/core-api/src/modules/safety/safety.service.ts:163` — contains `if (!isUniqueViolation(err)) throw err;`                             | PASS    |
+| 4   | The client cannot choose the moderation threshold or force an arbitrary status transition.                                                | A forged body claims a higher report count or requests removal directly. | `apps/core-api/src/modules/short-video/short-video.service.ts:492` — contains `if (distinctReporterCount >= threshold)`; `apps/core-api/src/modules/short-video/short-video.service.ts:499` — contains `return this.transition(videoId, VideoStatus.Published, VideoStatus.Removed);` | PASS    |
+| 5   | Reporting a video must not reduce the author's personal trust score.                                                                      | Content moderation is incorrectly treated as a user report.              | `apps/core-api/src/modules/safety/safety.service.ts:159` — contains `trustPenaltyApplied: 0`; `apps/core-api/src/modules/short-video/short-video.integration.spec.ts:313` — contains `report vượt VIDEO_REPORT_AUTOHIDE_THRESHOLD`                                                    | PASS    |
 
 Checklist:
 
-- PASS — Server-authoritative validation and moderation threshold: The web sends only reason/description; existence, visibility, distinct count, threshold, and transition are decided server-side.
+- PASS — Server-authoritative validation and moderation threshold: The API accepts only reason/description from a client; existence, visibility, distinct count, threshold, and transition are decided server-side.
 - PASS — Duplicate/race handling: A partial unique database index is the final guard and the integration test proves repeated reports remain one row.
 - PASS — Short-video status transition: Auto-hide uses a conditional published-to-removed update instead of a pessimistic lock.
 - PASS — Trust-score separation: Video reports record zero trust penalty and do not call user trust-score adjustment.
-- N/A — Age-verification policy: This change restores an existing report action and does not add an account eligibility or age gate; the requested scope explicitly excludes that restriction.
+- N/A — Age-verification policy: This backend report flow does not add an account eligibility or age gate.
 
-Test evidence: Web privacy analytics and short-video reporting; Short-video report persistence and auto-hide (see recorded checks above).
+Test evidence: Short-video report persistence and auto-hide (see recorded checks above).
 
 ## Deferred with reason
 
@@ -305,7 +296,13 @@ Test evidence: Web privacy analytics and short-video reporting; Short-video repo
 
 - Owner: product/domain owners
 - Reason: Matching shard expansion, feed CQRS and richer video ranking need observed traffic and SLO evidence. The current code keeps the documented bounded algorithms rather than adding speculative infrastructure.
-- Evidence: `docs/07-roadmap.md:178` — contains `số liệu traffic production thật`
+- Evidence: `docs/07-roadmap.md:180` — contains `số liệu traffic production thật`
+
+### short-video-reporting-ui
+
+- Owner: web/short-video with core-api/safety
+- Reason: The backend report contract and web API hook remain, but the visible report action was deliberately removed from the current reel UI. Do not claim the client feature is implemented until a product decision re-enables it and a behavior test verifies the user action.
+- Evidence: `apps/web/src/features/short-video/components/video-reel-feed.spec.tsx:100` — contains `Báo cáo video có nội dung không phù hợp`; `apps/web/src/features/short-video/components/video-reel-feed.spec.tsx:102` — contains `not.toBeInTheDocument()`
 
 ## Out of scope
 

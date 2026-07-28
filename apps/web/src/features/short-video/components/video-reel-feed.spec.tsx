@@ -72,7 +72,7 @@ describe('VideoReelFeed', () => {
     vi.spyOn(apiClient, 'GET').mockResolvedValue({
       data: { data: { items: [video], nextCursor: null } },
     } as never);
-    const postSpy = vi.spyOn(apiClient, 'POST').mockResolvedValue({
+    vi.spyOn(apiClient, 'POST').mockResolvedValue({
       data: { data: undefined },
     } as never);
 

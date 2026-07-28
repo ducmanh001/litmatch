@@ -51,8 +51,9 @@ identity, đủ 2 → `active` + `startedAt`), `participant_left` + `room_finish
 
 ## 4. Ticker — timer + billing đều ở server (docs/10 § Calling: KHÔNG tin timer client)
 
-`CallTickerService` interval `CALLING_TICKER_INTERVAL_MS`, mỗi tick quét call `pending`/
-`active` (index theo status):
+`CallTickerService` interval `CALLING_TICKER_INTERVAL_MS`, mỗi tick chỉ lấy `id` theo batch:
+`pending` dùng index `(status, created_at)`, còn `active` dùng partial index
+`(updated_at, id) WHERE status='active'` để không sort/quét toàn bộ tập call đang sống:
 
 - `pending` quá `CALLING_PENDING_TIMEOUT_SECONDS` kể từ `createdAt` → end `pending_timeout`.
 - `active`, `CALLING_PRICE_PER_MINUTE_DIAMOND = 0` (default): quá `CALLING_FREE_CALL_SECONDS`

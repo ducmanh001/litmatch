@@ -26,30 +26,58 @@ export function usePartyRoomMedia(roomId: string, canPublish: boolean) {
   // đây, không thì rơi ra ngoài React Query thành unhandled rejection và UI im lặng mãi mãi.
   const [mediaError, setMediaError] = useState<unknown>(null);
   const roomRef = useRef<Room | null>(null);
+  // Mỗi connect/disconnect/unmount đổi generation để response REST/LiveKit đến muộn không thể
+  // dựng lại room sau khi owner đã rời hoặc ghi đè một lần reconnect mới hơn.
+  const generationRef = useRef(0);
+  const disposedRef = useRef(false);
 
   const { mutate: joinRoomMutate } = joinRoom;
   const connect = useCallback(() => {
+    disposedRef.current = false;
+    const generation = ++generationRef.current;
     setRoomDisconnected(false);
     setMediaError(null);
     joinRoomMutate(undefined, {
       onSuccess: (joined) => {
         if (joined === undefined) return;
         void (async () => {
+          let connected: Room | null = null;
           try {
-            if (roomRef.current !== null) {
-              await disconnectMediaRoom(roomRef.current);
+            if (disposedRef.current || generation !== generationRef.current) {
+              return;
             }
-            const connected = await connectMediaRoom(
-              joined.token,
-              joined.livekitUrl,
-            );
-            connected.on(RoomEvent.Disconnected, () =>
-              setRoomDisconnected(true),
-            );
+            if (roomRef.current !== null) {
+              const previous = roomRef.current;
+              roomRef.current = null;
+              setRoom(null);
+              await disconnectMediaRoom(previous);
+            }
+            if (disposedRef.current || generation !== generationRef.current) {
+              return;
+            }
+            connected = await connectMediaRoom(joined.token, joined.livekitUrl);
+            if (disposedRef.current || generation !== generationRef.current) {
+              await disconnectMediaRoom(connected);
+              return;
+            }
+            connected.on(RoomEvent.Disconnected, () => {
+              if (
+                !disposedRef.current &&
+                generation === generationRef.current &&
+                roomRef.current === connected
+              ) {
+                setRoomDisconnected(true);
+              }
+            });
             roomRef.current = connected;
             setRoom(connected);
           } catch (err) {
-            setMediaError(err);
+            if (connected !== null) {
+              await disconnectMediaRoom(connected).catch(() => undefined);
+            }
+            if (!disposedRef.current && generation === generationRef.current) {
+              setMediaError(err);
+            }
           }
         })();
       },
@@ -58,17 +86,36 @@ export function usePartyRoomMedia(roomId: string, canPublish: boolean) {
 
   useEffect(() => {
     if (room === null) return;
+    const generation = generationRef.current;
+    let cancelled = false;
     // Audience (canPublish=false) chỉ tắt mic — không cần quyền, không lỗi. Speaker/host bật
     // mic thật sự cần quyền trình duyệt, có thể bị từ chối bất cứ lúc nào (đổi role giữa
     // chừng) — phải bắt lỗi ở đây, room vẫn sống (chỉ mic câm), không rớt kết nối cả phòng.
     room.localParticipant
       .setMicrophoneEnabled(canPublish)
-      .catch((err: unknown) => setMediaError(err));
+      .catch((err: unknown) => {
+        if (
+          !cancelled &&
+          !disposedRef.current &&
+          generation === generationRef.current &&
+          roomRef.current === room
+        ) {
+          setMediaError(err);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [room, canPublish]);
 
   useEffect(
     () => () => {
-      if (roomRef.current !== null) void disconnectMediaRoom(roomRef.current);
+      disposedRef.current = true;
+      generationRef.current += 1;
+      const current = roomRef.current;
+      roomRef.current = null;
+      if (current !== null) void disconnectMediaRoom(current);
     },
     [],
   );
@@ -76,8 +123,10 @@ export function usePartyRoomMedia(roomId: string, canPublish: boolean) {
   // Gọi tường minh khi phòng đóng (party.room.closed) — component không unmount, chỉ đổi
   // sang view đóng, nên cleanup-on-unmount ở trên không tự chạy trong trường hợp đó.
   const disconnect = useCallback(() => {
-    if (roomRef.current !== null) void disconnectMediaRoom(roomRef.current);
+    generationRef.current += 1;
+    const current = roomRef.current;
     roomRef.current = null;
+    if (current !== null) void disconnectMediaRoom(current);
     setRoom(null);
   }, []);
 

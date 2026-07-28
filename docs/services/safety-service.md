@@ -13,10 +13,12 @@
 - `Block`: log hành động, KHÔNG phải bảng trạng thái mutable — mỗi dòng là 1 sự kiện
   `action ∈ {blocked, unblocked}` giữa `(blockerUserId, blockedUserId)`. Trạng thái "đang block"
   = dòng mới nhất theo cặp có `action = blocked` (query `ORDER BY createdAt DESC LIMIT 1`, index
-  `(blockerUserId, blockedUserId, createdAt DESC)`). Lý do chọn log thay vì 1 dòng mutable: giữ
-  toàn bộ lịch sử block/unblock cho điều tra T&S (docs/06 "hành động nhạy cảm phải log audit
-  riêng, không xoá được") mà không cần bảng snapshot riêng (khác Wallet/Ledger — ở đây 1 lookup
-  có index đã đủ rẻ, không có bài toán tái tính tổng).
+  `(blockerUserId, blockedUserId, createdAt DESC)`). Query tập block 2 chiều còn có index đối
+  xứng `(blockedUserId, blockerUserId, createdAt DESC) INCLUDE (action)` cho chiều inbound;
+  thiếu nó sẽ quét toàn bộ log append-only. Lý do chọn log thay vì 1 dòng mutable: giữ toàn bộ
+  lịch sử block/unblock cho điều tra T&S (docs/06 "hành động nhạy cảm phải log audit riêng,
+  không xoá được") mà không cần bảng snapshot riêng (khác Wallet/Ledger — ở đây lookup có index
+  đã đủ rẻ, không có bài toán tái tính tổng).
 
 ## 2. `SafetyService` — public API (qua `index.ts`)
 

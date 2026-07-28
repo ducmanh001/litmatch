@@ -21,8 +21,15 @@ export async function connectMediaRoom(
     adaptiveStream: true,
     dynacast: true,
   });
-  await room.connect(livekitUrl ?? env.NEXT_PUBLIC_LIVEKIT_URL, accessToken);
-  return room;
+  try {
+    await room.connect(livekitUrl ?? env.NEXT_PUBLIC_LIVEKIT_URL, accessToken);
+    return room;
+  } catch (error) {
+    // `Room` đã cấp socket/timer trước khi handshake hoàn tất; caller chưa nhận được reference
+    // nên boundary tạo room phải tự dọn khi connect reject.
+    await room.disconnect().catch(() => undefined);
+    throw error;
+  }
 }
 
 export async function disconnectMediaRoom(room: Room): Promise<void> {

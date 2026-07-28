@@ -129,4 +129,20 @@ describe('SignalingGateway (unit — fanout thuần, không business logic)', ()
     gateway.handleDisconnect(sockets[0]);
     expect(admit.call(gateway, sockets[3], 'user-1')).toBe(true);
   });
+
+  it('shutdown buộc disconnect khi Redis đang reconnect và quit thất bại', async () => {
+    const { gateway } = makeGateway();
+    const subscriber = {
+      status: 'reconnecting',
+      quit: jest.fn().mockRejectedValue(new Error("Stream isn't writeable")),
+      disconnect: jest.fn(),
+    };
+    Object.assign(gateway, { subscriber, subscriptionReady: true });
+
+    await gateway.onApplicationShutdown();
+
+    expect(subscriber.quit).toHaveBeenCalledTimes(1);
+    expect(subscriber.disconnect).toHaveBeenCalledTimes(1);
+    expect(gateway.isReady()).toBe(false);
+  });
 });

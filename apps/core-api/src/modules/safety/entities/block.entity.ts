@@ -19,6 +19,8 @@ export enum BlockAction {
  */
 @Entity({ name: 'blocks' })
 @Index(['blockerUserId', 'blockedUserId', 'createdAt'])
+// Covering INCLUDE(action) chỉ biểu diễn chính xác bằng SQL migration; chặn schema diff phá nó.
+@Index('idx_blocks_blocked_blocker_created', { synchronize: false })
 export class Block {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
