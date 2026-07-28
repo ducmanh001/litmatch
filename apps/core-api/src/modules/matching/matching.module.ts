@@ -1,6 +1,7 @@
 import { Inject, Module, OnApplicationShutdown } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { closeCoreRedisClient } from '../../common/redis/core-redis-client';
 import { MatchingController } from './matching.controller';
 import { InviteController } from './controllers/invite.controller';
 import { MatchingMetrics } from './matching.metrics';
@@ -54,6 +55,6 @@ export class MatchingModule implements OnApplicationShutdown {
   constructor(@Inject(MATCHING_REDIS) private readonly redis: Redis) {}
 
   async onApplicationShutdown(): Promise<void> {
-    await this.redis.quit().catch(() => undefined);
+    await closeCoreRedisClient(this.redis);
   }
 }

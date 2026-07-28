@@ -10,9 +10,31 @@ import {
   validateDocx,
   validateRegistry,
   verifyVendoredArazzoSchema,
+  renderDocxParagraphs,
+  parseDocsArguments,
+  docxFiles,
 } from './generate.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
+
+test('accepts DOCX-only recovery but rejects DOCX-only validation', () => {
+  assert.deepEqual(parseDocsArguments([]), {
+    checkOnly: false,
+    docxOnly: false,
+  });
+  assert.deepEqual(parseDocsArguments(['--check']), {
+    checkOnly: true,
+    docxOnly: false,
+  });
+  assert.deepEqual(parseDocsArguments(['--docx-only']), {
+    checkOnly: false,
+    docxOnly: true,
+  });
+  assert.throws(
+    () => parseDocsArguments(['--check', '--docx-only']),
+    /cannot be combined/,
+  );
+});
 
 test('rejects malformed or schema-invalid Arazzo YAML', () => {
   assert.throws(
@@ -59,6 +81,54 @@ test('rejects stale and corrupt DOCX artifacts', () => {
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test('renders handbook blocks without raw syntax, soft-wrap breaks, or table separators', () => {
+  const documentXml = renderDocxParagraphs(`
+[← Lifecycle](./19.md) · **20 · Handbook** · [Overview](./00.md)
+# Handbook [home](https://example.test)
+> A short \`quote\`
+- First \`item\`
+  continued on the next source line
+1. Second **item**
+Soft-wrapped **bold
+span** stays in one paragraph.
+\`\`\`ts
+const answer = 42;
+\`\`\`
+| Trend | Decision |
+| --- | --- |
+| Stable | Keep [source](./docs.md) |
+---
+`);
+
+  assert.match(documentXml, /Handbook home \(https:\/\/example\.test\)/);
+  assert.match(documentXml, /A short quote/);
+  assert.match(documentXml, /• First item continued on the next source line/);
+  assert.match(documentXml, /1\. Second item/);
+  assert.match(documentXml, /Soft-wrapped bold span stays in one paragraph\./);
+  assert.match(documentXml, /const answer = 42;/);
+  assert.match(
+    documentXml,
+    /w:pStyle w:val="TableCardTitle"[^>]*><\/w:pPr><w:r><w:t[^>]*>Stable/,
+  );
+  assert.match(documentXml, /Decision: Keep source \(\.\/docs\.md\)/);
+  assert.doesNotMatch(documentXml, /\| --- \|/);
+  assert.doesNotMatch(documentXml, /Lifecycle/);
+  assert.doesNotMatch(documentXml, /\*\*bold/);
+  assert.doesNotMatch(documentXml, /<w:t[^>]*>```/);
+});
+
+test('packages deterministic styles for readable DOCX output', () => {
+  const files = docxFiles('# Title\n', 'Test title');
+  assert.match(files.get('[Content_Types].xml'), /\/word\/styles\.xml/);
+  assert.match(
+    files.get('word/_rels/document.xml.rels'),
+    /relationships\/styles/,
+  );
+  assert.match(files.get('word/styles.xml'), /w:styleId="TableCell"/);
+  assert.match(files.get('word/styles.xml'), /w:styleId="Heading3"/);
+  assert.match(files.get('word/document.xml'), /w:w="11906" w:h="16838"/);
 });
 
 test('keeps deferred and out-of-scope work in dedicated registry sections', () => {

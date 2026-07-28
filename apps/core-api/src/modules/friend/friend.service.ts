@@ -167,7 +167,8 @@ export class FriendService {
         's.muted_at IS NOT NULL AS muted',
       ])
       // Unread đếm theo message ĐỐI PHƯƠNG sau mốc đã đọc; preview là message mới nhất 2 chiều.
-      // Subquery per-row chạy trên index (conversation_id, seq) — list bạn bè cỡ trăm, chấp nhận.
+      // Hai subquery dùng lần lượt covering index (conversation_id, created_at) và index
+      // (conversation_id, seq); list bạn bè đã có hard limit nên không tăng query vô hạn.
       .addSelect(
         `(SELECT count(*) FROM messages m
            WHERE m.conversation_id = c.id

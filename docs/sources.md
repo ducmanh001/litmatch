@@ -17,8 +17,16 @@
 - Lỗi logic nghiệp vụ làm nền cho § 10.0: PortSwigger Web Security Academy —
   [Business logic vulnerability examples](https://portswigger.net/web-security/logic-flaws/examples)
   và [Race conditions](https://portswigger.net/web-security/race-conditions).
+- AI-native engineering (§ 20), chỉ dùng nguồn chính thức để định nghĩa/trade-off:
+  [OpenAI Harness engineering](https://openai.com/index/harness-engineering/),
+  [OpenAI Model optimization](https://developers.openai.com/api/docs/guides/model-optimization),
+  [Anthropic Context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents),
+  [Anthropic Building effective agents](https://www.anthropic.com/engineering/building-effective-agents),
+  [Anthropic Agent evals](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents),
+  [LangChain framework/runtime/harness taxonomy](https://docs.langchain.com/oss/python/concepts/products)
+  và [Model Context Protocol](https://modelcontextprotocol.io/docs/getting-started/intro).
 
-> Truy cập/kiểm lại URL ngày 2026-07-13. Nguồn thứ cấp chỉ dùng tạo hypothesis; quyết định về
+> Truy cập/kiểm lại URL ngày 2026-07-28. Nguồn thứ cấp chỉ dùng tạo hypothesis; quyết định về
 > framework/provider phải ưu tiên tài liệu chính thức và ADR, correctness của code phải do test
 > và invariant trong repo chứng minh.
 

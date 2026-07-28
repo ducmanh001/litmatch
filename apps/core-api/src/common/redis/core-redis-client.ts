@@ -17,3 +17,15 @@ export function createCoreRedisClient(redisUrl: string): Redis {
   client.on('error', () => undefined);
   return client;
 }
+
+/**
+ * Đóng Redis client mà không để reconnect timer/socket giữ process sống khi `QUIT` không gửi
+ * được (thường xảy ra lúc connection đang reconnect và offline queue đã tắt).
+ */
+export async function closeCoreRedisClient(client: Redis): Promise<void> {
+  try {
+    await client.quit();
+  } catch {
+    client.disconnect();
+  }
+}

@@ -16,6 +16,9 @@ jest.mock('ioredis', () => {
     quit = jest.fn(async () => {
       this.status = 'end';
     });
+    disconnect = jest.fn(() => {
+      this.status = 'end';
+    });
     constructor() {
       super();
       FakeRedis.instances.push(this);
@@ -65,6 +68,11 @@ describe('SignalingRedisAdapterService', () => {
 
     pubClient.emit('error', new Error('ECONNREFUSED'));
     await expect(connectPromise).rejects.toThrow('ECONNREFUSED');
+    for (const client of (Redis as unknown as FakeRedisCtor).instances) {
+      expect(
+        (client as unknown as { disconnect: jest.Mock }).disconnect,
+      ).toHaveBeenCalledTimes(1);
+    }
   });
 
   it('onApplicationShutdown() quit cả 2 client', async () => {
@@ -78,6 +86,28 @@ describe('SignalingRedisAdapterService', () => {
     for (const client of instances) {
       expect(client.quit).toHaveBeenCalledTimes(1);
     }
+  });
+
+  it('onApplicationShutdown() buộc disconnect client khi quit thất bại lúc reconnect', async () => {
+    const service = new SignalingRedisAdapterService();
+    const connectPromise = service.connect('redis://localhost:6379');
+    const instances = (Redis as unknown as FakeRedisCtor).instances;
+    instances.forEach(markReady);
+    await connectPromise;
+    for (const client of instances) {
+      (client.quit as jest.Mock).mockRejectedValueOnce(
+        new Error("Stream isn't writeable"),
+      );
+    }
+
+    await service.onApplicationShutdown();
+
+    for (const client of instances) {
+      expect(
+        (client as unknown as { disconnect: jest.Mock }).disconnect,
+      ).toHaveBeenCalledTimes(1);
+    }
+    expect(service.isReady()).toBe(false);
   });
 
   it('onApplicationShutdown() trước khi connect() không throw (chưa có client nào)', async () => {

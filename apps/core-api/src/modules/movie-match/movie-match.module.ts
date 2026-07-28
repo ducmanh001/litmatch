@@ -1,6 +1,7 @@
 import { Inject, Module, OnApplicationShutdown } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { closeCoreRedisClient } from '../../common/redis/core-redis-client';
 import { FriendModule } from '../friend';
 import { SafetyModule } from '../safety';
 import {
@@ -43,6 +44,6 @@ export class MovieMatchModule implements OnApplicationShutdown {
   constructor(@Inject(MOVIE_MATCH_REDIS) private readonly redis: Redis) {}
 
   async onApplicationShutdown(): Promise<void> {
-    await this.redis.quit().catch(() => undefined);
+    await closeCoreRedisClient(this.redis);
   }
 }

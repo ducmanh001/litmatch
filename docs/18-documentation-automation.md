@@ -27,23 +27,46 @@ The generated report is a view of the registry, not another manually maintained 
 consolidates the old, stale README status paragraph into a link to one evidence source while
 leaving product requirements and detailed domain specs in their existing owners.
 
+Operational learning has a separate, human-maintained evidence index:
+
+- [19 · Project lifecycle](./19-project-lifecycle-and-learning.md) defines terminology and the
+  discover-to-deprecate/error-learning route.
+- [Lessons registry](./reference/lessons-registry.md) holds only concise, source-linked reusable
+  corrections and near-misses; it is not generated and is not a production incident register.
+- [Learning-record template](./templates/learning-record.md) fixes the minimum durable fields:
+  symptom, impact, root cause/hypothesis, prevention, verification, status, owner, and links.
+
+Keep generated feature evidence and human learning records separate: `docs:check` proves the
+registry/report consistency described here, while a lesson's verification must point to its own
+test, review, runbook, or primary evidence.
+
 ## 18.2 Generate and validate
 
 ```bash
 pnpm docs:generate
 pnpm docs:check
+# Recovery-only when unrelated registry evidence is temporarily stale:
+pnpm docs:generate --docx-only
 ```
+
+`--docx-only` projects the existing generated report Markdown and canonical AI-native handbook into
+their two DOCX files, and deliberately performs no registry/spec validation. It cannot be combined
+with `--check` and never substitutes for a later full `pnpm docs:check`.
 
 The generator validates every evidence path and required text marker, then writes:
 
 - `docs/generated/product-spec-evidence-report.md` — a human-readable report.
 - `docs/generated/product-spec-evidence-report.docx` — the same report for future readers.
+- `docs/generated/ai-native-handbook.docx` — a deterministic reader artifact generated from the
+  canonical, human-maintained [20 · AI-native handbook](./20-ai-native-handbook.md).
 
-Generation is deterministic for a fixed registry: it uses sorted inputs, fixed document metadata,
-and no current timestamp. `docs:check` validates the registry, parses Arazzo YAML against the
-vendored official Arazzo 1.1 schema, validates AsyncAPI through the official parser, and fails when
-the generated Markdown is stale. It also checks DOCX ZIP integrity, its exact normalized entry
-list, and every generated XML entry, so a corrupt or older non-empty DOCX cannot pass.
+Generation is deterministic for fixed inputs: it uses sorted registry inputs, fixed document
+metadata, and no current timestamp. `docs:check` validates the registry, parses Arazzo YAML against
+the vendored official Arazzo 1.1 schema, validates AsyncAPI through the official parser, and fails
+when the generated report Markdown is stale. It also checks both DOCX files for ZIP integrity,
+their exact normalized entry list, and every generated XML entry, so a corrupt, hand-edited or
+older non-empty DOCX cannot pass. The handbook Markdown remains hand-maintained canonical content;
+the handbook DOCX is only its generated projection.
 
 The schema/parser checks run offline. The vendored Arazzo schema records its upstream schema ID and
 revision in `scripts/docs/schemas/arazzo-1.1-2026-04-15.json`; updating it must be an explicit,

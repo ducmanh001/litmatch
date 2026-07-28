@@ -1,6 +1,7 @@
 import { Inject, Module, OnApplicationShutdown } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { closeCoreRedisClient } from '../../common/redis/core-redis-client';
 import { FriendModule } from '../friend';
 import { MiniGameActiveParticipant } from './entities/mini-game-active-participant.entity';
 import { MiniGameSession } from './entities/mini-game-session.entity';
@@ -31,6 +32,6 @@ export class MiniGameModule implements OnApplicationShutdown {
   constructor(@Inject(MINI_GAME_REDIS) private readonly redis: Redis) {}
 
   async onApplicationShutdown(): Promise<void> {
-    await this.redis.quit().catch(() => undefined);
+    await closeCoreRedisClient(this.redis);
   }
 }

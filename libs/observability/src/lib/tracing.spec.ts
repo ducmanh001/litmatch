@@ -1,4 +1,8 @@
-import { resolveMetricsEndpoint, startTracing } from './tracing';
+import {
+  resolveMetricsEndpoint,
+  resolveMetricsHeaders,
+  startTracing,
+} from './tracing';
 
 describe('startTracing', () => {
   const ORIGINAL_ENV = process.env;
@@ -60,5 +64,16 @@ describe('startTracing', () => {
       expect.stringContaining('Prometheus remote_write URL'),
     );
     errorSpy.mockRestore();
+  });
+
+  it('tự dựng Authorization Basic từ username/token Grafana Cloud', () => {
+    process.env['GRAFANA_CLOUD_PROMETHEUS_USER'] = '123456';
+    process.env['GRAFANA_CLOUD_API_TOKEN'] = 'secret-token';
+
+    expect(resolveMetricsHeaders()).toEqual({
+      Authorization: `Basic ${Buffer.from('123456:secret-token').toString(
+        'base64',
+      )}`,
+    });
   });
 });

@@ -120,16 +120,6 @@ export function DiamondIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-export function LogoutIcon(props: IconProps) {
-  return (
-    <svg {...base} {...props}>
-      <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
-      <path d="M16 17l5-5-5-5" />
-      <path d="M21 12H9" />
-    </svg>
-  );
-}
-
 export function DiscoveryIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
@@ -356,25 +346,6 @@ export function PalmIcon(props: SVGProps<SVGSVGElement>) {
       {...props}
     >
       <path d="M12 2l2.5 6H21l-5 4.5L18 20l-6-4-6 4 2-7.5L3 8h6.5z" />
-    </svg>
-  );
-}
-
-export function FlagIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      width={22}
-      height={22}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      {...props}
-    >
-      <path d="M5 21V4m0 0c5-3 8 3 14 0v10c-6 3-9-3-14 0" />
     </svg>
   );
 }
