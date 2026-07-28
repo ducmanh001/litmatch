@@ -86,6 +86,39 @@ describe('useCallRoom', () => {
     unmount();
   });
 
+  it('unmount đóng room ngay cả khi browser còn treo ở prompt microphone', async () => {
+    let resolveMicrophone: (() => void) | undefined;
+    const room = fakeRoom();
+    room.localParticipant.setMicrophoneEnabled = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveMicrophone = resolve;
+        }),
+    );
+    vi.spyOn(livekit, 'connectMediaRoom').mockResolvedValue(room as never);
+    const disconnectSpy = vi
+      .spyOn(livekit, 'disconnectMediaRoom')
+      .mockResolvedValue(undefined);
+    vi.spyOn(apiClient, 'POST').mockResolvedValue({
+      data: {
+        data: { call: { id: 'call-1' }, token: 'tok', livekitUrl: 'ws://x' },
+      },
+    } as never);
+
+    const { result, unmount } = renderHook(() => useCallRoom('session-1'), {
+      wrapper,
+    });
+    act(() => result.current.connect());
+    await waitFor(() =>
+      expect(room.localParticipant.setMicrophoneEnabled).toHaveBeenCalled(),
+    );
+
+    unmount();
+
+    expect(disconnectSpy).toHaveBeenCalledWith(room);
+    resolveMicrophone?.();
+  });
+
   it('response join đến sau unmount không được kết nối lại room', async () => {
     let resolveJoin: ((value: unknown) => void) | undefined;
     vi.spyOn(apiClient, 'POST').mockImplementation(
@@ -136,6 +169,62 @@ describe('useCallRoom', () => {
 
     // Unmount tường minh trong lúc mock còn sống — tránh auto-cleanup của RTL chạy sau
     // restoreAllMocks() và gọi nhầm implementation thật (room giả không có .disconnect()).
+    unmount();
+  });
+
+  it('reconnect thất bại không giữ room cũ đã disconnect trong state', async () => {
+    const oldRoom = fakeRoom();
+    const reconnectError = new Error('LiveKit reconnect failed');
+    vi.spyOn(livekit, 'connectMediaRoom')
+      .mockResolvedValueOnce(oldRoom as never)
+      .mockRejectedValueOnce(reconnectError);
+    vi.spyOn(livekit, 'disconnectMediaRoom').mockResolvedValue(undefined);
+    vi.spyOn(apiClient, 'POST').mockResolvedValue({
+      data: {
+        data: { call: { id: 'call-1' }, token: 'tok', livekitUrl: 'ws://x' },
+      },
+    } as never);
+
+    const { result, unmount } = renderHook(() => useCallRoom('session-1'), {
+      wrapper,
+    });
+    act(() => result.current.connect());
+    await waitFor(() => expect(result.current.room).toBe(oldRoom));
+
+    act(() => result.current.connect());
+    await waitFor(() => expect(result.current.error).toBe(reconnectError));
+
+    expect(result.current.room).toBeNull();
+    expect(result.current.callId).toBeNull();
+    unmount();
+  });
+
+  it('disconnect event của room cũ không ghi đè trạng thái lần reconnect mới', async () => {
+    const oldRoom = fakeRoom();
+    const newRoom = fakeRoom();
+    vi.spyOn(livekit, 'connectMediaRoom')
+      .mockResolvedValueOnce(oldRoom as never)
+      .mockResolvedValueOnce(newRoom as never);
+    vi.spyOn(livekit, 'disconnectMediaRoom').mockResolvedValue(undefined);
+    vi.spyOn(apiClient, 'POST').mockResolvedValue({
+      data: {
+        data: { call: { id: 'call-1' }, token: 'tok', livekitUrl: 'ws://x' },
+      },
+    } as never);
+
+    const { result, unmount } = renderHook(() => useCallRoom('session-1'), {
+      wrapper,
+    });
+    act(() => result.current.connect());
+    await waitFor(() => expect(result.current.room).toBe(oldRoom));
+    const oldDisconnected = oldRoom.on.mock.calls[0]?.[1] as
+      (() => void) | undefined;
+
+    act(() => result.current.connect());
+    await waitFor(() => expect(result.current.room).toBe(newRoom));
+    act(() => oldDisconnected?.());
+
+    expect(result.current.roomDisconnected).toBe(false);
     unmount();
   });
 });

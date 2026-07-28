@@ -127,4 +127,122 @@ describe('usePartyRoomMedia', () => {
 
     expect(disconnectSpy).toHaveBeenCalledWith(room);
   });
+
+  it('LiveKit connect hoàn tất sau unmount vẫn bị đóng, không leak room', async () => {
+    const room = fakeRoom();
+    let resolveConnect: ((value: typeof room) => void) | undefined;
+    const connectSpy = vi.spyOn(livekit, 'connectMediaRoom').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveConnect = resolve;
+        }) as never,
+    );
+    const disconnectSpy = vi
+      .spyOn(livekit, 'disconnectMediaRoom')
+      .mockResolvedValue(undefined);
+    vi.spyOn(apiClient, 'POST').mockResolvedValue({
+      data: {
+        data: {
+          room: { id: 'r1' },
+          membership: {},
+          token: 'tok',
+          livekitUrl: 'ws://x',
+        },
+      },
+    } as never);
+
+    const { result, unmount } = renderHook(
+      () => usePartyRoomMedia('room-1', true),
+      { wrapper },
+    );
+    act(() => result.current.connect());
+    await waitFor(() => expect(connectSpy).toHaveBeenCalledTimes(1));
+
+    unmount();
+    await act(async () => {
+      resolveConnect?.(room);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(disconnectSpy).toHaveBeenCalledWith(room);
+  });
+
+  it('reconnect thất bại không giữ room cũ đã disconnect trong state', async () => {
+    const oldRoom = fakeRoom();
+    const reconnectError = new Error('LiveKit reconnect failed');
+    vi.spyOn(livekit, 'connectMediaRoom')
+      .mockResolvedValueOnce(oldRoom as never)
+      .mockRejectedValueOnce(reconnectError);
+    vi.spyOn(livekit, 'disconnectMediaRoom').mockResolvedValue(undefined);
+    vi.spyOn(apiClient, 'POST').mockResolvedValue({
+      data: {
+        data: {
+          room: { id: 'r1' },
+          membership: {},
+          token: 'tok',
+          livekitUrl: 'ws://x',
+        },
+      },
+    } as never);
+
+    const { result, unmount } = renderHook(
+      () => usePartyRoomMedia('room-1', true),
+      { wrapper },
+    );
+    act(() => result.current.connect());
+    await waitFor(() => expect(result.current.room).toBe(oldRoom));
+
+    act(() => result.current.connect());
+    await waitFor(() => expect(result.current.error).toBe(reconnectError));
+
+    expect(result.current.room).toBeNull();
+    unmount();
+  });
+
+  it('lỗi mic đến muộn từ room cũ không ghi đè reconnect mới', async () => {
+    let rejectOldMicrophone: ((error: unknown) => void) | undefined;
+    const oldRoom = fakeRoom();
+    oldRoom.localParticipant.setMicrophoneEnabled = vi.fn(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectOldMicrophone = reject;
+        }),
+    );
+    const newRoom = fakeRoom();
+    vi.spyOn(livekit, 'connectMediaRoom')
+      .mockResolvedValueOnce(oldRoom as never)
+      .mockResolvedValueOnce(newRoom as never);
+    vi.spyOn(livekit, 'disconnectMediaRoom').mockResolvedValue(undefined);
+    vi.spyOn(apiClient, 'POST').mockResolvedValue({
+      data: {
+        data: {
+          room: { id: 'r1' },
+          membership: {},
+          token: 'tok',
+          livekitUrl: 'ws://x',
+        },
+      },
+    } as never);
+
+    const { result, unmount } = renderHook(
+      () => usePartyRoomMedia('room-1', true),
+      { wrapper },
+    );
+    act(() => result.current.connect());
+    await waitFor(() => expect(result.current.room).toBe(oldRoom));
+    await waitFor(() =>
+      expect(oldRoom.localParticipant.setMicrophoneEnabled).toHaveBeenCalled(),
+    );
+
+    act(() => result.current.connect());
+    await waitFor(() => expect(result.current.room).toBe(newRoom));
+    await act(async () => {
+      rejectOldMicrophone?.(new Error('stale permission rejection'));
+      await Promise.resolve();
+    });
+
+    expect(result.current.error).toBeNull();
+    unmount();
+  });
 });
