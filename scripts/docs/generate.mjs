@@ -28,10 +28,13 @@ const generatedMarkdownPath = join(
   root,
   'docs/generated/product-spec-evidence-report.md',
 );
-const generatedDocxPath = join(
+const productReportDocxPath = join(
   root,
   'docs/generated/product-spec-evidence-report.docx',
 );
+const handbookSourcePath = join(root, 'docs/20-ai-native-handbook.md');
+const handbookDocxPath = join(root, 'docs/generated/ai-native-handbook.docx');
+const handbookDocxTitle = 'Litmatch AI-Native Handbook';
 const arazzoSchemaPath = join(
   root,
   'scripts/docs/schemas/arazzo-1.1-2026-04-15.json',
@@ -506,24 +509,145 @@ function paragraph(text, style) {
   return `<w:p>${properties}<w:r><w:t xml:space="preserve">${escapeXml(text)}</w:t></w:r></w:p>`;
 }
 
-function docxParagraphs(markdown) {
-  return markdown
-    .split('\n')
-    .filter((line) => line !== '')
-    .map((line) => {
-      if (line.startsWith('# ')) return paragraph(line.slice(2), 'Title');
-      if (line.startsWith('## ')) return paragraph(line.slice(3), 'Heading1');
-      if (line.startsWith('### ')) return paragraph(line.slice(4), 'Heading2');
-      return paragraph(line.replaceAll('`', ''));
-    })
-    .join('');
+function cleanInlineMarkdown(value) {
+  return value
+    .replaceAll(/!\[([^\]]*)\]\(([^)]*)\)/g, '$1 ($2)')
+    .replaceAll(/\[([^\]]+)\]\(([^)]*)\)/g, '$1 ($2)')
+    .replaceAll(/`([^`]+)`/g, '$1')
+    .replaceAll(/(\*\*|__)(.*?)\1/g, '$2')
+    .replaceAll(/(?<!\*)\*([^*]+)\*(?!\*)/g, '$1')
+    .replaceAll(/(?<!_)_([^_]+)_(?!_)/g, '$1');
 }
 
-function docxFiles(report) {
+function isTableSeparator(line) {
+  return /^\|(?:\s*:?-{3,}:?\s*\|)+$/u.test(line);
+}
+
+function isTableRow(line) {
+  return line.startsWith('|') && line.endsWith('|');
+}
+
+function tableCells(line) {
+  return line
+    .slice(1, -1)
+    .split('|')
+    .map((cell) => cleanInlineMarkdown(cell.trim()));
+}
+
+function isBreadcrumb(line) {
+  return /^\[[^\]]+\]\([^)]*\)\s+·/u.test(line);
+}
+
+function isBlockStart(lines, index) {
+  const line = lines[index];
+  return (
+    line.startsWith('```') ||
+    /^(#{1,3})\s+/u.test(line) ||
+    /^>\s?/u.test(line) ||
+    /^\s*[-*+]\s+/u.test(line) ||
+    /^\s*\d+\.\s+/u.test(line) ||
+    (isTableRow(line) && isTableSeparator(lines[index + 1] ?? ''))
+  );
+}
+
+export function renderDocxParagraphs(markdown) {
+  const lines = markdown.split('\n');
+  const paragraphs = [];
+
+  for (let index = 0; index < lines.length;) {
+    const line = lines[index];
+    if (line.trim() === '' || line.trim() === '---' || isBreadcrumb(line)) {
+      index += 1;
+      continue;
+    }
+    if (line.startsWith('```')) {
+      index += 1;
+      while (index < lines.length && !lines[index].startsWith('```')) {
+        paragraphs.push(paragraph(lines[index], 'Code'));
+        index += 1;
+      }
+      if (index < lines.length) index += 1;
+      continue;
+    }
+    const heading = /^(#{1,3})\s+(.+)$/u.exec(line);
+    if (heading) {
+      const style = ['Title', 'Heading1', 'Heading2'][heading[1].length - 1];
+      paragraphs.push(paragraph(cleanInlineMarkdown(heading[2]), style));
+      index += 1;
+      continue;
+    }
+    if (isTableRow(line) && isTableSeparator(lines[index + 1] ?? '')) {
+      const headers = tableCells(line);
+      index += 2;
+      while (index < lines.length && isTableRow(lines[index])) {
+        const cells = tableCells(lines[index]);
+        if (cells[0]) paragraphs.push(paragraph(cells[0], 'TableCardTitle'));
+        headers.slice(1).forEach((header, cellIndex) => {
+          const value = cells[cellIndex + 1];
+          if (header && value) {
+            paragraphs.push(paragraph(`${header}: ${value}`, 'TableCell'));
+          }
+        });
+        index += 1;
+      }
+      continue;
+    }
+    const quote = /^>\s?(.*)$/u.exec(line);
+    if (quote) {
+      const content = [];
+      while (index < lines.length) {
+        const nextQuote = /^>\s?(.*)$/u.exec(lines[index]);
+        if (!nextQuote) break;
+        content.push(nextQuote[1]);
+        index += 1;
+      }
+      paragraphs.push(
+        paragraph(cleanInlineMarkdown(content.join(' ')), 'Quote'),
+      );
+      continue;
+    }
+    const list = /^(\s*)([-*+]|\d+\.)\s+(.+)$/u.exec(line);
+    if (list) {
+      const content = [list[3]];
+      const style = /\d+\./u.test(list[2]) ? 'ListNumber' : 'ListBullet';
+      const prefix = style === 'ListNumber' ? `${list[2]} ` : '• ';
+      index += 1;
+      while (
+        index < lines.length &&
+        lines[index].trim() !== '' &&
+        /^\s{2,}\S/u.test(lines[index]) &&
+        !isBlockStart(lines, index)
+      ) {
+        content.push(lines[index].trim());
+        index += 1;
+      }
+      paragraphs.push(
+        paragraph(`${prefix}${cleanInlineMarkdown(content.join(' '))}`, style),
+      );
+      continue;
+    }
+    const content = [line.trim()];
+    index += 1;
+    while (
+      index < lines.length &&
+      lines[index].trim() !== '' &&
+      !isBlockStart(lines, index) &&
+      lines[index].trim() !== '---' &&
+      !isBreadcrumb(lines[index])
+    ) {
+      content.push(lines[index].trim());
+      index += 1;
+    }
+    paragraphs.push(paragraph(cleanInlineMarkdown(content.join(' '))));
+  }
+  return paragraphs.join('');
+}
+
+export function docxFiles(markdown, title) {
   return new Map([
     [
       '[Content_Types].xml',
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>',
     ],
     [
       '_rels/.rels',
@@ -531,20 +655,28 @@ function docxFiles(report) {
     ],
     [
       'docProps/core.xml',
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>Litmatch Product/Spec Evidence Report</dc:title><dc:creator>Litmatch documentation generator</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">1980-01-01T00:00:00Z</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">1980-01-01T00:00:00Z</dcterms:modified></cp:coreProperties>',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${escapeXml(title)}</dc:title><dc:creator>Litmatch documentation generator</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">1980-01-01T00:00:00Z</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">1980-01-01T00:00:00Z</dcterms:modified></cp:coreProperties>`,
     ],
     [
       'docProps/app.xml',
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Litmatch documentation generator</Application></Properties>',
     ],
     [
+      'word/_rels/document.xml.rels',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>',
+    ],
+    [
+      'word/styles.xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:eastAsia="Aptos"/><w:sz w:val="22"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="120" w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:rPr><w:b/><w:sz w:val="36"/><w:color w:val="1F4E79"/></w:rPr><w:pPr><w:spacing w:before="0" w:after="260"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="Heading 1"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="28"/><w:color w:val="1F4E79"/></w:rPr><w:pPr><w:keepNext/><w:spacing w:before="300" w:after="140"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="Heading 2"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="24"/><w:color w:val="2F75B5"/></w:rPr><w:pPr><w:keepNext/><w:spacing w:before="220" w:after="100"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="Heading3"><w:name w:val="Heading 3"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="22"/><w:color w:val="404040"/></w:rPr><w:pPr><w:keepNext/><w:spacing w:before="180" w:after="80"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="Quote"><w:name w:val="Quote"/><w:basedOn w:val="Normal"/><w:rPr><w:i/><w:color w:val="595959"/></w:rPr><w:pPr><w:ind w:left="420"/><w:spacing w:before="80" w:after="160"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="ListBullet"><w:name w:val="List Bullet"/><w:basedOn w:val="Normal"/><w:pPr><w:ind w:left="420" w:hanging="210"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="ListNumber"><w:name w:val="List Number"/><w:basedOn w:val="Normal"/><w:pPr><w:ind w:left="420" w:hanging="210"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="Code"><w:name w:val="Code"/><w:basedOn w:val="Normal"/><w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/><w:sz w:val="18"/></w:rPr><w:pPr><w:ind w:left="360"/><w:spacing w:after="0" w:line="220"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="TableCardTitle"><w:name w:val="Table Card Title"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:color w:val="1F4E79"/></w:rPr><w:pPr><w:keepNext/><w:spacing w:before="160" w:after="40"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="TableCell"><w:name w:val="Table Cell"/><w:basedOn w:val="Normal"/><w:pPr><w:ind w:left="240"/><w:spacing w:after="40"/></w:pPr></w:style></w:styles>',
+    ],
+    [
       'word/document.xml',
-      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${docxParagraphs(report)}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>`,
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${renderDocxParagraphs(markdown)}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr></w:body></w:document>`,
     ],
   ]);
 }
 
-function writeDocx(report) {
+function writeDocx({ markdown, path, title }) {
   const temporaryDirectory = mkdtempSync(join(tmpdir(), 'litmatch-docs-'));
   const wordDirectory = join(temporaryDirectory, 'word');
   const relsDirectory = join(temporaryDirectory, '_rels');
@@ -553,7 +685,7 @@ function writeDocx(report) {
   mkdirSync(relsDirectory, { recursive: true });
   mkdirSync(propsDirectory, { recursive: true });
 
-  const files = docxFiles(report);
+  const files = docxFiles(markdown, title);
 
   for (const [relativePath, content] of files) {
     const absolutePath = join(temporaryDirectory, relativePath);
@@ -571,18 +703,33 @@ function writeDocx(report) {
   } catch (error) {
     fail(`DOCX generation requires the local zip command: ${error.message}`);
   }
-  mkdirSync(dirname(generatedDocxPath), { recursive: true });
-  rmSync(generatedDocxPath, { force: true });
-  renameSync(temporaryOutput, generatedDocxPath);
+  mkdirSync(dirname(path), { recursive: true });
+  rmSync(path, { force: true });
+  renameSync(temporaryOutput, path);
   rmSync(temporaryDirectory, { recursive: true, force: true });
 }
 
-export function validateDocx(report, docxPath = generatedDocxPath) {
+function readHandbookArtifact() {
+  if (!existsSync(handbookSourcePath)) {
+    fail('AI-native handbook source is missing: docs/20-ai-native-handbook.md');
+  }
+  return {
+    markdown: readFileSync(handbookSourcePath, 'utf8'),
+    path: handbookDocxPath,
+    title: handbookDocxTitle,
+  };
+}
+
+export function validateDocx(
+  markdown,
+  docxPath = productReportDocxPath,
+  title = 'Litmatch Product/Spec Evidence Report',
+) {
   if (!existsSync(docxPath) || statSync(docxPath).size === 0) {
     fail('generated DOCX is missing; run pnpm docs:generate');
   }
 
-  const expectedFiles = docxFiles(report);
+  const expectedFiles = docxFiles(markdown, title);
   let archiveEntries;
   try {
     execFileSync('unzip', ['-tq', docxPath], { stdio: 'pipe' });
@@ -616,18 +763,53 @@ export function validateDocx(report, docxPath = generatedDocxPath) {
   }
 }
 
+export function parseDocsArguments(args) {
+  if (args.length === 0) return { checkOnly: false, docxOnly: false };
+  if (args.length === 1 && args[0] === '--check') {
+    return { checkOnly: true, docxOnly: false };
+  }
+  if (args.length === 1 && args[0] === '--docx-only') {
+    return { checkOnly: false, docxOnly: true };
+  }
+  fail(
+    'usage: node scripts/docs/generate.mjs [--check | --docx-only]; --check cannot be combined with --docx-only',
+  );
+}
+
 async function main() {
-  const checkOnly = process.argv.includes('--check');
-  if (
-    process.argv.length > 3 ||
-    (process.argv[2] && process.argv[2] !== '--check')
-  ) {
-    fail('usage: node scripts/docs/generate.mjs [--check]');
+  const { checkOnly, docxOnly } = parseDocsArguments(process.argv.slice(2));
+  if (docxOnly) {
+    if (!existsSync(generatedMarkdownPath)) {
+      fail('generated Markdown is missing; run pnpm docs:generate');
+    }
+    const docxArtifacts = [
+      {
+        markdown: readFileSync(generatedMarkdownPath, 'utf8'),
+        path: productReportDocxPath,
+        title: 'Litmatch Product/Spec Evidence Report',
+      },
+      readHandbookArtifact(),
+    ];
+    for (const artifact of docxArtifacts) writeDocx(artifact);
+    console.log(
+      `[docs] generated ${docxArtifacts.map((artifact) => relative(root, artifact.path)).join(', ')}`,
+    );
+    return;
   }
   const registry = readRegistry();
   validateRegistry(registry);
   await validateSpecifications();
   const report = await format(buildReport(registry), { parser: 'markdown' });
+  const docxArtifacts = [
+    {
+      markdown: report,
+      path: productReportDocxPath,
+      title: 'Litmatch Product/Spec Evidence Report',
+    },
+    {
+      ...readHandbookArtifact(),
+    },
+  ];
 
   if (checkOnly) {
     if (!existsSync(generatedMarkdownPath))
@@ -635,16 +817,18 @@ async function main() {
     if (readFileSync(generatedMarkdownPath, 'utf8') !== report) {
       fail('generated Markdown is stale; run pnpm docs:generate');
     }
-    validateDocx(report);
+    for (const artifact of docxArtifacts) {
+      validateDocx(artifact.markdown, artifact.path, artifact.title);
+    }
     console.log('[docs] registry and generated artifacts are valid');
     return;
   }
 
   mkdirSync(dirname(generatedMarkdownPath), { recursive: true });
   writeFileSync(generatedMarkdownPath, report);
-  writeDocx(report);
+  for (const artifact of docxArtifacts) writeDocx(artifact);
   console.log(
-    `[docs] generated ${relative(root, generatedMarkdownPath)} and ${relative(root, generatedDocxPath)}`,
+    `[docs] generated ${relative(root, generatedMarkdownPath)}, ${docxArtifacts.map((artifact) => relative(root, artifact.path)).join(', ')}`,
   );
 }
 
