@@ -59,6 +59,11 @@ Mỗi module publish bằng Redis client riêng của mình (docs/05 § 5.3) qua
 
 - Namespace `/signaling`; handshake `auth.token` = access token của core-api; fail →
   `connect_error: UNAUTHORIZED` (không thành connection — không tồn tại socket vô danh).
+- Quota connection/user là lease trong Redis (`signaling:connection-quota:{userId}`), acquire
+  atomic bằng Lua trên toàn cụm. `WS_MAX_CONNECTIONS_PER_USER` mặc định 3;
+  `WS_CONNECTION_LEASE_MS` mặc định 90 giây. Socket sống refresh lease, disconnect release; pod
+  chết thì lease tự hết hạn. Redis/quota lỗi thì handshake fail closed
+  `CONNECTION_QUOTA_UNAVAILABLE`, không fallback về Map cục bộ.
 - 1 connection Redis riêng cho `PSUBSCRIBE realtime:user:*` (ioredis subscriber mode không
   dùng chung với lệnh khác); channel lạ/payload rác → bỏ qua + log, không chết.
 - Socket chết được dọn bởi ping/pong mặc định của Socket.IO (`pingTimeout`) — chưa cần timer
@@ -82,8 +87,9 @@ qua Redis pub/sub rồi chỉ emit cho room cục bộ của mình) vốn KHÔNG
 
 Verify: `signaling.horizontal-scale.integration.spec.ts` boot 2 Nest app instance thật (2 port
 khác nhau, cùng Redis thật), 1 client chỉ connect vào instance A, gọi thẳng `server.to(room).emit()`
-ở instance B — client vẫn nhận được event. Readiness `/health/ready` cộng thêm check
-`redisClusterAdapter` (song song `redisSubscription` sẵn có).
+ở instance B — client vẫn nhận được event. Test cũng mở quota xuyên cả hai instance, từ chối socket
+thứ tư và xác nhận disconnect rồi reconnect ở pod khác lấy lại slot. Readiness `/health/ready`
+cộng thêm check `redisClusterAdapter`, Redis quota (song song `redisSubscription` sẵn có).
 
 Lưu ý transport: cluster adapter không tự giải quyết sticky-session cho Socket.IO long-polling
 qua nhiều instance — client hiện đã cố định `transports: ['websocket']` (xem test), nên không cần

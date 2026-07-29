@@ -24,6 +24,8 @@
     "observability:up": "docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.observability.yml up -d alloy",
     "observability:down": "docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.observability.yml stop alloy",
     "observability:logs": "docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.observability.yml logs --follow --tail=200 alloy",
+    "reliability:production-gate": "node scripts/reliability/verify-evidence.mjs",
+    "reliability:test": "node --test scripts/reliability/*.test.mjs",
     "build": "nx run-many -t build",
     "test": "nx run-many -t test",
     "lint": "nx run-many -t lint",

@@ -12,6 +12,18 @@ export const REQUIRED_RELEASE_KEYS = [
   'AUTH_OTP_PEPPER',
   'LIVEKIT_API_KEY',
   'LIVEKIT_API_SECRET',
+  'OBSERVABILITY_OWNER',
+  'SENTRY_CORE_API_DSN',
+  'SENTRY_SIGNALING_DSN',
+  'NEXT_PUBLIC_SENTRY_DSN',
+  'VITE_SENTRY_DSN',
+  'OTEL_EXPORTER_OTLP_ENDPOINT',
+  'OTEL_EXPORTER_OTLP_HEADERS',
+  'GRAFANA_CLOUD_PROMETHEUS_URL',
+  'GRAFANA_CLOUD_PROMETHEUS_USER',
+  'GRAFANA_CLOUD_LOKI_URL',
+  'GRAFANA_CLOUD_LOKI_USER',
+  'GRAFANA_CLOUD_API_TOKEN',
 ];
 
 export function parseEnvFile(path) {
@@ -83,20 +95,6 @@ export function validateReleaseConfig(values) {
   ].filter(Boolean);
   if (posthog.length === 1) {
     errors.push('Hai biến PostHog phải cùng có giá trị hoặc cùng để trống');
-  }
-
-  const grafanaKeys = [
-    'GRAFANA_CLOUD_PROMETHEUS_URL',
-    'GRAFANA_CLOUD_PROMETHEUS_USER',
-    'GRAFANA_CLOUD_LOKI_URL',
-    'GRAFANA_CLOUD_LOKI_USER',
-    'GRAFANA_CLOUD_API_TOKEN',
-  ];
-  const grafanaCount = grafanaKeys.filter((key) => Boolean(values[key])).length;
-  if (grafanaCount !== 0 && grafanaCount !== grafanaKeys.length) {
-    errors.push(
-      'Năm biến Grafana Cloud phải cùng có giá trị hoặc cùng để trống',
-    );
   }
 
   const facebookKeys = ['FACEBOOK_APP_ID', 'FACEBOOK_APP_SECRET'];

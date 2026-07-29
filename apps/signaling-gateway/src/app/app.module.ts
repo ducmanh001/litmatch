@@ -8,6 +8,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { validateSignalingEnv } from '../config/env.validation';
 
 import { HealthController } from './health.controller';
+import { ConnectionQuotaService } from './connection-quota.service';
 import { METRICS_METER } from './metrics.constants';
 import { SignalingRedisAdapterService } from './redis-adapter.service';
 import { SignalingGateway } from './signaling.gateway';
@@ -38,6 +39,7 @@ import type { SignalingEnv } from '../config/env.validation';
   controllers: [HealthController],
   providers: [
     SignalingGateway,
+    ConnectionQuotaService,
     SignalingRedisAdapterService,
     {
       provide: METRICS_METER,
