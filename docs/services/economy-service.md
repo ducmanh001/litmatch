@@ -129,3 +129,43 @@ Mọi request Apple/Google có deadline `ECONOMY_STORE_HTTP_TIMEOUT_MS` (mặc �
 timeout được coi là lỗi dependency, không được đổi thành "receipt không hợp lệ" của client.
 
 - **`StoreIapVerifier.verifyApple()` khớp `product_id` bằng `find()` — lấy phần tử ĐẦU TIÊN trùng product trong mảng `in_app` của receipt.** Với product tiêu dùng nhiều lần (consumable, user mua lại cùng `productId` nhiều lần), receipt hợp nhất của Apple chứa NHIỀU giao dịch cùng `product_id` — `providerTransactionId` lưu lại có thể không phải giao dịch user vừa mua, và khác với `transactionId` mà Apple gửi trong App Store Server Notification khi refund giao dịch cụ thể đó → `RefundService.refundIapPurchase()` có thể trả `unknown_receipt` dù thực ra có receipt tương ứng. Cần đóng trước khi bật `ECONOMY_IAP_VERIFIER=store`/`ECONOMY_APPLE_WEBHOOK_VERIFIER=store` ở production: client nên gửi kèm `transactionId` cụ thể (StoreKit 2 cung cấp sẵn) thay vì chỉ `productId`, server khớp đúng theo id đó.
+
+## 8. Nạp Diamond qua payOS (web Việt Nam)
+
+payOS là adapter thu VND bằng VietQR cho web, sống trong Economy module của `core-api`; không
+thêm deployable. Catalog riêng lưu `package_id`, `amount_vnd`, `diamonds`, `active`. Client chỉ
+gửi `packageId`, mọi giá trị tiền/Diamond được server đọc và snapshot vào order trước khi gọi
+payOS.
+
+Luồng chuẩn:
+
+1. User không phải guest tạo order với `Idempotency-Key`. Unique constraint DB bảo đảm một
+   intent chỉ có một order và một `order_code` payOS.
+2. Core API gọi payOS tạo payment link. Checkout URL/QR chỉ là dữ liệu trình bày, không phải
+   bằng chứng đã thanh toán.
+3. Chỉ webhook payOS có HMAC hợp lệ được xử lý. `returnUrl` từ browser chỉ dùng cho UX.
+4. Service lock order, đối chiếu `orderCode`, `amount`, `currency=VND`, success code và
+   `paymentLinkId` với snapshot. Sai bất kỳ trường nào thì không ghi ledger.
+5. Credit dùng double-entry: Nợ `system_iap` / Có `user_wallet` theo DIA. Update order `paid`
+   và gắn `transaction_id` chạy trong `LedgerService.record.withinTransaction`, cùng DB
+   transaction với entries + wallet snapshot.
+6. Webhook retry/concurrent replay theo idempotency key do server sinh từ `order_code`; không
+   cộng Diamond lần hai.
+
+payOS không thay Apple/Google IAP. Refund chuyển khoản không tự động suy ra từ webhook thu tiền;
+khi có nghiệp vụ hoàn thật phải đi qua reversal/adjustment có actor + lý do, không sửa order hay
+ledger cũ.
+
+### Thiết lập vận hành
+
+1. Tạo/xác minh tài khoản payOS, liên kết tài khoản ngân hàng và tạo Kênh thanh toán.
+2. Cấu hình server-only `PAYOS_CLIENT_ID`, `PAYOS_API_KEY`, `PAYOS_CHECKSUM_KEY`;
+   `PAYOS_WEB_WALLET_URL` trỏ tới `/wallet` public của web. Không đưa ba key vào `NEXT_PUBLIC_*`.
+3. Chạy migration trước deploy; operator chỉnh/activate catalog `payos_packages` theo chính sách
+   giá đã duyệt, không sửa snapshot order cũ.
+4. Khai webhook của Kênh thanh toán là
+   `https://<core-api-host>/api/v1/economy/webhooks/payos`. Endpoint public để payOS gọi nhưng
+   fail-closed bằng HMAC.
+5. Smoke bằng giao dịch VND thật giá trị nhỏ: tạo checkout → thanh toán → order `paid` →
+   `transactions.type=payos_topup` đúng một dòng → wallet tăng đúng package → đối soát fast/deep
+   không lệch. Không coi redirect về web là smoke thành công nếu webhook/ledger chưa hoàn tất.

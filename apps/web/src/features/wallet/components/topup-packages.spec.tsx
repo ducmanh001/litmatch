@@ -7,7 +7,7 @@ import { vi } from 'vitest';
 import { TopupPackages } from './topup-packages';
 import { apiClient } from '../../../shared/api/client';
 
-import type { IapProductDto } from '../api';
+import type { PayosPackageDto } from '../api';
 
 function renderPackages() {
   const queryClient = new QueryClient({
@@ -41,34 +41,48 @@ describe('TopupPackages', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Lỗi server');
   });
 
-  it('data — bấm gói gọi verify với productId + provider đúng', async () => {
-    const products: IapProductDto[] = [
+  it('data — bấm gói chỉ gửi packageId, giá và Diamond do server quyết định', async () => {
+    const packages: PayosPackageDto[] = [
       {
-        productId: 'com.litmatch.diamond.100',
-        provider: 'google',
-        diamonds: '100',
+        packageId: 'vn-50000',
+        amountVnd: '50000',
+        diamonds: '550',
       },
     ];
     vi.spyOn(apiClient, 'GET').mockResolvedValue({
-      data: { data: products },
+      data: { data: packages },
     } as never);
     const postSpy = vi.spyOn(apiClient, 'POST').mockResolvedValue({
-      data: { data: { transactionId: 't1', diamonds: '100', replayed: false } },
+      data: {
+        data: {
+          orderId: 'ab9c4ccb-264e-4cf0-a4a4-ff77ba9d3491',
+          orderCode: '1760000000000000',
+          amountVnd: '50000',
+          diamonds: '550',
+          status: 'pending',
+          checkoutUrl: 'https://pay.payos.vn/web/test',
+          qrCode: 'qr',
+          expiresAt: '2026-07-29T10:00:00.000Z',
+          replayed: false,
+        },
+      },
     } as never);
 
     renderPackages();
-    const button = await screen.findByRole('button', { name: /100 kim cương/ });
+    const button = await screen.findByRole('button', { name: /550 kim cương/ });
     await userEvent.click(button);
 
     expect(postSpy).toHaveBeenCalledWith(
-      '/api/v1/economy/iap/verify',
+      '/api/v1/economy/payos/orders',
       expect.objectContaining({
-        body: expect.objectContaining({
-          provider: 'google',
-          productId: 'com.litmatch.diamond.100',
-        }),
+        body: { packageId: 'vn-50000' },
+        params: {
+          header: { 'Idempotency-Key': expect.any(String) },
+        },
       }),
     );
-    expect(await screen.findByText(/Nạp thành công/)).toBeVisible();
+    expect(
+      await screen.findByRole('link', { name: /Mở payOS/ }),
+    ).toHaveAttribute('href', 'https://pay.payos.vn/web/test');
   });
 });

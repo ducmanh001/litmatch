@@ -14,6 +14,13 @@ export const ECONOMY_EVENTS_TOPIC = 'litmatch.economy.events';
 export const UQ_TRANSACTIONS_IDEMPOTENCY_KEY =
   'uq_transactions_idempotency_key';
 
+/** Constraint payOS — unique DB là chốt chặn create-order replay, không check-rồi-insert. */
+export const UQ_PAYOS_ORDER_IDEMPOTENCY_KEY =
+  'uq_payos_payment_orders_idempotency_key';
+
+export const PAYOS_SUCCESS_CODE = '00';
+export const PAYOS_CURRENCY_VND = 'VND';
+
 // ---------- Google (hạ tầng cố định, không đổi theo môi trường — docs/05 § 5.1 case 3) ----------
 
 /** Google Play Developer API — verify purchase + quét Voided Purchases. */

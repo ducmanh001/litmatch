@@ -3,6 +3,7 @@
 import { useState } from 'react';
 
 import { TopupPackages } from './topup-packages';
+import { PayosPaymentStatus } from './payos-payment-status';
 import { VipPlans } from './vip-plans';
 import { WalletBalance } from './wallet-balance';
 
@@ -22,6 +23,7 @@ export function WalletTabs() {
         onTopUp={() => setTab('diamond')}
         onUpgradeVip={() => setTab('vip')}
       />
+      <PayosPaymentStatus />
 
       <div
         role="tablist"

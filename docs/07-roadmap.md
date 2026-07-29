@@ -23,6 +23,9 @@
 > Vì mục tiêu là quy mô Litmatch thật (không phải MVP), xây **double-entry ledger đầy đủ ngay từ Giai đoạn 1** theo đúng [03-architecture.md § 3.8.C](./03-architecture.md) — không làm bản đơn giản (1 cột `balance`) rồi tính chuyển đổi sau, vì đổi mô hình dữ liệu tiền bạc giữa chừng khi đã có giao dịch thật là việc rất tốn kém và rủi ro.
 
 - [x] Economy module: `LedgerEntry` (double-entry, append-only — có DB trigger chặn UPDATE/DELETE) làm nguồn sự thật; idempotency key unique trên `Transaction`; `Wallet` chỉ là snapshot dẫn xuất, cập nhật cùng DB transaction — đúng [02-domain-model.md](./02-domain-model.md) + [services/economy-service.md](./services/economy-service.md)
+- [x] Nạp Diamond web Việt Nam qua payOS: package/order snapshot + create idempotency ở DB,
+      checkout VietQR, webhook HMAC là write path duy nhất để credit double-entry; return URL
+      chỉ đọc trạng thái server. Gift vẫn đổi DIA → PTS, không mở chuyển Diamond 1:1.
 - [x] Tích hợp Apple IAP + Google Play Billing: `StoreIapVerifier` (Apple verifyReceipt + Google Play Developer API) đã viết, **chưa chạy sandbox thật vì chưa có credential store** — dev dùng `DevIapVerifier` (chặn cứng ở production); job đối soát chạy định kỳ từ ngày đầu (bất biến Nợ=Có, receipt↔transaction, wallet↔ledger)
 - [x] VIP membership: mua bằng diamond, gia hạn cộng dồn, hết hạn tự downgrade (derive khi đọc, không phụ thuộc cron)
 - [x] Refund/chargeback IAP ([services/economy-service.md § 5](./services/economy-service.md)): webhook Apple App Store Server Notifications V2 + Google RTDN (verify chữ ký/OIDC, `@Public()`), job quét backstop (Apple Get Refund History + Google Voided Purchases), bút toán đảo cho phép balance âm (nợ diamond) thay vì clamp về 0 — **chưa chạy thật với webhook/credential sandbox** vì chưa có tài khoản Apple/Google Developer thật, đã verify bằng integration test trên Postgres thật (refund-sau-tiêu, idempotent replay, property test double-entry 60 bước ngẫu nhiên)

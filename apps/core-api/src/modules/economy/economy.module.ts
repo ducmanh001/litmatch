@@ -13,6 +13,7 @@ import { OutboxEvent } from './entities/outbox-event.entity';
 import { LedgerTransaction } from './entities/transaction.entity';
 import { Wallet } from './entities/wallet.entity';
 import { IapProduct, IapReceipt } from './entities/iap.entities';
+import { PayosPackage, PayosPaymentOrder } from './entities/payos.entities';
 import { VipPlan } from './entities/vip-plan.entity';
 import {
   DisabledIapVerifier,
@@ -32,6 +33,8 @@ import { IapRefundPollService } from './jobs/iap-refund-poll.service';
 import { OutboxRelayService } from './jobs/outbox-relay.service';
 import { ReconciliationService } from './jobs/reconciliation.service';
 import { RefundService } from './services/refund.service';
+import { PayosService } from './services/payos.service';
+import { PayosClient } from './ports/payos-client';
 import { EconomyWebhooksController } from './webhooks/economy-webhooks.controller';
 
 @Module({
@@ -43,6 +46,8 @@ import { EconomyWebhooksController } from './webhooks/economy-webhooks.controlle
       Wallet,
       IapProduct,
       IapReceipt,
+      PayosPackage,
+      PayosPaymentOrder,
       VipPlan,
       OutboxEvent,
     ]),
@@ -53,6 +58,8 @@ import { EconomyWebhooksController } from './webhooks/economy-webhooks.controlle
     EconomyMetrics,
     LedgerService, // writer duy nhất của ledger — KHÔNG export ra ngoài module
     RefundService,
+    PayosService,
+    PayosClient,
     OutboxRelayService,
     ReconciliationService,
     IapRefundPollService,

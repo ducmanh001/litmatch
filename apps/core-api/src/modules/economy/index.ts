@@ -12,6 +12,10 @@ export type {
   VipPlanCatalogView,
   AdminEconomyAnalytics,
 } from './economy.service';
+export type {
+  PayosOrderView,
+  PayosPackageView,
+} from './services/payos.service';
 export { VipTier } from './entities/wallet.entity';
 export { IapProvider } from './entities/iap.entities';
 export { TransactionType } from './entities/transaction.entity';

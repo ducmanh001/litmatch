@@ -16,6 +16,8 @@ export enum TransactionType {
   GiftSend = 'gift_send',
   /** Mua item avatar catalog qua spendDiamond generic (docs/services/avatar-service.md § 2). */
   AvatarPurchase = 'avatar_purchase',
+  /** Nạp web Việt Nam qua webhook payOS đã xác thực. */
+  PayosTopup = 'payos_topup',
   Reversal = 'reversal',
   Adjustment = 'adjustment',
 }
