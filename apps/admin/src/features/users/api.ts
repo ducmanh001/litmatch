@@ -30,8 +30,9 @@ export function useUsersList(filter: UsersListFilter, offset: number) {
             status: filter.status,
             role: filter.role,
             nickname: filter.nickname === '' ? undefined : filter.nickname,
-            limit: PAGE_SIZE,
-            offset,
+            // OpenAPI hiện generate Integer query thành Object; runtime contract vẫn là number.
+            limit: PAGE_SIZE as unknown as Record<string, never>,
+            offset: offset as unknown as Record<string, never>,
           },
         },
       });

@@ -1,6 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import {
   Bell,
+  Command,
   Gem,
   Gift,
   LayoutDashboard,
@@ -14,7 +15,7 @@ import {
   SlidersHorizontal,
   Users,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { useReportsList } from '../features/moderation/api';
@@ -23,6 +24,7 @@ import { useRole } from '../shared/auth/use-role';
 import { cn } from '../shared/lib/cn';
 import { Button } from '../shared/ui/button';
 import { LanguageToggle } from '../shared/ui/language-toggle';
+import { Modal, ModalBody, ModalHeader } from '../shared/ui/modal';
 import { ThemeSlider } from '../shared/ui/theme-slider';
 import { ToastStack } from '../shared/ui/toast-stack';
 
@@ -79,12 +81,78 @@ const ROLE_LABEL: Record<string, { initials: string; label: string }> = {
   user: { initials: 'U', label: 'Người dùng' },
 };
 
+interface SearchCommand {
+  label: string;
+  hint: string;
+  to: string;
+}
+
 export function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const role = useRole();
   const pendingReports = useReportsList('pending', 0);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+  const [isCommandSearchOpen, setIsCommandSearchOpen] = useState(false);
+  const mobileDrawerRef = useRef<HTMLElement>(null);
+  const mobileMenuTriggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if (
+        (event.key === '/' &&
+          !(
+            event.target instanceof HTMLInputElement ||
+            event.target instanceof HTMLTextAreaElement
+          )) ||
+        ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k')
+      ) {
+        event.preventDefault();
+        setIsMobileDrawerOpen(false);
+        setIsCommandSearchOpen(true);
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileDrawerOpen) return;
+    const drawer = mobileDrawerRef.current;
+    const trigger = mobileMenuTriggerRef.current;
+    const focusableSelector =
+      'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    drawer?.querySelector<HTMLElement>(focusableSelector)?.focus();
+
+    function onDrawerKeyDown(event: KeyboardEvent): void {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setIsMobileDrawerOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab' || drawer === null) return;
+      const focusable = Array.from(
+        drawer.querySelectorAll<HTMLElement>(focusableSelector),
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener('keydown', onDrawerKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onDrawerKeyDown);
+      trigger?.focus();
+    };
+  }, [isMobileDrawerOpen]);
 
   const logout = useMutation({
     mutationFn: async () => {
@@ -112,7 +180,15 @@ export function AppShell() {
   return (
     <div className="flex min-h-screen w-full bg-page">
       <div className="flex min-h-screen w-full bg-background">
-        <div className="relative sticky top-0 h-screen w-[74px] shrink-0 self-start">
+        {isMobileDrawerOpen && (
+          <button
+            type="button"
+            aria-label="Đóng menu"
+            className="fixed inset-0 z-40 bg-black/60 md:hidden"
+            onClick={() => setIsMobileDrawerOpen(false)}
+          />
+        )}
+        <div className="relative hidden h-screen w-[74px] shrink-0 self-start md:sticky md:top-0 md:block">
           <aside
             aria-label={
               isSidebarExpanded ? 'Menu đang mở rộng' : 'Menu đang thu gọn'
@@ -145,6 +221,18 @@ export function AppShell() {
                   <path d="M3 8h18M9 3l3 5 3-5M12 8l-3 13M12 8l3 13" />
                 </svg>
               </div>
+              {!isSidebarExpanded && (
+                <button
+                  type="button"
+                  aria-expanded={false}
+                  aria-label="Mở rộng menu"
+                  title="Mở rộng menu"
+                  onClick={() => setIsSidebarExpanded(true)}
+                  className="absolute top-[48px] right-1 flex size-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-md transition-colors hover:border-primary hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                >
+                  <PanelLeftOpen className="size-3.5" aria-hidden />
+                </button>
+              )}
               {isSidebarExpanded && (
                 <span className="truncate text-sm font-extrabold">
                   Litmatch Admin
@@ -215,28 +303,77 @@ export function AppShell() {
           </aside>
         </div>
 
-        <main className="min-w-0 flex-1 p-6 sm:p-[26px_30px_30px]">
+        <aside
+          ref={mobileDrawerRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Menu mobile"
+          aria-hidden={!isMobileDrawerOpen}
+          inert={!isMobileDrawerOpen}
+          className={cn(
+            'fixed inset-y-0 left-0 z-50 flex w-[min(86vw,300px)] flex-col gap-3 overflow-y-auto border-r border-border bg-muted px-3 py-[18px] shadow-2xl transition-transform duration-200 md:hidden',
+            isMobileDrawerOpen ? 'translate-x-0' : '-translate-x-full',
+          )}
+        >
+          <div className="mb-2 flex h-[42px] items-center gap-3 px-1">
+            <div className="flex size-[38px] shrink-0 items-center justify-center rounded-[11px] bg-primary text-brand-foreground">
+              <Gem className="size-[19px]" aria-hidden />
+            </div>
+            <span className="truncate text-sm font-extrabold">
+              Litmatch Admin
+            </span>
+            <button
+              type="button"
+              aria-label="Đóng menu"
+              onClick={() => setIsMobileDrawerOpen(false)}
+              className="ml-auto flex size-[38px] items-center justify-center rounded-[11px] border border-border bg-card text-muted-foreground hover:border-primary hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              <PanelLeftClose className="size-[18px]" aria-hidden />
+            </button>
+          </div>
+          <nav className="flex flex-col gap-2" aria-label="Điều hướng mobile">
+            {NAV_ITEMS.map(({ to, label, icon: Icon, ...rest }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={'end' in rest}
+                onClick={() => setIsMobileDrawerOpen(false)}
+                className={({ isActive }) =>
+                  cn(
+                    'flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-muted-foreground hover:bg-card hover:text-foreground',
+                    isActive && 'bg-primary-soft text-primary',
+                  )
+                }
+              >
+                <Icon className="size-[19px]" aria-hidden />
+                <span>{label}</span>
+              </NavLink>
+            ))}
+          </nav>
+        </aside>
+
+        <main
+          inert={isMobileDrawerOpen}
+          className="min-w-0 flex-1 p-4 sm:p-[26px_30px_30px]"
+        >
           <div className="mb-[22px] flex flex-wrap items-start justify-between gap-3.5">
             <div className="flex items-start gap-3">
-              <div className="flex size-[38px] shrink-0 items-center justify-center">
-                {!isSidebarExpanded && (
-                  <button
-                    type="button"
-                    aria-expanded={false}
-                    aria-label="Mở rộng menu"
-                    title="Mở rộng menu"
-                    onClick={() => setIsSidebarExpanded(true)}
-                    className="flex size-[38px] items-center justify-center rounded-[11px] border border-border bg-card text-muted-foreground transition-colors hover:border-primary hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                  >
-                    <PanelLeftOpen className="size-[18px]" aria-hidden />
-                  </button>
-                )}
-              </div>
+              <button
+                ref={mobileMenuTriggerRef}
+                type="button"
+                aria-expanded={isMobileDrawerOpen}
+                aria-label="Mở menu"
+                title="Mở menu"
+                onClick={() => setIsMobileDrawerOpen(true)}
+                className="flex size-[38px] shrink-0 items-center justify-center rounded-[11px] border border-border bg-card text-muted-foreground hover:border-primary hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary md:hidden"
+              >
+                <PanelLeftOpen className="size-[18px]" aria-hidden />
+              </button>
               <div>
                 <h1 className="m-0 text-[21px] font-extrabold tracking-tight">
                   {pageMeta.title}
                 </h1>
-                <p className="mt-1 text-[12.5px] text-muted-foreground">
+                <p className="mt-1 hidden text-[12.5px] text-muted-foreground sm:block">
                   {pageMeta.subtitle}
                 </p>
               </div>
@@ -244,18 +381,30 @@ export function AppShell() {
             <div className="flex flex-wrap items-center gap-2.5">
               <button
                 type="button"
-                aria-label="Tìm kiếm"
+                aria-label="Mở tìm kiếm lệnh"
+                title="Tìm kiếm (Ctrl/⌘ K hoặc /)"
+                onClick={() => {
+                  setIsMobileDrawerOpen(false);
+                  setIsCommandSearchOpen(true);
+                }}
                 className="flex size-[38px] items-center justify-center rounded-[11px] border border-border bg-card text-muted-foreground hover:border-primary hover:text-foreground"
               >
                 <Search className="size-4" aria-hidden />
               </button>
               <button
                 type="button"
-                aria-label="Thông báo"
+                aria-label="Mở report đang chờ"
+                title="Report đang chờ"
+                onClick={() =>
+                  navigate('/moderation?tab=reports&status=pending')
+                }
                 className="relative flex size-[38px] items-center justify-center rounded-[11px] border border-border bg-card text-muted-foreground hover:border-primary hover:text-foreground"
               >
                 <Bell className="size-4" aria-hidden />
-                <span className="absolute top-[7px] right-2 size-[7px] rounded-full border-[1.5px] border-card bg-destructive" />
+                {pendingReports.data !== undefined &&
+                  pendingReports.data.total > 0 && (
+                    <span className="absolute top-[7px] right-2 size-[7px] rounded-full border-[1.5px] border-card bg-destructive" />
+                  )}
               </button>
               <ThemeSlider />
               <LanguageToggle />
@@ -263,7 +412,7 @@ export function AppShell() {
                 <div className="flex size-7 items-center justify-center rounded-full bg-accent text-[11px] font-extrabold text-avatar-foreground">
                   {roleInfo.initials}
                 </div>
-                <span className="text-[12.5px] font-bold">
+                <span className="hidden text-[12.5px] font-bold xl:inline">
                   {roleInfo.label}
                 </span>
               </div>
@@ -284,6 +433,116 @@ export function AppShell() {
         </main>
       </div>
       <ToastStack />
+      {isCommandSearchOpen && (
+        <CommandSearch
+          onClose={() => setIsCommandSearchOpen(false)}
+          onNavigate={(to) => {
+            setIsCommandSearchOpen(false);
+            navigate(to);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function CommandSearch({
+  onClose,
+  onNavigate,
+}: {
+  onClose: () => void;
+  onNavigate: (to: string) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const commands = useMemo<SearchCommand[]>(() => {
+    const normalized = query.trim().toLocaleLowerCase('vi');
+    return NAV_ITEMS.filter(
+      (item) =>
+        normalized === '' ||
+        item.label.toLocaleLowerCase('vi').includes(normalized) ||
+        item.to.toLocaleLowerCase('vi').includes(normalized),
+    ).map((item) => ({
+      label: item.label,
+      hint: item.to,
+      to: item.to,
+    }));
+  }, [query]);
+
+  return (
+    <Modal open onClose={onClose} labelledBy="command-search-title">
+      <ModalHeader
+        title="Tìm kiếm nhanh"
+        titleId="command-search-title"
+        onClose={onClose}
+      />
+      <ModalBody>
+        <label htmlFor="command-search" className="sr-only">
+          Tìm trang quản trị
+        </label>
+        <div className="flex items-center gap-2 rounded-xl border border-border bg-muted px-3 focus-within:border-primary">
+          <Search className="size-4 text-muted-foreground" aria-hidden />
+          <input
+            id="command-search"
+            data-autofocus
+            autoComplete="off"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setActiveIndex(0);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                if (commands.length === 0) return;
+                setActiveIndex((current) => {
+                  const direction = event.key === 'ArrowDown' ? 1 : -1;
+                  return (
+                    (current + direction + commands.length) % commands.length
+                  );
+                });
+              } else if (event.key === 'Enter' && commands[activeIndex]) {
+                event.preventDefault();
+                onNavigate(commands[activeIndex].to);
+              }
+            }}
+            placeholder="Nhập tên trang…"
+            className="h-11 min-w-0 flex-1 bg-transparent text-sm outline-none"
+          />
+          <Command className="size-4 text-muted-foreground" aria-hidden />
+        </div>
+        <div
+          role="listbox"
+          aria-label="Kết quả tìm kiếm"
+          className="mt-3 max-h-72 space-y-1 overflow-y-auto"
+        >
+          {commands.map((command, index) => (
+            <button
+              key={`${command.to}-${command.label}`}
+              type="button"
+              role="option"
+              aria-selected={index === activeIndex}
+              onMouseMove={() => setActiveIndex(index)}
+              onClick={() => onNavigate(command.to)}
+              className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-sm hover:bg-muted aria-selected:bg-primary-soft aria-selected:text-primary"
+            >
+              <span className="font-semibold">{command.label}</span>
+              <span className="truncate font-mono text-[10px] text-muted-foreground">
+                {command.hint}
+              </span>
+            </button>
+          ))}
+          {commands.length === 0 && (
+            <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+              Không có trang nào khớp tìm kiếm.
+            </p>
+          )}
+        </div>
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          ↑↓ để chọn · Enter để mở · Esc để đóng
+        </p>
+      </ModalBody>
+    </Modal>
   );
 }

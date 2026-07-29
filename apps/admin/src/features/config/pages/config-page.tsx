@@ -67,7 +67,7 @@ export function ConfigPage() {
         {mutationError !== null && <ErrorState error={mutationError} />}
         {catalog.data !== undefined && (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] border-collapse text-[13px]">
+            <table className="responsive-table w-full border-collapse text-[13px] md:min-w-[640px]">
               <thead className="border-b border-border">
                 <tr>
                   <HeaderCell>Tên gói</HeaderCell>
@@ -89,25 +89,34 @@ export function ConfigPage() {
                       key={key}
                       className="border-b border-border last:border-0 hover:bg-muted"
                     >
-                      <td className="px-[18px] py-[13px] font-mono text-xs">
+                      <td
+                        data-label="Tên gói"
+                        className="px-[18px] py-[13px] font-mono text-xs"
+                      >
                         {catalogName(row)}
                       </td>
-                      <td className="px-[18px] py-[13px] uppercase">
+                      <td
+                        data-label="Loại"
+                        className="px-[18px] py-[13px] uppercase"
+                      >
                         {row.type === 'iap'
                           ? row.value.provider
                           : row.value.tier}
                       </td>
-                      <td className="px-[18px] py-[13px]">
+                      <td data-label="Giá trị" className="px-[18px] py-[13px]">
                         {row.type === 'iap'
                           ? `${row.value.diamonds} 💎`
                           : `${row.value.days} ngày`}
                       </td>
-                      <td className="px-[18px] py-[13px]">
+                      <td data-label="Giá" className="px-[18px] py-[13px]">
                         {row.type === 'iap'
                           ? 'Do App Store/Google Play quản lý'
                           : `${row.value.priceDiamond} 💎`}
                       </td>
-                      <td className="px-[18px] py-[13px]">
+                      <td
+                        data-label="Trạng thái"
+                        className="px-[18px] py-[13px]"
+                      >
                         <div className="flex items-center gap-2.5">
                           <ToggleSwitch
                             checked={row.value.active}

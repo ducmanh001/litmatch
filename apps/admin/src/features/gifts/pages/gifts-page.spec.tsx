@@ -115,7 +115,12 @@ describe('GiftsPage', () => {
     );
 
     expect(postSpy).toHaveBeenCalledWith('/api/v1/admin/gifts', {
-      body: { code: 'new-gift', name: 'Quà mới', priceDiamond: 20 },
+      body: {
+        code: 'new-gift',
+        name: 'Quà mới',
+        priceDiamond: 20,
+        sortOrder: 0,
+      },
     });
   });
 });

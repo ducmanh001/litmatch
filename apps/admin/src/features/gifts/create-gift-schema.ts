@@ -6,4 +6,5 @@ export const createGiftSchema = z.object({
   priceDiamond: z.coerce.number().int().min(1, 'Phải >= 1'),
 });
 
-export type CreateGiftForm = z.infer<typeof createGiftSchema>;
+export type CreateGiftFormInput = z.input<typeof createGiftSchema>;
+export type CreateGiftForm = z.output<typeof createGiftSchema>;
