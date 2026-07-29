@@ -226,6 +226,57 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/economy/payos/packages': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Catalog gói nạp Diamond payOS đang bán */
+    get: operations['EconomyController_listPayosPackages'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/economy/payos/orders': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Tạo checkout payOS idempotent; giá và diamond luôn snapshot từ catalog server */
+    post: operations['EconomyController_createPayosOrder'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/economy/payos/orders/{orderId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Trạng thái nạp payOS từ server; return URL/browser không phải bằng chứng thanh toán */
+    get: operations['EconomyController_getPayosOrderStatus'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/economy/vip/plans': {
     parameters: {
       query?: never;
@@ -2566,6 +2617,50 @@ export interface components {
        */
       diamonds: string;
     };
+    PayosPackageDto: {
+      /** @example vn-50000 */
+      packageId: string;
+      /**
+       * @description VND integer dạng chuỗi
+       * @example 50000
+       */
+      amountVnd: string;
+      /**
+       * @description Diamond bigint dạng chuỗi
+       * @example 550
+       */
+      diamonds: string;
+    };
+    CreatePayosOrderDto: {
+      /** @example vn-50000 */
+      packageId: string;
+    };
+    PayosOrderDto: {
+      orderId: string;
+      /** @example 1760000000000000 */
+      orderCode: string;
+      /** @example 50000 */
+      amountVnd: string;
+      /** @example 550 */
+      diamonds: string;
+      /** @enum {string} */
+      status: 'pending' | 'paid' | 'cancelled' | 'expired';
+      /** Format: uri */
+      checkoutUrl: string | null;
+      qrCode: string | null;
+      /** Format: date-time */
+      expiresAt: string;
+      replayed: boolean;
+    };
+    PayosOrderStatusDto: {
+      orderId: string;
+      /** @enum {string} */
+      status: 'pending' | 'paid' | 'cancelled' | 'expired';
+      /** Format: uuid */
+      transactionId: string | null;
+      /** @example 550 */
+      diamonds: string;
+    };
     VipPlanDto: {
       /** @example vip-30d */
       id: string;
@@ -3874,6 +3969,87 @@ export interface operations {
         content: {
           'application/json': {
             data: components['schemas']['IapProductDto'][];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  EconomyController_listPayosPackages: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['PayosPackageDto'][];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  EconomyController_createPayosOrder: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10) */
+        'Idempotency-Key': string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreatePayosOrderDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['PayosOrderDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  EconomyController_getPayosOrderStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orderId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['PayosOrderStatusDto'];
             meta?: {
               [key: string]: unknown;
             };

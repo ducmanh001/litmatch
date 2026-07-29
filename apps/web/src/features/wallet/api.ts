@@ -6,10 +6,13 @@ import type { ApiSchema } from '@litmatch/api-client';
 
 export type WalletDto = ApiSchema<'WalletDto'>;
 export type IapProductDto = ApiSchema<'IapProductDto'>;
+export type PayosPackageDto = ApiSchema<'PayosPackageDto'>;
 
 export const walletKeys = {
   wallet: ['wallet', 'me'] as const,
   iapProducts: ['wallet', 'iap-products'] as const,
+  payosPackages: ['wallet', 'payos-packages'] as const,
+  payosOrder: (orderId: string) => ['wallet', 'payos-order', orderId] as const,
   vipPlans: ['wallet', 'vip-plans'] as const,
 };
 
@@ -32,6 +35,49 @@ export function useIapProducts() {
     },
     // Catalog gói diamond gần như không đổi trong phiên — không cần refetch liên tục.
     staleTime: Infinity,
+  });
+}
+
+export function usePayosPackages() {
+  return useQuery({
+    queryKey: walletKeys.payosPackages,
+    queryFn: async () => {
+      const res = await apiClient.GET('/api/v1/economy/payos/packages');
+      return res.data?.data;
+    },
+    staleTime: Infinity,
+  });
+}
+
+export function usePayosOrder(orderId: string | null) {
+  return useQuery({
+    queryKey: walletKeys.payosOrder(orderId ?? ''),
+    queryFn: async () => {
+      if (orderId === null) return undefined;
+      const res = await apiClient.GET(
+        '/api/v1/economy/payos/orders/{orderId}',
+        { params: { path: { orderId } } },
+      );
+      return res.data?.data;
+    },
+    enabled: orderId !== null,
+  });
+}
+
+export function useCreatePayosOrder() {
+  return useMutation({
+    mutationFn: async (input: {
+      packageId: string;
+      idempotencyKey: string;
+    }) => {
+      const res = await apiClient.POST('/api/v1/economy/payos/orders', {
+        params: {
+          header: { 'Idempotency-Key': input.idempotencyKey },
+        },
+        body: { packageId: input.packageId },
+      });
+      return res.data?.data;
+    },
   });
 }
 

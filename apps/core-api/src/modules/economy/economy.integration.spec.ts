@@ -7,6 +7,7 @@ import { UserProfilePreferences1755800000000 } from '../../database/migrations/1
 import { UserRole1753600000000 } from '../../database/migrations/1753600000000-user-role';
 import { EconomyLedger1752000000000 } from '../../database/migrations/1752000000000-economy-ledger';
 import { EconomyRefund1752100000000 } from '../../database/migrations/1752100000000-economy-refund';
+import { PayosDiamond1756300000000 } from '../../database/migrations/1756300000000-payos-diamond';
 import { AuthIdentity } from '../auth/entities/auth-identity.entity';
 import { PhoneOtp } from '../auth/entities/phone-otp.entity';
 import { RefreshToken } from '../auth/entities/refresh-token.entity';
@@ -31,9 +32,15 @@ import {
 import { VipTier, Wallet } from './entities/wallet.entity';
 import { IapProduct, IapProvider, IapReceipt } from './entities/iap.entities';
 import { VipPlan } from './entities/vip-plan.entity';
+import {
+  PayosPackage,
+  PayosPaymentOrder,
+  PayosPaymentOrderStatus,
+} from './entities/payos.entities';
 import { OutboxRelayService } from './jobs/outbox-relay.service';
 import { ReconciliationService } from './jobs/reconciliation.service';
 import { RefundService } from './services/refund.service';
+import { PayosService } from './services/payos.service';
 
 import type { ConfigService } from '@nestjs/config';
 import type { SchedulerRegistry } from '@nestjs/schedule';
@@ -41,6 +48,7 @@ import type { Producer } from 'kafkajs';
 
 import type { CoreApiEnv } from '../../config/env.validation';
 import type { IapVerifier } from './ports/iap-verifier';
+import type { PayosClient } from './ports/payos-client';
 
 /**
  * Integration test TIỀN BẠC trên Postgres thật (docs/05 § 5.9 — bắt buộc cho Economy):
@@ -62,7 +70,9 @@ d('Economy integration (Postgres thật)', () => {
   let ledger: LedgerService;
   let economy: EconomyService;
   let refundService: RefundService;
+  let payosService: PayosService;
   let userA: string;
+  let payosCreateCalls = 0;
 
   const stubVerifier: IapVerifier = {
     verify: async (_p: IapProvider, payload: Record<string, unknown>) => ({
@@ -102,6 +112,8 @@ d('Economy integration (Postgres thật)', () => {
         Wallet,
         IapProduct,
         IapReceipt,
+        PayosPackage,
+        PayosPaymentOrder,
         VipPlan,
         OutboxEvent,
       ],
@@ -111,6 +123,7 @@ d('Economy integration (Postgres thật)', () => {
         UserRole1753600000000,
         EconomyLedger1752000000000,
         EconomyRefund1752100000000,
+        PayosDiamond1756300000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -135,6 +148,32 @@ d('Economy integration (Postgres thật)', () => {
       ds.getRepository(IapReceipt),
       ds.getRepository(LedgerTransaction),
       ledger,
+    );
+    const payosConfig = {
+      getOrThrow: (key: string) =>
+        ({
+          PAYOS_ORDER_EXPIRES_SECONDS: 900,
+          PAYOS_RETURN_URL: '',
+          PAYOS_CANCEL_URL: '',
+          PAYOS_WEB_WALLET_URL: 'https://web.example/wallet',
+        })[key],
+    } as unknown as ConfigService<CoreApiEnv, true>;
+    const payosClient = {
+      createPaymentLink: async (input: { orderCode: string }) => {
+        payosCreateCalls += 1;
+        return {
+          paymentLinkId: `plink-${input.orderCode}`,
+          checkoutUrl: `https://pay.example/${input.orderCode}`,
+          qrCode: `qr-${input.orderCode}`,
+        };
+      },
+    } as PayosClient;
+    payosService = new PayosService(
+      ds.getRepository(PayosPackage),
+      ds.getRepository(PayosPaymentOrder),
+      ledger,
+      payosClient,
+      payosConfig,
     );
 
     const user = await ds.getRepository(User).save(
@@ -176,6 +215,125 @@ d('Economy integration (Postgres thật)', () => {
         .getRepository(IapReceipt)
         .countBy({ providerTransactionId: 'gpa-0001' }),
     ).toBe(1);
+  });
+
+  it('payOS: create-order + webhook concurrent chỉ tạo một checkout và credit một lần', async () => {
+    const repo = ds.getRepository(User);
+    const user = await repo.save(
+      repo.create({
+        nickname: 'payos-race',
+        avatarId: 'default-01',
+        isGuest: false,
+      }),
+    );
+    const callsBefore = payosCreateCalls;
+    const [first, replay] = await Promise.all([
+      payosService.createOrder(user.id, 'vn-50000', 'same-intent'),
+      payosService.createOrder(user.id, 'vn-50000', 'same-intent'),
+    ]);
+    expect(first.orderId).toBe(replay.orderId);
+    // Hai caller có thể cùng gọi provider, nhưng dùng chung orderCode nên payOS/client
+    // reconcile về một checkout; quan trọng là không giữ DB lock qua network I/O.
+    expect(payosCreateCalls - callsBefore).toBeLessThanOrEqual(2);
+    expect(first.checkoutUrl).toBe(replay.checkoutUrl);
+
+    const event = {
+      code: '00',
+      success: true,
+      orderCode: first.orderCode,
+      amount: first.amountVnd,
+      currency: 'VND',
+      paymentLinkId: `plink-${first.orderCode}`,
+    };
+    const outcomes = await Promise.all([
+      payosService.creditVerifiedWebhook(event),
+      payosService.creditVerifiedWebhook(event),
+    ]);
+    expect(outcomes.filter(Boolean)).toHaveLength(1);
+    expect((await economy.getWallet(user.id)).balance).toBe('550');
+    const order = await ds
+      .getRepository(PayosPaymentOrder)
+      .findOneByOrFail({ id: first.orderId });
+    expect(order.status).toBe(PayosPaymentOrderStatus.Paid);
+    expect(order.transactionId).not.toBeNull();
+    expect(
+      await ds
+        .getRepository(LedgerTransaction)
+        .countBy({ idempotencyKey: `payos-credit:${first.orderCode}` }),
+    ).toBe(1);
+  });
+
+  it('payOS: amount mismatch không ghi ledger hoặc đổi trạng thái order', async () => {
+    const repo = ds.getRepository(User);
+    const user = await repo.save(
+      repo.create({
+        nickname: 'payos-mismatch',
+        avatarId: 'default-01',
+        isGuest: false,
+      }),
+    );
+    const order = await payosService.createOrder(
+      user.id,
+      'vn-10000',
+      'mismatch-intent',
+    );
+    await expect(
+      payosService.creditVerifiedWebhook({
+        code: '00',
+        success: true,
+        orderCode: order.orderCode,
+        amount: '1',
+        currency: 'VND',
+        paymentLinkId: `plink-${order.orderCode}`,
+      }),
+    ).resolves.toBe(false);
+    expect((await economy.getWallet(user.id)).balance).toBe('0');
+    expect(
+      (
+        await ds
+          .getRepository(PayosPaymentOrder)
+          .findOneByOrFail({ id: order.orderId })
+      ).status,
+    ).toBe(PayosPaymentOrderStatus.Pending);
+  });
+
+  it('payOS: webhook hợp lệ đến trễ vẫn đổi expired → paid cùng transaction ledger', async () => {
+    const repo = ds.getRepository(User);
+    const user = await repo.save(
+      repo.create({
+        nickname: 'payos-late-webhook',
+        avatarId: 'default-01',
+        isGuest: false,
+      }),
+    );
+    const order = await payosService.createOrder(
+      user.id,
+      'vn-10000',
+      'late-webhook-intent',
+    );
+    await ds
+      .getRepository(PayosPaymentOrder)
+      .update(
+        { id: order.orderId },
+        { status: PayosPaymentOrderStatus.Expired },
+      );
+
+    await expect(
+      payosService.creditVerifiedWebhook({
+        code: '00',
+        success: true,
+        orderCode: order.orderCode,
+        amount: order.amountVnd,
+        currency: 'VND',
+        paymentLinkId: `plink-${order.orderCode}`,
+      }),
+    ).resolves.toBe(true);
+    const paid = await ds
+      .getRepository(PayosPaymentOrder)
+      .findOneByOrFail({ id: order.orderId });
+    expect(paid.status).toBe(PayosPaymentOrderStatus.Paid);
+    expect(paid.transactionId).not.toBeNull();
+    expect((await economy.getWallet(user.id)).balance).toBe('100');
   });
 
   it('listIapProducts trả catalog active, sắp xếp theo diamonds tăng dần', async () => {

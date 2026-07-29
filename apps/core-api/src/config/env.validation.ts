@@ -63,6 +63,15 @@ export interface CoreApiEnv {
   ECONOMY_REFUND_POLL_ENABLED: boolean;
   ECONOMY_REFUND_POLL_INTERVAL_MS: number;
   ECONOMY_REFUND_POLL_WINDOW_DAYS: number;
+  PAYOS_CLIENT_ID: string;
+  PAYOS_API_KEY: string;
+  PAYOS_CHECKSUM_KEY: string;
+  PAYOS_API_BASE_URL: string;
+  PAYOS_HTTP_TIMEOUT_MS: number;
+  PAYOS_ORDER_EXPIRES_SECONDS: number;
+  PAYOS_WEB_WALLET_URL: string;
+  PAYOS_RETURN_URL: string;
+  PAYOS_CANCEL_URL: string;
   MATCHING_MATCHER_INTERVAL_MS: number;
   MATCHING_MATCHER_BATCH_SIZE: number;
   MATCHING_SWEEPER_INTERVAL_MS: number;
@@ -223,6 +232,32 @@ export const coreApiEnvSchema = Joi.object({
     .integer()
     .min(10_000)
     .default(60_000),
+
+  // payOS web top-up: credential chỉ ở core-api; URL callback chỉ phục vụ UX, không credit.
+  PAYOS_CLIENT_ID: Joi.string().allow('').default(''),
+  PAYOS_API_KEY: Joi.string().allow('').default(''),
+  PAYOS_CHECKSUM_KEY: Joi.string().allow('').default(''),
+  PAYOS_API_BASE_URL: Joi.string()
+    .uri({ scheme: ['https'] })
+    .default('https://api-merchant.payos.vn'),
+  PAYOS_HTTP_TIMEOUT_MS: Joi.number().integer().min(100).default(10_000),
+  PAYOS_ORDER_EXPIRES_SECONDS: Joi.number()
+    .integer()
+    .min(60)
+    .max(86_400)
+    .default(900),
+  PAYOS_WEB_WALLET_URL: Joi.string()
+    .uri({ scheme: ['http', 'https'] })
+    .allow('')
+    .default(''),
+  PAYOS_RETURN_URL: Joi.string()
+    .uri({ scheme: ['http', 'https'] })
+    .allow('')
+    .default(''),
+  PAYOS_CANCEL_URL: Joi.string()
+    .uri({ scheme: ['http', 'https'] })
+    .allow('')
+    .default(''),
 
   // Refund/chargeback (docs/services/economy-service.md § 5)
   // Mặc định 'store' (fail-closed) — thiếu config thì getOrThrow() chết ngay lúc verify thay vì

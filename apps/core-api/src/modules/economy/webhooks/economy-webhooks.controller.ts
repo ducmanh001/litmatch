@@ -17,12 +17,15 @@ import {
   AppleServerNotificationDto,
   GoogleRtdnEnvelopeDto,
 } from '../dto/webhook.dtos';
+import { PayosWebhookDto } from '../dto/payos-webhook.dto';
 import { IapProvider } from '../entities/iap.entities';
 import { RefundService } from '../services/refund.service';
 import {
   AppleNotificationVerifier,
   GoogleRtdnVerifier,
 } from '../ports/notification-verifier';
+import { PayosClient } from '../ports/payos-client';
+import { PayosService } from '../services/payos.service';
 
 // Notification type gây hoàn tiền (Apple App Store Server Notifications V2).
 const APPLE_REFUND_NOTIFICATION_TYPES = new Set(['REFUND', 'REVOKE']);
@@ -45,6 +48,8 @@ export class EconomyWebhooksController {
     private readonly refundService: RefundService,
     private readonly appleVerifier: AppleNotificationVerifier,
     private readonly googleVerifier: GoogleRtdnVerifier,
+    private readonly payosClient: PayosClient,
+    private readonly payosService: PayosService,
     private readonly config: ConfigService<CoreApiEnv, true>,
   ) {}
 
@@ -109,6 +114,22 @@ export class EconomyWebhooksController {
         `Google RTDN CANCELED (tín hiệu phụ, không tự refund): sku=${otp.sku} token=${otp.purchaseToken.slice(0, 12)}…`,
       );
     }
+    return { received: true };
+  }
+
+  /** Public nhưng HMAC được kiểm trước mọi query/write; chỉ service này gọi LedgerService. */
+  @Post('payos')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 120, ttl: minutes(1) } })
+  async payos(@Body() dto: PayosWebhookDto): Promise<{ received: boolean }> {
+    const event = this.payosClient.verifyWebhook({
+      code: dto.code,
+      success: dto.success,
+      data: dto.data,
+      signature: dto.signature,
+      ...(dto.desc ? { desc: dto.desc } : {}),
+    });
+    await this.payosService.creditVerifiedWebhook(event);
     return { received: true };
   }
 }
