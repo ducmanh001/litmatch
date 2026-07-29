@@ -340,6 +340,114 @@
         "tags": ["economy"]
       }
     },
+    "/api/v1/economy/payos/packages": {
+      "get": {
+        "operationId": "EconomyController_listPayosPackages",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PayosPackageDto"
+                      }
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Catalog gói nạp Diamond payOS đang bán",
+        "tags": ["economy"]
+      }
+    },
+    "/api/v1/economy/payos/orders": {
+      "post": {
+        "operationId": "EconomyController_createPayosOrder",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreatePayosOrderDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/PayosOrderDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Tạo checkout payOS idempotent; giá và diamond luôn snapshot từ catalog server",
+        "tags": ["economy"]
+      }
+    },
+    "/api/v1/economy/payos/orders/{orderId}": {
+      "get": {
+        "operationId": "EconomyController_getPayosOrderStatus",
+        "parameters": [
+          {
+            "name": "orderId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PayosOrderStatusDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Trạng thái nạp payOS từ server; return URL/browser không phải bằng chứng thanh toán",
+        "tags": ["economy"]
+      }
+    },
     "/api/v1/economy/vip/plans": {
       "get": {
         "operationId": "EconomyController_listVipPlans",
@@ -5808,6 +5916,79 @@
           }
         },
         "required": ["productId", "provider", "diamonds"]
+      },
+      "PayosPackageDto": {
+        "type": "object",
+        "properties": {
+          "packageId": { "type": "string", "example": "vn-50000" },
+          "amountVnd": {
+            "type": "string",
+            "example": "50000",
+            "description": "VND integer dạng chuỗi"
+          },
+          "diamonds": {
+            "type": "string",
+            "example": "550",
+            "description": "Diamond bigint dạng chuỗi"
+          }
+        },
+        "required": ["packageId", "amountVnd", "diamonds"]
+      },
+      "CreatePayosOrderDto": {
+        "type": "object",
+        "properties": {
+          "packageId": { "type": "string", "example": "vn-50000" }
+        },
+        "required": ["packageId"]
+      },
+      "PayosOrderDto": {
+        "type": "object",
+        "properties": {
+          "orderId": { "type": "string" },
+          "orderCode": { "type": "string", "example": "1760000000000000" },
+          "amountVnd": { "type": "string", "example": "50000" },
+          "diamonds": { "type": "string", "example": "550" },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "paid", "cancelled", "expired"]
+          },
+          "checkoutUrl": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true
+          },
+          "qrCode": { "type": "string", "nullable": true },
+          "expiresAt": { "format": "date-time", "type": "string" },
+          "replayed": { "type": "boolean" }
+        },
+        "required": [
+          "orderId",
+          "orderCode",
+          "amountVnd",
+          "diamonds",
+          "status",
+          "checkoutUrl",
+          "qrCode",
+          "expiresAt",
+          "replayed"
+        ]
+      },
+      "PayosOrderStatusDto": {
+        "type": "object",
+        "properties": {
+          "orderId": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "paid", "cancelled", "expired"]
+          },
+          "transactionId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "diamonds": { "type": "string", "example": "550" }
+        },
+        "required": ["orderId", "status", "transactionId", "diamonds"]
       },
       "VipPlanDto": {
         "type": "object",
