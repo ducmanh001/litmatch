@@ -29,6 +29,13 @@ const CONSENT_COOKIE_MAX_AGE_SECONDS = 31_536_000;
 const WEB_VITALS_SAMPLE_PERCENT = 10;
 const CORE_WEB_VITAL_NAMES = new Set(['LCP', 'INP', 'CLS']);
 const consentSubscribers = new Set<() => void>();
+const capturedWebVitalKeys = new Set<string>();
+let lastIdentifiedUserKey: string | null = null;
+
+function optInProductAnalytics(): void {
+  // Consent state is already stored in our first-party cookie; avoid a redundant `$opt_in` event.
+  posthog.opt_in_capturing({ captureEventName: false });
+}
 
 export const productAnalyticsConfig: ProductAnalyticsConfig | null =
   env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN !== undefined &&
@@ -39,28 +46,38 @@ export const productAnalyticsConfig: ProductAnalyticsConfig | null =
       }
     : null;
 
+/**
+ * Privacy guardrail:
+ * - never initialize PostHog before explicit user consent
+ * - keep high-volume autocapture and Session Replay disabled
+ * - do not weaken these defaults without updating the runbook and review notes
+ */
 export function initializeProductAnalytics(
   config: ProductAnalyticsConfig | null = productAnalyticsConfig,
 ): boolean {
-  if (config === null) {
+  if (config === null || getProductAnalyticsConsent() !== 'accepted') {
     return false;
   }
-  if (posthog.__loaded) return true;
+  if (posthog.__loaded) {
+    optInProductAnalytics();
+    return true;
+  }
 
   posthog.init(config.projectToken, {
     api_host: config.host,
     defaults: '2026-05-30',
-    autocapture: true,
+    autocapture: false,
     capture_pageview: 'history_change',
     capture_pageleave: false,
     person_profiles: 'identified_only',
+    disable_session_recording: true,
     session_recording: {
-      maskAllInputs: false,
-      maskTextSelector: undefined,
+      maskAllInputs: true,
+      maskTextSelector: '*',
     },
   });
 
-  posthog.opt_in_capturing();
+  optInProductAnalytics();
   return true;
 }
 
@@ -89,12 +106,16 @@ export function setProductAnalyticsConsent(
   document.cookie = `${CONSENT_COOKIE_NAME}=${consent}; Path=/; Max-Age=${CONSENT_COOKIE_MAX_AGE_SECONDS}; SameSite=Lax`;
   if (consent === 'accepted') {
     if (posthog.__loaded) {
-      posthog.opt_in_capturing();
+      optInProductAnalytics();
     } else {
       initializeProductAnalytics(config);
     }
-  } else if (posthog.__loaded) {
-    posthog.opt_out_capturing();
+  } else {
+    lastIdentifiedUserKey = null;
+    if (posthog.__loaded) {
+      posthog.reset();
+      posthog.opt_out_capturing();
+    }
   }
 
   consentSubscribers.forEach((subscriber) => subscriber());
@@ -104,12 +125,20 @@ export function identifyProductAnalyticsUser(
   user: AnalyticsUser,
   config: ProductAnalyticsConfig | null = productAnalyticsConfig,
 ): void {
-  if (config === null || !posthog.__loaded) {
+  if (
+    config === null ||
+    getProductAnalyticsConsent() !== 'accepted' ||
+    !posthog.__loaded
+  ) {
     return;
   }
+  const userKey = `${user.id}:${user.isGuest ? 'guest' : 'registered'}`;
+  if (lastIdentifiedUserKey === userKey) return;
+
   posthog.identify(user.id, {
     account_type: user.isGuest ? 'guest' : 'registered',
   });
+  lastIdentifiedUserKey = userKey;
 }
 
 function webVitalsSampleBucket(id: string): number {
@@ -131,12 +160,17 @@ export function captureProductWebVital(
 ): void {
   if (
     config === null ||
+    getProductAnalyticsConsent() !== 'accepted' ||
     !posthog.__loaded ||
     !CORE_WEB_VITAL_NAMES.has(metric.name) ||
     webVitalsSampleBucket(metric.id) >= WEB_VITALS_SAMPLE_PERCENT
   ) {
     return;
   }
+  const metricKey = `${metric.id}:${metric.name}`;
+  if (capturedWebVitalKeys.has(metricKey)) return;
+  capturedWebVitalKeys.add(metricKey);
+
   posthog.capture('web_vital', {
     metric_name: metric.name,
     value: metric.value,
@@ -148,6 +182,8 @@ export function captureProductWebVital(
 export function resetProductAnalyticsUser(
   config: ProductAnalyticsConfig | null = productAnalyticsConfig,
 ): void {
+  lastIdentifiedUserKey = null;
+  capturedWebVitalKeys.clear();
   if (config === null || !posthog.__loaded) return;
   posthog.reset();
 }
