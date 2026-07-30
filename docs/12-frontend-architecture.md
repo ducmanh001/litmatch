@@ -165,6 +165,20 @@ Frontend không tự bổ sung endpoint khi task không cho phép sửa backend.
 3. CORS allow-list từ `CORS_ORIGINS`, có validation, không dùng `origin: true`.
 4. OpenAPI response/error contract đủ để generate client, cập nhật qua `openapi:sync`.
 
+Runtime availability của auth provider, web/native top-up, video upload/transcode và push lấy
+duy nhất từ `GET /api/v1/capabilities`. Endpoint suy trạng thái từ adapter + credential backend
+thật và trả `enabled | beta | maintenance | disabled`; UI không được tự suy production readiness
+từ việc route/component đã tồn tại. Nút/CTA vẫn được giữ để product surface ổn định: với
+`disabled`/`maintenance`, interaction chỉ hiển thị `message` endpoint trả về và không gọi action
+API phía sau.
+
+Trong giai đoạn rolling deploy endpoint này, auth build env cũ (`NEXT_PUBLIC_AUTH_*`,
+`NEXT_PUBLIC_PHONE_OTP_ENABLED`, `VITE_AUTH_GOOGLE_CLIENT_ID`, `VITE_PHONE_OTP_ENABLED`) chỉ là
+fallback khi endpoint chưa tồn tại hoặc tạm lỗi. Khi endpoint trả response hợp lệ, response đó là
+authority và fallback không được nâng một capability `disabled`/`maintenance`. Sau khi mọi
+core-api instance đã có endpoint và qua một chu kỳ rollback an toàn, các fallback này có thể được
+deprecate bằng thay đổi riêng.
+
 ## 12.8 Realtime và media lifecycle
 
 Socket là kênh delta, REST/core-api là nguồn sự thật. Lifecycle chuẩn:

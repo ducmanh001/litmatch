@@ -3,6 +3,10 @@
 import { isApiError } from '@litmatch/api-client';
 
 import { useIdempotencyKey } from '../../../shared/idempotency/use-idempotency-key';
+import {
+  isCapabilityUsable,
+  useCapabilities,
+} from '../../../shared/capabilities/api';
 import { showToast } from '../../../shared/lib/toast-store';
 import { DiamondIcon } from '../../../shared/ui/icons';
 import { useCreatePayosOrder, usePayosPackages } from '../api';
@@ -14,9 +18,53 @@ const vndFormatter = new Intl.NumberFormat('vi-VN', {
 });
 
 export function TopupPackages() {
-  const packages = usePayosPackages();
+  const capabilities = useCapabilities();
+  const webTopUp =
+    capabilities.data?.topUp.web ??
+    (capabilities.isError
+      ? {
+          status: 'enabled' as const,
+          message:
+            'Đang dùng chế độ tương thích trong lúc capability endpoint chưa sẵn sàng.',
+        }
+      : undefined);
+  const packages = usePayosPackages(isCapabilityUsable(webTopUp));
   const createOrder = useCreatePayosOrder();
   const { key, resetKey } = useIdempotencyKey();
+
+  if (capabilities.isPending) {
+    return (
+      <p className="text-sm text-slate-500 dark:text-slate-400">
+        Đang kiểm tra phương thức nạp…
+      </p>
+    );
+  }
+
+  if (webTopUp === undefined) {
+    return (
+      <p role="alert" className="text-sm text-destructive">
+        Không thể xác định phương thức nạp đang khả dụng.
+      </p>
+    );
+  }
+
+  if (!isCapabilityUsable(webTopUp)) {
+    return (
+      <button
+        type="button"
+        onClick={() => showToast(webTopUp.message, 'warn')}
+        className="w-full rounded-2xl border border-black/5 bg-white p-4 text-left transition hover:border-diamond/50 dark:border-white/10 dark:bg-surf"
+      >
+        <p className="flex items-center gap-1.5 text-lg font-extrabold">
+          <DiamondIcon className="text-diamond" width={15} height={15} />
+          Nạp Diamond qua web
+        </p>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          Nhấn để xem trạng thái
+        </p>
+      </button>
+    );
+  }
 
   if (packages.isPending) {
     return (

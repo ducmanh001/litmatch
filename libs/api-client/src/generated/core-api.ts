@@ -55,6 +55,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/capabilities': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Runtime capability contract cho mọi frontend
+     * @description Phản ánh provider/credential thật; frontend không tự suy availability từ build env.
+     */
+    get: operations['CapabilitiesController_getCapabilities'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/users/me': {
     parameters: {
       query?: never;
@@ -2527,6 +2547,47 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    /** @enum {string} */
+    CapabilityStatus: 'enabled' | 'beta' | 'maintenance' | 'disabled';
+    AuthProviderCapabilityDto: {
+      status: components['schemas']['CapabilityStatus'];
+      /** @description Giải thích ngắn để UI trình bày khi capability không sẵn sàng hoàn toàn */
+      message: string;
+      /** @description OAuth client/app ID công khai; null với provider không cần hoặc chưa cấu hình */
+      clientId: string | null;
+    };
+    CapabilityStateDto: {
+      status: components['schemas']['CapabilityStatus'];
+      /** @description Giải thích ngắn để UI trình bày khi capability không sẵn sàng hoàn toàn */
+      message: string;
+    };
+    AuthCapabilitiesDto: {
+      phoneOtp: components['schemas']['AuthProviderCapabilityDto'];
+      google: components['schemas']['AuthProviderCapabilityDto'];
+      apple: components['schemas']['AuthProviderCapabilityDto'];
+      facebook: components['schemas']['AuthProviderCapabilityDto'];
+      guest: components['schemas']['CapabilityStateDto'];
+    };
+    TopUpCapabilitiesDto: {
+      web: components['schemas']['CapabilityStateDto'];
+      /** @description Aggregate native IAP; production chỉ enabled khi cả Apple và Google đều sẵn sàng */
+      native: components['schemas']['CapabilityStateDto'];
+      nativeApple: components['schemas']['CapabilityStateDto'];
+      nativeGoogle: components['schemas']['CapabilityStateDto'];
+    };
+    VideoCapabilitiesDto: {
+      upload: components['schemas']['CapabilityStateDto'];
+      transcode: components['schemas']['CapabilityStateDto'];
+    };
+    NotificationCapabilitiesDto: {
+      push: components['schemas']['CapabilityStateDto'];
+    };
+    CapabilitiesDto: {
+      auth: components['schemas']['AuthCapabilitiesDto'];
+      topUp: components['schemas']['TopUpCapabilitiesDto'];
+      video: components['schemas']['VideoCapabilitiesDto'];
+      notifications: components['schemas']['NotificationCapabilitiesDto'];
+    };
     MyProfileDto: {
       id: string;
       nickname: string;
@@ -3731,6 +3792,30 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+    };
+  };
+  CapabilitiesController_getCapabilities: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['CapabilitiesDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
       };
     };
   };

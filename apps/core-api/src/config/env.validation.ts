@@ -6,6 +6,7 @@ import * as Joi from 'joi';
 
 import { parseCorsOrigins } from '../common/cors/cors-origins';
 import { parseLivekitRegionUrls } from '../common/livekit/livekit-url';
+import { parseMaintenanceCapabilities } from './capabilities';
 
 /**
  * Khớp 1-1 với `coreApiEnvSchema` bên dưới — dùng làm type param cho `ConfigService<CoreApiEnv, true>`
@@ -20,6 +21,7 @@ export interface CoreApiEnv {
   HTTP_TRUST_PROXY_HOPS: number;
   CORS_ORIGINS: string;
   SWAGGER_ENABLED: boolean;
+  CAPABILITY_MAINTENANCE_FEATURES: string;
   DATABASE_URL: string;
   REDIS_URL: string;
   KAFKA_BROKERS: string;
@@ -179,6 +181,13 @@ export const coreApiEnvSchema = Joi.object({
       return value;
     }, 'danh sách origin http(s) hợp lệ, phân cách bằng dấu phẩy'),
   SWAGGER_ENABLED: Joi.boolean().default(true),
+  CAPABILITY_MAINTENANCE_FEATURES: Joi.string()
+    .allow('')
+    .default('')
+    .custom((value: string) => {
+      parseMaintenanceCapabilities(value);
+      return value;
+    }, 'danh sách capability maintenance hợp lệ'),
 
   DATABASE_URL: Joi.string()
     .uri({ scheme: ['postgres', 'postgresql'] })

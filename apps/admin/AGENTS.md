@@ -49,6 +49,8 @@ apps/admin theo layouts/admins/..." cho breakdown thật/demo + backlog phụ th
 - Toast: `shared/lib/toast-store.ts` (cùng idiom singleton) + `showToast()` gọi từ bất kỳ đâu,
   `<ToastStack/>` mount 1 lần ở `app-shell.tsx`. Dùng cho phản hồi mutation (ban/unban, resolve/
   dismiss, refund, toggle gift...) thay vì chỉ inline error.
+- Login provider readiness lấy từ `GET /api/v1/capabilities`; nút unavailable vẫn hiện, khi bấm
+  chỉ toast message server và không gọi action API. Build env auth chỉ là rolling-deploy fallback.
 - `config`/`permissions` từng là demo tĩnh lúc mới redesign; nay đã nối backend thật (catalog
   toggle, broadcast, permission matrix, staff role) — không còn `DemoPill`/state cục bộ giả lập.
 - Task 0 backend đã xong (docs/12 § 12.7): `RequireAuth` (`shared/auth/require-auth.tsx`) đọc
