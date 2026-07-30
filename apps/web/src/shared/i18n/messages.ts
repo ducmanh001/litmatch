@@ -9,8 +9,8 @@ const MESSAGES = {
     en: 'Checking your sign-in session…',
   },
   'auth.otpCreated': {
-    vi: 'Mã OTP của bạn là',
-    en: 'Your OTP is',
+    vi: 'Mã xác thực (OTP) của bạn là',
+    en: 'Your one-time password (OTP) is',
   },
   'analytics.consentTitle': {
     vi: 'Cho phép phân tích trải nghiệm?',
