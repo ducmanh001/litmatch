@@ -46,23 +46,26 @@ function legacyAuthCapabilities(): CapabilitiesDto['auth'] {
     phoneOtp: {
       ...state(
         env.VITE_PHONE_OTP_ENABLED,
-        'Đăng nhập bằng số điện thoại chưa được bật.',
+        'Đăng nhập bằng số điện thoại hiện chưa khả dụng.',
       ),
       clientId: null,
     },
     google: {
-      ...state(googleClientId !== null, 'Đăng nhập Google chưa được cấu hình.'),
+      ...state(
+        googleClientId !== null,
+        'Đăng nhập Google chưa hiện chưa khả dụng.',
+      ),
       clientId: googleClientId,
     },
     apple: {
-      ...state(false, 'Đăng nhập Apple chưa được cấu hình.'),
+      ...state(false, 'Đăng nhập Apple hiện chưa khả dụng.'),
       clientId: null,
     },
     facebook: {
-      ...state(false, 'Đăng nhập Facebook chưa được cấu hình.'),
+      ...state(false, 'Đăng nhập Facebook hiện chưa khả dụng.'),
       clientId: null,
     },
-    guest: state(true, 'Có thể dùng tài khoản khách.'),
+    guest: state(true, 'Có thể trải nghiệm ngay không cần đăng nhập.'),
   };
 }
 
@@ -86,7 +89,9 @@ export function LoginPage() {
       const phone = normalizeVnPhone(localPhone);
       if (phone === null) {
         // Đã qua zodResolver(phoneSchema) nên luôn khớp VN_LOCAL_PHONE_PATTERN.
-        throw new Error('unreachable: phone không khớp VN_LOCAL_PHONE_PATTERN');
+        throw new Error(
+          'Số điện thoại không đúng định dạng. Vui lòng kiểm tra lại.',
+        );
       }
       const res = await apiClient.POST('/api/v1/auth/otp/request', {
         body: { phone },
@@ -94,7 +99,7 @@ export function LoginPage() {
       const otp = res.data?.data;
       if (otp === undefined || !/^\d{6}$/u.test(otp.code)) {
         throw new Error(
-          'API chưa trả về mã OTP hợp lệ. Hãy restart/rebuild core-api rồi thử lại.',
+          'Không thể khởi tạo mã xác thực lúc này. Vui lòng thử lại sau.',
         );
       }
       return { phone, otp };
@@ -105,7 +110,7 @@ export function LoginPage() {
         shouldValidate: true,
       });
       setPhase({ step: 'code', phone });
-      showToast(`Mã OTP của bạn là ${otp.code}`);
+      showToast(`Mã xác thực (OTP) của bạn là ${otp.code}`);
     },
   });
 
@@ -128,7 +133,10 @@ export function LoginPage() {
     mutationFn: async () => {
       const capability = authCapabilities.google;
       if (!isCapabilityUsable(capability) || capability?.clientId === null) {
-        throw new Error(capability?.message ?? 'Google chưa sẵn sàng.');
+        throw new Error(
+          capability?.message ??
+            'Đăng nhập bằng Google hiện chưa khả dụng. Vui lòng thử phương thức khác.',
+        );
       }
       const clientId = capability.clientId;
       const idToken = await getGoogleIdToken(clientId);

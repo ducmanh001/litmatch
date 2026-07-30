@@ -80,19 +80,19 @@ export class CapabilitiesService {
       iapVerifier === 'dev' && !production
         ? this.state(
             CapabilityStatus.Beta,
-            'IAP chỉ dùng verifier phát triển, không phải giao dịch thật.',
+            'Tính năng nạp tiền đang ở chế độ thử nghiệm (không phát sinh chi phí).',
           )
         : nativeApple.status === CapabilityStatus.Enabled &&
             nativeGoogle.status === CapabilityStatus.Enabled
           ? this.state(
               CapabilityStatus.Enabled,
-              'Apple và Google native IAP đều sẵn sàng.',
+              'Sẵn sàng thanh toán qua App Store và Google Play.',
             )
           : this.state(
               CapabilityStatus.Disabled,
               nativeIapProviders.length > 0
-                ? `Native IAP mới chỉ cấu hình ${nativeIapProviders.join('/')}; client phải dùng trạng thái theo provider.`
-                : 'Nạp qua native IAP chưa được hỗ trợ trên môi trường này.',
+                ? `Hiện chỉ hỗ trợ thanh toán qua ${nativeIapProviders.join('/')}; client phải dùng trạng thái theo provider.`
+                : 'Nạp tiền qua ứng dụng hiện chưa khả dụng.',
             ),
     );
     return {
@@ -102,23 +102,23 @@ export class CapabilitiesService {
           'auth.google',
           googleClientId !== '',
           googleClientId,
-          'Đăng nhập Google chưa được cấu hình.',
+          'Đăng nhập Google chưa khả dụng.',
         ),
         apple: this.authProvider(
           'auth.apple',
           appleClientId !== '',
           appleClientId,
-          'Đăng nhập Apple chưa được cấu hình.',
+          'Đăng nhập Apple chưa khả dụng.',
         ),
         facebook: this.authProvider(
           'auth.facebook',
           facebookReady,
           facebookReady ? facebookAppId : '',
-          'Đăng nhập Facebook chưa được cấu hình đầy đủ.',
+          'Đăng nhập Facebook ckhả dụng.',
         ),
         guest: this.state(
           CapabilityStatus.Enabled,
-          'Có thể dùng tài khoản khách.',
+          'Có thể trải nghiệm ngay không cần đăng nhập.',
         ),
       },
       topUp: {
@@ -127,11 +127,11 @@ export class CapabilitiesService {
           payosReady
             ? this.state(
                 CapabilityStatus.Enabled,
-                'Nạp qua chuyển khoản/VietQR payOS.',
+                'Thanh toán nhanh qua VietQR / Chuyển khoản ngân hàng..',
               )
             : this.state(
                 CapabilityStatus.Disabled,
-                'Nạp qua web chưa được cấu hình.',
+                'Phương thức nạp tiền này hiện chưa khả dụng.',
               ),
         ),
         native,
@@ -143,13 +143,13 @@ export class CapabilitiesService {
           'video.upload',
           videoEnabled,
           production,
-          'Upload video chỉ đang nối storage phát triển.',
+          'Tính năng tải video lên đang ở bản thử nghiệm',
         ),
         transcode: this.devOnlyCapability(
           'video.transcode',
           videoEnabled,
           production,
-          'Transcode video chỉ đang nối provider phát triển.',
+          'Tính năng xử lý video đang ở bản thử nghiệm.',
         ),
       },
       notifications: {
@@ -158,11 +158,11 @@ export class CapabilitiesService {
           pushProvider === 'dev' && !production
             ? this.state(
                 CapabilityStatus.Beta,
-                'Push đang dùng provider phát triển và không gửi ra thiết bị thật.',
+                'Tính năng thông báo đang ở chế độ thử nghiệm.',
               )
             : this.state(
                 CapabilityStatus.Disabled,
-                'Push notification chưa được cấu hình.',
+                'Tính năng thông báo hiện chưa khả dụng.',
               ),
         ),
       },
@@ -178,7 +178,7 @@ export class CapabilitiesService {
     const state = this.withMaintenance(
       id,
       available
-        ? this.state(CapabilityStatus.Enabled, 'Sẵn sàng.')
+        ? this.state(CapabilityStatus.Enabled, 'Đã sẵn sàng sử dụng.')
         : this.state(CapabilityStatus.Disabled, disabledMessage),
     );
     return {
@@ -196,11 +196,11 @@ export class CapabilitiesService {
       configured
         ? this.state(
             CapabilityStatus.Beta,
-            'OTP được backend trả trực tiếp để hiển thị và tự điền.',
+            'Đăng nhập bằng số điện thoại (chế độ thử nghiệm).',
           )
         : this.state(
             CapabilityStatus.Disabled,
-            'Đăng nhập bằng số điện thoại chưa được bật.',
+            'Đăng nhập bằng số điện thoại hiện chưa khả dụng.',
           ),
     );
     return { ...state, clientId: null };
@@ -215,18 +215,18 @@ export class CapabilitiesService {
     if (verifier === 'dev' && !production) {
       return this.state(
         CapabilityStatus.Beta,
-        `${provider} IAP đang dùng verifier phát triển.`,
+        `Thanh toán qua ${provider} đang ở chế độ thử nghiệm.`,
       );
     }
     if (verifier === 'store' && credentialsReady) {
       return this.state(
         CapabilityStatus.Enabled,
-        `${provider} IAP đã cấu hình.`,
+        `Thanh toán qua ${provider} đã sẵn sàng.`,
       );
     }
     return this.state(
       CapabilityStatus.Disabled,
-      `${provider} IAP chưa được cấu hình.`,
+      `Thanh toán qua ${provider} hiện chưa khả dụng.`,
     );
   }
 
@@ -242,7 +242,7 @@ export class CapabilitiesService {
         ? this.state(CapabilityStatus.Beta, betaMessage)
         : this.state(
             CapabilityStatus.Disabled,
-            'Capability chưa có provider production.',
+            'Tính năng này hiện chưa khả dụng.',
           ),
     );
   }
@@ -257,7 +257,7 @@ export class CapabilitiesService {
     ) {
       return this.state(
         CapabilityStatus.Maintenance,
-        'Tính năng đang tạm bảo trì.',
+        'Tính năng đang tạm bảo trì. Vui lòng quay lại sau..',
       );
     }
     return state;
