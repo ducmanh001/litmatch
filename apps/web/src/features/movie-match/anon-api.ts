@@ -15,13 +15,18 @@ export type MovieMessageDto = ApiSchema<'MovieMessageDto'>;
 
 const MESSAGES_PAGE_LIMIT = 30;
 
+export const MOVIE_ANON_CURRENT_REFETCH_INTERVAL_MS = 5_000;
+export const MOVIE_ANON_MESSAGES_REFETCH_INTERVAL_MS = 5_000;
+
 export const movieAnonKeys = {
   current: ['movie-match', 'anon', 'current'] as const,
   messages: (sessionId: string) =>
     ['movie-match', 'anon', 'messages', sessionId] as const,
 };
 
-function shouldPoll(state: MovieAnonStateDto['state'] | undefined): boolean {
+export function isPollingMovieAnonState(
+  state: MovieAnonStateDto['state'] | undefined,
+): boolean {
   return state === 'queued' || state === 'watching' || state === 'rating';
 }
 
@@ -34,7 +39,9 @@ export function useCurrentMovieAnon() {
       return response.data?.data;
     },
     refetchInterval: (query) =>
-      shouldPoll(query.state.data?.state) ? 2000 : false,
+      isPollingMovieAnonState(query.state.data?.state)
+        ? MOVIE_ANON_CURRENT_REFETCH_INTERVAL_MS
+        : false,
   });
 }
 
@@ -115,7 +122,7 @@ export function useMovieAnonMessages(sessionId: string, enabled: boolean) {
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage?.meta.nextCursor ?? undefined,
-    refetchInterval: 3000,
+    refetchInterval: MOVIE_ANON_MESSAGES_REFETCH_INTERVAL_MS,
     enabled,
   });
 }

@@ -14,7 +14,7 @@ export type NotificationDto = ApiSchema<'NotificationDto'>;
 const NOTIFICATION_PAGE_LIMIT = 20;
 
 /** Badge chuông cần tươi hơn cache mặc định nhưng không cần realtime từng giây. */
-const UNREAD_COUNT_REFETCH_MS = 30_000;
+export const UNREAD_NOTIFICATION_COUNT_REFETCH_INTERVAL_MS = 60_000;
 
 export const notificationKeys = {
   all: ['notifications'] as const,
@@ -29,7 +29,7 @@ export function useUnreadNotificationCount() {
       const res = await apiClient.GET('/api/v1/notifications/unread-count');
       return res.data?.data;
     },
-    refetchInterval: UNREAD_COUNT_REFETCH_MS,
+    refetchInterval: UNREAD_NOTIFICATION_COUNT_REFETCH_INTERVAL_MS,
   });
 }
 
