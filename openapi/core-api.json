@@ -28,6 +28,32 @@
         "tags": ["health"]
       }
     },
+    "/api/v1/capabilities": {
+      "get": {
+        "description": "Phản ánh provider/credential thật; frontend không tự suy availability từ build env.",
+        "operationId": "CapabilitiesController_getCapabilities",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/CapabilitiesDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Runtime capability contract cho mọi frontend",
+        "tags": ["capabilities"]
+      }
+    },
     "/api/v1/users/me": {
       "get": {
         "operationId": "UserController_getMe",
@@ -282,6 +308,74 @@
         "parameters": [],
         "responses": { "204": { "description": "" } },
         "summary": "Thu hồi refresh token, xoá cookie — cần header X-CSRF-Token (ADR 0007)",
+        "tags": ["auth"]
+      }
+    },
+    "/api/v1/auth/upgrade/otp": {
+      "post": {
+        "operationId": "AuthUpgradeController_upgradeOtp",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/VerifyOtpDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AuthTokensDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Gắn phone đã xác minh vào guest hiện tại, giữ nguyên userId",
+        "tags": ["auth"]
+      }
+    },
+    "/api/v1/auth/upgrade/social": {
+      "post": {
+        "operationId": "AuthUpgradeController_upgradeSocial",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SocialLoginDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AuthTokensDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Gắn social identity vào guest hiện tại, giữ nguyên userId",
         "tags": ["auth"]
       }
     },
@@ -568,6 +662,13 @@
       "post": {
         "operationId": "MatchingController_joinQueue",
         "parameters": [
+          {
+            "name": "X-Guest-Device-Token",
+            "in": "header",
+            "description": "Bắt buộc nếu trạng thái user tươi trong DB vẫn là guest",
+            "required": false,
+            "schema": { "type": "string" }
+          },
           {
             "name": "Idempotency-Key",
             "in": "header",
@@ -5706,6 +5807,98 @@
       "bearer": { "scheme": "bearer", "bearerFormat": "JWT", "type": "http" }
     },
     "schemas": {
+      "CapabilityStatus": {
+        "type": "string",
+        "enum": ["enabled", "beta", "maintenance", "disabled"]
+      },
+      "AuthProviderCapabilityDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "allOf": [{ "$ref": "#/components/schemas/CapabilityStatus" }]
+          },
+          "message": {
+            "type": "string",
+            "description": "Giải thích ngắn để UI trình bày khi capability không sẵn sàng hoàn toàn"
+          },
+          "clientId": {
+            "type": "string",
+            "nullable": true,
+            "description": "OAuth client/app ID công khai; null với provider không cần hoặc chưa cấu hình"
+          }
+        },
+        "required": ["status", "message", "clientId"]
+      },
+      "CapabilityStateDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "allOf": [{ "$ref": "#/components/schemas/CapabilityStatus" }]
+          },
+          "message": {
+            "type": "string",
+            "description": "Giải thích ngắn để UI trình bày khi capability không sẵn sàng hoàn toàn"
+          }
+        },
+        "required": ["status", "message"]
+      },
+      "AuthCapabilitiesDto": {
+        "type": "object",
+        "properties": {
+          "phoneOtp": {
+            "$ref": "#/components/schemas/AuthProviderCapabilityDto"
+          },
+          "google": {
+            "$ref": "#/components/schemas/AuthProviderCapabilityDto"
+          },
+          "apple": { "$ref": "#/components/schemas/AuthProviderCapabilityDto" },
+          "facebook": {
+            "$ref": "#/components/schemas/AuthProviderCapabilityDto"
+          },
+          "guest": { "$ref": "#/components/schemas/CapabilityStateDto" }
+        },
+        "required": ["phoneOtp", "google", "apple", "facebook", "guest"]
+      },
+      "TopUpCapabilitiesDto": {
+        "type": "object",
+        "properties": {
+          "web": { "$ref": "#/components/schemas/CapabilityStateDto" },
+          "native": {
+            "description": "Aggregate native IAP; production chỉ enabled khi cả Apple và Google đều sẵn sàng",
+            "allOf": [{ "$ref": "#/components/schemas/CapabilityStateDto" }]
+          },
+          "nativeApple": { "$ref": "#/components/schemas/CapabilityStateDto" },
+          "nativeGoogle": { "$ref": "#/components/schemas/CapabilityStateDto" }
+        },
+        "required": ["web", "native", "nativeApple", "nativeGoogle"]
+      },
+      "VideoCapabilitiesDto": {
+        "type": "object",
+        "properties": {
+          "upload": { "$ref": "#/components/schemas/CapabilityStateDto" },
+          "transcode": { "$ref": "#/components/schemas/CapabilityStateDto" }
+        },
+        "required": ["upload", "transcode"]
+      },
+      "NotificationCapabilitiesDto": {
+        "type": "object",
+        "properties": {
+          "push": { "$ref": "#/components/schemas/CapabilityStateDto" }
+        },
+        "required": ["push"]
+      },
+      "CapabilitiesDto": {
+        "type": "object",
+        "properties": {
+          "auth": { "$ref": "#/components/schemas/AuthCapabilitiesDto" },
+          "topUp": { "$ref": "#/components/schemas/TopUpCapabilitiesDto" },
+          "video": { "$ref": "#/components/schemas/VideoCapabilitiesDto" },
+          "notifications": {
+            "$ref": "#/components/schemas/NotificationCapabilitiesDto"
+          }
+        },
+        "required": ["auth", "topUp", "video", "notifications"]
+      },
       "MyProfileDto": {
         "type": "object",
         "properties": {
@@ -5816,7 +6009,11 @@
             "description": "TTL access token (giây)"
           },
           "userId": { "type": "string" },
-          "isGuest": { "type": "boolean" }
+          "isGuest": { "type": "boolean" },
+          "guestDeviceToken": {
+            "type": "string",
+            "description": "Chỉ trả khi guest login; gửi qua X-Guest-Device-Token khi vào matching queue"
+          }
         },
         "required": [
           "accessToken",

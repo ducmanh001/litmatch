@@ -16,14 +16,17 @@ import {
 import { createGiftSchema } from '../create-gift-schema';
 import { useCreateGift, useGiftsList, useUpdateGift } from '../api';
 
-import type { CreateGiftForm } from '../create-gift-schema';
+import type {
+  CreateGiftForm,
+  CreateGiftFormInput,
+} from '../create-gift-schema';
 
 export function GiftsPage() {
   const { data, isPending, error } = useGiftsList();
   const createGift = useCreateGift();
   const updateGift = useUpdateGift();
 
-  const form = useForm<CreateGiftForm>({
+  const form = useForm<CreateGiftFormInput, unknown, CreateGiftForm>({
     resolver: zodResolver(createGiftSchema),
   });
 
@@ -41,12 +44,15 @@ export function GiftsPage() {
         <form
           className="flex flex-wrap items-end gap-4"
           onSubmit={form.handleSubmit((values) => {
-            createGift.mutate(values, {
-              onSuccess: () => {
-                form.reset();
-                showToast(`Đã tạo quà mới "${values.name}"`);
+            createGift.mutate(
+              { ...values, sortOrder: 0 },
+              {
+                onSuccess: () => {
+                  form.reset();
+                  showToast(`Đã tạo quà mới "${values.name}"`);
+                },
               },
-            });
+            );
           })}
           noValidate
         >
@@ -103,7 +109,7 @@ export function GiftsPage() {
       {data !== undefined && data.length > 0 && (
         <Card className="overflow-hidden p-0">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] border-collapse text-[13px]">
+            <table className="responsive-table w-full border-collapse text-[13px] md:min-w-[640px]">
               <thead className="border-b border-border">
                 <tr>
                   <th className="px-[18px] py-3 text-left text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
@@ -185,19 +191,24 @@ function GiftRow({
 }) {
   return (
     <tr className="border-b border-border last:border-0 hover:bg-muted">
-      <td className="px-[18px] py-[13px] font-mono text-[11.5px] text-muted-foreground">
+      <td
+        data-label="Code"
+        className="px-[18px] py-[13px] font-mono text-[11.5px] text-muted-foreground"
+      >
         {gift.code}
       </td>
-      <td className="px-[18px] py-[13px]">{gift.name}</td>
-      <td className="px-[18px] py-[13px]">
+      <td data-label="Tên" className="px-[18px] py-[13px]">
+        {gift.name}
+      </td>
+      <td data-label="Giá (DIA)" className="px-[18px] py-[13px]">
         <PriceEditor initial={gift.priceDiamond} onSave={onSavePrice} />
       </td>
-      <td className="px-[18px] py-[13px]">
+      <td data-label="Trạng thái" className="px-[18px] py-[13px]">
         <Pill variant={gift.active ? 'green' : 'neutral'}>
           {gift.active ? 'Đang bán' : 'Đã tắt'}
         </Pill>
       </td>
-      <td className="px-[18px] py-[13px] text-right">
+      <td data-label="" className="px-[18px] py-[13px] text-right">
         <Button
           size="sm"
           variant={gift.active ? 'destructive' : 'outline'}

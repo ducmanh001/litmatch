@@ -39,10 +39,27 @@ export function inspectChange({
   const violations = [];
   const normalized = filePath.replaceAll('\\', '/');
   const appMatch = normalized.match(/(?:^|\/)apps\/([^/]+)(?:\/|$)/u);
+  const applicationManifestMatch = normalized.match(
+    /^apps\/([^/]+)\/project\.json$/u,
+  );
+  const isProjectManifest = /(?:^|\/)project\.json$/u.test(normalized);
+  const declaresApplication =
+    /"projectType"\s*:\s*"application"/u.test(content) ||
+    /"type:app"/u.test(content);
 
   if (appMatch && !ALLOWED_APPS.has(appMatch[1])) {
     violations.push(
       `Không được tạo apps/${appMatch[1]}; domain mới phải nằm trong apps/core-api/src/modules/.`,
+    );
+  }
+  if (
+    isProjectManifest &&
+    declaresApplication &&
+    (!applicationManifestMatch ||
+      !ALLOWED_APPS.has(applicationManifestMatch[1]))
+  ) {
+    violations.push(
+      'Deployable application phải nằm trong apps/ và thuộc baseline đã duyệt; domain mới là module trong core-api.',
     );
   }
 

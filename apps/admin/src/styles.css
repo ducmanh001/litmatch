@@ -128,6 +128,60 @@ body {
     color 0.3s ease;
 }
 
+/*
+ * Bảng vận hành giữ semantics ở desktop và trở thành danh sách card có nhãn ở màn hình hẹp.
+ * Mỗi td phải khai data-label; action cell dùng data-label="".
+ */
+@media (max-width: 767px) {
+  .responsive-table,
+  .responsive-table tbody {
+    display: block;
+    width: 100%;
+  }
+  .responsive-table thead {
+    display: none;
+  }
+  .responsive-table tbody {
+    padding: 0.75rem;
+  }
+  .responsive-table tr {
+    display: grid;
+    gap: 0.65rem;
+    margin-bottom: 0.75rem;
+    padding: 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: 0.85rem;
+    background: var(--muted);
+  }
+  .responsive-table tr:last-child {
+    margin-bottom: 0;
+  }
+  .responsive-table td {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, 34%) minmax(0, 1fr);
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0 !important;
+    border: 0 !important;
+    text-align: left !important;
+  }
+  .responsive-table td::before {
+    content: attr(data-label);
+    color: var(--muted-foreground);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.035em;
+    text-transform: uppercase;
+  }
+  .responsive-table td[data-label=''] {
+    display: flex;
+    justify-content: flex-end;
+  }
+  .responsive-table td[data-label='']::before {
+    content: none;
+  }
+}
+
 /* Tooltip hover cho sidebar icon-rail (layouts/admins mockup .nav-item::after) */
 .nav-tip {
   position: absolute;

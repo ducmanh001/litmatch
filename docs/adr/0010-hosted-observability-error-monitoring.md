@@ -13,8 +13,9 @@ thêm một SDK tracing thứ hai sẽ tạo trace trùng, chi phí và nhiễu 
 
 ## Quyết định
 
-- Sentry Cloud là error monitoring opt-in cho core-api, signaling-gateway, web và admin; SDK chỉ
-  gửi exception, mặc định không gửi PII và `tracesSampleRate=0`.
+- Sentry Cloud gửi exception cho core-api, signaling-gateway, web và admin, mặc định không gửi PII
+  và `tracesSampleRate=0`. Dev/CI/hosted-free có thể opt-in; profile production-like bắt buộc
+  Sentry + OTel qua `OBSERVABILITY_REQUIRED=true` và fail boot khi cấu hình thiếu.
 - Grafana Cloud là nơi xem metrics/logs khi Compose/K8s chạy Alloy. Profile hosted-free của ADR 0009
   chỉ gửi OTel traces trực tiếp bằng endpoint/header chuẩn vì hai service Northflank không có slot
   collector hoặc Docker socket.
@@ -30,7 +31,8 @@ thêm một SDK tracing thứ hai sẽ tạo trace trùng, chi phí và nhiễu 
 
 ## Hệ quả
 
-- Operator điền DSN và tạo alert ở Sentry; để trống DSN thì integration tắt không làm service fail.
+- Dev/CI/hosted-free để trống DSN thì integration tắt. Production-like phải điền DSN + release,
+  OTel trace/metrics và credential; Platform on-call sở hữu delivery/alert theo runbook reliability.
 - Sentry không nhận token/cookie/request body từ controlled exception boundary.
 - Dashboard Grafana giữ metric/log labels low-cardinality hiện có; trace drill-down dùng service name
   `core-api` hoặc `signaling-gateway`.

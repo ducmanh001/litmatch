@@ -44,7 +44,7 @@ describe('product analytics tracking', () => {
     expect(posthogMock.init).toHaveBeenCalled();
   });
 
-  it('bật autocapture và không che text/input của session replay', () => {
+  it('khởi tạo trực tiếp với cấu hình tối ưu quota và debug UI', () => {
     setProductAnalyticsConsent('accepted', config);
 
     expect(getProductAnalyticsConsent()).toBe('accepted');
@@ -55,11 +55,15 @@ describe('product analytics tracking', () => {
       expect.objectContaining({
         api_host: config.host,
         autocapture: true,
+        capture_pageview: true,
         capture_pageleave: false,
         session_recording: {
           maskAllInputs: false,
           maskTextSelector: undefined,
         },
+        session_recording_sample_rate: 0.2,
+        session_recording_minimum_duration: 3000,
+        capture_performance: false,
       }),
     );
     expect(posthogMock.opt_in_capturing).toHaveBeenCalled();

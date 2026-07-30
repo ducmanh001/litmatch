@@ -4,7 +4,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@litmatch/common-exceptions';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, IsNull, Repository } from 'typeorm';
 
 import { isUniqueViolation } from '../../database/postgres-errors';
 import { User, UserService, UserStatus } from '../user';
@@ -13,9 +13,11 @@ import { generateCsrfToken } from '../../common/csrf/csrf-token';
 
 import { AuthErrors } from './auth.errors';
 import { AuthIdentity, AuthProvider } from './entities/auth-identity.entity';
+import { RefreshToken } from './entities/refresh-token.entity';
 import { OtpService } from './services/otp.service';
 import { SocialVerifierService } from './services/social-verifier';
 import { TokenService } from './services/token.service';
+import { GuestDeviceTokenService } from './services/guest-device-token.service';
 
 import type { CoreApiEnv } from '../../config/env.validation';
 
@@ -31,6 +33,7 @@ export interface IssuedSession {
   expiresIn: number;
   userId: string;
   isGuest: boolean;
+  guestDeviceToken?: string;
 }
 
 @Injectable()
@@ -43,6 +46,7 @@ export class AuthService {
     private readonly tokenService: TokenService,
     private readonly otpService: OtpService,
     private readonly socialVerifier: SocialVerifierService,
+    private readonly guestDeviceTokens: GuestDeviceTokenService,
     private readonly config: ConfigService<CoreApiEnv, true>,
   ) {}
 
@@ -51,7 +55,10 @@ export class AuthService {
       isGuest: true,
       nicknamePrefix: 'Khách',
     });
-    return this.issue(user);
+    return {
+      ...(await this.issue(user)),
+      guestDeviceToken: await this.guestDeviceTokens.issue(user.id, deviceId),
+    };
   }
 
   async requestOtp(
@@ -81,6 +88,35 @@ export class AuthService {
       nicknamePrefix: 'User',
     });
     return this.issue(user);
+  }
+
+  /**
+   * Upgrade gắn identity vào chính user đang đăng nhập. Không tạo/migrate user; unique
+   * (provider, providerUid) là chốt conflict cuối dưới race.
+   */
+  async upgradeGuestWithOtp(
+    userId: string,
+    phone: string,
+    code: string,
+  ): Promise<IssuedSession> {
+    this.assertPhoneOtpEnabled();
+    if (!(await this.isIdentityOwnedBy(userId, AuthProvider.Phone, phone))) {
+      await this.otpService.verifyOtp(phone, code);
+    }
+    return this.issue(
+      await this.linkIdentityAndUpgrade(userId, AuthProvider.Phone, phone),
+    );
+  }
+
+  async upgradeGuestWithSocial(
+    userId: string,
+    provider: AuthProvider,
+    idToken: string,
+  ): Promise<IssuedSession> {
+    const identity = await this.socialVerifier.verify(provider, idToken);
+    return this.issue(
+      await this.linkIdentityAndUpgrade(userId, provider, identity.uid),
+    );
   }
 
   async refresh(refreshToken: string): Promise<IssuedSession> {
@@ -120,9 +156,11 @@ export class AuthService {
       providerUid,
     });
     if (existing) {
-      return this.assertActive(
+      const user = this.assertActive(
         await this.userService.getByIdOrThrow(existing.userId),
       );
+      this.assertGuestIdentityStillActive(provider, user);
+      return user;
     }
 
     try {
@@ -147,10 +185,108 @@ export class AuthService {
           providerUid,
         });
         return this.assertActive(
-          await this.userService.getByIdOrThrow(identity.userId),
+          this.assertGuestIdentityStillActive(
+            provider,
+            await this.userService.getByIdOrThrow(identity.userId),
+          ),
         );
       }
       throw err;
+    }
+  }
+
+  private async isIdentityOwnedBy(
+    userId: string,
+    provider: AuthProvider,
+    providerUid: string,
+  ): Promise<boolean> {
+    const existing = await this.identityRepo.findOneBy({
+      provider,
+      providerUid,
+    });
+    if (!existing) return false;
+    if (existing.userId === userId) return true;
+    throw new DomainException(
+      AuthErrors.IDENTITY_ALREADY_LINKED,
+      'Identity đã gắn với một tài khoản khác; hãy đăng nhập tài khoản đó',
+      HttpStatus.CONFLICT,
+    );
+  }
+
+  private async linkIdentityAndUpgrade(
+    userId: string,
+    provider: AuthProvider,
+    providerUid: string,
+  ): Promise<User> {
+    try {
+      return await this.dataSource.transaction(async (manager) => {
+        const user = await manager.findOne(User, {
+          where: { id: userId },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!user) return this.userService.getByIdOrThrow(userId);
+        this.assertActive(user);
+
+        const existing = await manager.findOneBy(AuthIdentity, {
+          provider,
+          providerUid,
+        });
+        if (existing && existing.userId !== userId) {
+          throw new DomainException(
+            AuthErrors.IDENTITY_ALREADY_LINKED,
+            'Identity đã gắn với một tài khoản khác; không tự động merge tài khoản',
+            HttpStatus.CONFLICT,
+          );
+        }
+        if (!user.isGuest && !existing) {
+          throw new DomainException(
+            AuthErrors.GUEST_UPGRADE_NOT_ALLOWED,
+            'Tài khoản không còn là guest; không thể gắn identity mới qua luồng upgrade',
+            HttpStatus.CONFLICT,
+          );
+        }
+        if (!existing) {
+          await manager.insert(AuthIdentity, {
+            userId,
+            provider,
+            providerUid,
+          });
+        }
+        if (user.isGuest) {
+          // Credential guest và mọi refresh session cũ không được “đi theo” thành quyền account
+          // thật. Access token cũ chỉ còn hiệu lực tới TTL ngắn hiện tại của JWT.
+          await manager.update(
+            RefreshToken,
+            { userId, revokedAt: IsNull() },
+            { revokedAt: new Date() },
+          );
+          await manager.delete(AuthIdentity, {
+            userId,
+            provider: AuthProvider.Guest,
+          });
+          user.isGuest = false;
+          await manager.save(user);
+        }
+        return user;
+      });
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      // Request song song cùng identity: transaction thua đọc winner rồi phân loại replay/conflict.
+      const existing = await this.identityRepo.findOneByOrFail({
+        provider,
+        providerUid,
+      });
+      if (existing.userId !== userId) {
+        throw new DomainException(
+          AuthErrors.IDENTITY_ALREADY_LINKED,
+          'Identity đã gắn với một tài khoản khác; không tự động merge tài khoản',
+          HttpStatus.CONFLICT,
+        );
+      }
+      await this.dataSource
+        .getRepository(User)
+        .update({ id: userId, isGuest: true }, { isGuest: false });
+      return this.assertActive(await this.userService.getByIdOrThrow(userId));
     }
   }
 
@@ -163,6 +299,18 @@ export class AuthService {
       );
     }
     return user;
+  }
+
+  private assertGuestIdentityStillActive(
+    provider: AuthProvider,
+    user: User,
+  ): User {
+    if (provider !== AuthProvider.Guest || user.isGuest) return user;
+    throw new DomainException(
+      AuthErrors.GUEST_IDENTITY_RETIRED,
+      'Guest credential đã bị thu hồi sau khi nâng cấp tài khoản',
+      HttpStatus.UNAUTHORIZED,
+    );
   }
 
   private assertPhoneOtpEnabled(): void {

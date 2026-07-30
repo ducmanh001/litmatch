@@ -1,6 +1,7 @@
 import { JwtService } from '@nestjs/jwt';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
+import Redis from 'ioredis';
 import { io } from 'socket.io-client';
 
 import type { INestApplication } from '@nestjs/common';
@@ -40,7 +41,9 @@ d('Socket.IO cluster adapter — 2 instance gateway độc lập (Redis thật)'
   let instanceA: Instance;
   let instanceB: Instance;
   let jwt: JwtService;
+  let quotaRedis: Redis;
   const openClients: ClientSocket[] = [];
+  const previousLeaseMs = process.env['WS_CONNECTION_LEASE_MS'];
 
   async function bootInstance(): Promise<Instance> {
     // import động SAU khi set env — AppModule validate env lúc khởi tạo
@@ -66,7 +69,9 @@ d('Socket.IO cluster adapter — 2 instance gateway độc lập (Redis thật)'
   beforeAll(async () => {
     process.env['JWT_SECRET'] = JWT_SECRET;
     process.env['REDIS_URL'] = REDIS_URL;
+    process.env['WS_CONNECTION_LEASE_MS'] = '10000';
     jwt = new JwtService({ secret: JWT_SECRET });
+    quotaRedis = new Redis(REDIS_URL);
 
     [instanceA, instanceB] = await Promise.all([
       bootInstance(),
@@ -78,6 +83,12 @@ d('Socket.IO cluster adapter — 2 instance gateway độc lập (Redis thật)'
     for (const c of openClients) c.close();
     await instanceA?.app.close();
     await instanceB?.app.close();
+    await quotaRedis?.quit();
+    if (previousLeaseMs === undefined) {
+      delete process.env['WS_CONNECTION_LEASE_MS'];
+    } else {
+      process.env['WS_CONNECTION_LEASE_MS'] = previousLeaseMs;
+    }
   });
 
   async function connectedClient(
@@ -96,6 +107,41 @@ d('Socket.IO cluster adapter — 2 instance gateway độc lập (Redis thật)'
       socket.on('connect_error', reject);
     });
     return socket;
+  }
+
+  async function rejectedClient(
+    instance: Instance,
+    userId: string,
+  ): Promise<Error> {
+    const token = await jwt.signAsync({ sub: userId, isGuest: false });
+    const socket = io(`${instance.baseUrl}/signaling`, {
+      auth: { token },
+      transports: ['websocket'],
+      reconnection: false,
+    });
+    openClients.push(socket);
+    return new Promise((resolve, reject) => {
+      socket.on('connect', () =>
+        reject(new Error('Expected connection rejection')),
+      );
+      socket.on('connect_error', resolve);
+    });
+  }
+
+  async function waitForQuotaCount(
+    userId: string,
+    expected: number,
+    timeoutMs = 5_000,
+  ): Promise<void> {
+    const key = `signaling:connection-quota:${userId}`;
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if ((await quotaRedis.zcard(key)) === expected) return;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    throw new Error(
+      `Timed out waiting for Redis quota count ${expected} for ${userId}`,
+    );
   }
 
   it('emit từ instance B tới được socket chỉ connect ở instance A (cluster adapter thật)', async () => {
@@ -124,5 +170,106 @@ d('Socket.IO cluster adapter — 2 instance gateway độc lập (Redis thật)'
       await new Promise((r) => setTimeout(r, 25));
     }
     expect(received).toEqual([{ from: 'instance-b' }]);
+  });
+
+  it('quota per-user atomic xuyên 2 instance và trả slot sau disconnect/reconnect', async () => {
+    const userId = `quota-${Date.now()}`;
+    const first = await connectedClient(instanceA, userId);
+    await connectedClient(instanceB, userId);
+    await connectedClient(instanceA, userId);
+
+    const rejected = await rejectedClient(instanceB, userId);
+    expect(rejected.message).toBe('CONNECTION_LIMIT');
+
+    const serverSawDisconnect = new Promise<void>((resolve) => {
+      first.on('disconnect', () => resolve());
+    });
+    first.disconnect();
+    await serverSawDisconnect;
+    await waitForQuotaCount(userId, 2);
+
+    const reconnected = await connectedClient(instanceB, userId);
+    expect(reconnected.connected).toBe(true);
+  });
+
+  it('chỉ 3 admission thắng khi 8 kết nối tranh quota đồng thời trên 2 instance', async () => {
+    const userId = `quota-race-${Date.now()}`;
+    const results = await Promise.all(
+      Array.from({ length: 8 }, async (_, index) => {
+        try {
+          return await connectedClient(
+            index % 2 === 0 ? instanceA : instanceB,
+            userId,
+          );
+        } catch (error) {
+          return error;
+        }
+      }),
+    );
+    expect(
+      results.filter(
+        (result) =>
+          typeof result === 'object' &&
+          result !== null &&
+          'connected' in result &&
+          result.connected,
+      ),
+    ).toHaveLength(3);
+    expect(
+      results.filter(
+        (result) =>
+          result instanceof Error && result.message === 'CONNECTION_LIMIT',
+      ),
+    ).toHaveLength(5);
+  });
+
+  it('stale release không xoá lease reconnect và acquire dọn member hết hạn', async () => {
+    const { ConnectionQuotaService } =
+      await import('./connection-quota.service');
+    const quota = instanceA.app.get(ConnectionQuotaService);
+    const userId = `quota-lease-${Date.now()}`;
+    const key = `signaling:connection-quota:${userId}`;
+
+    await quota.acquire(userId, 'old');
+    const leaseTtl = await quotaRedis.pttl(key);
+    expect(leaseTtl).toBeGreaterThan(0);
+    expect(leaseTtl).toBeLessThanOrEqual(quota.leaseMs);
+    await quota.acquire(userId, 'other-1');
+    await quota.acquire(userId, 'other-2');
+    await quota.release(userId, 'old');
+    await expect(quota.acquire(userId, 'new')).resolves.toBe(true);
+    await quota.release(userId, 'old');
+    await expect(quota.acquire(userId, 'over-limit')).resolves.toBe(false);
+
+    await quotaRedis.zadd(key, 0, 'other-1');
+    await expect(quota.acquire(userId, 'after-expiry')).resolves.toBe(true);
+    await quotaRedis.del(key);
+  });
+
+  it('socket sống được renew qua TTL, còn lease của replica chết tự hết hạn', async () => {
+    const { ConnectionQuotaService } =
+      await import('./connection-quota.service');
+    const quota = instanceA.app.get(ConnectionQuotaService);
+    const liveUserId = `quota-live-${Date.now()}`;
+    const orphanUserId = `quota-orphan-${Date.now()}`;
+    const live = await connectedClient(instanceA, liveUserId);
+
+    await quota.acquire(orphanUserId, 'orphan-1');
+    await quota.acquire(orphanUserId, 'orphan-2');
+    await quota.acquire(orphanUserId, 'orphan-3');
+
+    // Không release/refresh các lease orphan: tương đương replica chết đột ngột.
+    await waitForQuotaCount(orphanUserId, 0, 15_000);
+
+    expect(live.connected).toBe(true);
+    await waitForQuotaCount(liveUserId, 1);
+    expect(
+      await quotaRedis.zcard(`signaling:connection-quota:${liveUserId}`),
+    ).toBe(1);
+    await expect(quota.acquire(orphanUserId, 'after-crash')).resolves.toBe(
+      true,
+    );
+    live.disconnect();
+    await quotaRedis.del(`signaling:connection-quota:${orphanUserId}`);
   });
 });

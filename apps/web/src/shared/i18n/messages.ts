@@ -9,8 +9,8 @@ const MESSAGES = {
     en: 'Checking your sign-in session…',
   },
   'auth.otpCreated': {
-    vi: 'Mã OTP của bạn là',
-    en: 'Your OTP is',
+    vi: 'Mã xác thực (OTP) của bạn là',
+    en: 'Your one-time password (OTP) is',
   },
   'analytics.consentTitle': {
     vi: 'Cho phép phân tích trải nghiệm?',
@@ -193,12 +193,20 @@ const MESSAGES = {
   'more.logout': { vi: 'Đăng xuất', en: 'Log out' },
   'more.invite.shareTitle': { vi: 'Litmatch', en: 'Litmatch' },
   'more.invite.shareText': {
-    vi: 'Tham gia Litmatch cùng mình:',
-    en: 'Join Litmatch with me:',
+    vi: 'Tham gia Litmatch cùng mình',
+    en: 'Join me on Litmatch',
+  },
+  'more.invite.sharing': {
+    vi: 'Đang mở bảng chia sẻ…',
+    en: 'Opening share options…',
   },
   'more.invite.copied': {
-    vi: 'Đã copy link mời bạn bè',
+    vi: 'Đã sao chép liên kết mời',
     en: 'Invite link copied',
+  },
+  'more.invite.copyFailed': {
+    vi: 'Không thể sao chép liên kết. Vui lòng thử lại.',
+    en: 'Could not copy the invite link. Please try again.',
   },
   'theme.toLight': {
     vi: 'Chuyển sang giao diện sáng',

@@ -47,3 +47,6 @@ and response path in [19 § 19.4](../19-project-lifecycle-and-learning.md#194-er
 - [2026-07-20 — hosted-free release plan](./2026-07-20-hosted-free-release-plan.md)
 - [2026-07-22 — hosted-free release review](./2026-07-22-hosted-free-release-review.md)
 - [2026-07-24 — superseded analytics/reporting handoff](./2026-07-24-analytics-reporting-handoff.md)
+- [2026-07-29 — payOS Diamond review](./2026-07-29-payos-diamond-review.md)
+- [2026-07-29 — payOS Diamond verification](./2026-07-29-payos-diamond-verify.md)
+- [2026-07-30 — documentation reorganization review](./2026-07-30-documentation-reorganization-review.md)

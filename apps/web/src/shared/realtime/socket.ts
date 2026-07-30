@@ -33,6 +33,11 @@ function getSocket(): Socket {
       // Gateway verify JWT lúc handshake — callback lấy token tươi mỗi lần (re)connect.
       auth: (cb) => cb({ token: tokenStore.getAccessToken() }),
       autoConnect: false,
+      transports: ['websocket'],
+      reconnectionAttempts: Infinity,
+      reconnectionDelayMax: 30_000,
+      randomizationFactor: 0.5,
+      timeout: 10_000,
     });
     const current = socket;
     current.on('connect_error', (error: Error) => {

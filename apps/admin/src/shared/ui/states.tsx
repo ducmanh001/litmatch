@@ -1,5 +1,8 @@
 import { isApiError } from '@litmatch/api-client';
-import { AlertTriangle, Inbox, Loader2 } from 'lucide-react';
+import { AlertTriangle, Copy, Inbox, Loader2 } from 'lucide-react';
+
+import { copyToClipboard } from '../lib/copy-to-clipboard';
+import { showToast } from '../lib/toast-store';
 
 /**
  * 3 trạng thái chuẩn của màn hình dữ liệu (docs/13 § 13.7) — mọi page dùng chung bộ này,
@@ -40,10 +43,31 @@ export function ErrorState({ error }: { error: unknown }) {
         {apiError?.message ?? 'Có lỗi không xác định. Thử tải lại trang.'}
       </p>
       {apiError !== null && (
-        <p className="font-mono text-xs text-muted-foreground">
-          {apiError.code}
-          {apiError.traceId !== '' && ` · trace: ${apiError.traceId}`}
-        </p>
+        <div className="flex flex-wrap items-center justify-center gap-2 font-mono text-xs text-muted-foreground">
+          <span>
+            {apiError.code}
+            {apiError.traceId !== '' && ` · trace: ${apiError.traceId}`}
+          </span>
+          {apiError.traceId !== '' && (
+            <button
+              type="button"
+              aria-label="Sao chép trace ID"
+              title="Sao chép trace ID"
+              className="rounded-md p-1 hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+              onClick={async () => {
+                const copied = await copyToClipboard(apiError.traceId);
+                showToast(
+                  copied
+                    ? 'Đã sao chép trace ID'
+                    : 'Không thể sao chép; hãy chọn trace ID thủ công',
+                  copied ? undefined : 'warn',
+                );
+              }}
+            >
+              <Copy className="size-3.5" aria-hidden />
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

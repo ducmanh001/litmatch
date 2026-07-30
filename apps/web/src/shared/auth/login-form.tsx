@@ -14,6 +14,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { apiClient, tokenStore } from '../api/client';
+import { isCapabilityUsable, useCapabilities } from '../capabilities/api';
 import { env } from '../env';
 import { useTranslation } from '../i18n/messages';
 import { showToast } from '../lib/toast-store';
@@ -24,6 +25,7 @@ import {
 } from './social-sdk';
 
 import type { ClipboardEvent, KeyboardEvent } from 'react';
+import type { CapabilitiesDto } from '../capabilities/api';
 
 /** Chỉ để giãn cách UX (giảm spam bấm) — rate-limit thật enforce ở server. */
 const RESEND_COOLDOWN_SECONDS = 30;
@@ -57,9 +59,46 @@ const buttonClass =
 const socialButtonClass =
   'flex items-center justify-center rounded-xl bg-slate-100 py-3 transition hover:bg-slate-200 disabled:opacity-50 dark:bg-surf2 dark:hover:bg-surf2/70';
 
+function legacyAuthCapabilities(): CapabilitiesDto['auth'] {
+  const state = (enabled: boolean, message: string) => ({
+    status: enabled ? ('enabled' as const) : ('disabled' as const),
+    message,
+  });
+  const googleClientId = env.NEXT_PUBLIC_AUTH_GOOGLE_CLIENT_ID ?? null;
+  const appleClientId = env.NEXT_PUBLIC_AUTH_APPLE_CLIENT_ID ?? null;
+  const facebookAppId = env.NEXT_PUBLIC_AUTH_FACEBOOK_APP_ID ?? null;
+  return {
+    phoneOtp: {
+      ...state(
+        env.NEXT_PUBLIC_PHONE_OTP_ENABLED,
+        'Đăng nhập bằng số điện thoại chưa được bật.',
+      ),
+      clientId: null,
+    },
+    google: {
+      ...state(googleClientId !== null, 'Đăng nhập Google chưa được cấu hình.'),
+      clientId: googleClientId,
+    },
+    apple: {
+      ...state(appleClientId !== null, 'Đăng nhập Apple chưa được cấu hình.'),
+      clientId: appleClientId,
+    },
+    facebook: {
+      ...state(
+        facebookAppId !== null,
+        'Đăng nhập Facebook chưa được cấu hình.',
+      ),
+      clientId: facebookAppId,
+    },
+    guest: state(true, 'Có thể dùng tài khoản khách.'),
+  };
+}
+
 export function LoginForm() {
   const router = useRouter();
   const t = useTranslation();
+  const capabilities = useCapabilities();
+  const authCapabilities = capabilities.data?.auth ?? legacyAuthCapabilities();
   const [phase, setPhase] = useState<
     { step: 'phone' } | { step: 'code'; phone: string }
   >({
@@ -212,17 +251,11 @@ export function LoginForm() {
   // ID token lấy từ SDK chính chủ, server verify lại toàn bộ (POST /auth/social).
   const socialLogin = useMutation({
     mutationFn: async (provider: 'google' | 'apple' | 'facebook') => {
-      const clientId =
-        provider === 'google'
-          ? env.NEXT_PUBLIC_AUTH_GOOGLE_CLIENT_ID
-          : provider === 'apple'
-            ? env.NEXT_PUBLIC_AUTH_APPLE_CLIENT_ID
-            : env.NEXT_PUBLIC_AUTH_FACEBOOK_APP_ID;
-      if (clientId === undefined) {
-        throw new Error(
-          `Đăng nhập ${provider === 'google' ? 'Google' : provider === 'apple' ? 'Apple' : 'Facebook'} chưa được cấu hình trên môi trường này.`,
-        );
+      const capability = authCapabilities[provider];
+      if (!isCapabilityUsable(capability) || capability?.clientId === null) {
+        throw new Error(capability?.message ?? 'Provider chưa sẵn sàng.');
       }
+      const clientId = capability.clientId;
       const idToken =
         provider === 'google'
           ? await getGoogleIdToken(clientId)
@@ -262,6 +295,16 @@ export function LoginForm() {
           ? error.message
           : 'Có lỗi xảy ra, thử lại.';
 
+  if (capabilities.isPending) {
+    return (
+      <p className="text-center text-sm text-slate-500 dark:text-slate-400">
+        Đang kiểm tra phương thức đăng nhập…
+      </p>
+    );
+  }
+
+  const phoneOtpAvailable = isCapabilityUsable(authCapabilities.phoneOtp);
+
   const guestCta = (
     <>
       <div className="my-5 flex items-center gap-3">
@@ -270,7 +313,13 @@ export function LoginForm() {
       <button
         type="button"
         disabled={guestLogin.isPending}
-        onClick={() => guestLogin.mutate()}
+        onClick={() => {
+          if (!isCapabilityUsable(authCapabilities.guest)) {
+            showToast(authCapabilities.guest.message, 'warn');
+            return;
+          }
+          guestLogin.mutate();
+        }}
         className="block w-full text-center text-sm font-bold text-irisl disabled:opacity-50"
       >
         {guestLogin.isPending ? 'Đang vào…' : 'Dùng thử với tài khoản khách →'}
@@ -289,56 +338,55 @@ export function LoginForm() {
     return (
       <form
         key="phone"
-        onSubmit={phoneForm.handleSubmit((v) => requestOtp.mutate(v.phone))}
+        onSubmit={(event) => {
+          if (!phoneOtpAvailable) {
+            event.preventDefault();
+            showToast(authCapabilities.phoneOtp.message, 'warn');
+            return;
+          }
+          void phoneForm.handleSubmit((v) => requestOtp.mutate(v.phone))(event);
+        }}
         noValidate
       >
-        {env.NEXT_PUBLIC_PHONE_OTP_ENABLED && (
-          <>
-            <label
-              htmlFor="phone"
-              className="mb-2 block text-xs font-bold uppercase text-slate-500 dark:text-slate-400"
-            >
-              Số điện thoại
-            </label>
-            <div className="mb-4 flex gap-2">
-              <span
-                aria-hidden
-                className="flex h-12 w-14 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-sm font-semibold dark:bg-surf2"
-              >
-                {VN_COUNTRY_CODE}
-              </span>
-              <input
-                id="phone"
-                type="tel"
-                autoComplete="tel"
-                autoFocus
-                placeholder="912 345 678"
-                className={inputClass}
-                {...phoneForm.register('phone')}
-              />
-            </div>
-            {message !== undefined && (
-              <p role="alert" className="-mt-2 mb-4 text-sm text-destructive">
-                {message}
-              </p>
-            )}
-            <button
-              type="submit"
-              className={`${buttonClass} mb-5`}
-              disabled={requestOtp.isPending}
-            >
-              {requestOtp.isPending ? 'Đang gửi…' : 'Gửi mã OTP'}
-            </button>
-          </>
+        <label
+          htmlFor="phone"
+          className="mb-2 block text-xs font-bold uppercase text-slate-500 dark:text-slate-400"
+        >
+          Số điện thoại
+        </label>
+        <div className="mb-4 flex gap-2">
+          <span
+            aria-hidden
+            className="flex h-12 w-14 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-sm font-semibold dark:bg-surf2"
+          >
+            {VN_COUNTRY_CODE}
+          </span>
+          <input
+            id="phone"
+            type="tel"
+            autoComplete="tel"
+            autoFocus
+            placeholder="912 345 678"
+            className={inputClass}
+            {...phoneForm.register('phone')}
+          />
+        </div>
+        {message !== undefined && (
+          <p role="alert" className="-mt-2 mb-4 text-sm text-destructive">
+            {message}
+          </p>
         )}
+        <button
+          type="submit"
+          className={`${buttonClass} mb-5`}
+          disabled={requestOtp.isPending}
+        >
+          {requestOtp.isPending ? 'Đang gửi…' : 'Gửi mã OTP'}
+        </button>
 
         <div className="mb-5 flex items-center gap-3">
           <div className="h-px flex-1 bg-black/10 dark:bg-white/10" />
-          <span className="text-xs text-slate-400">
-            {env.NEXT_PUBLIC_PHONE_OTP_ENABLED
-              ? 'hoặc tiếp tục với'
-              : 'Đăng nhập với'}
-          </span>
+          <span className="text-xs text-slate-400">hoặc tiếp tục với</span>
           <div className="h-px flex-1 bg-black/10 dark:bg-white/10" />
         </div>
         <div className="grid grid-cols-3 gap-3">

@@ -121,7 +121,7 @@ export function UsersPage() {
       {data !== undefined && data.items.length > 0 && (
         <Card className="overflow-hidden p-0">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] border-collapse text-[13px]">
+            <table className="responsive-table w-full border-collapse text-[13px] md:min-w-[640px]">
               <thead className="border-b border-border">
                 <tr>
                   <th className="px-[18px] py-3 text-left text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
@@ -145,7 +145,7 @@ export function UsersPage() {
                     key={user.id}
                     className="border-b border-border last:border-0 hover:bg-muted"
                   >
-                    <td className="px-[18px] py-[13px]">
+                    <td data-label="Nickname" className="px-[18px] py-[13px]">
                       <button
                         type="button"
                         onClick={() => setProfileUser(user)}
@@ -162,20 +162,23 @@ export function UsersPage() {
                         </span>
                       </button>
                     </td>
-                    <td className="px-[18px] py-[13px]">
+                    <td data-label="Role" className="px-[18px] py-[13px]">
                       <Pill variant={ROLE_PILL[user.role]}>{user.role}</Pill>
                     </td>
-                    <td className="px-[18px] py-[13px]">
+                    <td data-label="Trạng thái" className="px-[18px] py-[13px]">
                       <Pill
                         variant={user.status === 'active' ? 'green' : 'red'}
                       >
                         {user.status === 'active' ? 'Active' : 'Banned'}
                       </Pill>
                     </td>
-                    <td className="px-[18px] py-[13px]">
+                    <td data-label="Guest" className="px-[18px] py-[13px]">
                       {user.isGuest ? 'Có' : 'Không'}
                     </td>
-                    <td className="px-[18px] py-[13px] text-right">
+                    <td
+                      data-label=""
+                      className="px-[18px] py-[13px] text-right"
+                    >
                       {user.status === 'banned' ? (
                         <Button
                           size="sm"
@@ -241,11 +244,16 @@ export function UsersPage() {
         </p>
       )}
 
-      <Modal open={profileUser !== null} onClose={() => setProfileUser(null)}>
+      <Modal
+        open={profileUser !== null}
+        onClose={() => setProfileUser(null)}
+        labelledBy="user-profile-title"
+      >
         {profileUser !== null && (
           <>
             <ModalHeader
               title="Hồ sơ người dùng"
+              titleId="user-profile-title"
               onClose={() => setProfileUser(null)}
             />
             <ModalBody>

@@ -51,14 +51,18 @@ export function initializeProductAnalytics(
     api_host: config.host,
     defaults: '2026-05-30',
     autocapture: true,
-    capture_pageview: 'history_change',
+    capture_pageview: true,
     capture_pageleave: false,
     person_profiles: 'identified_only',
     session_recording: {
       maskAllInputs: false,
       maskTextSelector: undefined,
     },
-  });
+    // Required quota controls are not declared by the installed posthog-js 1.404.0 types.
+    session_recording_sample_rate: 0.2,
+    session_recording_minimum_duration: 3000,
+    capture_performance: false,
+  } as Parameters<typeof posthog.init>[1]);
 
   posthog.opt_in_capturing();
   return true;

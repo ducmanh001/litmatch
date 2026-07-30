@@ -13,6 +13,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 
 import { apiClient, tokenStore } from '../api/client';
+import { isCapabilityUsable, useCapabilities } from '../capabilities/api';
 import { env } from '../env';
 import { showToast } from '../lib/toast-store';
 import { Button } from '../ui/button';
@@ -21,6 +22,8 @@ import { Field } from '../ui/field';
 import { Input } from '../ui/input';
 import { ToastStack } from '../ui/toast-stack';
 import { useIsAuthenticated } from './use-session';
+
+import type { CapabilitiesDto } from '../capabilities/api';
 
 const phoneSchema = z.object({
   // Input là số nội địa (0xxx hoặc bỏ số 0) — chuẩn hoá sang E.164 lúc submit (normalizeVnPhone).
@@ -33,8 +36,43 @@ const codeSchema = z.object({
 type PhoneForm = z.infer<typeof phoneSchema>;
 type CodeForm = z.infer<typeof codeSchema>;
 
+function legacyAuthCapabilities(): CapabilitiesDto['auth'] {
+  const state = (enabled: boolean, message: string) => ({
+    status: enabled ? ('enabled' as const) : ('disabled' as const),
+    message,
+  });
+  const googleClientId = env.VITE_AUTH_GOOGLE_CLIENT_ID ?? null;
+  return {
+    phoneOtp: {
+      ...state(
+        env.VITE_PHONE_OTP_ENABLED,
+        'Đăng nhập bằng số điện thoại hiện chưa khả dụng.',
+      ),
+      clientId: null,
+    },
+    google: {
+      ...state(
+        googleClientId !== null,
+        'Đăng nhập Google chưa hiện chưa khả dụng.',
+      ),
+      clientId: googleClientId,
+    },
+    apple: {
+      ...state(false, 'Đăng nhập Apple hiện chưa khả dụng.'),
+      clientId: null,
+    },
+    facebook: {
+      ...state(false, 'Đăng nhập Facebook hiện chưa khả dụng.'),
+      clientId: null,
+    },
+    guest: state(true, 'Có thể trải nghiệm ngay không cần đăng nhập.'),
+  };
+}
+
 export function LoginPage() {
   const isAuthenticated = useIsAuthenticated();
+  const capabilities = useCapabilities();
+  const authCapabilities = capabilities.data?.auth ?? legacyAuthCapabilities();
   const navigate = useNavigate();
   const location = useLocation();
   const [phase, setPhase] = useState<
@@ -51,7 +89,9 @@ export function LoginPage() {
       const phone = normalizeVnPhone(localPhone);
       if (phone === null) {
         // Đã qua zodResolver(phoneSchema) nên luôn khớp VN_LOCAL_PHONE_PATTERN.
-        throw new Error('unreachable: phone không khớp VN_LOCAL_PHONE_PATTERN');
+        throw new Error(
+          'Số điện thoại không đúng định dạng. Vui lòng kiểm tra lại.',
+        );
       }
       const res = await apiClient.POST('/api/v1/auth/otp/request', {
         body: { phone },
@@ -59,7 +99,7 @@ export function LoginPage() {
       const otp = res.data?.data;
       if (otp === undefined || !/^\d{6}$/u.test(otp.code)) {
         throw new Error(
-          'API chưa trả về mã OTP hợp lệ. Hãy restart/rebuild core-api rồi thử lại.',
+          'Không thể khởi tạo mã xác thực lúc này. Vui lòng thử lại sau.',
         );
       }
       return { phone, otp };
@@ -70,7 +110,7 @@ export function LoginPage() {
         shouldValidate: true,
       });
       setPhase({ step: 'code', phone });
-      showToast(`Mã OTP của bạn là ${otp.code}`);
+      showToast(`Mã xác thực (OTP) của bạn là ${otp.code}`);
     },
   });
 
@@ -91,10 +131,14 @@ export function LoginPage() {
 
   const socialLogin = useMutation({
     mutationFn: async () => {
-      const clientId = env.VITE_AUTH_GOOGLE_CLIENT_ID;
-      if (clientId === undefined) {
-        throw new Error('Google OAuth chưa được cấu hình trên môi trường này.');
+      const capability = authCapabilities.google;
+      if (!isCapabilityUsable(capability) || capability?.clientId === null) {
+        throw new Error(
+          capability?.message ??
+            'Đăng nhập bằng Google hiện chưa khả dụng. Vui lòng thử phương thức khác.',
+        );
       }
+      const clientId = capability.clientId;
       const idToken = await getGoogleIdToken(clientId);
       const res = await apiClient.POST('/api/v1/auth/social', {
         body: { provider: 'google', idToken },
@@ -107,6 +151,15 @@ export function LoginPage() {
       const from = (location.state as { from?: string } | null)?.from;
       navigate(from ?? '/', { replace: true });
     },
+    onError: (error) =>
+      showToast(
+        isApiError(error)
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : 'Có lỗi xảy ra, thử lại.',
+        'warn',
+      ),
   });
 
   if (isAuthenticated) return <Navigate to="/" replace />;
@@ -120,6 +173,16 @@ export function LoginPage() {
           ? error.message
           : 'Có lỗi xảy ra, thử lại.';
 
+  if (capabilities.isPending) {
+    return (
+      <main className="flex min-h-screen items-center justify-center p-4">
+        <p className="text-sm text-muted-foreground">
+          Đang kiểm tra phương thức đăng nhập…
+        </p>
+      </main>
+    );
+  }
+
   return (
     <>
       <main className="flex min-h-screen items-center justify-center p-4">
@@ -128,64 +191,65 @@ export function LoginPage() {
             <h1 className="text-xl font-semibold">Litmatch Admin</h1>
             <p className="text-sm text-muted-foreground">
               {phase.step === 'phone'
-                ? env.VITE_PHONE_OTP_ENABLED
-                  ? 'Đăng nhập bằng số điện thoại hoặc Google'
-                  : 'Đăng nhập bằng Google'
+                ? 'Đăng nhập bằng số điện thoại hoặc Google'
                 : `Nhập mã OTP đã gửi tới ${phase.phone}`}
             </p>
           </div>
 
           {phase.step === 'phone' ? (
             <div className="space-y-4">
-              {env.VITE_PHONE_OTP_ENABLED && (
-                <form
-                  key="phone"
-                  className="space-y-4"
-                  onSubmit={phoneForm.handleSubmit((v) =>
+              <form
+                key="phone"
+                className="space-y-4"
+                onSubmit={(event) => {
+                  if (!isCapabilityUsable(authCapabilities.phoneOtp)) {
+                    event.preventDefault();
+                    showToast(authCapabilities.phoneOtp.message, 'warn');
+                    return;
+                  }
+                  void phoneForm.handleSubmit((v) =>
                     requestOtp.mutate(v.phone),
-                  )}
-                  noValidate
+                  )(event);
+                }}
+                noValidate
+              >
+                <Field
+                  htmlFor="phone"
+                  label="Số điện thoại"
+                  error={
+                    phoneForm.formState.errors.phone?.message ??
+                    mutationError(requestOtp.error)
+                  }
                 >
-                  <Field
-                    htmlFor="phone"
-                    label="Số điện thoại"
-                    error={
-                      phoneForm.formState.errors.phone?.message ??
-                      mutationError(requestOtp.error)
-                    }
-                  >
-                    <div className="flex gap-2">
-                      <span
-                        aria-hidden
-                        className="flex h-9 w-14 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-sm text-muted-foreground"
-                      >
-                        {VN_COUNTRY_CODE}
-                      </span>
-                      <Input
-                        id="phone"
-                        type="tel"
-                        autoComplete="tel"
-                        placeholder="912345678 hoặc 0912345678"
-                        {...phoneForm.register('phone')}
-                      />
-                    </div>
-                  </Field>
-                  <Button
-                    className="w-full"
-                    type="submit"
-                    disabled={requestOtp.isPending}
-                  >
-                    {requestOtp.isPending ? 'Đang gửi…' : 'Gửi mã OTP'}
-                  </Button>
-                </form>
-              )}
-              {env.VITE_PHONE_OTP_ENABLED && (
-                <div className="flex items-center gap-3" aria-hidden>
-                  <div className="h-px flex-1 bg-border" />
-                  <span className="text-xs text-muted-foreground">hoặc</span>
-                  <div className="h-px flex-1 bg-border" />
-                </div>
-              )}
+                  <div className="flex gap-2">
+                    <span
+                      aria-hidden
+                      className="flex h-9 w-14 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-sm text-muted-foreground"
+                    >
+                      {VN_COUNTRY_CODE}
+                    </span>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      autoComplete="tel"
+                      placeholder="912345678 hoặc 0912345678"
+                      {...phoneForm.register('phone')}
+                    />
+                  </div>
+                </Field>
+                <Button
+                  className="w-full"
+                  type="submit"
+                  disabled={requestOtp.isPending}
+                >
+                  {requestOtp.isPending ? 'Đang gửi…' : 'Gửi mã OTP'}
+                </Button>
+              </form>
+              <div className="flex items-center gap-3" aria-hidden>
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-xs text-muted-foreground">hoặc</span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
               <Button
                 className="w-full"
                 type="button"

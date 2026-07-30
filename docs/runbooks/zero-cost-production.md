@@ -21,9 +21,9 @@ dưới `NODE_ENV=production`.
 4. Trong Google Cloud Console tạo OAuth 2.0 Client loại **Web application**. Thêm hai Authorized
    JavaScript origins `https://app.<DOMAIN>` và `https://admin.<DOMAIN>`. Copy Client ID; không
    tạo/đưa client secret vào repo.
-5. Optional: tạo Grafana Cloud Free theo [runbook Grafana](./grafana-cloud.md) và PostHog Cloud
-   Free theo [runbook PostHog](./posthog-cloud.md). Để trống env thì hai integration tắt sạch,
-   không làm hỏng stack.
+5. Tạo Sentry + Grafana Cloud Free theo [runbook Grafana](./grafana-cloud.md); chỉ PostHog Cloud
+   là optional theo [runbook PostHog](./posthog-cloud.md). Gán DRI cá nhân/on-call cho alert
+   delivery trước release; chỉ env PostHog được phép để trống.
 
 `sslip.io` phù hợp bootstrap không tốn tiền. Khi có domain riêng, đổi `DOMAIN`, cập nhật Google
 origins và deploy lại; dữ liệu database không đổi.
@@ -64,8 +64,8 @@ Kiểm tra không thay đổi hệ thống:
 pnpm release:preflight
 ```
 
-Preflight từ chối placeholder, secret ngắn, cấu hình PostHog/Grafana thiếu một nửa và Compose
-không hợp lệ.
+Preflight từ chối placeholder, secret ngắn, thiếu DRI/Sentry/OTel/Grafana, cấu hình PostHog thiếu
+một nửa và Compose không hợp lệ.
 
 ## 4. Vòng đời mỗi release
 
@@ -82,7 +82,8 @@ runtime image → start/wait database/cache/broker → backup PostgreSQL → mig
 app → TLS smoke API/realtime/web/admin → ghi tag hiện tại/trước đó. Một bước fail thì không ghi
 release thành công.
 
-4. Kiểm tra `https://app.<DOMAIN>`, `https://admin.<DOMAIN>` và Grafana/PostHog nếu đã bật.
+4. Kiểm tra `https://app.<DOMAIN>`, `https://admin.<DOMAIN>`, Sentry/Grafana có sample mới và
+   PostHog nếu đã bật.
 5. Backup nằm tại `deploy/production/backups/*.dump`; copy định kỳ sang máy cá nhân hoặc storage
    khác. Backup cùng VM không bảo vệ khỏi mất VM.
 

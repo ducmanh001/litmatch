@@ -1,34 +1,46 @@
-import { closeCoreRedisClient } from './core-redis-client';
-
-import type Redis from 'ioredis';
-
-function redisStub(options?: { quitError?: Error }) {
-  return {
-    quit: jest.fn(
-      options?.quitError
-        ? () => Promise.reject(options.quitError)
-        : () => Promise.resolve('OK'),
-    ),
+jest.mock('ioredis', () => ({
+  __esModule: true,
+  default: jest.fn().mockImplementation(() => ({
+    status: 'ready',
+    on: jest.fn(),
+    quit: jest.fn(async () => 'OK'),
     disconnect: jest.fn(),
-  } as unknown as Redis;
-}
+  })),
+}));
 
-describe('closeCoreRedisClient', () => {
-  it('đóng graceful bằng QUIT khi connection còn ghi được', async () => {
-    const redis = redisStub();
+import Redis from 'ioredis';
 
-    await closeCoreRedisClient(redis);
+import {
+  closeCoreRedisClient,
+  coreRedisReconnectDelay,
+  createCoreRedisClient,
+} from './core-redis-client';
 
-    expect(redis.quit).toHaveBeenCalledTimes(1);
-    expect(redis.disconnect).not.toHaveBeenCalled();
+describe('core Redis client', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('uses bounded exponential reconnect backoff with jitter', () => {
+    expect(coreRedisReconnectDelay(1, () => 0)).toBe(188);
+    expect(coreRedisReconnectDelay(1, () => 1)).toBe(313);
+    expect(coreRedisReconnectDelay(100, () => 1)).toBe(15_000);
   });
 
-  it('buộc disconnect khi QUIT thất bại trong lúc reconnect', async () => {
-    const redis = redisStub({ quitError: new Error("Stream isn't writeable") });
+  it('shares one command connection per URL and closes it after the final owner', async () => {
+    const first = createCoreRedisClient('redis://shared-test');
+    const second = createCoreRedisClient('redis://shared-test');
 
-    await closeCoreRedisClient(redis);
+    expect(first).toBe(second);
+    expect(Redis).toHaveBeenCalledTimes(1);
 
-    expect(redis.quit).toHaveBeenCalledTimes(1);
-    expect(redis.disconnect).toHaveBeenCalledTimes(1);
+    await closeCoreRedisClient(first);
+    expect(first.quit).not.toHaveBeenCalled();
+
+    await closeCoreRedisClient(second);
+    expect(first.quit).toHaveBeenCalledTimes(1);
+
+    const replacement = createCoreRedisClient('redis://shared-test');
+    expect(replacement).not.toBe(first);
+    expect(Redis).toHaveBeenCalledTimes(2);
+    await closeCoreRedisClient(replacement);
   });
 });

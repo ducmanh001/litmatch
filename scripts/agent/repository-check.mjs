@@ -12,6 +12,12 @@ import {
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  adapterReadinessLine,
+  assessIndexAdapterParity,
+  assessRepositoryAdapterParity,
+  parseGitIndexEntries,
+} from './adapter-parity.mjs';
 import { inspectChange } from './guard-core.mjs';
 import { findBrokenMarkdownLinks } from './markdown-links.mjs';
 import {
@@ -23,12 +29,30 @@ import { workflowPolicyErrors } from '../ci/workflow-policy.mjs';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const errors = [];
 const stagedMode = process.argv.includes('--staged');
-const trackedFiles = new Set(
-  execFileSync('git', ['ls-files'], { cwd: root, encoding: 'utf8' })
-    .trim()
-    .split('\n')
-    .filter(Boolean),
+const indexEntries = parseGitIndexEntries(
+  execFileSync('git', ['ls-files', '--stage', '-z'], {
+    cwd: root,
+    encoding: 'utf8',
+  }),
 );
+const trackedFiles = new Set([...indexEntries.keys()]);
+const repositoryFiles = new Set([
+  ...trackedFiles,
+  ...execFileSync('git', ['ls-files', '--others', '--exclude-standard', '-z'], {
+    cwd: root,
+    encoding: 'utf8',
+  })
+    .split('\0')
+    .filter(Boolean),
+]);
+
+function readIndexSymlink(path) {
+  return execFileSync('git', ['show', `:${path}`], {
+    cwd: root,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
 
 function git(args, fallback = '') {
   try {
@@ -110,16 +134,26 @@ function validateEslintToolchainDeps() {
 }
 
 function validateGithubWorkflowPolicy() {
-  const ciWorkflow = readFileSync(
-    join(root, '.github/workflows/ci.yml'),
-    'utf8',
+  const readPolicyFile = (path) => {
+    if (stagedMode) {
+      return indexEntries.has(path) ? readIndexSymlink(path) : undefined;
+    }
+    const absolutePath = join(root, path);
+    return existsSync(absolutePath)
+      ? readFileSync(absolutePath, 'utf8')
+      : undefined;
+  };
+  const ciWorkflow = readPolicyFile('.github/workflows/ci.yml');
+  const hostedReleaseWorkflow = readPolicyFile(
+    '.github/workflows/hosted-release.yml',
   );
-  const securityWorkflowPath = join(root, '.github/workflows/security.yml');
-  const securityWorkflow = existsSync(securityWorkflowPath)
-    ? readFileSync(securityWorkflowPath, 'utf8')
-    : undefined;
+  const securityWorkflow = readPolicyFile('.github/workflows/security.yml');
 
-  for (const error of workflowPolicyErrors({ ciWorkflow, securityWorkflow })) {
+  for (const error of workflowPolicyErrors({
+    ciWorkflow,
+    hostedReleaseWorkflow,
+    securityWorkflow,
+  })) {
     addError(error);
   }
 }
@@ -256,6 +290,20 @@ function validateSymlinks() {
   }
 }
 
+function validateAdapterParity() {
+  const report = stagedMode
+    ? assessIndexAdapterParity({
+        indexEntries,
+        readSymlink: readIndexSymlink,
+      })
+    : assessRepositoryAdapterParity({
+        root,
+        repositoryPaths: repositoryFiles,
+      });
+  for (const finding of report.findings) addError(finding.message);
+  return report;
+}
+
 function validateMarkdownLinks() {
   const markdownFiles = new Set([
     ...trackedFiles,
@@ -286,9 +334,11 @@ validateEslintToolchainDeps();
 validateGithubWorkflowPolicy();
 validateDiff();
 validateNeutralWording();
+const adapterParity = validateAdapterParity();
 validateSymlinks();
 validateMarkdownLinks();
 
+console.log(adapterReadinessLine(adapterParity));
 if (errors.length) {
   console.error(`Agent repository check FAILED (${errors.length}):`);
   for (const error of errors) console.error(`- ${error}`);

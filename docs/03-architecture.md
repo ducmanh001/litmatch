@@ -13,7 +13,7 @@ Nghiên cứu thực tế cho thấy phần lớn tổ chức làm tốt hơn v�
 
 Chia 8 service từ ngày 0 nghĩa là: 8 lần deploy, 8 lần theo dõi log, 8 network boundary phải xử lý lỗi mạng, trong khi ở giai đoạn đầu chưa có traffic nào cần tách riêng cả. Đó là chi phí thừa cần tránh.
 
-## 3.2 Kiến trúc đề xuất
+## 3.2 Kiến trúc hiện hành
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -79,14 +79,29 @@ Feed, Content, Avatar, Moderation, Notification gần như chắc chắn **khôn
   cần ADR chọn node lớn hơn, đổi topology/provider hoặc giới hạn sản phẩm — không gọi việc thêm
   node là "cascade room".
 
-## 3.6 Xử lý giao dịch xuyên module (Match → Call → Billing) — Saga, không dùng 2PC
+## 3.6 Transaction và side effect xuyên module
 
-Luồng `Matching → Calling → Economy` chạm vào nhiều module, không thể bọc trong 1 transaction DB chung (dù đang là modular monolith thì các module _nên_ coi dữ liệu của nhau là riêng biệt, để dễ tách service sau này mà không phải viết lại logic).
+Hiện tại các domain cùng chạy trong `core-api` và dùng chung PostgreSQL, nên không dựng network
+saga giả bên trong modular monolith. Một business action cần atomicity xuyên module gọi public API
+qua NestJS DI và, khi cần, truyền `EntityManager` đã được owner thiết kế công khai để cùng tham gia
+một DB transaction. Module không được vì thế mà import repository/entity nội bộ của nhau.
 
-- Vì đây là luồng tuyến tính, khá ít bước (match found → call started → billing tick → call ended → settle cuối), lại là luồng đụng tới tiền cần audit rõ ràng — dùng **orchestration nhẹ**: 1 `CallOrchestratorService` gọi tuần tự từng bước, biết chính xác cách rollback (compensate) khi 1 bước fail giữa chừng. Orchestration phù hợp hơn choreography ở đây vì cho khả năng quan sát và kiểm soát rõ ràng — quan trọng khi tiền bạc liên quan.
-- Các việc phụ không ảnh hưởng tính đúng đắn của giao dịch (gửi notification, ghi analytics khi call kết thúc) thì dùng **choreography** — publish event, module nào cần thì tự subscribe, không cần orchestrator biết tới. Đây là cách kết hợp hybrid: orchestration cho luồng chính liên quan tiền, choreography cho việc phụ.
-- **Outbox Pattern là bắt buộc**: khi Economy module vừa update DB (trừ diamond) vừa cần publish event (`diamond.deducted`), phải ghi event vào bảng `outbox` trong **cùng transaction DB** với thao tác trừ tiền, sau đó 1 relay process riêng đọc `outbox` rồi mới publish ra ngoài — tránh tình trạng DB commit xong nhưng event bị mất (dual-write problem), lỗi rất hay gặp nếu bỏ qua pattern này.
-- **Inbox Pattern / idempotency phía consumer**: mọi handler nhận event phải kiểm tra event đã xử lý chưa (dựa vào event id) trước khi xử lý — an toàn khi message bị gửi lại do retry.
+- Debit/credit, ledger entry, wallet snapshot và business record phải commit hoặc rollback cùng
+  nhau. Correction của Economy dùng reversal transaction, không dùng compensation tùy ý để sửa/xóa
+  ledger cũ.
+- `OutboxEvent` được ghi cùng transaction cho các Economy event cần relay ra Kafka. Relay dùng
+  retry/locking và chỉ đánh dấu published sau ACK; đây là bảo vệ dual-write, không phải lý do đưa
+  mọi interaction nội bộ qua broker.
+- Notification hoặc side effect chỉ có một consumer trong cùng process có thể được gọi trực tiếp
+  qua DI, kể cả bằng `EntityManager` của action gốc. Nếu cần chạy sau commit, owner phải nêu rõ
+  delivery/retry/idempotency thay vì fire-and-forget.
+- Repository hiện không có một `CallOrchestratorService`/generic Inbox làm authority cho toàn luồng.
+  Nếu một module được tách qua network theo § 3.4, ADR/migration phải bổ sung orchestration hoặc
+  choreography phù hợp, idempotent consumer/inbox, timeout, retry và compensation trước khi cắt
+  transaction boundary cũ.
+
+Không dùng 2PC xuyên deployable. Cùng-process transaction hiện tại là tối giản có chủ đích; saga là
+chi phí chỉ trả khi boundary thật sự phân tán.
 
 ## 3.7 Giao tiếp giữa các phần
 

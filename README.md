@@ -1,91 +1,33 @@
-# Litmatch-style System
+# Litmatch social-entertainment platform
 
-Hệ thống social-entertainment kiểu Litmatch: voice/text matching ẩn danh (Soul Match, Voice Match), phòng nhóm voice (Party Room), Feed, avatar ẩn danh, và 1 hệ kinh tế diamond (Economy) xuyên suốt để monetize toàn bộ. Xem đầy đủ ở [`docs/01-product-features.md`](./docs/01-product-features.md).
+Litmatch là monorepo cho matching text/voice ẩn danh, social/feed, Party Room, content, Trust &
+Safety và Economy Diamond/VIP. Hệ thống dùng modular monolith cho business logic, tách realtime
+fanout và media theo quy luật scale khác.
 
-Mục tiêu thiết kế: quy mô Litmatch thật (hàng trăm nghìn – hàng triệu người dùng đồng thời), **không phải MVP** — nhưng vẫn build tuần tự theo modular monolith trước, tách microservice khi có số liệu thật cần, xem [`docs/03-architecture.md`](./docs/03-architecture.md).
+“Có implementation trong repo” không đồng nghĩa “đã launch production”. Trạng thái code-backed và
+test source nằm ở [`docs/feature-registry.json`](./docs/feature-registry.json); bản đọc được được
+sinh ở [product evidence report](./docs/generated/product-spec-evidence-report.md). Chạy
+`pnpm docs:check` trước khi dựa vào report.
 
-## Trạng thái hiện tại
+## Kiến trúc đọc nhanh
 
-Trạng thái code-backed hiện tại nằm trong
-[`docs/feature-registry.json`](./docs/feature-registry.json), với bản đọc được và DOCX sinh từ
-registry ở [`docs/generated/product-spec-evidence-report.md`](./docs/generated/product-spec-evidence-report.md).
-Chạy `pnpm docs:check` để xác minh evidence của checkout; đây không phải xác nhận production.
+| Thành phần                                                     | Vai trò                                                                    | Boundary                                                             |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| [`apps/core-api`](./apps/core-api/README.md)                   | NestJS modular monolith, sở hữu toàn bộ business logic và PostgreSQL state | Domain gọi nhau qua public API/DI; Economy ledger là source of truth |
+| [`apps/signaling-gateway`](./apps/signaling-gateway/README.md) | Socket.IO JWT handshake, Redis fanout/adapter và connection quota          | Không quyết định matching, billing hoặc media permission             |
+| [`apps/media-server`](./apps/media-server/README.md)           | LiveKit SFU config/deployment                                              | Không business logic hoặc DB                                         |
+| [`apps/web`](./apps/web/README.md)                             | Next.js client cho end user                                                | Không business logic; REST qua generated client                      |
+| [`apps/admin`](./apps/admin/README.md)                         | Vite/React operations console                                              | Backend guard/permission mới là authority                            |
 
-Roadmap vẫn mô tả trình tự/milestone ở [`docs/07-roadmap.md`](./docs/07-roadmap.md), không phải
-nguồn trạng thái feature độc lập.
-
-## Cấu trúc repo
-
-```
-.
-├── AGENTS.md              ← hợp đồng làm việc dùng chung cho mọi agent
-├── README.md               ← file này
-├── docs/                   ← toàn bộ đặc tả, bắt đầu từ docs/00-overview-and-index.md
-│   ├── 00-overview-and-index.md
-│   ├── 01-product-features.md
-│   ├── 02-domain-model.md
-│   ├── 03-architecture.md          ← quan trọng nhất: kiến trúc + quyết định scale
-│   ├── 04-tech-stack.md
-│   ├── 05-coding-standards.md
-│   ├── 06-domain-rules.md
-│   ├── 07-roadmap.md               ← checklist theo giai đoạn, tick khi xong
-│   ├── 08-working-with-agents.md
-│   ├── 09-practical-notes.md
-│   ├── 10-code-review-checklist.md ← quan trọng nhất: tự review trước khi báo "xong"
-│   ├── 11-engineering-principles.md ← la bàn thiết kế cho người đọc
-│   ├── 12-frontend-architecture.md
-│   ├── 13-frontend-coding-standards.md
-│   ├── 14-rule-enforcement-matrix.md ← rule nào được chặn bằng máy, rule nào review tay
-│   ├── 15-commit-guidelines.md
-│   ├── 16-module-blueprint.md
-│   ├── 17-naming-conventions.md
-│   ├── 18-documentation-automation.md ← registry/evidence/report generator
-│   ├── 19-project-lifecycle-and-learning.md ← vòng đời thay đổi, lỗi/sự cố và bài học
-│   ├── 20-ai-native-handbook.md ← prompt/context/harness/eval + ma trận trend
-│   ├── services/               ← đặc tả theo domain/service owner
-│   ├── runbooks/               ← thao tác release, quan sát và phục hồi
-│   ├── plans/                  ← plan/review có ngày; bằng chứng lịch sử, không phải trạng thái hiện tại
-│   ├── reference/              ← registry tra cứu ngắn, có link về nguồn canonical
-│   ├── templates/              ← mẫu ghi nhận có cấu trúc
-│   ├── feature-registry.json          ← trạng thái feature máy đọc được
-│   └── sources.md
-├── specs/                  ← Arazzo workflow và AsyncAPI transport companion contracts
-├── scripts/docs/           ← generator/validator cho registry report + DOCX
-├── apps/
-│   ├── core-api/            ← modular monolith chứa toàn bộ business logic (auth, user, matching, economy, social, content, moderation, notification, gift...)
-│   ├── signaling-gateway/   ← WebSocket, connection-bound, tách riêng để scale ngang
-│   ├── media-server/        ← LiveKit self-host config/deployment, không business logic
-│   ├── admin/               ← Vite + React SPA cho vận hành nội bộ
-│   └── web/                 ← Next.js app cho end user
-└── libs/                    ← shared libraries dùng chung giữa các app (common-exceptions, common-dtos, logger, config-validator...)
-```
+Baseline có đúng **ba backend deployable**: Core API, Signaling Gateway và Media Server. Admin/Web
+là client; các project E2E không phải runtime. Deployable backend thứ tư cần số liệu, ADR và cập
+nhật guard theo [architecture § 3.4](./docs/03-architecture.md).
 
 ## Bắt đầu
 
-1. Dùng Node.js 22 + pnpm 11.9, sau đó chạy `cp .env.example .env`.
-2. Chọn cách chạy: dùng Compose development ở phần dưới (`pnpm dev:up`), hoặc dùng host-native
-   `pnpm bootstrap` để cài dependency, khởi động Postgres/Redis/Kafka, chạy migration và kiểm tra
-   môi trường. Với host-native, những lần sau dùng `pnpm infra:up` và `pnpm doctor`.
-3. Đọc [`docs/00-overview-and-index.md`](./docs/00-overview-and-index.md) — mục lục đầy đủ.
-4. Đọc [`docs/19-project-lifecycle-and-learning.md`](./docs/19-project-lifecycle-and-learning.md)
-   để biết đường vào dự án, vòng đời thay đổi, xử lý lỗi/sự cố và cách lưu bài học.
-5. Nếu dùng hoặc phát triển cùng agent, đọc
-   [`docs/20-ai-native-handbook.md`](./docs/20-ai-native-handbook.md) hoặc
-   [bản DOCX](./docs/generated/ai-native-handbook.docx) để hiểu prompt/context/harness/eval và
-   lý do các trend như fine-tuning, RAG, LangChain/LangGraph chưa được thêm mặc định.
-6. Đọc [`docs/03-architecture.md`](./docs/03-architecture.md) — quyết định kiến trúc quan trọng
-   nhất, đặc biệt § 3.8 (SFU, matching shard, ledger cho quy mô lớn).
-7. Agent làm việc theo [`AGENTS.md`](./AGENTS.md) và
-   [`docs/08-working-with-agents.md`](./docs/08-working-with-agents.md), chạy
-   `pnpm agent:context <scope>`; riêng thay đổi tài liệu dùng `pnpm agent:context docs`.
+Yêu cầu: Node.js 22, pnpm 11.9, Docker/Compose.
 
-### Chạy toàn bộ local development bằng Docker
-
-Compose development chạy hạ tầng, migration, Core API, Signaling, Admin, Web và LiveKit cùng một
-network, ở chế độ hot reload. Browser vẫn dùng các địa chỉ local quen thuộc: Web `:4300`, Admin
-`:4200`, Core API `:3000/docs`, Signaling `:3001`, LiveKit `:7880`.
-
-#### Lần đầu trên máy mới
+### Full local stack bằng Compose
 
 ```bash
 cp .env.example .env
@@ -94,81 +36,74 @@ cp apps/web/.env.example apps/web/.env.local
 pnpm dev:up
 ```
 
-Lần đầu Docker tạo dev image, named volume `node_modules` Linux và chạy migration; thời gian phụ
-thuộc tốc độ tải package. Không cần chạy `pnpm bootstrap` riêng nếu chỉ dùng luồng Compose này.
+Web chạy ở `http://localhost:4300`, Admin `:4200`, Core API/Swagger `:3000/docs`, Signaling `:3001`
+và LiveKit `:7880`. Xem log/health bằng `pnpm dev:logs` và `pnpm dev:ps`.
 
-#### Mỗi ngày / các lần sau
+### Host-native development
 
 ```bash
-pnpm dev:up
+pnpm bootstrap
 ```
 
-Lệnh trả terminal sau khi các container đã được tạo. Xem tiến trình boot hoặc log runtime bằng
-`pnpm dev:logs`; kiểm tra container/health bằng `pnpm dev:ps`. `pnpm dev:down` dừng toàn bộ stack
-nhưng giữ volume Postgres/Redis/Kafka và dependency cache.
+`bootstrap` cài dependency từ lockfile, bật PostgreSQL/Redis/Kafka, chạy migration và `doctor`.
+Những lần sau dùng `pnpm infra:up`, `pnpm db:migrate` và target Nx của app đang làm.
 
-#### Khi thay đổi dependency, Dockerfile hoặc hạ tầng
+Runbook đầy đủ về env ownership, dependency/migration changes, daily workflow và reset data:
+[Local development](./docs/runbooks/local-development.md).
 
-| Thay đổi                                   | Lệnh cần chạy                                                                            |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| Thêm/nâng dependency đã cập nhật lockfile  | `pnpm dev:install && pnpm dev:up`                                                        |
-| Sửa `Dockerfile.dev`                       | `pnpm dev:rebuild`                                                                       |
-| Thêm/sửa service hoặc config trong Compose | `pnpm dev:up`                                                                            |
-| Thêm migration                             | `pnpm dev:up` — service `migrate` chạy trước Core API mỗi lần                            |
-| Thêm biến môi trường                       | Cập nhật `.env.example`, thêm key tương ứng vào `.env`, rồi `pnpm dev:up && pnpm doctor` |
+## Lệnh thường dùng
 
-Compose dev dùng named volume cho `node_modules`, nên không ghi dependency do container tạo vào
-working tree host. Hạ tầng chỉ phục vụ local development thêm vào `docker-compose.dev.yml`; nếu
-thành phần đó là baseline deploy/runtime, phải cập nhật architecture/ADR, env example và deployment
-theo quy định trong `AGENTS.md`, không chỉ thêm local container.
+| Mục đích                                 | Lệnh                                                                 |
+| ---------------------------------------- | -------------------------------------------------------------------- |
+| Xem Nx projects/target thật              | `pnpm nx show projects`; `pnpm nx show project <name> --json`        |
+| Build/test/lint một project              | `pnpm nx build <name>`; `pnpm nx test <name>`; `pnpm nx lint <name>` |
+| Route context cho agent                  | `pnpm agent:context <scope>`                                         |
+| Kiểm tra contract/guard repository       | `pnpm agent:check`                                                   |
+| Sinh/kiểm tra docs và contract artifacts | `pnpm docs:generate`; `pnpm docs:check`                              |
+| Đồng bộ OpenAPI + generated client       | `pnpm openapi:sync`; kiểm tra bằng `pnpm openapi:check`              |
+| Kiểm tra format không ghi file           | `pnpm format:check`                                                  |
+| Xem local CI plan                        | `pnpm ci:local:plan`                                                 |
+| Full preflight trước push                | `pnpm ci:preflight`                                                  |
 
-Root `.env` là nguồn cấu hình duy nhất của full Compose stack: credential PostgreSQL, host port,
-CORS, URL public của Admin/Web/LiveKit, tunnel origin và `DEV_LAN_IP` đều sửa tại đó. Không sửa
-trực tiếp `docker-compose*.yml`, `livekit*.yaml` hoặc `next.config.js` cho từng máy. Hai file
-`apps/*/.env.local` chỉ cần cho cách chạy từng frontend trực tiếp trên host; biến `environment`
-của Compose luôn lấy từ root `.env` và có độ ưu tiên cao hơn các file đó.
+`pnpm ci:local:quick` và `pnpm ci:preflight` có bước format ghi file. Không chạy chúng trong shared
+dirty worktree khi chưa phối hợp ownership; dùng target check theo scope trước. Chi tiết:
+[Quality gates](./docs/runbooks/quality-gates.md).
 
-Các lệnh hạ tầng thường dùng:
+## Bản đồ repository
 
-| Lệnh                                     | Mục đích                                                                               |
-| ---------------------------------------- | -------------------------------------------------------------------------------------- |
-| `pnpm doctor`                            | Kiểm tra toolchain, `.env`, credential trong Git remote và trạng thái dependency local |
-| `pnpm infra:up` / `pnpm infra:down`      | Bật/tắt hạ tầng local                                                                  |
-| `pnpm infra:logs`                        | Theo dõi log Postgres/Redis/Kafka                                                      |
-| `pnpm infra:reset`                       | **Xoá toàn bộ volume local** và tạo lại từ đầu                                         |
-| `pnpm db:migrate` / `pnpm db:status`     | Chạy hoặc xem trạng thái migration                                                     |
-| `pnpm docs:generate` / `pnpm docs:check` | Sinh/kiểm tra registry report + DOCX từ evidence local; không xác minh production      |
-| `pnpm ci:local:quick`                    | Mô phỏng job Format and lint của GitHub Actions, reset Nx cache để không tin cache cũ  |
-| `pnpm ci:local:clean`                    | Chạy quality gate trong Node 22 Linux container + `node_modules` rỗng, gần CI nhất     |
-| `pnpm ci:local`                          | Chạy quality + Postgres/Redis + frontend/core test, build và E2E như CI                |
-| `pnpm ci:local:docker`                   | Build image và smoke health-check local; không deploy                                  |
-| `pnpm ci:local:security`                 | Profile security không blocking, hiện bỏ qua vulnerability/secret scans                |
-| `pnpm ci:preflight`                      | Một lệnh trước push: clean quality + test/build/E2E + image smoke                      |
-| `pnpm ci:local:all`                      | Alias đầy đủ của preflight; security scan nằm ngoài blocking gate hiện tại             |
+| Path                                       | Nội dung                                                                   |
+| ------------------------------------------ | -------------------------------------------------------------------------- |
+| [`docs/`](./docs/00-overview-and-index.md) | Product, architecture, domain, engineering, roadmap, lifecycle và evidence |
+| [`openapi/`](./openapi/README.md)          | REST contract được emit từ Core API                                        |
+| [`specs/`](./specs/README.md)              | Arazzo critical workflows và AsyncAPI realtime companion contract          |
+| [`libs/`](./libs/README.md)                | Shared libraries có boundary/tag Nx                                        |
+| [`deploy/`](./deploy/README.md)            | Hosted và single-node production artifacts                                 |
+| [`k8s/`](./k8s/README.md)                  | Kubernetes base/overlays và media networking                               |
+| [`loadtest/`](./loadtest/README.md)        | k6/Artillery/LiveKit workload và SLO scaffold                              |
+| [`scripts/`](./scripts/README.md)          | Agent, CI, docs, release, reliability và dev automation                    |
+| [`layouts/`](./layouts/README.md)          | Visual reference HTML; không phải product/API contract                     |
 
-Nên chạy `pnpm ci:local:quick` trong vòng lặp hằng ngày và `pnpm ci:preflight` trước khi mở/cập
-nhật PR. `pre-commit` chỉ auto-format file staged rồi chạy guard staged; `pre-push` chạy full
-preflight trong Node 22 Linux. Lệnh Docker dùng database cô lập `litmatch_ci` thay vì database
-dev; xem trước toàn bộ kế hoạch bằng `pnpm ci:local:plan`.
+## Đọc tài liệu theo nhu cầu
 
-Khi cần bypass có kiểm soát: dùng `LITMATCH_CI_BYPASS=1 git commit ...` hoặc
-`LITMATCH_CI_BYPASS=1 git push ...`; runner cũng nhận `pnpm ci:preflight -- --bypass`.
-GitHub Actions có cùng cờ ở `workflow_dispatch` (`bypass_ci` và `bypass_reason`), để lại log
-lý do rõ ràng trong lần chạy ngoại lệ.
+- Newcomer: [`AGENTS.md`](./AGENTS.md) →
+  [docs overview](./docs/00-overview-and-index.md) →
+  [project lifecycle](./docs/19-project-lifecycle-and-learning.md).
+- Product/domain: [capability map](./docs/01-product-features.md) →
+  [domain model](./docs/02-domain-model.md) →
+  [service catalog](./docs/services/README.md).
+- Backend: [architecture](./docs/03-architecture.md) →
+  [coding standards](./docs/05-coding-standards.md) →
+  [module blueprint](./docs/16-module-blueprint.md).
+- Frontend: [frontend architecture](./docs/12-frontend-architecture.md) →
+  [frontend standards](./docs/13-frontend-coding-standards.md).
+- Release/operations: [runbook index](./docs/runbooks/README.md) và ADR của profile.
 
-Các profile CI tắt Nx daemon/Husky, tự chạy Prettier trước quality check và chạy actionlint +
-ShellCheck đã pin checksum, nên hành vi gần runner GitHub và lỗi workflow YAML/expression được
-phát hiện ngay local. Vulnerability/secret scan không nằm trong blocking gate hiện tại theo quyết
-định vận hành.
+## Invariant cốt lõi
 
-Các công cụ vulnerability/secret và [baseline](./.gitleaks-baseline.json) vẫn được giữ để bật
-lại khi có quyết định riêng; hiện chúng không được gọi bởi blocking gate. Baseline không phải
-allowlist chung: nếu bật scan, finding mới vẫn phải được review theo fingerprint.
+- Business domain mới là module trong `core-api`, không tự tạo backend app/service.
+- `LedgerEntry` double-entry append-only là nguồn sự thật; `Wallet` chỉ là snapshot; transaction
+  idempotency unique ở DB; correction bằng reversal.
+- Business flow nhạy cảm cần assumption table, guard `file:line`, test thật và
+  `review-module verify`. Docs/tooling-only vẫn chạy checks theo scope và ghi lý do N/A.
 
-## Nguyên tắc cốt lõi (chi tiết đầy đủ trong `docs/`, xem `AGENTS.md` cho bản tóm tắt agent dùng)
-
-- **Modular monolith trước**: baseline chỉ 3 backend deployable; thay baseline cần số liệu + ADR
-  cập nhật invariant/guard, không phải quyết định cục bộ của feature.
-- **Economy = double-entry ledger**: `LedgerEntry` là nguồn sự thật, `Wallet.balance` chỉ là snapshot dẫn xuất.
-- **Review theo phương pháp luận, không chỉ theo checklist kỹ thuật**: `docs/10-code-review-checklist.md` § 10.0 dạy cách tìm lỗi logic nghiệp vụ (business logic vulnerability) — loại lỗi mà linter/scanner không bắt được.
-- **Thiết kế theo ownership và boundary**: đọc [`docs/11-engineering-principles.md`](./docs/11-engineering-principles.md) trước khi thêm abstraction, module hoặc đề xuất tách service.
+Chi tiết bắt buộc thuộc [`AGENTS.md`](./AGENTS.md); README này chỉ là landing page.

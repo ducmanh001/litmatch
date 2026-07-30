@@ -14,5 +14,12 @@ data:
   SIGNALING_PORT: '3001'
   # Điểm mở: điền domain FE thật khi có — KHÔNG dùng '*'
   CORS_ORIGINS: ''
+  WS_MAX_CONNECTIONS_PER_USER: '3'
+  WS_CONNECTION_LEASE_MS: '90000'
   SENTRY_DSN: ''
   SENTRY_RELEASE: ''
+  OTEL_EXPORTER_OTLP_ENDPOINT: ''
+  GRAFANA_CLOUD_PROMETHEUS_URL: ''
+  GRAFANA_CLOUD_PROMETHEUS_USER: ''
+  # Fail boot nếu Sentry/OTel/Grafana chưa được cấu hình đầy đủ.
+  OBSERVABILITY_REQUIRED: 'true'

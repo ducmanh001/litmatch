@@ -11,6 +11,7 @@ import {
 } from './entities/match-ticket.entity';
 import { TransactionType } from '../economy';
 import { UserStatus } from '../user';
+import { GuestMatchQuotaService } from './services/guest-match-quota.service';
 
 import type { ConfigService } from '@nestjs/config';
 import type { DataSource, EntityManager, Repository } from 'typeorm';
@@ -82,8 +83,14 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
     sendPush: jest.Mock;
   };
   let userService: { getByIdOrThrow: jest.Mock };
-  let manager: jest.Mocked<Pick<EntityManager, 'findOne' | 'save'>>;
+  let manager: jest.Mocked<
+    Pick<EntityManager, 'findOne' | 'findOneBy' | 'save' | 'create'>
+  >;
   let dataSource: { transaction: jest.Mock };
+  let guestQuota: {
+    authorize: jest.Mock;
+    consume: jest.Mock;
+  };
   let service: MatchingService;
   let matcherWakeup: MatcherWakeup;
 
@@ -136,11 +143,26 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
           }) as User,
       ),
     };
-    manager = { findOne: jest.fn(), save: jest.fn(async (t) => t) } as never;
+    manager = {
+      findOne: jest.fn(),
+      findOneBy: jest.fn().mockResolvedValue(null),
+      create: jest.fn((_entity, input) =>
+        Object.assign(new MatchTicket(), { id: 'ticket-1' }, input),
+      ),
+      save: jest.fn(async (t) => t),
+    } as never;
     dataSource = {
       transaction: jest.fn(async (cb: (m: EntityManager) => Promise<unknown>) =>
         cb(manager as never),
       ),
+    };
+    guestQuota = {
+      authorize: jest.fn(async () => ({
+        user: await userService.getByIdOrThrow(),
+        quotaDate: '2026-07-29',
+        keyHashes: [],
+      })),
+      consume: jest.fn().mockResolvedValue(undefined),
     };
 
     const config = {
@@ -159,6 +181,7 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
       config,
       redis as unknown as Redis,
       matcherWakeup,
+      guestQuota as unknown as GuestMatchQuotaService,
     );
   });
 
@@ -213,12 +236,12 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
       ).rejects.toMatchObject({
         code: MatchingErrors.USER_BANNED,
       });
-      expect(ticketRepo.save).not.toHaveBeenCalled();
+      expect(manager.save).not.toHaveBeenCalled();
     });
 
     it('retry cùng Idempotency-Key → trả lại ticket cũ + re-enqueue NX, không tạo ticket đôi', async () => {
       const existing = makeTicket();
-      ticketRepo.save.mockRejectedValueOnce({
+      manager.save.mockRejectedValueOnce({
         code: '23505',
         message: 'uq_match_tickets_idempotency_key',
       });
@@ -260,7 +283,7 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
     });
 
     it('cùng key nhưng genderPreference đổi → 409 IDEMPOTENCY_CONFLICT (request khác nội dung)', async () => {
-      ticketRepo.save.mockRejectedValueOnce({
+      manager.save.mockRejectedValueOnce({
         code: '23505',
         message: 'uq_match_tickets_idempotency_key',
       });
@@ -280,7 +303,7 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
     });
 
     it('cùng key nhưng nội dung khác (matchType đổi) → 409 IDEMPOTENCY_CONFLICT (docs/05 § 5.10)', async () => {
-      ticketRepo.save.mockRejectedValueOnce({
+      manager.save.mockRejectedValueOnce({
         code: '23505',
         message: 'uq_match_tickets_idempotency_key',
       });
@@ -295,7 +318,7 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
     });
 
     it('đã có ticket active (partial unique index bắn 23505) → 409 ALREADY_QUEUED', async () => {
-      ticketRepo.save.mockRejectedValueOnce({
+      manager.save.mockRejectedValueOnce({
         code: '23505',
         message: 'uq_match_tickets_active_user',
       });

@@ -78,7 +78,7 @@ export function PermissionsPage() {
           <ErrorState error={setPermission.error} />
         )}
         {matrix.data !== undefined && (
-          <table className="w-full border-collapse text-[13px]">
+          <table className="responsive-table w-full border-collapse text-[13px]">
             <thead>
               <tr>
                 <HeaderCell align="left">Quyền</HeaderCell>
@@ -89,7 +89,10 @@ export function PermissionsPage() {
             <tbody>
               {permissions.map((permission) => (
                 <tr key={permission.permission}>
-                  <td className="border-b border-border px-4 py-3">
+                  <td
+                    data-label="Quyền"
+                    className="border-b border-border px-4 py-3"
+                  >
                     {permission.label}
                   </td>
                   {(['moderator', 'admin'] as const).map((role) => {
@@ -99,6 +102,7 @@ export function PermissionsPage() {
                     return (
                       <td
                         key={role}
+                        data-label={role}
                         className="border-b border-border px-4 py-3 text-center"
                       >
                         <input
@@ -135,7 +139,7 @@ export function PermissionsPage() {
         )}
         {staffItems.length > 0 && (
           <div className="overflow-x-auto">
-            <table className="mt-3.5 w-full min-w-[420px] border-collapse text-[13px]">
+            <table className="responsive-table mt-3.5 w-full border-collapse text-[13px] md:min-w-[420px]">
               <thead className="border-b border-border">
                 <tr>
                   <HeaderCell align="left">Nickname</HeaderCell>
@@ -151,11 +155,11 @@ export function PermissionsPage() {
                       key={staffMember.id}
                       className="border-b border-border last:border-0 hover:bg-muted"
                     >
-                      <td className="px-[18px] py-[13px]">
+                      <td data-label="Nickname" className="px-[18px] py-[13px]">
                         {staffMember.nickname}
                         {isSelf ? ' (bạn)' : ''}
                       </td>
-                      <td className="px-[18px] py-[13px]">
+                      <td data-label="Role" className="px-[18px] py-[13px]">
                         <select
                           value={staffMember.role}
                           disabled={isSelf || setStaffRole.isPending}
@@ -172,7 +176,10 @@ export function PermissionsPage() {
                           <option value="admin">admin</option>
                         </select>
                       </td>
-                      <td className="px-[18px] py-[13px] text-right">
+                      <td
+                        data-label=""
+                        className="px-[18px] py-[13px] text-right"
+                      >
                         <Button
                           size="sm"
                           variant="destructive"

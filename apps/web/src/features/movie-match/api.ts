@@ -6,6 +6,8 @@ import type { ApiSchema } from '@litmatch/api-client';
 
 export type MovieSessionDto = ApiSchema<'MovieSessionDto'>;
 
+export const MOVIE_SESSION_REFETCH_INTERVAL_MS = 10_000;
+
 export const movieMatchKeys = {
   session: (sessionId: string) =>
     ['movie-match', 'session', sessionId] as const,
@@ -40,7 +42,9 @@ export function useSession(sessionId: string) {
       return res.data?.data;
     },
     refetchInterval: (query) =>
-      isActiveSession(query.state.data?.status) ? 4000 : false,
+      isActiveSession(query.state.data?.status)
+        ? MOVIE_SESSION_REFETCH_INTERVAL_MS
+        : false,
   });
 }
 

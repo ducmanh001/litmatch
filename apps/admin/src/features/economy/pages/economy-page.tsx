@@ -121,7 +121,7 @@ export function EconomyPage() {
                   — chưa gồm giao dịch chỉ là người nhận quà.
                 </p>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[640px] border-collapse text-[13px]">
+                  <table className="responsive-table w-full border-collapse text-[13px] md:min-w-[640px]">
                     <thead className="border-b border-border">
                       <tr>
                         <th className="px-[18px] py-3 text-left text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
@@ -199,15 +199,16 @@ function TransactionRow({
   const isPositive = txn.diamondDelta.trim().startsWith('+');
   return (
     <tr className="border-b border-border align-top last:border-0 hover:bg-muted">
-      <td className="px-[18px] py-[13px]">
+      <td data-label="Loại" className="px-[18px] py-[13px]">
         {TXN_TYPE_LABEL[txn.type] ?? txn.type}
       </td>
-      <td className="px-[18px] py-[13px]">
+      <td data-label="Trạng thái" className="px-[18px] py-[13px]">
         <Pill variant={txn.status === 'completed' ? 'green' : 'neutral'}>
           {txn.status === 'completed' ? 'Hoàn tất' : 'Đã hoàn tiền'}
         </Pill>
       </td>
       <td
+        data-label="Diamond delta"
         className={
           isPositive
             ? 'px-[18px] py-[13px] font-extrabold text-success'
@@ -216,10 +217,10 @@ function TransactionRow({
       >
         {txn.diamondDelta}
       </td>
-      <td className="px-[18px] py-[13px]">
+      <td data-label="Thời gian" className="px-[18px] py-[13px]">
         {new Date(txn.createdAt).toLocaleString('vi-VN')}
       </td>
-      <td className="px-[18px] py-[13px] text-right">
+      <td data-label="" className="px-[18px] py-[13px] text-right">
         {!isReversal && txn.status !== 'reversed' && (
           <RefundForm onSubmit={onRefund} disabled={refundPending} />
         )}

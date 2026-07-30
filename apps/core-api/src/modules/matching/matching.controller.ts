@@ -3,17 +3,20 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
+  Req,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiHeader,
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle, minutes } from '@nestjs/throttler';
@@ -32,6 +35,7 @@ import {
 } from '../../common/decorators/idempotency-key.decorator';
 
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
+import type { Request } from 'express';
 
 @ApiTags('matching')
 @ApiBearerAuth()
@@ -42,6 +46,11 @@ export class MatchingController {
   @Post('tickets')
   @Throttle({ default: { limit: 10, ttl: minutes(1) } }) // rate limit riêng chặt hơn cho vào queue (docs/05 § 5.8)
   @ApiIdempotencyKeyHeader()
+  @ApiHeader({
+    name: 'X-Guest-Device-Token',
+    required: false,
+    description: 'Bắt buộc nếu trạng thái user tươi trong DB vẫn là guest',
+  })
   @ApiOperation({
     summary: 'Vào hàng đợi matching — 409 nếu đã có ticket đang chờ/đang ghép',
   })
@@ -50,9 +59,14 @@ export class MatchingController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: JoinQueueDto,
     @IdempotencyKey() idempotencyKey: string,
+    @Headers('x-guest-device-token') guestDeviceToken: string | undefined,
+    @Req() req: Request,
   ): Promise<TicketDto> {
     return TicketDto.from(
-      await this.matchingService.joinQueue(user, dto, idempotencyKey),
+      await this.matchingService.joinQueue(user, dto, idempotencyKey, {
+        deviceToken: guestDeviceToken,
+        ip: req.ip || req.socket.remoteAddress || 'unknown',
+      }),
       this.matchingService.getSpeedupPriceDiamond(),
     );
   }

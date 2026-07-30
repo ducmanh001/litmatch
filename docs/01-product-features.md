@@ -1,33 +1,53 @@
-[← 00-overview-and-index](./00-overview-and-index.md) · **01 · Product Features** · [02 · Domain Model →](./02-domain-model.md)
+[← 00 · Overview](./00-overview-and-index.md) · **01 · Product capabilities** · [02 · Domain model →](./02-domain-model.md)
 
-# 1. Bản đồ capability sản phẩm Litmatch
+# 1. Bản đồ capability sản phẩm
 
-Danh sách dưới mô tả capability và ý định sản phẩm, không tuyên bố trạng thái code hay
-production. Trạng thái thực tế, owner và test evidence nằm duy nhất ở
-[`feature-registry.json`](./feature-registry.json) và bản đọc được sinh tự động trong
-[`generated/product-spec-evidence-report.md`](./generated/product-spec-evidence-report.md).
+File này giữ **ý định và ranh giới sản phẩm**, không giữ trạng thái triển khai. Muốn biết checkout
+hiện tại có source/test evidence nào, đọc [`feature-registry.json`](./feature-registry.json) hoặc
+[report được sinh](./generated/product-spec-evidence-report.md) sau khi chạy `pnpm docs:check`.
+Provider có code nhưng thiếu credential/sandbox vẫn có thể chưa sẵn sàng ở runtime.
 
-| #   | Tính năng                              | Mô tả ngắn                                                                                                                                                                 | Độ phức tạp kỹ thuật                                                                          |
-| --- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| 1   | **Soul Match**                         | Ghép ngẫu nhiên vào phòng chat text ẩn danh (2-3 phút). Sau đó 2 bên đánh giá "Thô lỗ / Nhàm chán / Thích". Cả 2 "Thích" → mở khoá profile, thành bạn thật                 | Trung bình — matchmaking + chat realtime + trạng thái ẩn danh                                 |
-| 2   | **Voice Match**                        | Ghép gọi thoại ngắn (~7 phút), nghe giọng để quyết định kết nối tiếp hay không                                                                                             | Cao — WebRTC/SFU + matchmaking + billing theo phút                                            |
-| 3   | **Party Chat (phòng nhóm)**            | Voice room nhiều người, chia sẻ mic, chat, tặng quà trong phòng                                                                                                            | Cao — multi-party audio (SFU bắt buộc), quản lý role trong phòng (host/speaker/audience)      |
-| 4   | **Movie Match / Movie Night**          | 2 người xem chung 1 video (YouTube) đồng bộ, vừa xem vừa chat                                                                                                              | Trung bình — đồng bộ playback state qua WebSocket, không cần xử lý stream video thật          |
-| 5   | **Palm Match (bói toán)**              | Tính năng giải trí: "dự đoán" tình yêu/sức khỏe/công việc                                                                                                                  | Thấp — chỉ là random/template content, không cần AI thật                                      |
-| 6   | **Feed (bảng tin)**                    | Đăng bài viết/ảnh/trạng thái cảm xúc, người khác thả tim/bình luận                                                                                                         | Trung bình — CRUD post + like/comment + fanout khi đông user                                  |
-| 7   | **Avatar tuỳ chỉnh**                   | Không cần ảnh thật, chọn/tạo avatar giữ ẩn danh                                                                                                                            | Thấp — quản lý asset (item, layer ghép hình)                                                  |
-| 8   | **Diamond (tiền ảo) + VIP Membership** | Hệ kinh tế xuyên suốt: mua diamond, VIP subscription, mọi tính năng trả phí đều trừ diamond                                                                                | Cao — xương sống tiền bạc, cần transaction chuẩn, chống gian lận, tích hợp IAP (Apple/Google) |
-| 9   | **Speed-up matching**                  | Trả diamond để ưu tiên ghép nhanh hơn trong queue                                                                                                                          | Thấp-Trung bình                                                                               |
-| 10  | **Gift trong Party room / Voice call** | Tặng quà ảo, hiệu ứng; người nhận nhận **điểm quy đổi/exp theo tỉ lệ config, KHÔNG phải diamond 1:1** (chống rửa diamond — xem [06-domain-rules.md](./06-domain-rules.md)) | Trung bình — trừ diamond + cộng điểm quy đổi + trigger animation event realtime               |
-| 11  | **Mini game** (đua xe, giải đố)        | Chơi game nhỏ trong lúc chat để tăng tương tác                                                                                                                             | Thấp (ưu tiên thấp nhất)                                                                      |
-| 12  | **Report / Block**                     | Tố cáo, chặn người dùng                                                                                                                                                    | Trung bình — trust & safety, ảnh hưởng matching                                               |
-| 13  | **Bộ lọc tuổi/giới tính khi match**    | Filter cơ bản trước khi vào queue                                                                                                                                          | Thấp                                                                                          |
-| 14  | Giới hạn theo platform                 | Bản iOS Litmatch **chỉ có Soul Match + Voice Match** (Apple hạn chế tính năng live/random call kiểu group), Android có đủ                                                  | Cần lưu ý chính sách store khi lên production                                                 |
-| 15  | **Friend Chat (nhắn tin 1-1)**         | Đích đến của phễu matching: cả 2 "Thích" → thành bạn → chat 1-1 lâu dài (khác chat ẩn danh tạm thời trong Soul Match)                                                      | Trung bình — messaging realtime + lưu lịch sử + block/report áp dụng cho chat                 |
-| 16  | **Đăng ký / Onboarding**               | Phone OTP, social login (Google/Apple/Facebook) hoặc guest; người dùng vào app không bị chặn bởi age gate, ngày sinh là dữ liệu profile/filter tự chọn                     | Trung bình — auth đa phương thức + nâng cấp identity mà vẫn giữ nguyên user/wallet            |
+Các số 1–16 được giữ để không làm gãy tham chiếu lịch sử; capability bổ sung được nối tiếp.
 
-**Nhận xét quan trọng:** Litmatch không phải app "chỉ có voice call" — nó là **social-entertainment platform** với voice/text matching làm lõi, xoay quanh **1 hệ kinh tế diamond** để monetize toàn bộ. Nếu "bê nguyên" tính năng, thì **Diamond/Economy module** mới là phần phải thiết kế chắc nhất ngay từ đầu — không phải Voice Match.
+|   # | Capability                             | Ý định và boundary sản phẩm                                                                                                                                                                                         |
+| --: | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|   1 | **Soul Match**                         | Ghép hai người vào chat text ẩn danh có thời hạn; rating `rude / boring / like`; chỉ mutual-like mới mở danh tính và tạo quan hệ bền vững.                                                                          |
+|   2 | **Voice Match**                        | Ghép gọi thoại 1-1 qua SFU, có giới hạn free-call/tính phí theo cấu hình và mutual-like sau cuộc gọi.                                                                                                               |
+|   3 | **Party Room**                         | Voice room nhiều người với role host/speaker/audience, cap cứng theo config và quà realtime.                                                                                                                        |
+|   4 | **Movie Match / Movie Night**          | Hai mode: bạn bè chủ động xem URL đã chọn, hoặc queue ẩn danh với video server chọn, chat/rating và mutual reveal; không tự xử lý/transcode video.                                                                  |
+|   5 | **Palm Match**                         | Queue ẩn danh, flip card theo lượt, compatibility snapshot và like/skip; kết quả được seed/chốt ở server, không quảng bá như chẩn đoán, bói toán thật hoặc AI prediction.                                           |
+|   6 | **Feed và Stories**                    | Post/ảnh, reaction, comment, audience per-post và story hết hạn; quyền xem/block được enforce ở server.                                                                                                             |
+|   7 | **Avatar tùy chỉnh**                   | Avatar nhiều layer và item catalog, cho phép giữ ẩn danh; item trả phí đi qua Economy.                                                                                                                              |
+|   8 | **Diamond, top-up và VIP**             | Một nền kinh tế xuyên sản phẩm: payOS web, IAP native, VIP và mọi debit qua ledger double-entry; runtime readiness phụ thuộc provider/credential.                                                                   |
+|   9 | **Matching speed-up**                  | Dùng Diamond để tăng priority ticket; giá và giới hạn do server trả, client không hard-code.                                                                                                                        |
+|  10 | **Gift**                               | Tặng quà trong context được phép; người gửi mất DIA, người nhận nhận PTS theo tỉ lệ config, không chuyển Diamond 1:1.                                                                                               |
+|  11 | **Mini game**                          | Hoạt động nhẹ trong social context; implementation đầu tiên là rock-paper-scissors, không phải một game platform độc lập.                                                                                           |
+|  12 | **Trust & Safety**                     | Report, block, moderation và trust signals cắt các điểm chạm liên quan; audit nhạy cảm phải bền vững.                                                                                                               |
+|  13 | **Preference khi matching**            | Tuổi/giới tính/region là tiêu chí lọc có consent; state machine và `canPair` ở server mới là authority.                                                                                                             |
+|  14 | **Availability theo platform/runtime** | UI lấy trạng thái provider từ runtime capability contract. Policy store, credential và release profile phải được kiểm lại trước mỗi launch; không hard-code một danh sách availability vĩnh viễn trong client/docs. |
+|  15 | **Friend và chat 1-1**                 | Mutual-like tạo Friendship + Conversation atomically; tin nhắn bền vững khác chat ẩn danh tạm thời.                                                                                                                 |
+|  16 | **Đăng ký, onboarding và guest**       | Phone OTP/social/guest; guest nâng cấp bằng cách gắn identity vào **cùng userId/wallet**. Guest match có quota chống farm; entry point nâng cấp trên UI là delivery concern riêng.                                  |
+|  17 | **Discovery, Nearby và direct invite** | Browse profile, nearby opt-in bảo vệ vị trí và mời Soul/Voice Match có consent; không biến thành friend-request flow thứ hai.                                                                                       |
+|  18 | **Mood và conversation streak**        | Mood preset công khai có privacy rule; streak chỉ tăng khi hai chiều trò chuyện theo ngày UTC.                                                                                                                      |
+|  19 | **Short video**                        | Upload lifecycle, feed/ranking, reaction/comment/report và admin moderation; storage/transcode production đi qua provider port, không dùng LiveKit SFU.                                                             |
+|  20 | **Notification**                       | In-app notification là baseline; push chỉ sẵn sàng khi provider production được cấu hình và runtime contract xác nhận.                                                                                              |
+|  21 | **Support và admin operations**        | Support ticket, user/moderation/economy/catalog/config/permission dashboards; mọi quyền thật được enforce ở backend, UI guard chỉ hỗ trợ UX.                                                                        |
+
+## 1.1 Product boundaries không được suy diễn
+
+- Frontend trình bày và orchestration UX; business rules, quyền, giá, quota và state machine thuộc
+  backend owner.
+- “Có source” không đồng nghĩa “đã launch”. Native IAP, push, video provider, multi-region và
+  capacity production cần bằng chứng môi trường thật.
+- Tính năng mới bắt đầu là module trong `core-api`; không tạo deployable mới chỉ vì bảng trên có
+  một capability riêng.
+- Capability bị cắt/hoãn phải có trigger mở lại ở [07 · Roadmap](./07-roadmap.md) hoặc service
+  spec, không để mockup/plan cũ tự trở thành requirement.
+
+Litmatch ở đây là một social-entertainment platform lấy matching và interaction làm lõi, còn
+Economy là boundary rủi ro cao xuyên nhiều capability. Vì vậy correctness của ledger, identity,
+consent và trust/safety được ưu tiên hơn số lượng màn hình.
 
 ---
 
-[← 00-overview-and-index](./00-overview-and-index.md) · [02 · Domain Model →](./02-domain-model.md)
+[← 00 · Overview](./00-overview-and-index.md) · [02 · Domain model →](./02-domain-model.md)

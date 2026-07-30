@@ -1,6 +1,13 @@
 import { ApiError } from '@litmatch/api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { vi } from 'vitest';
 
 import { ModerationPage } from './moderation-page';
@@ -8,13 +15,15 @@ import { apiClient } from '../../../shared/api/client';
 
 import type { AdminReportDto } from '../api';
 
-function renderPage() {
+function renderPage(initialEntry = '/moderation') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <ModerationPage />
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <ModerationPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -99,6 +108,117 @@ describe('ModerationPage', () => {
     await screen.findByText('Đã xử lý');
     expect(screen.queryByRole('button', { name: 'Đã xử lý' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Bỏ qua' })).toBeNull();
+  });
+
+  it('filter Tất cả gửi status undefined thay vì rơi về pending', async () => {
+    const getSpy = vi.spyOn(apiClient, 'GET').mockResolvedValue({
+      data: { data: { items: [], total: 0 } },
+    } as never);
+    renderPage();
+
+    await screen.findByText('Không có report nào khớp bộ lọc');
+    fireEvent.change(screen.getByLabelText('Trạng thái'), {
+      target: { value: '' },
+    });
+
+    await waitFor(() => {
+      const lastCall = getSpy.mock.calls.at(-1);
+      expect(lastCall?.[1]).toMatchObject({
+        params: { query: { status: undefined } },
+      });
+    });
+  });
+
+  it('deep link giữ offset để tải và highlight đúng case ở trang sau', async () => {
+    const getSpy = vi.spyOn(apiClient, 'GET').mockResolvedValue({
+      data: { data: { items: [report({ id: 'r21' })], total: 40 } },
+    } as never);
+    renderPage('/moderation?status=pending&offset=20&case=r21');
+
+    await screen.findByText('Spam');
+    expect(getSpy).toHaveBeenCalledWith('/api/v1/admin/reports', {
+      params: {
+        query: expect.objectContaining({ offset: 20, status: 'pending' }),
+      },
+    });
+    expect(screen.getByText('r21').closest('tr')).toHaveClass(
+      'bg-primary-soft',
+    );
+  });
+
+  it('bulk report — bắt buộc confirm rồi gọi action audit theo từng case', async () => {
+    vi.spyOn(apiClient, 'GET').mockResolvedValue({
+      data: {
+        data: {
+          items: [report(), report({ id: 'r2', reason: 'harassment' })],
+          total: 2,
+        },
+      },
+    } as never);
+    const postSpy = vi.spyOn(apiClient, 'POST').mockResolvedValue({
+      data: { data: {} },
+    } as never);
+
+    renderPage();
+    await screen.findByText('Spam');
+    fireEvent.click(screen.getByRole('button', { name: 'Chọn report r1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Chọn report r2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Xử lý hàng loạt' }));
+
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      'ghi audit log riêng cho từng case',
+    );
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' })),
+    );
+
+    expect(postSpy).toHaveBeenCalledTimes(2);
+    expect(postSpy).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/admin/reports/{id}/resolve',
+      { params: { path: { id: 'r1' } } },
+    );
+    expect(postSpy).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/admin/reports/{id}/resolve',
+      { params: { path: { id: 'r2' } } },
+    );
+  });
+
+  it('bulk partial failure giữ code và trace ID theo từng case', async () => {
+    vi.spyOn(apiClient, 'GET').mockResolvedValue({
+      data: {
+        data: {
+          items: [report(), report({ id: 'r2', reason: 'harassment' })],
+          total: 2,
+        },
+      },
+    } as never);
+    vi.spyOn(apiClient, 'POST')
+      .mockResolvedValueOnce({ data: { data: {} } } as never)
+      .mockRejectedValueOnce(
+        new ApiError(409, {
+          code: 'REPORT_ALREADY_HANDLED',
+          message: 'Case đã được xử lý',
+          traceId: 'trace-r2',
+        }),
+      );
+
+    renderPage();
+    await screen.findByText('Spam');
+    fireEvent.click(screen.getByRole('button', { name: 'Chọn report r1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Chọn report r2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Xử lý hàng loạt' }));
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' })),
+    );
+
+    const failure = await screen.findByRole('alert');
+    expect(failure).toHaveTextContent('REPORT_ALREADY_HANDLED');
+    expect(failure).toHaveTextContent('trace-r2');
+    expect(
+      screen.getByRole('button', { name: 'Bỏ chọn report r2' }),
+    ).toBeVisible();
   });
 
   it('tab Video ngắn chờ duyệt — Duyệt gọi đúng endpoint approve', async () => {

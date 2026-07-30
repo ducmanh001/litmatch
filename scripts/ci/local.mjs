@@ -2,6 +2,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, readdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -16,12 +17,24 @@ const bypassRequested =
       .trim()
       .toLowerCase(),
   );
+const runningInCi = ['1', 'true', 'yes', 'on'].includes(
+  (process.env['CI'] ?? process.env['GITHUB_ACTIONS'] ?? '')
+    .trim()
+    .toLowerCase(),
+);
 const cleanRunnerImage =
   process.env['LOCAL_CI_NODE_IMAGE'] ??
   'node:22-bookworm@sha256:a25c9934ff6382cd4f08b6bc26c82bf4ea69b1e6f8dabfb2ead457374127c365';
 const securityToolsScript = fileURLToPath(
   new URL('./security-tools.mjs', import.meta.url),
 );
+const stageRunnerScript = fileURLToPath(
+  new URL('./run-stage.mjs', import.meta.url),
+);
+const stageTimeoutMs = Number(
+  process.env['LOCAL_CI_STAGE_TIMEOUT_MS'] ?? 20 * 60 * 1000,
+);
+const localCiNxRoot = join(tmpdir(), 'litmatch-local-ci', String(process.pid));
 const supportedProfiles = new Set([
   'quick',
   'clean',
@@ -39,6 +52,12 @@ if (!supportedProfiles.has(profile)) {
 }
 
 if (bypassRequested) {
+  if (runningInCi) {
+    console.error(
+      `[ci-local] Refusing bypass for profile ${profile} in a CI environment.`,
+    );
+    process.exit(1);
+  }
   console.log(
     `[ci-local] Bypass enabled for profile ${profile}${
       process.env['LITMATCH_CI_BYPASS_REASON']
@@ -59,6 +78,12 @@ const environment = {
     process.env['LOCAL_CI_JWT_SECRET'] ?? 'local-ci-jwt-0123456789abcdef-xyz',
   AUTH_OTP_PEPPER:
     process.env['LOCAL_CI_AUTH_OTP_PEPPER'] ?? 'local-ci-pepper-0123456789',
+  AUTH_GUEST_DEVICE_TOKEN_SECRET:
+    process.env['LOCAL_CI_AUTH_GUEST_DEVICE_TOKEN_SECRET'] ??
+    'local-ci-guest-device-secret-0123456789abcdef',
+  MATCHING_GUEST_QUOTA_PEPPER:
+    process.env['LOCAL_CI_MATCHING_GUEST_QUOTA_PEPPER'] ??
+    'local-ci-matching-quota-pepper-0123456789abcdef',
   DATABASE_URL:
     process.env['LOCAL_CI_DATABASE_URL'] ??
     'postgresql://litmatch:litmatch_local@localhost:5432/litmatch_ci',
@@ -72,6 +97,12 @@ const environment = {
     process.env['NEXT_PUBLIC_SOCKET_URL'] ?? 'http://localhost:3001',
   NEXT_PUBLIC_LIVEKIT_URL:
     process.env['NEXT_PUBLIC_LIVEKIT_URL'] ?? 'ws://localhost:7880',
+  NX_TUI: 'false',
+  NX_CACHE_DIRECTORY:
+    process.env['LOCAL_CI_NX_CACHE_DIRECTORY'] ?? join(localCiNxRoot, 'cache'),
+  NX_WORKSPACE_DATA_DIRECTORY:
+    process.env['LOCAL_CI_NX_WORKSPACE_DATA_DIRECTORY'] ??
+    join(localCiNxRoot, 'workspace-data'),
 };
 
 let dependenciesPrepared = false;
@@ -87,11 +118,25 @@ function run(label, command, args, options = {}) {
 
   if (dryRun) return 0;
 
-  const result = spawnSync(command, args, {
-    cwd: root,
-    env: { ...process.env, ...environment, ...(options.env ?? {}) },
-    stdio: 'inherit',
-  });
+  const timeoutMs = options.timeoutMs ?? stageTimeoutMs;
+  const ownsInnerWatchdogs = options.ownsInnerWatchdogs === true;
+  const result = spawnSync(
+    ownsInnerWatchdogs ? command : process.execPath,
+    ownsInnerWatchdogs ? args : [stageRunnerScript, command, ...args],
+    {
+      cwd: root,
+      env: {
+        ...process.env,
+        ...environment,
+        ...(options.env ?? {}),
+        ...(!ownsInnerWatchdogs && {
+          LITMATCH_STAGE_LABEL: label,
+          LITMATCH_STAGE_TIMEOUT_MS: String(timeoutMs),
+        }),
+      },
+      stdio: 'inherit',
+    },
+  );
 
   if (result.error) {
     if (options.allowFailure) return 1;
@@ -110,6 +155,8 @@ function commandSucceeds(command, args) {
     cwd: root,
     env: { ...process.env, ...environment },
     stdio: 'ignore',
+    timeout: 10_000,
+    killSignal: 'SIGKILL',
   });
   return result.status === 0;
 }
@@ -125,7 +172,11 @@ function prepareDependencies() {
 
 function prepareNx() {
   if (nxPrepared) return;
-  run('Reset Nx daemon and project-graph cache', pnpm, ['nx', 'reset']);
+  run('Reset Nx daemon and project-graph cache', pnpm, [
+    'nx',
+    'reset',
+    '--outputStyle=static',
+  ]);
   nxPrepared = true;
 }
 
@@ -166,56 +217,76 @@ function startTestServices() {
 function runQuality() {
   prepareDependencies();
   prepareNx();
-  run('Auto-fix formatting before quality checks', pnpm, ['format']);
   run('Agent contract and guard checks', pnpm, ['agent:check']);
   run('Agent guard tests', pnpm, ['agent:test']);
   runWorkflowLint();
   run('Format check', pnpm, ['format:check']);
-  run('Lint every Nx project', pnpm, ['nx', 'run-many', '-t', 'lint']);
+  run('Lint every Nx project', pnpm, [
+    'nx',
+    'run-many',
+    '-t',
+    'lint',
+    '--outputStyle=static',
+  ]);
 }
 
 function runCleanQuality() {
   if (!dryRun) mkdirSync(join(root, '.nx'), { recursive: true });
 
+  const shellQuote = (value) => `'${value.replaceAll("'", "'\"'\"'")}'`;
+  const stage = (label, command) =>
+    `LITMATCH_STAGE_LABEL=${shellQuote(label)} ` +
+    `LITMATCH_STAGE_TIMEOUT_MS=${stageTimeoutMs} ` +
+    `node scripts/ci/run-stage.mjs bash -lc ${shellQuote(command)}`;
   const command = [
     'git config --global --add safe.directory /workspace',
     'corepack enable',
-    'pnpm install --store-dir /pnpm/store --frozen-lockfile',
-    'pnpm nx reset',
-    'pnpm format',
-    'pnpm agent:check',
-    'pnpm agent:test',
-    'SHELLCHECK="$(node scripts/ci/security-tools.mjs shellcheck --print-path)"',
-    'ACTIONLINT="$(node scripts/ci/security-tools.mjs actionlint --print-path)"',
-    '"$ACTIONLINT" -shellcheck="$SHELLCHECK" .github/workflows/*.yml',
-    'pnpm format:check',
-    'pnpm nx run-many -t lint',
+    stage(
+      'clean: install dependencies',
+      'pnpm install --store-dir /pnpm/store --frozen-lockfile',
+    ),
+    stage('clean: reset Nx', 'pnpm nx reset --outputStyle=static'),
+    stage('clean: agent check', 'pnpm agent:check'),
+    stage('clean: agent tests', 'pnpm agent:test'),
+    stage(
+      'clean: workflow lint',
+      'SHELLCHECK="$(node scripts/ci/security-tools.mjs shellcheck --print-path)" && ACTIONLINT="$(node scripts/ci/security-tools.mjs actionlint --print-path)" && "$ACTIONLINT" -shellcheck="$SHELLCHECK" .github/workflows/*.yml',
+    ),
+    stage('clean: format check', 'pnpm format:check'),
+    stage('clean: lint', 'pnpm nx run-many -t lint --outputStyle=static'),
   ].join(' && ');
 
-  run('Run quality gate in a clean Node 22 Linux container', 'docker', [
-    'run',
-    '--rm',
-    '--volume',
-    `${root}:/workspace`,
-    '--mount',
-    'type=volume,destination=/workspace/node_modules',
-    '--mount',
-    'type=volume,source=litmatch-local-ci-pnpm-store,destination=/pnpm/store',
-    '--mount',
-    'type=volume,destination=/workspace/.nx',
-    '--workdir',
-    '/workspace',
-    '--env',
-    'CI=true',
-    '--env',
-    'HUSKY=0',
-    '--env',
-    'NX_DAEMON=false',
-    cleanRunnerImage,
-    'bash',
-    '-lc',
-    command,
-  ]);
+  run(
+    'Run quality gate in a clean Node 22 Linux container',
+    'docker',
+    [
+      'run',
+      '--rm',
+      '--volume',
+      `${root}:/workspace`,
+      '--mount',
+      'type=volume,destination=/workspace/node_modules',
+      '--mount',
+      'type=volume,source=litmatch-local-ci-pnpm-store,destination=/pnpm/store',
+      '--mount',
+      'type=volume,destination=/workspace/.nx',
+      '--workdir',
+      '/workspace',
+      '--env',
+      'CI=true',
+      '--env',
+      'HUSKY=0',
+      '--env',
+      'NX_DAEMON=false',
+      '--env',
+      'NX_TUI=false',
+      cleanRunnerImage,
+      'bash',
+      '-lc',
+      command,
+    ],
+    { ownsInnerWatchdogs: true },
+  );
 }
 
 function runTestAndBuild() {
@@ -223,17 +294,32 @@ function runTestAndBuild() {
   prepareNx();
   startTestServices();
   ensureLocalCiDatabase();
-  run('Frontend contract, tests, builds and bundle audit', pnpm, [
-    'agent:verify',
-    'frontend',
+  run(
+    'Frontend contract, tests, builds and bundle audit',
+    pnpm,
+    ['agent:verify', 'frontend'],
+    { ownsInnerWatchdogs: true },
+  );
+  // This Redis lease suite intentionally uses the minimum production TTL to prove crash expiry
+  // and live renewal. Running it beside the Core API's large Jest pool can starve its event-loop
+  // refresh timer long enough to simulate a dead replica, so keep the timing-sensitive target
+  // isolated and let the remaining pure/unit-heavy projects retain Nx parallelism.
+  run('Signaling Redis integration tests with isolated CPU', pnpm, [
+    'nx',
+    'test',
+    'signaling-gateway',
+    '--coverage',
+    '--skip-nx-cache',
+    '--outputStyle=static',
   ]);
-  run('Unit and integration tests with coverage', pnpm, [
+  run('Remaining unit and integration tests with coverage', pnpm, [
     'nx',
     'run-many',
     '-t',
     'test',
     '--coverage',
-    '--exclude=admin,web,api-client',
+    '--exclude=admin,web,api-client,signaling-gateway',
+    '--outputStyle=static',
   ]);
   run('Build backend projects', pnpm, [
     'nx',
@@ -241,6 +327,7 @@ function runTestAndBuild() {
     '-t',
     'build',
     '--exclude=admin,web,api-client',
+    '--outputStyle=static',
   ]);
   run('End-to-end smoke tests', pnpm, [
     'nx',
@@ -248,6 +335,7 @@ function runTestAndBuild() {
     '-t',
     'e2e',
     '--parallel=2',
+    '--outputStyle=static',
   ]);
 }
 
@@ -344,16 +432,28 @@ function waitForHealthEndpoints() {
     const coreReady = commandSucceeds('curl', [
       '--fail',
       '--silent',
+      '--connect-timeout',
+      '2',
+      '--max-time',
+      '3',
       'http://127.0.0.1:3000/health/ready',
     ]);
     const signalingReady = commandSucceeds('curl', [
       '--fail',
       '--silent',
+      '--connect-timeout',
+      '2',
+      '--max-time',
+      '3',
       'http://127.0.0.1:3001/health/ready',
     ]);
     const webReady = commandSucceeds('curl', [
       '--fail',
       '--silent',
+      '--connect-timeout',
+      '2',
+      '--max-time',
+      '3',
       'http://127.0.0.1:4300/',
     ]);
     if (coreReady && signalingReady && webReady) return;
@@ -400,6 +500,7 @@ function runContainerSmoke() {
     'run-many',
     '-t',
     'build',
+    '--outputStyle=static',
   ]);
   run('Run database migrations in the isolated local CI database', pnpm, [
     'db:migrate',
@@ -462,6 +563,10 @@ function runContainerSmoke() {
       `JWT_SECRET=${environment.JWT_SECRET}`,
       '--env',
       `AUTH_OTP_PEPPER=${environment.AUTH_OTP_PEPPER}`,
+      '--env',
+      `AUTH_GUEST_DEVICE_TOKEN_SECRET=${environment.AUTH_GUEST_DEVICE_TOKEN_SECRET}`,
+      '--env',
+      `MATCHING_GUEST_QUOTA_PEPPER=${environment.MATCHING_GUEST_QUOTA_PEPPER}`,
       '--env',
       'AUTH_PHONE_OTP_ENABLED=true',
       '--env',

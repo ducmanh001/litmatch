@@ -9,9 +9,18 @@ export interface SentryConfig {
 
 /**
  * Error monitoring tách khỏi OTel tracing: Sentry chỉ nhận exception để tránh gửi trace hai lần.
- * Credential luôn là DSN runtime; để trống thì integration tắt hoàn toàn.
+ * Credential luôn là DSN runtime. Dev/CI có thể để trống; profile production-like đặt
+ * OBSERVABILITY_REQUIRED=true và sẽ fail boot nếu DSN/release thiếu.
  */
 export function initializeSentry(config: SentryConfig): void {
+  if (
+    process.env['OBSERVABILITY_REQUIRED'] === 'true' &&
+    (config.dsn === '' || config.release === '')
+  ) {
+    throw new Error(
+      'Production Sentry is required: configure both SENTRY_DSN and SENTRY_RELEASE',
+    );
+  }
   if (config.dsn === '') return;
 
   Sentry.init({

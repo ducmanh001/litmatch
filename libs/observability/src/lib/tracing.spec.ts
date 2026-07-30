@@ -15,6 +15,7 @@ describe('startTracing', () => {
     delete process.env['GRAFANA_CLOUD_PROMETHEUS_URL'];
     delete process.env['GRAFANA_CLOUD_PROMETHEUS_USER'];
     delete process.env['GRAFANA_CLOUD_API_TOKEN'];
+    delete process.env['OBSERVABILITY_REQUIRED'];
   });
 
   afterEach(() => {
@@ -75,5 +76,27 @@ describe('startTracing', () => {
         'base64',
       )}`,
     });
+  });
+
+  it('fail boot khi profile bắt buộc telemetry nhưng pipeline chưa đủ', () => {
+    process.env['OBSERVABILITY_REQUIRED'] = 'true';
+
+    expect(() => startTracing({ serviceName: 'core-api' })).toThrow(
+      'Production telemetry is required but incomplete',
+    );
+  });
+
+  it('profile bắt buộc telemetry chỉ boot khi có trace, metrics và credential', async () => {
+    process.env['OBSERVABILITY_REQUIRED'] = 'true';
+    process.env['OTEL_EXPORTER_OTLP_ENDPOINT'] =
+      'http://127.0.0.1:4318/v1/traces';
+    process.env['GRAFANA_CLOUD_PROMETHEUS_URL'] =
+      'http://127.0.0.1:4318/v1/metrics';
+    process.env['GRAFANA_CLOUD_PROMETHEUS_USER'] = '123';
+    process.env['GRAFANA_CLOUD_API_TOKEN'] = 'token';
+
+    const sdk = startTracing({ serviceName: 'core-api' });
+    expect(sdk).not.toBeNull();
+    await sdk?.shutdown();
   });
 });

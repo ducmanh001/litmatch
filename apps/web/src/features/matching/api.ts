@@ -7,6 +7,8 @@ import type { ApiSchema } from '@litmatch/api-client';
 
 export type TicketDto = ApiSchema<'TicketDto'>;
 
+export const MATCHING_TICKET_REFETCH_INTERVAL_MS = 10_000;
+
 export const matchingKeys = {
   all: ['matching'] as const,
   current: ['matching', 'ticket', 'current'] as const,
@@ -66,7 +68,9 @@ export function useTicket(ticketId: string | null) {
     enabled: ticketId !== null,
     // Poll ngắn khi còn đang chờ ghép/chờ confirm — socket best-effort, poll là fallback thật.
     refetchInterval: (query) =>
-      isPollingStatus(query.state.data?.status) ? 3000 : false,
+      isPollingStatus(query.state.data?.status)
+        ? MATCHING_TICKET_REFETCH_INTERVAL_MS
+        : false,
   });
 }
 

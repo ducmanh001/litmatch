@@ -48,6 +48,10 @@ async function bootstrap(): Promise<void> {
   app.useBodyParser('json', { type: 'application/webhook+json' });
 
   const config = app.get<ConfigService<CoreApiEnv, true>>(ConfigService);
+  app.set(
+    'trust proxy',
+    config.getOrThrow('HTTP_TRUST_PROXY_HOPS', { infer: true }),
+  );
   initializeSentry({
     dsn: config.getOrThrow('SENTRY_DSN', { infer: true }),
     environment: config.getOrThrow('NODE_ENV', { infer: true }),

@@ -63,6 +63,7 @@ export class CallTickerService
       task: () => this.runOnce(),
       logger: this.logger,
       errorMessage: 'Call ticker tick lỗi',
+      clusterSingleton: { dataSource: this.dataSource },
     });
   }
 
@@ -101,14 +102,41 @@ export class CallTickerService
   }
 
   private async processActiveCalls(): Promise<void> {
-    const active = await this.dataSource.getRepository(CallSession).find({
-      select: { id: true },
-      where: { status: CallSessionStatus.Active },
-      order: { updatedAt: 'ASC', id: 'ASC' },
-      take: TICK_BATCH_SIZE,
+    const freeSeconds = this.config.getOrThrow('CALLING_FREE_CALL_SECONDS', {
+      infer: true,
     });
+    const price = this.config.getOrThrow('CALLING_PRICE_PER_MINUTE_DIAMOND', {
+      infer: true,
+    });
+    const activeQuery = this.dataSource
+      .getRepository(CallSession)
+      .createQueryBuilder('call')
+      .select(['call.id'])
+      .where('call.status = :status', { status: CallSessionStatus.Active })
+      .andWhere('call.started_at IS NOT NULL')
+      .orderBy('call.updated_at', 'ASC')
+      .addOrderBy('call.id', 'ASC')
+      .take(TICK_BATCH_SIZE);
+
+    if (price === 0) {
+      // Free-only calls need no per-second read until their server deadline is actually due.
+      activeQuery.andWhere(
+        'call.started_at <= now() - make_interval(secs => :freeSeconds)',
+        { freeSeconds },
+      );
+    } else {
+      // The next charge starts at free-window + already-billed whole minutes.
+      activeQuery.andWhere(
+        `call.started_at
+           + make_interval(secs => :freeSeconds + call.billed_minutes * 60)
+         <= now()`,
+        { freeSeconds },
+      );
+    }
+
+    const active = await activeQuery.getMany();
     for (const call of active) {
-      await this.processActive(call.id).catch((err) =>
+      await this.processActive(call.id, freeSeconds, price).catch((err) =>
         this.logger.error(
           { err: `${err}` },
           `Xử lý call active ${call.id} lỗi — thử lại ở tick sau`,
@@ -117,26 +145,14 @@ export class CallTickerService
     }
   }
 
-  private async processActive(callId: string): Promise<void> {
-    const freeSeconds = this.config.getOrThrow('CALLING_FREE_CALL_SECONDS', {
-      infer: true,
-    });
-    const price = this.config.getOrThrow('CALLING_PRICE_PER_MINUTE_DIAMOND', {
-      infer: true,
-    });
-
+  private async processActive(
+    callId: string,
+    freeSeconds: number,
+    price: number,
+  ): Promise<void> {
     if (price === 0) {
-      // Free-only: hết free window thì server tự end (docs/06) — không đụng Economy
-      const call = await this.dataSource
-        .getRepository(CallSession)
-        .findOneBy({ id: callId });
-      if (
-        call?.status === CallSessionStatus.Active &&
-        call.startedAt &&
-        Date.now() - call.startedAt.getTime() >= freeSeconds * 1000
-      ) {
-        await this.callingService.endById(callId, CallEndReason.FreeLimit);
-      }
+      // Candidate query đã lọc deadline; endById lock + re-check terminal state.
+      await this.callingService.endById(callId, CallEndReason.FreeLimit);
       return;
     }
 

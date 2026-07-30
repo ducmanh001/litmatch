@@ -69,6 +69,7 @@ export class TicketSweeperService
       task: () => this.runOnce(),
       logger: this.logger,
       errorMessage: 'Sweeper tick lỗi',
+      clusterSingleton: { dataSource: this.dataSource },
     });
   }
 

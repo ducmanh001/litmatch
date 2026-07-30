@@ -168,6 +168,7 @@ export class AuthController {
       expiresIn: session.expiresIn,
       userId: session.userId,
       isGuest: session.isGuest,
+      guestDeviceToken: session.guestDeviceToken,
     };
   }
 }

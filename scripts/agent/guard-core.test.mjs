@@ -14,6 +14,39 @@ test('blocks a fourth deployable app', () => {
   );
 });
 
+test('blocks an application project hidden outside apps/', () => {
+  assert.match(
+    inspectChange({
+      filePath: 'services/feed-service/project.json',
+      content: '{ "projectType": "application", "tags": ["type:app"] }',
+      operation: 'create',
+    }).join('\n'),
+    /Deployable application/u,
+  );
+});
+
+test('blocks a nested application project under an approved app', () => {
+  assert.match(
+    inspectChange({
+      filePath: 'apps/core-api/tools/feed-worker/project.json',
+      content: '{ "projectType": "application", "tags": ["type:app"] }',
+      operation: 'create',
+    }).join('\n'),
+    /Deployable application/u,
+  );
+});
+
+test('allows a library project outside apps/', () => {
+  assert.deepEqual(
+    inspectChange({
+      filePath: 'libs/feed-contracts/project.json',
+      content: '{ "projectType": "library", "tags": ["type:lib"] }',
+      operation: 'create',
+    }),
+    [],
+  );
+});
+
 test('allows an existing app and a domain module', () => {
   assert.deepEqual(
     inspectChange({

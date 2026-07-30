@@ -76,9 +76,10 @@ Husky `pre-commit` chạy Prettier qua `lint-staged`, sau đó `pnpm agent:check
 lớp bảo vệ nhanh cho commit, **không** thay thế verification theo scope. `pre-push` mới chạy
 full CI preflight gồm clean quality, test/build/E2E và Docker smoke.
 
-Trong tình huống khẩn cấp có thể bypass tường minh bằng `LITMATCH_CI_BYPASS=1`; hook sẽ in rõ
-đang bỏ qua lớp nào. GitHub chỉ nhận bypass qua lần chạy `workflow_dispatch` có `bypass_ci` và
-`bypass_reason`, không dùng bypass âm thầm.
+Trong tình huống khẩn cấp có thể bypass **local hook** tường minh bằng
+`LITMATCH_CI_BYPASS=1`; hook sẽ in rõ đang bỏ qua lớp nào. GitHub CI không nhận bypass: mọi
+`CI required` xanh đều đã chạy gate. Runner từ chối cả `--bypass`, `LITMATCH_CI_BYPASS` và
+`CI_BYPASS` khi `CI=true`; hosted release chỉ nhận SHA trên `main` có push CI thành công.
 
 ## 15.5 Quy trình tham chiếu
 

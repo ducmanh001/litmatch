@@ -2,7 +2,7 @@
   "name": "signaling-gateway-e2e",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "projectType": "application",
-  "tags": ["type:app", "scope:e2e"],
+  "tags": ["type:app", "scope:e2e", "platform:server"],
   "implicitDependencies": ["signaling-gateway"],
   "targets": {
     "e2e": {
