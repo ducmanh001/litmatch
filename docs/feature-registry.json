@@ -5,7 +5,7 @@
   "features": [
     {
       "id": "auth-session",
-      "title": "Guest, OTP, social login and rotating browser sessions",
+      "title": "Guest, OTP, social login, identity upgrade and rotating browser sessions",
       "status": "implemented",
       "owner": "core-api/auth",
       "contracts": [
@@ -17,6 +17,10 @@
         {
           "path": "apps/core-api/src/modules/auth/auth.controller.ts",
           "contains": "@Controller('auth')"
+        },
+        {
+          "path": "apps/core-api/src/modules/auth/controllers/auth-upgrade.controller.ts",
+          "contains": "@Controller('auth/upgrade')"
         }
       ],
       "verification": {
@@ -24,7 +28,41 @@
         "evidence": [
           {
             "path": "apps/core-api/src/modules/auth/auth.service.spec.ts",
-            "contains": "AuthService"
+            "contains": "social upgrade giữ userId"
+          }
+        ]
+      }
+    },
+    {
+      "id": "runtime-capabilities",
+      "title": "Server-derived runtime availability contract for frontend providers",
+      "status": "implemented",
+      "owner": "core-api/app with admin/web consumers",
+      "contracts": [
+        "openapi/core-api.json",
+        "docs/12-frontend-architecture.md",
+        ".env.example"
+      ],
+      "evidence": [
+        {
+          "path": "apps/core-api/src/app/capabilities.controller.ts",
+          "contains": "@Controller('capabilities')"
+        },
+        {
+          "path": "apps/core-api/src/app/capabilities.service.ts",
+          "contains": "getCapabilities(): CapabilitiesDto"
+        }
+      ],
+      "verification": {
+        "kind": "automated-test-source",
+        "evidence": [
+          {
+            "path": "apps/core-api/src/app/capabilities.service.spec.ts",
+            "contains": "derives configured providers"
+          },
+          {
+            "path": "apps/web/src/shared/capabilities/api.spec.tsx",
+            "contains": "capabilities"
           }
         ]
       }
@@ -61,7 +99,7 @@
     },
     {
       "id": "matching",
-      "title": "Queue ticket, pairing and paid speed-up",
+      "title": "Queue ticket, pairing, guest quota and paid speed-up",
       "status": "implemented",
       "owner": "core-api/matching",
       "contracts": [
@@ -77,6 +115,10 @@
         {
           "path": "apps/core-api/src/modules/matching/jobs/matcher-worker.service.ts",
           "contains": "MatcherWorkerService"
+        },
+        {
+          "path": "apps/core-api/src/modules/matching/services/guest-match-quota.service.ts",
+          "contains": "GuestMatchQuotaService"
         }
       ],
       "verification": {
@@ -84,7 +126,7 @@
         "evidence": [
           {
             "path": "apps/core-api/src/modules/matching/matching.integration.spec.ts",
-            "contains": "Matching"
+            "contains": "guest quota: concurrent guest mới cùng IP"
           }
         ]
       }
@@ -511,26 +553,26 @@
     },
     {
       "id": "privacy-analytics-consent",
-      "title": "Auto-enabled hosted analytics and explicit unmasked replay behavior",
+      "title": "Consent-gated hosted analytics with autocapture and session replay disabled",
       "status": "implemented",
       "owner": "web/shared-analytics",
       "contracts": ["docs/runbooks/posthog-cloud.md"],
       "evidence": [
         {
           "path": "apps/web/src/shared/analytics/product-analytics.ts",
-          "contains": "posthog.opt_in_capturing();"
+          "contains": "posthog.opt_in_capturing({ captureEventName: false });"
         },
         {
           "path": "apps/web/src/shared/analytics/product-analytics.ts",
-          "contains": "maskAllInputs: false"
+          "contains": "maskAllInputs: true"
         },
         {
           "path": "apps/web/src/shared/analytics/product-analytics.ts",
-          "contains": "autocapture: true"
+          "contains": "autocapture: false"
         },
         {
           "path": "apps/web/src/shared/analytics/product-analytics-components.tsx",
-          "contains": "Analytics luôn bật khi đã cấu hình PostHog."
+          "contains": "setProductAnalyticsConsent(enabled ? 'declined' : 'accepted')"
         }
       ],
       "verification": {
@@ -538,22 +580,22 @@
         "evidence": [
           {
             "path": "apps/web/src/shared/analytics/product-analytics.spec.ts",
-            "contains": "khởi tạo SDK ngay cả khi chưa có cookie consent"
+            "contains": "không khởi tạo hoặc opt-in khi"
           },
           {
             "path": "apps/web/src/shared/analytics/product-analytics.spec.ts",
-            "contains": "bật autocapture và không che text/input của session replay"
+            "contains": "tắt autocapture/session replay"
           },
           {
             "path": "apps/web/src/shared/analytics/product-analytics-components.spec.tsx",
-            "contains": "hiển thị analytics đang bật và không có thao tác opt-in riêng"
+            "contains": "mặc định tắt, cho phép accept rồi decline lại"
           }
         ]
       }
     },
     {
       "id": "realtime-fanout",
-      "title": "Authenticated Socket.IO user fanout through Redis",
+      "title": "Authenticated Socket.IO fanout and distributed connection quota through Redis",
       "status": "implemented",
       "owner": "signaling-gateway with core-api producers",
       "contracts": [
@@ -569,6 +611,10 @@
         {
           "path": "libs/common-dtos/src/lib/realtime-events.ts",
           "contains": "export const RealtimeEvents"
+        },
+        {
+          "path": "apps/signaling-gateway/src/app/connection-quota.service.ts",
+          "contains": "ConnectionQuotaService"
         }
       ],
       "verification": {
@@ -577,6 +623,10 @@
           {
             "path": "apps/signaling-gateway/src/app/signaling.integration.spec.ts",
             "contains": "event chỉ tới ĐÚNG user"
+          },
+          {
+            "path": "apps/signaling-gateway/src/app/signaling.horizontal-scale.integration.spec.ts",
+            "contains": "quota per-user atomic xuyên 2 instance"
           }
         ]
       }
@@ -832,10 +882,5 @@
       "recordedCheckScopes": ["Short-video report persistence and auto-hide"]
     }
   ],
-  "outOfScope": [
-    {
-      "id": "github-ci-cd",
-      "reason": "The audit explicitly excludes GitHub CI/CD. This change does not edit .github, CI workflows, deployment manifests or release automation."
-    }
-  ]
+  "outOfScope": []
 }

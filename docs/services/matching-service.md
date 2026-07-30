@@ -121,7 +121,7 @@ session cũ trước khi đặt `is_guest=false`; access token cũ chỉ còn s�
 Retry đúng identity đã gắn vào chính user vẫn idempotent, nhưng tài khoản thật không được dùng
 endpoint upgrade để gắn thêm identity mới.
 
-## 9. Invite — CTA "mời Voice/Soul Match" (W4) {#invite}
+## 9. Invite — CTA "mời Voice/Soul Match" (W4)
 
 > Mitigation chính cho rủi ro graph bạn bè sparse (docs/plans/2026-07-14-plan-6-tinh-nang-social-discovery.md
 > § 3.1, § 4, § 6): Discovery/Nearby chỉ cho xem profile là ngõ cụt cho dating app — directed

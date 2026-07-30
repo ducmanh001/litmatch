@@ -21,13 +21,20 @@
 - **Rớt kết nối giữa call**: có **reconnect window** (config, mặc định 30 giây) — trong window billing tạm dừng; quá window thì call kết thúc và settle theo thời gian đã dùng thật.
 - **Đăng ký/đăng nhập**: phone OTP hoặc social login (Google/Apple/Facebook) + **guest account** dùng thử. Guest bị giới hạn: không nạp diamond, không nhận điểm quy đổi từ gift, giới hạn match/ngày chặt hơn — cho tới khi gắn số điện thoại/social.
 - **Nâng cấp guest → tài khoản thật**: giữ **nguyên `userId`** (cùng `Wallet`, cùng lịch sử ledger, không tạo user mới) — nâng cấp là _gắn thêm_ phone/social vào user đang có, không migrate dữ liệu sang user khác. Nếu số điện thoại/social đã gắn với 1 user thật khác → không cho merge tự động (tránh gộp nhầm ledger 2 người), báo lỗi để user đăng nhập vào tài khoản cũ.
-- **Chống farm guest**: guest tạo hàng loạt để cày free match/thưởng là vector lạm dụng — giới hạn số guest theo device fingerprint + IP (config), free match/thưởng của guest tính theo device chứ không chỉ theo userId (tạo user mới không reset được quota), xem [10 § Trust & Safety](./10-code-review-checklist.md).
+- **Chống farm guest khi matching**: guest phải gửi `X-Guest-Device-Token` đã được Auth ký cho
+  chính user. Quota ngày UTC được consume atomically theo ba key HMAC ổn định
+  `(user, device token identity, normalized network IP)` với pepper server; tạo user mới không
+  được phép chỉ reset một trong ba trục. Không lưu device token/IP thô trong bảng quota. Retry
+  idempotent được nhận diện trước khi consume và nâng cấp guest phải khóa/read `User.isGuest` từ
+  DB, không tin claim JWT cũ.
 - **Refund/chargeback IAP**: user hoàn tiền qua Apple/Google sau khi đã nạp (và có thể đã tiêu) diamond → hệ thống ghi **bút toán đảo**, `Wallet.balance` có thể **âm** (user nợ diamond), bị chặn tiêu tiếp tới khi nạp bù; refund-sau-tiêu lặp lại nhiều lần là tín hiệu gian lận → hạ trust score/khoá nạp. Chi tiết [services/economy-service.md § 5](./services/economy-service.md).
 - **Ngày sinh không phải access gate**: người dùng có thể bỏ trống hoặc lưu một ngày hợp lệ
   không nằm trong tương lai; core flow không chặn truy cập/matching theo tuổi hay trạng thái
   xác minh tuổi. Bộ lọc tuổi là preference tự chọn, server chỉ dùng để lọc khi người dùng yêu cầu.
 - **VIP mua bằng diamond** (qua ledger như mọi giao dịch khác); đang active mà mua tiếp thì **gia hạn cộng dồn** (expiry = max(now, expiry hiện tại) + số ngày gói); hết hạn tự downgrade bằng cách **derive khi đọc**, không chờ cron. Chi tiết: [services/economy-service.md](./services/economy-service.md).
-- **Free match giới hạn số lần/ngày** (config, phân biệt guest / thường / VIP) — hết lượt thì trả diamond hoặc chờ reset ngày.
+- **Quota match/ngày hiện hành chỉ áp dụng cho guest** qua `MATCHING_GUEST_DAILY_LIMIT`; tài khoản
+  đã nâng cấp không đi qua quota này. Regular/VIP quota hoặc cơ chế “trả Diamond để mua thêm lượt”
+  chưa phải rule hiện hành và chỉ được thêm sau quyết định sản phẩm + Economy flow đầy đủ.
 - **Discovery (browse/nearby) loại trừ report vĩnh viễn, KHÁC cooldown của matching**: 1 cặp
   user từng report nhau (theo bất kỳ chiều nào) không bao giờ thấy nhau lại qua Discovery —
   `reports` là append-only, không có "unreport" nên không có cơ sở để hết hạn loại trừ này. Đây
@@ -65,7 +72,8 @@
   khác. Toạ độ quantize ~500m NGAY LÚC GHI (không lưu toạ độ thô) + jitter tất định theo
   cặp-theo-ngày trước khi tính bucket hiển thị — 3 lớp chống trilateration cộng với rate limit
   ghi/đọc. Loại trừ banned/guest/block/report dùng LẠI đúng bộ luật của Discovery browse (không
-  tự chế luật riêng). Chi tiết: [services/discovery-service.md § 8](./services/discovery-service.md#nearby).
+  tự chế luật riêng). Chi tiết:
+  [services/discovery-service.md § 8](./services/discovery-service.md#8-nearby-w4).
 - **CTA "mời Voice/Soul Match" (W4) — directed invite, KHÔNG phải friend-request flow mới**:
   accept tạo trực tiếp `MatchTicket`/`MatchSession` bỏ qua hàng đợi shard, tái dùng nguyên
   `canPair`/invariant 1-user-1-queue của auto-match; KHÔNG check gender preference (đây là
@@ -75,7 +83,7 @@
   Rate limit chống spam mời ĐỐI XỨNG cho mọi user, không hard-code phân biệt giới tính trong
   logic. Inbox re-check hidden-set ở mỗi lần đọc và DTO chỉ compose `PublicProfileDto` tối thiểu
   của inviter để invitee có đủ thông tin đồng ý; không lộ ngày sinh/region/trust/status. Chi tiết:
-  [services/matching-service.md § 9](./services/matching-service.md#invite).
+  [services/matching-service.md § 9](./services/matching-service.md#9-invite-cta-mời-voicesoul-match-w4).
 - **Voice Match có thể tạo Friendship bằng "Yêu thích" ngay trong hoặc sau cuộc gọi**: mỗi bên có
   đúng một lượt immutable; chỉ khi **cả hai** đã thích thì server tạo `Friendship` và
   `Conversation` trong cùng transaction. Danh tính chỉ được reveal qua chat sau mutual like; khi

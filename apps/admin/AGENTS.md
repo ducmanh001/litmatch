@@ -23,16 +23,17 @@ Env: copy `.env.example` → `.env.local` (đã có sẵn cho local). Đọc env
 | `/login`       | OTP 2 bước (phone → code), redirect về trang trước đó sau login                                                                     |
 | `/`            | Dashboard — stat card + chart + "Phòng đang live" + audit log gần đây, toàn bộ `GET /admin/dashboard` thật (`features/dashboard/`)  |
 | `/users`       | Danh sách user — lọc status/nickname, ban/unban, modal hồ sơ (`features/users/`)                                                    |
-| `/moderation`  | Tab báo cáo (thật) + tab "Video ngắn chờ duyệt" (thật) (`features/moderation/`)                                                     |
+| `/moderation`  | Report/support + video pending/published; approve/reject/remove qua admin API (`features/moderation/`)                              |
 | `/gifts`       | Gift catalog — tạo quà mới, sửa giá, bật/tắt (`features/gifts/`)                                                                    |
 | `/economy`     | Tra ví + lịch sử giao dịch theo user ID, hoàn tiền thủ công (`features/economy/`)                                                   |
-| `/rooms`       | Party Room đang live — đọc `GET /party/rooms` (public), không có nút kết thúc phòng (`features/rooms/`)                             |
+| `/rooms`       | Party Room active + member count qua `GET /admin/rooms`; force-close có audit qua `POST /admin/rooms/:id/close` (`features/rooms/`) |
 | `/config`      | Catalog Diamond/VIP (bật/tắt) + soạn thông báo broadcast — `/admin/config/*`, `/admin/notifications/broadcast` (`features/config/`) |
 | `/permissions` | Ma trận quyền theo role + danh sách staff (đổi role) — `/admin/permissions/*`, `/admin/staff/*` (`features/permissions/`)           |
 
-Nav sidebar khai tại `src/app/app-shell.tsx` (`NAV_ITEMS`). Redesign theo
-`layouts/admins/litmatch-admin-dashboard (2).html` — xem docs/07-roadmap.md mục "Redesign toàn bộ
-apps/admin theo layouts/admins/..." cho breakdown thật/demo + backlog phụ thuộc backend đầy đủ.
+Nav sidebar khai tại `src/app/app-shell.tsx` (`NAV_ITEMS`). HTML
+`layouts/admins/litmatch-admin-dashboard (2).html` chỉ là visual reference theo
+`../../layouts/README.md`; route source/OpenAPI/docs/12 thắng khi mockup mâu thuẫn. Backlog có
+trigger hiện hành nằm ở `../../docs/07-roadmap.md`, không copy vào file này.
 
 ## Delta riêng admin
 
