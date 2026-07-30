@@ -45,6 +45,19 @@ Scope chuẩn: `core`, `economy`, `matching`, `calling`, `signaling`, `content`,
 Applied/Partial/Not applied; file này tiếp tục giữ vai trò operational contract, không lặp lại phần
 trend hoặc lý do chọn công nghệ.
 
+### 8.2.1 Adapter portability và startup budget
+
+`AGENTS.md` và `.agents/skills/` là canonical. Entrypoint/skill adapter mà một runtime cần để
+auto-discover phải là symlink tới đúng file canonical, không phải bản sao prose. `agent:check`
+kiểm tra cả coverage và target thực của adapter; “symlink còn resolve được” chưa đủ vì nó vẫn có
+thể trỏ nhầm contract ở scope cha. Check thường đọc working tree; `--staged` đọc đúng Git index để
+adapter chưa stage không thể che một commit thiếu hoặc trỏ sai.
+
+Startup chỉ nên inject bản đồ ổn định: entrypoint, cách chọn context, shared-worktree risk và gate
+chung. Roadmap, backlog, checklist domain và log chỉ nạp sau khi scope/điều kiện khớp. Đây là
+attention budget: một danh sách việc chưa làm xuất hiện ở mọi session dễ kéo agent lệch khỏi
+objective hiện tại dù nội dung danh sách vẫn đúng.
+
 ## 8.3 Skills dùng chung
 
 - Task code, review, điều tra hoặc thiết kế không tầm thường: dùng
@@ -69,6 +82,17 @@ sub-agent phù hợp; ưu tiên giảm token nhưng giữ nguyên acceptance cri
 
 Model cụ thể phụ thuộc runtime. Agent không được đoán model ID hoặc tuyên bố đã đổi model của lượt
 đang chạy; nếu runtime không hỗ trợ override thì dùng model kế thừa và vẫn giữ các quality gate.
+
+### 8.3.1 Parallel work và isolation
+
+Root agent giữ objective, authority, synthesis và kết luận. Chỉ delegate contract độc lập, ghi rõ
+file/responsibility ownership và nhận về summary + evidence thay vì full transcript/raw log.
+
+Với nhiều writer thật sự độc lập, ưu tiên worktree cô lập khi runtime hỗ trợ và task không cần chia
+sẻ local state chưa commit. Worktree giảm collision nhưng tốn setup, disk/cache và không thấy ngay
+thay đổi chưa commit của session khác. Shared worktree phù hợp cho read-only hoặc path hoàn toàn
+disjoint; khi dùng nó, kiểm tra status trước mỗi batch edit, stage path tường minh và tuyệt đối
+không dùng `git add -A` để gom việc của session khác.
 
 ## 8.4 Guard độc lập công cụ
 
