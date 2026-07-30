@@ -262,6 +262,7 @@ d('Socket.IO cluster adapter — 2 instance gateway độc lập (Redis thật)'
     await waitForQuotaCount(orphanUserId, 0, 15_000);
 
     expect(live.connected).toBe(true);
+    await waitForQuotaCount(liveUserId, 1);
     expect(
       await quotaRedis.zcard(`signaling:connection-quota:${liveUserId}`),
     ).toBe(1);
