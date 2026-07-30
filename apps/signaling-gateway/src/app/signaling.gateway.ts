@@ -107,7 +107,6 @@ export class SignalingGateway
     this.subscriber.on('pmessage', (_pattern, channel, raw) =>
       this.relay(channel, raw),
     );
-    this.ensureSubscribed();
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -318,7 +317,14 @@ export class SignalingGateway
   }
 
   private ensureSubscribed(): void {
-    if (!this.subscriber || this.subscriptionInFlight) return;
+    if (
+      !this.subscriber ||
+      this.subscriber.status !== 'ready' ||
+      this.subscriptionInFlight ||
+      this.subscriptionReady
+    ) {
+      return;
+    }
     this.subscriptionReady = false;
     this.subscriptionInFlight = this.subscriber
       .psubscribe(REALTIME_USER_CHANNEL_PATTERN)
