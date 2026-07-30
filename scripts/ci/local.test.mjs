@@ -56,11 +56,18 @@ test('aggregate gates own stage watchdogs instead of a blanket 45-second timeout
   const localCi = readFileSync('scripts/ci/local.mjs', 'utf8');
   const agentVerify = readFileSync('scripts/agent/verify.mjs', 'utf8');
   const agentContract = readFileSync('AGENTS.md', 'utf8');
+  const packageJson = readFileSync('package.json', 'utf8');
 
   assert.match(localCi, /run-stage\.mjs/u);
   assert.match(localCi, /LOCAL_CI_STAGE_TIMEOUT_MS/u);
+  assert.match(localCi, /NX_TUI:\s*'false'/u);
+  assert.match(localCi, /--no-tui/u);
   assert.match(agentVerify, /run-stage\.mjs/u);
   assert.match(agentVerify, /AGENT_VERIFY_STAGE_TIMEOUT_MS/u);
+  assert.match(agentVerify, /NX_TUI:\s*'false'/u);
+  assert.match(agentVerify, /--no-tui/u);
+  assert.match(packageJson, /"lint":\s*"nx run-many -t lint --no-tui"/u);
+  assert.match(packageJson, /"test":\s*"nx run-many -t test --no-tui"/u);
   assert.match(agentVerify, /timeout: 45_000/u);
   assert.match(localCi, /ownsInnerWatchdogs/u);
   assert.match(

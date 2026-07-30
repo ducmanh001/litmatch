@@ -99,6 +99,7 @@ function runCommand(command, args, environment = {}) {
       env: {
         ...process.env,
         ...environment,
+        NX_TUI: 'false',
         LITMATCH_STAGE_LABEL: label,
         LITMATCH_STAGE_TIMEOUT_MS: String(stageTimeoutMs),
       },
@@ -180,6 +181,7 @@ if (config.projects.length > 0) {
     '-p',
     ...config.projects,
     ...cacheArguments,
+    '--no-tui',
   ]);
   run(
     [
@@ -190,6 +192,7 @@ if (config.projects.length > 0) {
       '-p',
       ...config.projects,
       ...cacheArguments,
+      '--no-tui',
     ],
     config.integration
       ? {
@@ -208,11 +211,12 @@ if (config.projects.length > 0) {
       '-p',
       ...config.projects,
       '--skip-nx-cache',
+      '--no-tui',
     ]);
   }
 }
 if (tier === 'full' && config.e2eProject) {
-  run(['nx', 'e2e', config.e2eProject, '--skip-nx-cache']);
+  run(['nx', 'e2e', config.e2eProject, '--skip-nx-cache', '--no-tui']);
 }
 
 if (tier === 'full' && config.browserBundleAudit) {

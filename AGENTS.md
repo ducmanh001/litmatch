@@ -43,6 +43,8 @@ Nếu nguồn mâu thuẫn, dừng và sửa nguồn canonical trong cùng thay 
   thể trả exit `124`); kiểm tra không còn process con trước khi retry. Không polling/sleep loop,
   process dài foreground hoặc progress filler. Cùng
   một failure chỉ sửa và retry tối đa hai lần.
+- Các lệnh Nx gate chạy trong `lint/test/build/e2e` và local CI phải ép `--no-tui` hoặc
+  `NX_TUI=false`; đừng để Nx tự đoán Terminal UI theo TTY vì dễ vỡ trong hook/CI non-interactive.
 - Tối đa hai sub-agent cho workstream độc lập; chỉ truyền contract rút gọn + file path, không
   truyền chat history/raw log. Dừng delegate khi đủ evidence; tranh luận tối đa một round.
 - Writer chạy song song ưu tiên worktree cô lập; nếu dùng chung worktree phải chia path ownership.

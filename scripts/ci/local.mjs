@@ -78,6 +78,7 @@ const environment = {
     process.env['NEXT_PUBLIC_SOCKET_URL'] ?? 'http://localhost:3001',
   NEXT_PUBLIC_LIVEKIT_URL:
     process.env['NEXT_PUBLIC_LIVEKIT_URL'] ?? 'ws://localhost:7880',
+  NX_TUI: 'false',
 };
 
 let dependenciesPrepared = false;
@@ -193,7 +194,13 @@ function runQuality() {
   run('Agent guard tests', pnpm, ['agent:test']);
   runWorkflowLint();
   run('Format check', pnpm, ['format:check']);
-  run('Lint every Nx project', pnpm, ['nx', 'run-many', '-t', 'lint']);
+  run('Lint every Nx project', pnpm, [
+    'nx',
+    'run-many',
+    '-t',
+    'lint',
+    '--no-tui',
+  ]);
 }
 
 function runCleanQuality() {
@@ -220,7 +227,7 @@ function runCleanQuality() {
       'SHELLCHECK="$(node scripts/ci/security-tools.mjs shellcheck --print-path)" && ACTIONLINT="$(node scripts/ci/security-tools.mjs actionlint --print-path)" && "$ACTIONLINT" -shellcheck="$SHELLCHECK" .github/workflows/*.yml',
     ),
     stage('clean: format check', 'pnpm format:check'),
-    stage('clean: lint', 'pnpm nx run-many -t lint'),
+    stage('clean: lint', 'pnpm nx run-many -t lint --no-tui'),
   ].join(' && ');
 
   run(
@@ -275,6 +282,7 @@ function runTestAndBuild() {
     'signaling-gateway',
     '--coverage',
     '--skip-nx-cache',
+    '--no-tui',
   ]);
   run('Remaining unit and integration tests with coverage', pnpm, [
     'nx',
@@ -283,6 +291,7 @@ function runTestAndBuild() {
     'test',
     '--coverage',
     '--exclude=admin,web,api-client,signaling-gateway',
+    '--no-tui',
   ]);
   run('Build backend projects', pnpm, [
     'nx',
@@ -290,6 +299,7 @@ function runTestAndBuild() {
     '-t',
     'build',
     '--exclude=admin,web,api-client',
+    '--no-tui',
   ]);
   run('End-to-end smoke tests', pnpm, [
     'nx',
@@ -297,6 +307,7 @@ function runTestAndBuild() {
     '-t',
     'e2e',
     '--parallel=2',
+    '--no-tui',
   ]);
 }
 
@@ -461,6 +472,7 @@ function runContainerSmoke() {
     'run-many',
     '-t',
     'build',
+    '--no-tui',
   ]);
   run('Run database migrations in the isolated local CI database', pnpm, [
     'db:migrate',
