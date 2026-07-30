@@ -7,6 +7,8 @@ import {
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
+import { signalingRedisClientOptions } from './redis-client-options';
+
 import type { SignalingEnv } from '../config/env.validation';
 
 const QUOTA_KEY_PREFIX = 'signaling:connection-quota:';
@@ -66,13 +68,10 @@ export class ConnectionQuotaService
     this.maxConnections = config.getOrThrow('WS_MAX_CONNECTIONS_PER_USER', {
       infer: true,
     });
-    this.redis = new Redis(config.getOrThrow('REDIS_URL', { infer: true }), {
-      connectTimeout: 1_000,
-      commandTimeout: 1_000,
-      maxRetriesPerRequest: 1,
-      enableOfflineQueue: false,
-      retryStrategy: (attempt) => Math.min(attempt * 100, 1_000),
-    });
+    this.redis = new Redis(
+      config.getOrThrow('REDIS_URL', { infer: true }),
+      signalingRedisClientOptions(),
+    );
     // This command client is deliberately separate from subscriber-mode connections.
     // Commands still reject during an outage (the gateway fails closed), while the listener
     // prevents a transient ioredis EventEmitter error from becoming unhandled.

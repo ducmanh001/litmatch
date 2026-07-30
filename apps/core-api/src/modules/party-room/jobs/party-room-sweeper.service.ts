@@ -67,6 +67,7 @@ export class PartyRoomSweeperService
       task: () => this.runOnce(),
       logger: this.logger,
       errorMessage: 'Party sweeper tick lỗi',
+      clusterSingleton: { dataSource: this.dataSource },
     });
 
     this.hostGraceJob.start(this.scheduler, {
@@ -77,6 +78,7 @@ export class PartyRoomSweeperService
       task: () => this.runHostGraceCheckOnce(),
       logger: this.logger,
       errorMessage: 'Party host-grace-check lỗi',
+      clusterSingleton: { dataSource: this.dataSource },
     });
   }
 

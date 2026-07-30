@@ -19,6 +19,7 @@ import { randomUUID } from 'node:crypto';
 import Redis from 'ioredis';
 
 import { ConnectionQuotaService } from './connection-quota.service';
+import { signalingRedisClientOptions } from './redis-client-options';
 import type { Namespace, Socket } from 'socket.io';
 import type {
   AccessTokenPayload,
@@ -94,13 +95,7 @@ export class SignalingGateway
 
     this.subscriber = new Redis(
       this.config.getOrThrow('REDIS_URL', { infer: true }),
-      {
-        connectTimeout: 1_000,
-        commandTimeout: 1_000,
-        maxRetriesPerRequest: 1,
-        enableOfflineQueue: false,
-        retryStrategy: (attempt) => Math.min(attempt * 100, 1_000),
-      },
+      signalingRedisClientOptions(),
     );
     this.subscriber.on('ready', () => this.ensureSubscribed());
     this.subscriber.on('close', () => {
