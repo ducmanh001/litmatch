@@ -97,7 +97,7 @@ export class CapabilitiesService {
     );
     return {
       auth: {
-        phoneOtp: this.phoneOtpCapability(production),
+        phoneOtp: this.phoneOtpCapability(),
         google: this.authProvider(
           'auth.google',
           googleClientId !== '',
@@ -187,22 +187,20 @@ export class CapabilitiesService {
     };
   }
 
-  private phoneOtpCapability(production: boolean): AuthProviderCapabilityDto {
+  private phoneOtpCapability(): AuthProviderCapabilityDto {
     const configured = this.config.getOrThrow('AUTH_PHONE_OTP_ENABLED', {
       infer: true,
     });
     const state = this.withMaintenance(
       'auth.phoneOtp',
-      configured && !production
+      configured
         ? this.state(
             CapabilityStatus.Beta,
-            'OTP đang dùng delivery phát triển và hiển thị code trực tiếp.',
+            'OTP được backend trả trực tiếp để hiển thị và tự điền.',
           )
         : this.state(
             CapabilityStatus.Disabled,
-            configured
-              ? 'OTP chưa có provider gửi mã production.'
-              : 'Đăng nhập bằng số điện thoại chưa được bật.',
+            'Đăng nhập bằng số điện thoại chưa được bật.',
           ),
     );
     return { ...state, clientId: null };

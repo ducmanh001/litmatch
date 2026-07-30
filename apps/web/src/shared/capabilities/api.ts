@@ -11,8 +11,6 @@ export const capabilityKeys = {
   runtime: ['capabilities', 'runtime'] as const,
 };
 
-const CAPABILITY_REFRESH_MS = 30_000;
-
 export function isCapabilityUsable(
   capability: CapabilityStateDto | undefined,
 ): boolean {
@@ -30,9 +28,8 @@ export function useCapabilities() {
       }
       return capabilities;
     },
-    staleTime: CAPABILITY_REFRESH_MS,
-    refetchInterval: CAPABILITY_REFRESH_MS,
-    refetchOnWindowFocus: true,
+    // Capability/env chỉ đổi cùng một lần deploy stack; bản hosted mới hoặc reload sẽ fetch lại.
+    staleTime: Infinity,
     // Rolling-deploy fallback phải kích hoạt ngay; retry nền sẽ trì hoãn login/top-up hiện có.
     retry: false,
   });

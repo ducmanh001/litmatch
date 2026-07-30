@@ -171,6 +171,8 @@ thật và trả `enabled | beta | maintenance | disabled`; UI không được t
 từ việc route/component đã tồn tại. Nút/CTA vẫn được giữ để product surface ổn định: với
 `disabled`/`maintenance`, interaction chỉ hiển thị `message` endpoint trả về và không gọi action
 API phía sau.
+Capability query không polling: mỗi app fetch một lần trong vòng đời QueryClient. Thay đổi env/
+maintenance đi cùng deploy stack; hosted release mới hoặc reload browser sẽ lấy contract mới.
 
 Trong giai đoạn rolling deploy endpoint này, auth build env cũ (`NEXT_PUBLIC_AUTH_*`,
 `NEXT_PUBLIC_PHONE_OTP_ENABLED`, `VITE_AUTH_GOOGLE_CLIENT_ID`, `VITE_PHONE_OTP_ENABLED`) chỉ là

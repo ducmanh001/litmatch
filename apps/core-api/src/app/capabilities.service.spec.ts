@@ -52,7 +52,7 @@ describe('CapabilitiesService', () => {
     expect(capabilities.notifications.push.status).toBe(CapabilityStatus.Beta);
   });
 
-  it('fails closed for every dev-only capability in production', () => {
+  it('keeps response-delivered OTP usable and fails closed for dev-only adapters in production', () => {
     const capabilities = createService({
       NODE_ENV: 'production',
     }).getCapabilities();
@@ -63,7 +63,7 @@ describe('CapabilitiesService', () => {
     expect(capabilities.notifications.push.status).toBe(
       CapabilityStatus.Disabled,
     );
-    expect(capabilities.auth.phoneOtp.status).toBe(CapabilityStatus.Disabled);
+    expect(capabilities.auth.phoneOtp.status).toBe(CapabilityStatus.Beta);
   });
 
   it('requires the complete payOS and Facebook configuration', () => {
