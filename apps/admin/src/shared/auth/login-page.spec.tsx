@@ -91,7 +91,9 @@ describe('LoginPage', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: 'Gửi mã OTP' }));
 
-    expect(await screen.findByText('Mã OTP của bạn là 123456')).toBeVisible();
+    expect(
+      await screen.findByText('Mã xác thực (OTP) của bạn là 123456'),
+    ).toBeVisible();
     expect(screen.getByLabelText('Mã OTP')).toHaveValue('123456');
   });
 

@@ -102,7 +102,9 @@ describe('LoginForm', () => {
       name: /Gửi lại mã \(30s\)/,
     });
     expect(resendButton).toBeDisabled();
-    expect(await screen.findByText('Mã OTP của bạn là 123456')).toBeVisible();
+    expect(
+      await screen.findByText('Mã xác thực (OTP) của bạn là 123456'),
+    ).toBeVisible();
     const otpDigitInputs = screen
       .getAllByRole('textbox')
       .filter((input) => input.getAttribute('inputmode') === 'numeric');
@@ -127,7 +129,9 @@ describe('LoginForm', () => {
 
     await user.click(readyButton);
     expect(post).toHaveBeenCalledTimes(2);
-    expect(await screen.findByText('Mã OTP của bạn là 123456')).toBeVisible();
+    expect(
+      await screen.findByText('Mã xác thực (OTP) của bạn là 123456'),
+    ).toBeVisible();
     // Lần gửi lại phải dùng ĐÚNG phone đã chuẩn hoá trước đó, không normalize lại.
     expect(post).toHaveBeenLastCalledWith('/api/v1/auth/otp/request', {
       body: { phone: '+84912345678' },
