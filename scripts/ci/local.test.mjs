@@ -184,6 +184,10 @@ test('quality profiles check formatting without rewriting the workspace', () => 
 
 test('local and GitHub CI provide every required non-database application secret', () => {
   const localCi = readFileSync('scripts/ci/local.mjs', 'utf8');
+  const coreSmoke = localCi.slice(
+    localCi.indexOf("run('Start Core API smoke container'"),
+    localCi.indexOf("run('Start Signaling Gateway smoke container'"),
+  );
 
   for (const variable of [
     'JWT_SECRET',
@@ -192,6 +196,11 @@ test('local and GitHub CI provide every required non-database application secret
     'MATCHING_GUEST_QUOTA_PEPPER',
   ]) {
     assert.match(localCi, new RegExp(`\\b${variable}:`, 'u'), variable);
+    assert.match(
+      coreSmoke,
+      new RegExp(`${variable}=\\$\\{environment\\.${variable}\\}`, 'u'),
+      `${variable} must reach the clean Core API smoke container`,
+    );
   }
 });
 
