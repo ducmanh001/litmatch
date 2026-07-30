@@ -30,6 +30,7 @@ import {
 import { ConversationService } from '../friend/services/conversation.service';
 import { MatchingService } from '../matching';
 import { MatcherWakeup } from '../matching/matcher-wakeup';
+import { GuestMatchQuotaService } from '../matching/services/guest-match-quota.service';
 import {
   MatchTicket,
   MatchTicketStatus,
@@ -241,6 +242,10 @@ d('Soul Match integration (Postgres thật)', () => {
       configStub,
       {} as never,
       new MatcherWakeup(),
+      {
+        authorize: async () => undefined,
+        consume: async () => undefined,
+      } as unknown as GuestMatchQuotaService,
     );
     service = new SoulMatchService(
       ds,
