@@ -127,7 +127,7 @@ function build() {
     'web',
     'admin',
     '--skip-nx-cache',
-    '--no-tui',
+    '--outputStyle=static',
   ]);
   run('docker', [
     'build',

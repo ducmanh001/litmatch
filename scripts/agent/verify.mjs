@@ -181,7 +181,7 @@ if (config.projects.length > 0) {
     '-p',
     ...config.projects,
     ...cacheArguments,
-    '--no-tui',
+    '--outputStyle=static',
   ]);
   run(
     [
@@ -192,7 +192,7 @@ if (config.projects.length > 0) {
       '-p',
       ...config.projects,
       ...cacheArguments,
-      '--no-tui',
+      '--outputStyle=static',
     ],
     config.integration
       ? {
@@ -211,12 +211,18 @@ if (config.projects.length > 0) {
       '-p',
       ...config.projects,
       '--skip-nx-cache',
-      '--no-tui',
+      '--outputStyle=static',
     ]);
   }
 }
 if (tier === 'full' && config.e2eProject) {
-  run(['nx', 'e2e', config.e2eProject, '--skip-nx-cache', '--no-tui']);
+  run([
+    'nx',
+    'e2e',
+    config.e2eProject,
+    '--skip-nx-cache',
+    '--outputStyle=static',
+  ]);
 }
 
 if (tier === 'full' && config.browserBundleAudit) {

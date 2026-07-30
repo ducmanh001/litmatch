@@ -61,19 +61,26 @@ test('aggregate gates own stage watchdogs instead of a blanket 45-second timeout
   assert.match(localCi, /run-stage\.mjs/u);
   assert.match(localCi, /LOCAL_CI_STAGE_TIMEOUT_MS/u);
   assert.match(localCi, /NX_TUI:\s*'false'/u);
-  assert.match(localCi, /--no-tui/u);
+  assert.match(localCi, /--outputStyle=static/u);
   assert.match(agentVerify, /run-stage\.mjs/u);
   assert.match(agentVerify, /AGENT_VERIFY_STAGE_TIMEOUT_MS/u);
   assert.match(agentVerify, /NX_TUI:\s*'false'/u);
-  assert.match(agentVerify, /--no-tui/u);
-  assert.match(packageJson, /"lint":\s*"nx run-many -t lint --no-tui"/u);
-  assert.match(packageJson, /"test":\s*"nx run-many -t test --no-tui"/u);
+  assert.match(agentVerify, /--outputStyle=static/u);
+  assert.match(
+    packageJson,
+    /"lint":\s*"nx run-many -t lint --outputStyle=static"/u,
+  );
+  assert.match(
+    packageJson,
+    /"test":\s*"nx run-many -t test --outputStyle=static"/u,
+  );
   assert.match(agentVerify, /timeout: 45_000/u);
   assert.match(localCi, /ownsInnerWatchdogs/u);
   assert.match(
-    agentContract,
-    /Không bọc\s+nguyên quality gate\/test\/build\/CI bằng 45 giây/u,
+    readFileSync('nx.json', 'utf8'),
+    /"tui":\s*\{\s*"enabled":\s*false\s*\}/su,
   );
+  assert.match(agentContract, /NX_TUI=false[\s\S]{0,160}--outputStyle=static/u);
 });
 
 test('commit owns formatting and staged guard checks; push owns the complete preflight', () => {

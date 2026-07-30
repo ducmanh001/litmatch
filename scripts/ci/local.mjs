@@ -199,7 +199,7 @@ function runQuality() {
     'run-many',
     '-t',
     'lint',
-    '--no-tui',
+    '--outputStyle=static',
   ]);
 }
 
@@ -227,7 +227,7 @@ function runCleanQuality() {
       'SHELLCHECK="$(node scripts/ci/security-tools.mjs shellcheck --print-path)" && ACTIONLINT="$(node scripts/ci/security-tools.mjs actionlint --print-path)" && "$ACTIONLINT" -shellcheck="$SHELLCHECK" .github/workflows/*.yml',
     ),
     stage('clean: format check', 'pnpm format:check'),
-    stage('clean: lint', 'pnpm nx run-many -t lint --no-tui'),
+    stage('clean: lint', 'pnpm nx run-many -t lint --outputStyle=static'),
   ].join(' && ');
 
   run(
@@ -282,7 +282,7 @@ function runTestAndBuild() {
     'signaling-gateway',
     '--coverage',
     '--skip-nx-cache',
-    '--no-tui',
+    '--outputStyle=static',
   ]);
   run('Remaining unit and integration tests with coverage', pnpm, [
     'nx',
@@ -291,7 +291,7 @@ function runTestAndBuild() {
     'test',
     '--coverage',
     '--exclude=admin,web,api-client,signaling-gateway',
-    '--no-tui',
+    '--outputStyle=static',
   ]);
   run('Build backend projects', pnpm, [
     'nx',
@@ -299,7 +299,7 @@ function runTestAndBuild() {
     '-t',
     'build',
     '--exclude=admin,web,api-client',
-    '--no-tui',
+    '--outputStyle=static',
   ]);
   run('End-to-end smoke tests', pnpm, [
     'nx',
@@ -307,7 +307,7 @@ function runTestAndBuild() {
     '-t',
     'e2e',
     '--parallel=2',
-    '--no-tui',
+    '--outputStyle=static',
   ]);
 }
 
@@ -472,7 +472,7 @@ function runContainerSmoke() {
     'run-many',
     '-t',
     'build',
-    '--no-tui',
+    '--outputStyle=static',
   ]);
   run('Run database migrations in the isolated local CI database', pnpm, [
     'db:migrate',
