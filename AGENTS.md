@@ -37,10 +37,19 @@ Nếu nguồn mâu thuẫn, dừng và sửa nguồn canonical trong cùng thay 
 
 - Dùng `rg` có glob; đọc tối đa 200 dòng/lần. Không nạp file trên 100 KB, lockfile, bundle hoặc
   build artifact. Log mặc định tối đa 20 dòng liên quan.
-- CLI có thể treo phải bọc `timeout 45s`. Không polling/sleep loop, process dài foreground hoặc
-  progress filler. Cùng một failure chỉ sửa và retry tối đa hai lần.
+- Chỉ probe ngắn có nguy cơ treo mới bọc `timeout --signal=TERM --kill-after=5s 45s`. Không bọc
+  nguyên quality gate/test/build/CI bằng 45 giây: dùng watchdog theo stage của runner và để tool
+  yield output định kỳ. Chỉ kết luận `TIMED_OUT` khi runner đã ghi marker đó (command thật cũng có
+  thể trả exit `124`); kiểm tra không còn process con trước khi retry. Không polling/sleep loop,
+  process dài foreground hoặc progress filler. Cùng
+  một failure chỉ sửa và retry tối đa hai lần.
+- Các lệnh Nx gate chạy trong `lint/test/build/e2e` và local CI phải ép `NX_TUI=false` và
+  `--outputStyle=static`; đừng để Nx tự đoán Terminal UI theo TTY vì dễ vỡ trong hook/CI
+  non-interactive, và đừng ghép `--no-tui` với `--outputStyle` vì Nx xem chúng là loại trừ nhau.
 - Tối đa hai sub-agent cho workstream độc lập; chỉ truyền contract rút gọn + file path, không
   truyền chat history/raw log. Dừng delegate khi đủ evidence; tranh luận tối đa một round.
+- Writer chạy song song ưu tiên worktree cô lập; nếu dùng chung worktree phải chia path ownership.
+  Commit chỉ stage path thuộc task, không dùng `git add -A` khi còn thay đổi của session khác.
 
 ## Lệnh chính
 

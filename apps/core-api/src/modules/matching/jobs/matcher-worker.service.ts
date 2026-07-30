@@ -102,6 +102,8 @@ export class MatcherWorkerService
       task: () => this.runOnce(),
       logger: this.logger,
       errorMessage: 'Matcher tick lỗi',
+      // Enqueue wake-up vẫn chạy song song theo pod; chỉ backstop định kỳ cần một replica.
+      clusterSingleton: { dataSource: this.dataSource },
     });
   }
 

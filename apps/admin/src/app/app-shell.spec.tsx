@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { vi } from 'vitest';
 
@@ -53,10 +53,14 @@ describe('AppShell', () => {
       screen.getByRole('complementary', { name: 'Menu đang mở rộng' }),
     ).toBeVisible();
     expect(sidebarSlot).toHaveClass('w-[74px]');
-    expect(screen.getByText('Litmatch Admin')).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Tổng quan' })).toHaveClass(
-      'w-full',
-    );
+    expect(
+      screen.getByRole('complementary', { name: 'Menu đang mở rộng' }),
+    ).toHaveTextContent('Litmatch Admin');
+    expect(
+      screen
+        .getByRole('complementary', { name: 'Menu đang mở rộng' })
+        .querySelector('a[href="/"]'),
+    ).toHaveClass('w-full');
     expect(
       screen.getByRole('button', { name: 'Thu gọn menu' }),
     ).toHaveAttribute('aria-expanded', 'true');
@@ -66,6 +70,47 @@ describe('AppShell', () => {
     expect(
       screen.getByRole('complementary', { name: 'Menu đang thu gọn' }),
     ).toBeVisible();
-    expect(screen.queryByText('Litmatch Admin')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('complementary', { name: 'Menu đang thu gọn' }),
+    ).not.toHaveTextContent('Litmatch Admin');
+  });
+
+  it('mở drawer mobile và command search có thể điều hướng bằng bàn phím', () => {
+    renderAppShell();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mở menu' }));
+    expect(screen.getByRole('dialog', { name: 'Menu mobile' })).toHaveClass(
+      'translate-x-0',
+    );
+    expect(
+      within(screen.getByRole('dialog', { name: 'Menu mobile' })).getByRole(
+        'button',
+        { name: 'Đóng menu' },
+      ),
+    ).toHaveFocus();
+
+    fireEvent.keyDown(document, { key: 'k', ctrlKey: true });
+    const search = screen.getByLabelText('Tìm trang quản trị');
+    fireEvent.change(search, { target: { value: 'users' } });
+    fireEvent.keyDown(search, { key: 'ArrowDown' });
+    fireEvent.keyDown(search, { key: 'Enter' });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Quản lý người dùng' }),
+    ).toBeVisible();
+  });
+
+  it('drawer đóng bằng Escape và trả focus về nút mở', () => {
+    renderAppShell();
+    const trigger = screen.getByRole('button', { name: 'Mở menu' });
+    fireEvent.click(trigger);
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(
+      screen.queryByRole('dialog', { name: 'Menu mobile' }),
+    ).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 });

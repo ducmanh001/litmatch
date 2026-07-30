@@ -16,6 +16,8 @@ export type PartyRole = PartyRoomMemberDto['role'];
 
 const ROOM_LIST_PAGE_LIMIT = 20;
 
+export const PARTY_ROOM_DETAIL_REFETCH_INTERVAL_MS = 15_000;
+
 /** Host và speaker publish được — audience bị chặn ở tầng SFU, client phản ánh lại cho nhất quán. */
 export function canPublishRole(role: PartyRole | undefined): boolean {
   return role === 'host' || role === 'speaker';
@@ -83,7 +85,7 @@ export function useRoomDetail(roomId: string) {
       });
       return res.data?.data;
     },
-    refetchInterval: 5000,
+    refetchInterval: PARTY_ROOM_DETAIL_REFETCH_INTERVAL_MS,
   });
 }
 

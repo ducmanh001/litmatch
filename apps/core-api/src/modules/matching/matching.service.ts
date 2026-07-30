@@ -42,6 +42,10 @@ import { EconomyService, TransactionType } from '../economy';
 import { NotificationService, NotificationType } from '../notification';
 import { MatcherWakeup } from './matcher-wakeup';
 import { UserService, UserStatus } from '../user';
+import {
+  GuestMatchQuotaService,
+  type GuestQuotaRequestContext,
+} from './services/guest-match-quota.service';
 
 import type {
   MatchConfirmedEventData,
@@ -88,6 +92,7 @@ export class MatchingService {
     private readonly config: ConfigService<CoreApiEnv, true>,
     @Inject(MATCHING_REDIS) private readonly redis: Redis,
     private readonly matcherWakeup: MatcherWakeup,
+    private readonly guestQuota: GuestMatchQuotaService,
   ) {}
 
   /**
@@ -98,40 +103,60 @@ export class MatchingService {
     user: AuthenticatedUser,
     dto: JoinQueueDto,
     idempotencyKey: string,
+    quotaContext: GuestQuotaRequestContext = { ip: 'unknown' },
   ): Promise<MatchTicket> {
-    const profile = await this.userService.getByIdOrThrow(user.userId);
-    if (profile.status === UserStatus.Banned) {
-      throw new DomainException(
-        MatchingErrors.USER_BANNED,
-        'Tài khoản bị khoá, không thể vào hàng đợi',
-        HttpStatus.FORBIDDEN,
-      );
-    }
-
-    // region/ageBand server tự derive từ profile — không tin client (docs/10 § 10.0.B)
-    const region = profile.region ?? DEFAULT_REGION;
-    const ageBand = this.ageBandOf(profile.birthDate);
-    // preference là lựa chọn hợp lệ của client (như matchType); không gửi = any (docs/01 #13)
     const genderPreference = dto.genderPreference ?? GenderPreference.Any;
     const prefixedKey = joinIdempotencyKey(user.userId, idempotencyKey);
 
     let ticket: MatchTicket;
     try {
-      ticket = await this.ticketRepo.save(
-        this.ticketRepo.create({
-          userId: user.userId,
-          matchType: dto.matchType,
-          region,
-          ageBand,
-          genderPreference,
-          status: MatchTicketStatus.Queued,
-          enqueuedAt: new Date(),
-          priorityBoostMs: 0,
-          trustPenaltyMs: this.trustPenaltyMsOf(profile.trustScore),
-          sessionId: null,
+      ticket = await this.dataSource.transaction(async (manager) => {
+        // Lock + DB-fresh isGuest: JWT cũ sau upgrade không thể giữ hoặc né guest restriction.
+        const authorization = await this.guestQuota.authorize(
+          manager,
+          user.userId,
+          quotaContext,
+        );
+        const profile = authorization.user;
+        if (profile.status === UserStatus.Banned) {
+          throw new DomainException(
+            MatchingErrors.USER_BANNED,
+            'Tài khoản bị khoá, không thể vào hàng đợi',
+            HttpStatus.FORBIDDEN,
+          );
+        }
+
+        // Replay được nhận diện trước consume; retry không tốn quota.
+        const replay = await manager.findOneBy(MatchTicket, {
           idempotencyKey: prefixedKey,
-        }),
-      );
+        });
+        if (replay) {
+          this.assertJoinReplay(
+            replay,
+            user.userId,
+            dto.matchType,
+            genderPreference,
+          );
+          return replay;
+        }
+
+        await this.guestQuota.consume(manager, authorization);
+        return manager.save(
+          manager.create(MatchTicket, {
+            userId: user.userId,
+            matchType: dto.matchType,
+            region: profile.region ?? DEFAULT_REGION,
+            ageBand: this.ageBandOf(profile.birthDate),
+            genderPreference,
+            status: MatchTicketStatus.Queued,
+            enqueuedAt: new Date(),
+            priorityBoostMs: 0,
+            trustPenaltyMs: this.trustPenaltyMsOf(profile.trustScore),
+            sessionId: null,
+            idempotencyKey: prefixedKey,
+          }),
+        );
+      });
     } catch (err) {
       if (!isUniqueViolation(err)) throw err;
       // Replay cùng Idempotency-Key? — check TRƯỚC, vì cả 2 unique constraint có thể cùng dính
@@ -139,17 +164,12 @@ export class MatchingService {
         idempotencyKey: prefixedKey,
       });
       if (existing) {
-        if (
-          existing.userId !== user.userId ||
-          existing.matchType !== dto.matchType ||
-          existing.genderPreference !== genderPreference
-        ) {
-          throw new DomainException(
-            MatchingErrors.TICKET_IDEMPOTENCY_CONFLICT,
-            'Idempotency-Key đã dùng cho 1 request khác nội dung',
-            HttpStatus.CONFLICT,
-          );
-        }
+        this.assertJoinReplay(
+          existing,
+          user.userId,
+          dto.matchType,
+          genderPreference,
+        );
         // Replay: đảm bảo ticket còn queued vẫn có mặt trong Redis (NX — không đè score đã boost)
         if (existing.status === MatchTicketStatus.Queued)
           await this.ensureEnqueued(existing);
@@ -169,6 +189,25 @@ export class MatchingService {
     // sẽ re-enqueue (nhánh replay ở trên), sweeper là chốt chặn cuối (expire quá hạn).
     await this.ensureEnqueued(ticket);
     return ticket;
+  }
+
+  private assertJoinReplay(
+    ticket: MatchTicket,
+    userId: string,
+    matchType: MatchType,
+    genderPreference: GenderPreference,
+  ): void {
+    if (
+      ticket.userId === userId &&
+      ticket.matchType === matchType &&
+      ticket.genderPreference === genderPreference
+    )
+      return;
+    throw new DomainException(
+      MatchingErrors.TICKET_IDEMPOTENCY_CONFLICT,
+      'Idempotency-Key đã dùng cho 1 request khác nội dung',
+      HttpStatus.CONFLICT,
+    );
   }
 
   async getTicket(

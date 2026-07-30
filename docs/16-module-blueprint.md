@@ -70,11 +70,58 @@ Quy tắc gốc module:
 | Job nền/worker/scheduler            | `jobs/`         | Lifecycle, retry, interval và idempotency của job                                                               |
 | Webhook bên thứ ba                  | `webhooks/`     | Controller, signature verification và DTO webhook                                                               |
 | Redis/queue provider riêng module   | `redis/`        | Provider, key builder và script thuộc store đó                                                                  |
-| Event contract/handler              | `events/`       | Event versioning; DB write + publish dùng outbox khi cần                                                        |
+| Event contract/handler              | `events/`       | `*.event.ts` là contract; `*.handler.ts` là inbound adapter; DB write + publish dùng outbox khi cần             |
 
 `common/` chỉ dành cho hạ tầng trung lập dùng chung. Không chuyển nghiệp vụ của một
 module vào `common/` chỉ để tránh import. Quy tắc quyết định pure helper nên nằm ở
 `common/` hay giữ trong module: [11-engineering-principles.md § DRY có chọn lọc](./11-engineering-principles.md#dry-có-chọn-lọc-aha-trước-abstraction).
+
+### 16.3.1 Layer và chiều phụ thuộc
+
+Folder thể hiện **vai trò**, không phải nghi thức bắt buộc. Module đơn giản chỉ cần facade,
+controller và entity vẫn hợp lệ; khi đã tách vai trò thì dependency phải đi theo chiều sau:
+
+```text
+controllers / webhooks / event handlers ──→ application facade / use cases
+application facade / use cases ───────────→ domain rules / contracts / ports
+repositories / clients / redis ───────────→ domain/application ports
+
+<module>.module.ts = composition root nối toàn bộ provider
+```
+
+- Mũi tên là **compile-time dependency**. Outbound adapter implement port nên adapter phụ thuộc
+  contract/port, không đảo chiều port phụ thuộc adapter.
+- Controller, webhook và `*.handler.ts` không inject `Repository<T>`, `DataSource` hoặc custom
+  repository; chúng gọi facade/use case.
+- Application/domain code không import `controllers/`, `webhooks/`, `jobs/` hoặc event handler.
+- Job/worker là inbound process adapter nhưng được phép sở hữu transaction/persistence trong chính
+  domain khi batch/locking/idempotency cần một boundary nguyên tử. Đây là pragmatic exception của
+  code hiện tại; job không trở thành public API và application/domain vẫn không phụ thuộc ngược nó.
+- Entity cùng module chỉ phụ thuộc entity hoặc domain constant cần cho persistence mapping; không
+  gọi service/client/job.
+- Port là contract nhìn từ use case; adapter implement port. Không đặt HTTP/SDK type của provider
+  vào public application contract.
+- Cross-module luôn qua `index.ts`; layer không tạo ngoại lệ cho việc import nội tạng module khác.
+
+DTO hiện được một số facade legacy nhận trực tiếp. Với use case mới có nhiều entrypoint, event
+consumer hoặc rule cần test độc lập transport, controller phải map DTO sang `*Input` và map
+`*Result` sang output DTO. Không bắt module CRUD đơn giản nhân đôi type nếu mapping chưa tạo giá
+trị; khi độ phức tạp xuất hiện thì không tiếp tục mở rộng coupling DTO → application.
+
+### 16.3.2 Event role
+
+`events/` chỉ xuất hiện khi module thật sự publish/consume event:
+
+- Domain/in-process reaction không được thay synchronous check hoặc transaction cần kết quả ngay.
+- Integration event durable ghi outbox cùng transaction; handler chịu at-least-once bằng
+  inbox/dedup và version compatibility.
+- Realtime delta ephemeral dùng contract riêng, publish sau commit và client phải refetch được.
+- `*.event.ts`/event type là contract nên application code có thể import; `*.handler.ts` là inbound
+  adapter: mỏng, idempotent, map envelope vào application use case; không chứa business rule,
+  truy cập persistence trực tiếp hoặc mutate bảng module khác.
+
+Decision matrix, event envelope và đánh đổi canonical:
+[ADR 0011](./adr/0011-hybrid-modular-layered-event-driven.md).
 
 ## 16.4 Public API và ownership
 

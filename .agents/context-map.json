@@ -80,6 +80,11 @@
       "docs/generated/ai-native-handbook.docx",
       "docs/20-ai-native-handbook.md"
     ],
+    "invariants": [
+      "AGENTS.md và .agents/skills là canonical; adapter runtime chỉ là symlink đúng target",
+      "Startup context chỉ chứa tín hiệu ổn định; roadmap/backlog được nạp theo điều kiện",
+      "Rule deterministic cần positive/negative test; phán đoán nghiệp vụ vẫn cần review"
+    ],
     "checks": [
       "pnpm agent:check",
       "pnpm agent:test",

@@ -1,3 +1,5 @@
+import { EventEmitter } from 'node:events';
+
 import { SignalingGateway } from './signaling.gateway';
 
 import type { ConfigService } from '@nestjs/config';
@@ -5,9 +7,11 @@ import type { JwtService } from '@nestjs/jwt';
 import type { Socket } from 'socket.io';
 
 import type { SignalingEnv } from '../config/env.validation';
+import type { ConnectionQuotaService } from './connection-quota.service';
 
 function makeGateway(verifyImpl?: jest.Mock): {
   gateway: SignalingGateway;
+  connectionQuota: ConnectionQuotaService;
   emit: jest.Mock;
   to: jest.Mock;
 } {
@@ -21,18 +25,30 @@ function makeGateway(verifyImpl?: jest.Mock): {
       throw new Error(`missing config ${key}`);
     },
   } as unknown as ConfigService<SignalingEnv, true>;
-  const gateway = new SignalingGateway(jwtService, config);
+  const connectionQuota = {
+    leaseMs: 90_000,
+    maxConnections: 3,
+    isReady: jest.fn(() => true),
+    acquire: jest.fn(async () => true),
+    refresh: jest.fn(async () => true),
+    release: jest.fn(async () => undefined),
+    onUnavailable: jest.fn(() => jest.fn()),
+  } as unknown as ConnectionQuotaService;
+  const gateway = new SignalingGateway(jwtService, config, connectionQuota);
   const emit = jest.fn();
   const to = jest.fn(() => ({ emit }));
   // gán server mock (bình thường do @WebSocketServer inject sau afterInit)
   Object.assign(gateway, { server: { to } });
-  return { gateway, emit, to };
+  return { gateway, connectionQuota, emit, to };
 }
 
 function makeSocket(token?: unknown): Socket {
   return {
     handshake: { auth: token === undefined ? {} : { token } },
     data: {},
+    conn: Object.assign(new EventEmitter(), { readyState: 'open' }),
+    join: jest.fn(async () => undefined),
+    disconnect: jest.fn(),
   } as unknown as Socket;
 }
 
@@ -109,25 +125,136 @@ describe('SignalingGateway (unit — fanout thuần, không business logic)', ()
     expect(gateway.ping()).toEqual({ event: 'pong', data: 'pong' });
   });
 
-  it('giới hạn tối đa 3 socket đang hoạt động cho cùng một user và nhả slot khi disconnect', () => {
+  it('delegate admission/release qua Redis quota service bằng lease riêng', async () => {
     const { gateway } = makeGateway();
+    const quota = (
+      gateway as unknown as { connectionQuota: ConnectionQuotaService }
+    ).connectionQuota;
     const admit = (
       gateway as unknown as {
-        admitConnection: (socket: Socket, userId: string) => boolean;
+        admitConnection: (socket: Socket, userId: string) => Promise<boolean>;
       }
     ).admitConnection;
-    const sockets = [makeSocket(), makeSocket(), makeSocket(), makeSocket()];
-    for (const socket of sockets) {
-      (socket.data as { userId?: string }).userId = 'user-1';
-    }
+    const socket = makeSocket();
+    (socket.data as { userId?: string }).userId = 'user-1';
 
-    expect(admit.call(gateway, sockets[0], 'user-1')).toBe(true);
-    expect(admit.call(gateway, sockets[1], 'user-1')).toBe(true);
-    expect(admit.call(gateway, sockets[2], 'user-1')).toBe(true);
-    expect(admit.call(gateway, sockets[3], 'user-1')).toBe(false);
+    await expect(admit.call(gateway, socket, 'user-1')).resolves.toBe(true);
+    const leaseId = (socket.data as { quotaLeaseId?: string }).quotaLeaseId;
+    expect(leaseId).toEqual(expect.any(String));
+    expect(quota.acquire).toHaveBeenCalledWith('user-1', leaseId);
 
-    gateway.handleDisconnect(sockets[0]);
-    expect(admit.call(gateway, sockets[3], 'user-1')).toBe(true);
+    gateway.handleConnection(socket);
+    gateway.handleDisconnect(socket);
+    await Promise.resolve();
+    expect(quota.release).toHaveBeenCalledWith('user-1', leaseId);
+  });
+
+  it('transport đóng trong async handshake → release lease đã acquire', async () => {
+    const { gateway, connectionQuota } = makeGateway();
+    const socket = makeSocket();
+    const admit = (
+      gateway as unknown as {
+        admitConnection: (socket: Socket, userId: string) => Promise<boolean>;
+      }
+    ).admitConnection;
+
+    await admit.call(gateway, socket, 'user-1');
+    (socket.conn as unknown as EventEmitter).emit('close');
+    await Promise.resolve();
+
+    expect(connectionQuota.release).toHaveBeenCalledWith(
+      'user-1',
+      expect.any(String),
+    );
+  });
+
+  it('transport đóng trong lúc Redis acquire pending → release ngay khi acquire trả về', async () => {
+    const { gateway, connectionQuota } = makeGateway();
+    let resolveAcquire!: (value: boolean) => void;
+    jest
+      .mocked(connectionQuota.acquire)
+      .mockReturnValueOnce(
+        new Promise<boolean>((resolve) => (resolveAcquire = resolve)),
+      );
+    const socket = makeSocket();
+    const admit = (
+      gateway as unknown as {
+        admitConnection: (socket: Socket, userId: string) => Promise<boolean>;
+      }
+    ).admitConnection;
+
+    const pending = admit.call(gateway, socket, 'user-1');
+    Object.assign(socket.conn, { readyState: 'closed' });
+    (socket.conn as unknown as EventEmitter).emit('close');
+    resolveAcquire(true);
+
+    await expect(pending).rejects.toThrow('CONNECTION_QUOTA_UNAVAILABLE');
+    await Promise.resolve();
+    expect(connectionQuota.release).toHaveBeenCalledWith(
+      'user-1',
+      expect.any(String),
+    );
+  });
+
+  it('Redis quota lỗi lúc acquire → fail closed với lỗi handshake rõ ràng', async () => {
+    const { gateway, connectionQuota } = makeGateway();
+    jest
+      .mocked(connectionQuota.acquire)
+      .mockRejectedValueOnce(new Error('redis unavailable'));
+    const admit = (
+      gateway as unknown as {
+        admitConnection: (socket: Socket, userId: string) => Promise<boolean>;
+      }
+    ).admitConnection;
+
+    await expect(admit.call(gateway, makeSocket(), 'user-1')).rejects.toThrow(
+      'CONNECTION_QUOTA_UNAVAILABLE',
+    );
+  });
+
+  it('Redis quota lỗi lúc refresh → ngắt socket để fail closed', async () => {
+    jest.useFakeTimers();
+    const { gateway, connectionQuota } = makeGateway();
+    jest
+      .mocked(connectionQuota.refresh)
+      .mockRejectedValueOnce(new Error('redis unavailable'));
+    const socket = makeSocket();
+    const disconnect = jest.fn();
+    Object.assign(socket, { disconnect });
+    Object.assign(socket.data, { userId: 'user-1', quotaLeaseId: 'lease-1' });
+    (
+      gateway as unknown as {
+        startLeaseRefresh: (socket: Socket, userId: string) => void;
+      }
+    ).startLeaseRefresh(socket, 'user-1');
+
+    await jest.advanceTimersByTimeAsync(30_000);
+    expect(disconnect).toHaveBeenCalledWith(true);
+    gateway.handleDisconnect(socket);
+    jest.useRealTimers();
+  });
+
+  it('shutdown ngắt socket trước khi release global slot', async () => {
+    const { gateway, connectionQuota } = makeGateway();
+    const socket = makeSocket();
+    const admit = (
+      gateway as unknown as {
+        admitConnection: (socket: Socket, userId: string) => Promise<boolean>;
+      }
+    ).admitConnection;
+    (socket.data as { userId?: string }).userId = 'user-1';
+    await admit.call(gateway, socket, 'user-1');
+    gateway.handleConnection(socket);
+
+    await gateway.onModuleDestroy();
+
+    const disconnect = jest.mocked(socket.disconnect);
+    const release = jest.mocked(connectionQuota.release);
+    expect(disconnect).toHaveBeenCalledWith(true);
+    expect(release).toHaveBeenCalled();
+    expect(disconnect.mock.invocationCallOrder[0]).toBeLessThan(
+      release.mock.invocationCallOrder[0],
+    );
   });
 
   it('shutdown buộc disconnect khi Redis đang reconnect và quit thất bại', async () => {
@@ -139,7 +266,7 @@ describe('SignalingGateway (unit — fanout thuần, không business logic)', ()
     };
     Object.assign(gateway, { subscriber, subscriptionReady: true });
 
-    await gateway.onApplicationShutdown();
+    await gateway.onModuleDestroy();
 
     expect(subscriber.quit).toHaveBeenCalledTimes(1);
     expect(subscriber.disconnect).toHaveBeenCalledTimes(1);

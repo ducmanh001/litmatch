@@ -10,12 +10,18 @@ import { AuthIdentity, AuthProvider } from './entities/auth-identity.entity';
 import { OtpService } from './services/otp.service';
 import { SocialVerifierService } from './services/social-verifier';
 import { TokenService } from './services/token.service';
+import { GuestDeviceTokenService } from './services/guest-device-token.service';
 
 describe('AuthService', () => {
   const identityRepo = { findOneBy: jest.fn(), findOneByOrFail: jest.fn() };
   const manager = {
     save: jest.fn((e: unknown) => Promise.resolve(e)),
     create: jest.fn((_cls: unknown, obj: object) => obj),
+    findOne: jest.fn(),
+    findOneBy: jest.fn(),
+    insert: jest.fn().mockResolvedValue({ identifiers: [] }),
+    update: jest.fn().mockResolvedValue({ affected: 1 }),
+    delete: jest.fn().mockResolvedValue({ affected: 1 }),
   };
   const dataSource = {
     transaction: jest.fn(async (cb: (m: typeof manager) => Promise<unknown>) =>
@@ -37,6 +43,9 @@ describe('AuthService', () => {
   };
   const otpService = { requestOtp: jest.fn(), verifyOtp: jest.fn() };
   const socialVerifier = { verify: jest.fn() };
+  const guestDeviceTokens = {
+    issue: jest.fn().mockResolvedValue('signed-device-token'),
+  };
   let phoneOtpEnabled = true;
   const config = {
     getOrThrow: (key: string) => {
@@ -68,6 +77,7 @@ describe('AuthService', () => {
         { provide: TokenService, useValue: tokenService },
         { provide: OtpService, useValue: otpService },
         { provide: SocialVerifierService, useValue: socialVerifier },
+        { provide: GuestDeviceTokenService, useValue: guestDeviceTokens },
         { provide: ConfigService, useValue: config },
       ],
     }).compile();
@@ -153,5 +163,57 @@ describe('AuthService', () => {
     ).rejects.toMatchObject({ code: AuthErrors.PHONE_OTP_DISABLED });
     expect(otpService.requestOtp).not.toHaveBeenCalled();
     expect(otpService.verifyOtp).not.toHaveBeenCalled();
+  });
+
+  it('social upgrade giữ userId và thu hồi guest credential + refresh session cũ', async () => {
+    socialVerifier.verify.mockResolvedValue({ uid: 'google-upgrade-1' });
+    manager.findOne.mockResolvedValue(user());
+    manager.findOneBy.mockResolvedValue(null);
+
+    const session = await service.upgradeGuestWithSocial(
+      'u1',
+      AuthProvider.Google,
+      'id.token',
+    );
+
+    expect(session.userId).toBe('u1');
+    expect(manager.insert).toHaveBeenCalledWith(
+      AuthIdentity,
+      expect.objectContaining({
+        userId: 'u1',
+        provider: AuthProvider.Google,
+        providerUid: 'google-upgrade-1',
+      }),
+    );
+    expect(manager.delete).toHaveBeenCalledWith(AuthIdentity, {
+      userId: 'u1',
+      provider: AuthProvider.Guest,
+    });
+    expect(manager.update).toHaveBeenCalled();
+  });
+
+  it('social upgrade retry đúng identity idempotent; identity user khác trả conflict', async () => {
+    socialVerifier.verify.mockResolvedValue({ uid: 'google-upgrade-1' });
+    manager.findOne.mockResolvedValue(user({ isGuest: false }));
+    manager.findOneBy.mockResolvedValue({
+      userId: 'u1',
+      provider: AuthProvider.Google,
+      providerUid: 'google-upgrade-1',
+    });
+
+    await expect(
+      service.upgradeGuestWithSocial('u1', AuthProvider.Google, 'id.token'),
+    ).resolves.toMatchObject({ userId: 'u1', isGuest: false });
+    expect(manager.insert).not.toHaveBeenCalled();
+
+    manager.findOne.mockResolvedValue(user());
+    manager.findOneBy.mockResolvedValue({
+      userId: 'u2',
+      provider: AuthProvider.Google,
+      providerUid: 'google-upgrade-1',
+    });
+    await expect(
+      service.upgradeGuestWithSocial('u1', AuthProvider.Google, 'id.token'),
+    ).rejects.toMatchObject({ code: AuthErrors.IDENTITY_ALREADY_LINKED });
   });
 });

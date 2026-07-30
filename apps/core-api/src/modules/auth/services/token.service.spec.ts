@@ -64,6 +64,21 @@ describe('TokenService', () => {
     expect(saved.tokenHash).not.toContain(tokens.refreshToken);
   });
 
+  it('mỗi lần issue có jti riêng kể cả trong cùng một giây', async () => {
+    await service.issueForUser('u1', false, Roles.User);
+    await service.issueForUser('u1', false, Roles.User);
+
+    const firstPayload = jwt.signAsync.mock.calls[0][0] as {
+      jti?: string;
+    };
+    const secondPayload = jwt.signAsync.mock.calls[1][0] as {
+      jti?: string;
+    };
+    expect(firstPayload.jti).toEqual(expect.any(String));
+    expect(secondPayload.jti).toEqual(expect.any(String));
+    expect(secondPayload.jti).not.toBe(firstPayload.jti);
+  });
+
   it('rotate thành công khi token còn hiệu lực và chưa rotate', async () => {
     repo.findOneBy.mockResolvedValue(storedToken());
     repo.update.mockResolvedValue({ affected: 1 });

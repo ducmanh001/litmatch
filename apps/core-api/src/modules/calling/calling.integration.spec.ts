@@ -24,6 +24,7 @@ import {
 } from './entities/call-session.entity';
 import { MatchingService } from '../matching';
 import { MatcherWakeup } from '../matching/matcher-wakeup';
+import { GuestMatchQuotaService } from '../matching/services/guest-match-quota.service';
 import {
   MatchTicket,
   MatchTicketStatus,
@@ -300,6 +301,10 @@ d('Calling integration (Postgres thật)', () => {
       configStub,
       {} as never,
       new MatcherWakeup(),
+      {
+        authorize: async () => undefined,
+        consume: async () => undefined,
+      } as unknown as GuestMatchQuotaService,
     );
     calling = new CallingService(
       ds,

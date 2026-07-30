@@ -1,0 +1,139 @@
+name: Staging reliability evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      change_ticket:
+        description: Approved staging change/game-day ticket
+        required: true
+        type: string
+      deployed_sha:
+        description: Full commit SHA currently deployed to staging
+        required: true
+        type: string
+      vus:
+        description: Concurrent virtual users per scenario
+        required: true
+        default: '20'
+        type: string
+      duration:
+        description: k6 duration such as 2m or 30s
+        required: true
+        default: 2m
+        type: string
+
+concurrency:
+  group: staging-reliability
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  loadtest:
+    name: Real staging load test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: staging
+    env:
+      BASE_URL: ${{ vars.STAGING_API_URL }}
+      BASE_URL_CORE: ${{ vars.STAGING_API_URL }}
+      SIGNALING_URL: ${{ vars.STAGING_SIGNALING_URL }}
+      VUS: ${{ inputs.vus }}
+      DURATION: ${{ inputs.duration }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ inputs.deployed_sha }}
+          persist-credentials: false
+      - name: Validate approved staging target
+        env:
+          CHANGE_TICKET: ${{ inputs.change_ticket }}
+          DEPLOYED_SHA: ${{ inputs.deployed_sha }}
+        run: |
+          test -n "${CHANGE_TICKET}"
+          [[ "${DEPLOYED_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          test -n "${BASE_URL}"
+          test -n "${SIGNALING_URL}"
+          [[ "${VUS}" =~ ^[1-9][0-9]{0,3}$ ]]
+          [[ "${DURATION}" =~ ^[1-9][0-9]*(s|m|h)$ ]]
+          case "${BASE_URL}" in
+            *staging*|*stage*|*stg*) ;;
+            *) echo "::error::STAGING_API_URL must identify staging"; exit 1 ;;
+          esac
+          case "${SIGNALING_URL}" in
+            *staging*|*stage*|*stg*) ;;
+            *) echo "::error::STAGING_SIGNALING_URL must identify staging"; exit 1 ;;
+          esac
+          mkdir -p artifacts/staging-reliability
+      - name: Record immutable run metadata
+        env:
+          CHANGE_TICKET: ${{ inputs.change_ticket }}
+          DEPLOYED_SHA: ${{ inputs.deployed_sha }}
+        run: |
+          jq -n \
+            --arg sha "${DEPLOYED_SHA}" \
+            --arg run_id "${GITHUB_RUN_ID}" \
+            --arg run_attempt "${GITHUB_RUN_ATTEMPT}" \
+            --arg change_ticket "${CHANGE_TICKET}" \
+            --arg vus "${VUS}" \
+            --arg duration "${DURATION}" \
+            --arg started_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{sha:$sha,runId:$run_id,runAttempt:$run_attempt,changeTicket:$change_ticket,vus:($vus|tonumber),duration:$duration,startedAt:$started_at}' \
+            > artifacts/staging-reliability/metadata.json
+      - name: Matching queue workload
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -e BASE_URL -e VUS -e DURATION \
+            -v "${PWD}:/work" -w /work \
+            grafana/k6:1.7.0 run \
+            --summary-export=/work/artifacts/staging-reliability/matching-summary.json \
+            loadtest/matching-queue.js \
+            2>&1 | tee artifacts/staging-reliability/matching.log
+      - name: Matching to call-setup workload
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -e BASE_URL -e VUS -e DURATION \
+            -v "${PWD}:/work" -w /work \
+            grafana/k6:1.7.0 run \
+            --summary-export=/work/artifacts/staging-reliability/calling-summary.json \
+            loadtest/calling-flow.js \
+            2>&1 | tee artifacts/staging-reliability/calling.log
+      - name: Socket.IO signaling workload
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -e BASE_URL_CORE -e SIGNALING_URL -e VUS -e DURATION \
+            -v "${PWD}:/work" -w /work \
+            grafana/k6:1.7.0 run \
+            --summary-export=/work/artifacts/staging-reliability/signaling-summary.json \
+            loadtest/signaling-ws.js \
+            2>&1 | tee artifacts/staging-reliability/signaling.log
+      - name: Finalize production-gate evidence
+        if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
+          EVIDENCE_OWNER: ${{ github.actor }}
+          DEPLOYED_SHA: ${{ inputs.deployed_sha }}
+        run: |
+          if [ "${JOB_STATUS}" = success ]; then
+            evidence_status=pass
+          else
+            evidence_status=fail
+          fi
+          jq -n \
+            --arg environment staging \
+            --arg status "${evidence_status}" \
+            --arg git_sha "${DEPLOYED_SHA}" \
+            --arg executed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg run_url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            --arg owner "${EVIDENCE_OWNER}" \
+            '{environment:$environment,status:$status,gitSha:$git_sha,executedAt:$executed_at,runUrl:$run_url,owner:$owner,checks:["staging-load"]}' \
+            > artifacts/staging-reliability/loadtest.json
+      - name: Upload raw evidence even when a threshold fails
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: staging-reliability-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/staging-reliability
+          if-no-files-found: error
+          retention-days: 90

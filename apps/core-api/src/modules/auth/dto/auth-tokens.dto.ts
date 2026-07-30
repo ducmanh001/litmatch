@@ -11,4 +11,10 @@ export class AuthTokensDto {
   @ApiProperty({ description: 'TTL access token (giây)' }) expiresIn!: number;
   @ApiProperty() userId!: string;
   @ApiProperty() isGuest!: boolean;
+  @ApiProperty({
+    required: false,
+    description:
+      'Chỉ trả khi guest login; gửi qua X-Guest-Device-Token khi vào matching queue',
+  })
+  guestDeviceToken?: string;
 }

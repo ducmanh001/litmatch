@@ -40,6 +40,7 @@ export function startTracing(input: StartTracingInput): NodeSDK | null {
     process.env['OTEL_EXPORTER_OTLP_ENDPOINT'] ??
     process.env['OTEL_EXPORTER_OTLP_TRACES_ENDPOINT'];
   const metricsEndpoint = resolveMetricsEndpoint();
+  assertRequiredTelemetry(traceEndpoint, metricsEndpoint);
   if (!traceEndpoint && !metricsEndpoint) {
     console.warn(
       '[metrics] OTLP exporter disabled: GRAFANA_CLOUD_PROMETHEUS_URL is missing or invalid',
@@ -101,6 +102,31 @@ export function startTracing(input: StartTracingInput): NodeSDK | null {
 }
 
 const DEFAULT_METRICS_EXPORT_INTERVAL_MS = 15_000;
+
+/**
+ * Production-like profiles set OBSERVABILITY_REQUIRED=true. Keeping this separate from
+ * NODE_ENV lets local/hosted-free builds use production optimisations without pretending to
+ * provide a production SLO. A required pipeline fails at boot instead of running silently blind.
+ */
+function assertRequiredTelemetry(
+  traceEndpoint: string | undefined,
+  metricsEndpoint: string | undefined,
+): void {
+  if (process.env['OBSERVABILITY_REQUIRED'] !== 'true') return;
+
+  const missing: string[] = [];
+  if (!traceEndpoint) missing.push('OTEL trace endpoint');
+  if (!metricsEndpoint) missing.push('OTEL metrics endpoint');
+  if (!process.env['GRAFANA_CLOUD_PROMETHEUS_USER'])
+    missing.push('metrics user');
+  if (!process.env['GRAFANA_CLOUD_API_TOKEN']) missing.push('metrics token');
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Production telemetry is required but incomplete: ${missing.join(', ')}`,
+    );
+  }
+}
 
 /**
  * Grafana's existing variable name is retained for deployment compatibility, but its value

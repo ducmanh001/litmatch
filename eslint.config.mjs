@@ -28,10 +28,32 @@ export default [
           depConstraints: [
             { sourceTag: 'type:app', onlyDependOnLibsWithTags: ['type:lib'] },
             { sourceTag: 'type:lib', onlyDependOnLibsWithTags: ['type:lib'] },
-            // FE chỉ được depend libs trung lập (docs/12 § 12.9-2) — vi phạm là lỗi lint
+            // Capability runtime là chiều độc lập với type/scope. Project có cả hai tag
+            // phải thoả cả hai constraint, nên lib cross-runtime chỉ phụ thuộc lib cross-runtime.
+            {
+              sourceTag: 'platform:server',
+              onlyDependOnLibsWithTags: ['platform:server'],
+            },
+            {
+              sourceTag: 'platform:browser',
+              onlyDependOnLibsWithTags: ['platform:browser'],
+            },
+            // FE chỉ được depend lib browser-compatible (docs/12 § 12.9-2).
             {
               sourceTag: 'scope:frontend',
               onlyDependOnLibsWithTags: ['platform:browser'],
+            },
+            {
+              sourceTag: 'scope:core',
+              onlyDependOnLibsWithTags: ['platform:server'],
+            },
+            {
+              sourceTag: 'scope:signaling',
+              onlyDependOnLibsWithTags: ['platform:server'],
+            },
+            {
+              sourceTag: 'scope:e2e',
+              onlyDependOnLibsWithTags: ['platform:server'],
             },
           ],
         },

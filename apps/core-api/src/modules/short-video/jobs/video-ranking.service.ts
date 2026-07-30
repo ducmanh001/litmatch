@@ -46,6 +46,7 @@ export class VideoRankingService
       task: () => this.runOnce(),
       logger: this.logger,
       errorMessage: 'Video ranking job lỗi',
+      clusterSingleton: { dataSource: this.dataSource },
     });
   }
 

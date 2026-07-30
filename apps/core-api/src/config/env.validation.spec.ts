@@ -36,4 +36,10 @@ describe('coreApiEnvSchema invariants', () => {
     ).toBeUndefined();
     expect(schema.validate('not-a-dsn').error).toBeDefined();
   });
+
+  it('maintenance capability chỉ nhận identifier do contract công bố', () => {
+    const schema = coreApiEnvSchema.extract('CAPABILITY_MAINTENANCE_FEATURES');
+    expect(schema.validate('auth.google,topUp.web').error).toBeUndefined();
+    expect(schema.validate('wallet.magicTopup').error).toBeDefined();
+  });
 });

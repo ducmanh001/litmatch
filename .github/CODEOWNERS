@@ -6,4 +6,8 @@
 /apps/core-api/src/database/migrations/ @ducmanh001
 /apps/core-api/src/modules/economy/ @ducmanh001
 /docker-compose.yml @ducmanh001
-
+/apps/signaling-gateway/ @ducmanh001
+/libs/observability/ @ducmanh001
+/.github/workflows/staging-reliability.yml @ducmanh001
+/docs/runbooks/reliability-slo-and-evidence.md @ducmanh001
+/scripts/reliability/ @ducmanh001

@@ -14,6 +14,8 @@ export type MessageDto = ApiSchema<'MessageDto'>;
 
 const MESSAGES_PAGE_LIMIT = 30;
 
+export const FRIEND_MESSAGES_REFETCH_INTERVAL_MS = 5_000;
+
 export const friendChatKeys = {
   friends: ['friend-chat', 'friends'] as const,
   conversation: (friendUserId: string) =>
@@ -82,7 +84,7 @@ export function useConversationMessages(conversationId: string) {
     getNextPageParam: (lastPage) => lastPage?.meta.nextCursor ?? undefined,
     // Chat bạn bè không có "đóng phòng" như Soul Match — poll luôn bật khi hook còn mount,
     // là fallback REST thật khi socket rớt/không có (docs/12 §12.8).
-    refetchInterval: 3000,
+    refetchInterval: FRIEND_MESSAGES_REFETCH_INTERVAL_MS,
   });
 }
 

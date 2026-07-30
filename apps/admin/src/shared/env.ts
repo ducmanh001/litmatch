@@ -8,7 +8,7 @@ import { z } from 'zod';
 const envSchema = z.object({
   /** Origin core-api, KHÔNG kèm /api/v1 (spec đã chứa prefix trong path). */
   VITE_API_URL: z.url(),
-  /** OAuth client id công khai của Google Identity Services. */
+  /** Compatibility fallback khi backend cũ chưa có capability endpoint. */
   VITE_AUTH_GOOGLE_CLIENT_ID: z.string().min(1).optional(),
   /** Public browser DSN; empty disables error reporting. */
   VITE_SENTRY_DSN: z.url().optional(),
@@ -16,7 +16,7 @@ const envSchema = z.object({
   VITE_SENTRY_ENVIRONMENT: z.string().min(1).default('production'),
   /** Immutable release identifier attached to browser error events. */
   VITE_SENTRY_RELEASE: z.string().max(200).optional(),
-  /** Cho phép hiển thị flow OTP; production miễn phí đặt false để khớp capability backend. */
+  /** Compatibility fallback khi backend cũ chưa có capability endpoint. */
   VITE_PHONE_OTP_ENABLED: z
     .enum(['true', 'false'])
     .default('true')

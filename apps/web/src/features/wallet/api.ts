@@ -38,7 +38,7 @@ export function useIapProducts() {
   });
 }
 
-export function usePayosPackages() {
+export function usePayosPackages(enabled = true) {
   return useQuery({
     queryKey: walletKeys.payosPackages,
     queryFn: async () => {
@@ -46,6 +46,7 @@ export function usePayosPackages() {
       return res.data?.data;
     },
     staleTime: Infinity,
+    enabled,
   });
 }
 

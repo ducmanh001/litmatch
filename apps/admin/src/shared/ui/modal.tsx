@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
 
 import { cn } from '../lib/cn';
@@ -9,17 +9,60 @@ interface ModalProps {
   open: boolean;
   onClose: () => void;
   children: ReactNode;
+  labelledBy?: string;
 }
 
-/** Port từ .modal-overlay/.modal-panel của mockup — đóng bằng Escape + click ra ngoài. */
-export function Modal({ open, onClose, children }: ModalProps) {
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** Dialog dùng chung: Escape, focus trap và trả focus về trigger khi đóng. */
+export function Modal({ open, onClose, children, labelledBy }: ModalProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
     if (!open) return;
-    function onKeyDown(e: KeyboardEvent): void {
-      if (e.key === 'Escape') onClose();
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const panel = panelRef.current;
+    const preferredFocus =
+      panel?.querySelector<HTMLElement>('[data-autofocus]');
+    const firstFocusable =
+      panel?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+    (preferredFocus ?? firstFocusable ?? panel)?.focus();
+
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab' || panel === null) return;
+      const focusable = Array.from(
+        panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+      );
+      if (focusable.length === 0) {
+        event.preventDefault();
+        panel.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
     document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      previousFocusRef.current?.focus();
+    };
   }, [open, onClose]);
 
   if (!open) return null;
@@ -34,8 +77,11 @@ export function Modal({ open, onClose, children }: ModalProps) {
       onClick={onOverlayClick}
     >
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={labelledBy}
+        tabIndex={-1}
         className="max-h-[88vh] w-full max-w-[460px] overflow-y-auto rounded-2xl border border-border bg-card"
         style={{ boxShadow: 'var(--shadow)', animation: 'modal-in .18s ease' }}
       >
@@ -48,13 +94,18 @@ export function Modal({ open, onClose, children }: ModalProps) {
 export function ModalHeader({
   title,
   onClose,
+  titleId,
 }: {
   title: string;
   onClose: () => void;
+  titleId?: string;
 }) {
+  const generatedId = useId();
   return (
     <div className="sticky top-0 flex items-center justify-between border-b border-border bg-card px-5 py-4">
-      <h3 className="text-[15px] font-extrabold">{title}</h3>
+      <h3 id={titleId ?? generatedId} className="text-[15px] font-extrabold">
+        {title}
+      </h3>
       <button
         type="button"
         onClick={onClose}

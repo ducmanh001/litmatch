@@ -74,7 +74,8 @@ like). W1 chỉ cho xem profile; **W4 bổ sung CTA "mời Voice/Soul Match"** �
 dùng nguyên pipeline `MatchTicket`/`MatchSession` sẵn có, KHÔNG phải friend-request flow mới. Đây
 là mitigation chính cho rủi ro graph bạn bè sparse (browse/nearby chỉ xem profile là ngõ cụt cho
 dating app). Thiết kế chi tiết, state machine, rate-limit chống spam: xem
-[matching-service.md § Invite](./matching-service.md#invite) — Discovery/Nearby chỉ là nơi UI lấy
+[matching-service.md § Invite](./matching-service.md#9-invite-cta-mời-voicesoul-match-w4) —
+Discovery/Nearby chỉ là nơi UI lấy
 `inviteeUserId`, không sở hữu logic invite.
 
 ## 7. Ngoài scope
@@ -85,7 +86,7 @@ dating app). Thiết kế chi tiết, state machine, rate-limit chống spam: xe
 - Ghost mode (ẩn nearby có chọn lọc, khác tắt hẳn `nearbyVisible`) hoãn lại — không scaffold cột
   riêng, chỉ dùng reciprocity làm cơ chế ẩn/hiện duy nhất (chốt 2026-07-14, xem plan gốc § 6).
 
-## 8. Nearby (W4) {#nearby}
+## 8. Nearby (W4)
 
 Mở rộng module `discovery` — 2 bảng mới sở hữu bởi chính module này (không đụng `users`):
 `user_locations` (1:1 user — `latQuantized`/`lonQuantized`, `updatedAt` để derive độ tươi) và

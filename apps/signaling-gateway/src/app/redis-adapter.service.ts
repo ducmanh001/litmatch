@@ -2,6 +2,8 @@ import { Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 
+import { signalingRedisClientOptions } from './redis-client-options';
+
 import type { ServerOptions } from 'socket.io';
 
 /**
@@ -20,13 +22,7 @@ export class SignalingRedisAdapterService implements OnApplicationShutdown {
   async connect(
     redisUrl: string,
   ): Promise<NonNullable<ServerOptions['adapter']>> {
-    this.pubClient = new Redis(redisUrl, {
-      connectTimeout: 1_000,
-      commandTimeout: 1_000,
-      maxRetriesPerRequest: 1,
-      enableOfflineQueue: false,
-      retryStrategy: (attempt) => Math.min(attempt * 100, 1_000),
-    });
+    this.pubClient = new Redis(redisUrl, signalingRedisClientOptions());
     this.subClient = this.pubClient.duplicate();
     // Listener bền vững — không có listener 'error' thì ioredis ném exception làm crash process
     // mỗi lần reconnect drop giữa chừng (khác với race connect ban đầu bên dưới).

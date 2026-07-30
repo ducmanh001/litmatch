@@ -26,7 +26,7 @@ test('đăng nhập OTP, session sống sót qua reload, vào hàng đợi ghép
   const otpResponse = await otpResponsePromise;
   const otpPayload = await otpResponse.json();
   const code: string = otpPayload.data.code;
-  await expect(page.getByText(/Mã OTP của bạn là \d{6}/u)).toBeVisible();
+  // Toast là phản hồi transient đã được unit-test; E2E xác nhận behavior autofill ổn định.
   for (const [index, digit] of [...code].entries()) {
     await expect(otpDigitInputs.nth(index)).toHaveValue(digit);
   }
@@ -51,7 +51,7 @@ test('đăng nhập OTP, session sống sót qua reload, vào hàng đợi ghép
 
   await expect(page.getByText('Đang tìm người ghép đôi')).toBeVisible();
 
-  // Chờ đúng 1 chu kỳ poll thật (refetchInterval 3s, api.ts) — assert vào status code, KHÔNG
+  // Chờ đúng 1 chu kỳ poll thật (refetchInterval 10s, api.ts) — assert vào status code, KHÔNG
   // phải text UI cụ thể: máy dev/CI có thể còn ticket "soul + any" từ lần chạy trước đang chờ
   // trong queue thật, nên 2 ticket có thể match NHAU giữa lúc test chạy (đúng hành vi nghiệp vụ,
   // không phải lỗi) — cái cần xác nhận cho ADR 0007 là request sau reload vẫn được xác thực

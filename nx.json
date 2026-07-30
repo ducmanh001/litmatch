@@ -117,6 +117,9 @@
     }
   ],
   "analytics": false,
+  "tui": {
+    "enabled": false
+  },
   "generators": {
     "@nx/react": {
       "application": {

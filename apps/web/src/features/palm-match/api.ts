@@ -7,11 +7,15 @@ import type { ApiSchema } from '@litmatch/api-client';
 export type PalmMatchStateDto = ApiSchema<'PalmMatchStateDto'>;
 export type PalmMatchRating = ApiSchema<'RatePalmMatchDto'>['rating'];
 
+export const PALM_MATCH_REFETCH_INTERVAL_MS = 5_000;
+
 export const palmMatchKeys = {
   current: ['palm-match', 'current'] as const,
 };
 
-function shouldPoll(state: PalmMatchStateDto['state'] | undefined): boolean {
+export function isPollingPalmMatchState(
+  state: PalmMatchStateDto['state'] | undefined,
+): boolean {
   return state === 'queued' || state === 'active';
 }
 
@@ -24,7 +28,9 @@ export function useCurrentPalmMatch() {
       return response.data?.data;
     },
     refetchInterval: (query) =>
-      shouldPoll(query.state.data?.state) ? 2000 : false,
+      isPollingPalmMatchState(query.state.data?.state)
+        ? PALM_MATCH_REFETCH_INTERVAL_MS
+        : false,
   });
 }
 

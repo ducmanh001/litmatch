@@ -8,12 +8,14 @@ import { UserModule } from '../user';
 
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { AuthUpgradeController } from './controllers/auth-upgrade.controller';
 import { AuthIdentity } from './entities/auth-identity.entity';
 import { PhoneOtp } from './entities/phone-otp.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { OtpService } from './services/otp.service';
 import { SocialVerifierService } from './services/social-verifier';
 import { TokenService } from './services/token.service';
+import { GuestDeviceTokenService } from './services/guest-device-token.service';
 
 @Module({
   imports: [
@@ -27,8 +29,14 @@ import { TokenService } from './services/token.service';
       }),
     }),
   ],
-  controllers: [AuthController],
-  providers: [AuthService, TokenService, OtpService, SocialVerifierService],
-  exports: [],
+  controllers: [AuthController, AuthUpgradeController],
+  providers: [
+    AuthService,
+    TokenService,
+    OtpService,
+    SocialVerifierService,
+    GuestDeviceTokenService,
+  ],
+  exports: [GuestDeviceTokenService],
 })
 export class AuthModule {}

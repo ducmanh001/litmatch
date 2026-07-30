@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
+import { InjectDataSource } from '@nestjs/typeorm';
 import { RealtimeEvents } from '@litmatch/common-dtos';
 
 import { publishRealtimeEvent } from '../../../common/realtime/publish-realtime';
@@ -17,6 +18,7 @@ import { StreakService } from '../services/streak.service';
 import { NotificationService, NotificationType } from '../../notification';
 
 import type Redis from 'ioredis';
+import type { DataSource } from 'typeorm';
 import type {
   FriendStreakAtRiskEventData,
   RealtimeEnvelope,
@@ -45,6 +47,7 @@ export class StreakWarningJob
     private readonly config: ConfigService<CoreApiEnv, true>,
     private readonly scheduler: SchedulerRegistry,
     @Inject(FRIEND_REDIS) private readonly redis: Redis,
+    @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -56,6 +59,7 @@ export class StreakWarningJob
       task: () => this.runOnce(),
       logger: this.logger,
       errorMessage: 'Streak warning job lỗi',
+      clusterSingleton: { dataSource: this.dataSource },
     });
   }
 

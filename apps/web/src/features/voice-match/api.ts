@@ -6,6 +6,8 @@ import type { ApiSchema } from '@litmatch/api-client';
 
 export type CallDto = ApiSchema<'CallDto'>;
 
+export const VOICE_CALL_REFETCH_INTERVAL_MS = 10_000;
+
 export const voiceMatchKeys = {
   call: (id: string) => ['voice-match', 'call', id] as const,
 };
@@ -53,7 +55,9 @@ export function useCall(callId: string | null) {
     },
     enabled: callId !== null,
     refetchInterval: (query) =>
-      isActiveCallStatus(query.state.data?.status) ? 4000 : false,
+      isActiveCallStatus(query.state.data?.status)
+        ? VOICE_CALL_REFETCH_INTERVAL_MS
+        : false,
   });
 }
 

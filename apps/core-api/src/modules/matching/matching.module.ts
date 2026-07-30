@@ -14,6 +14,8 @@ import { MatcherWakeup } from './matcher-wakeup';
 import { MatchTicket } from './entities/match-ticket.entity';
 import { MatchSession } from './entities/match-session.entity';
 import { MatchInvite } from './entities/match-invite.entity';
+import { GuestMatchQuota } from './entities/guest-match-quota.entity';
+import { GuestMatchQuotaService } from './services/guest-match-quota.service';
 import { MATCH_INTERACTION_POLICY } from './ports/interaction-policy';
 import {
   MATCHING_REDIS,
@@ -23,12 +25,19 @@ import { EconomyModule } from '../economy';
 import { NotificationModule } from '../notification';
 import { SafetyModule, SafetyService } from '../safety';
 import { UserModule } from '../user';
+import { AuthModule } from '../auth';
 
 import type Redis from 'ioredis';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([MatchTicket, MatchSession, MatchInvite]),
+    TypeOrmModule.forFeature([
+      MatchTicket,
+      MatchSession,
+      MatchInvite,
+      GuestMatchQuota,
+    ]),
+    AuthModule,
     UserModule,
     EconomyModule,
     SafetyModule,
@@ -43,6 +52,7 @@ import type Redis from 'ioredis';
     MatcherWakeup,
     TicketSweeperService,
     InviteSweeperService,
+    GuestMatchQuotaService,
     matchingRedisProvider,
     // Safety module cung cấp implementation thật (docs/services/safety-service.md § 6) —
     // SafetyService.canPair thoả mãn MatchInteractionPolicy bằng structural typing

@@ -64,5 +64,5 @@
       }
     }
   },
-  "tags": ["type:app", "scope:core"]
+  "tags": ["type:app", "scope:core", "platform:server"]
 }

@@ -155,9 +155,24 @@ for (const directory of indexedDirectories) {
   });
 }
 
-test('new lifecycle navigation resolves relative Markdown anchors', async () => {
+test('service catalog covers every top-level Core API module', async () => {
+  const moduleRoot = join(root, 'apps/core-api/src/modules');
+  const expectedModules = (await readdir(moduleRoot, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+  const catalog = await readFile(join(docsRoot, 'services/README.md'), 'utf8');
+  const catalogedModules = sortedUnique(
+    [...catalog.matchAll(/^\| `([^`]+)`\s+\|/gmu)].map((match) => match[1]),
+  );
+
+  assert.deepEqual(catalogedModules, expectedModules);
+});
+
+test('selected canonical navigation resolves relative Markdown anchors', async () => {
   const sources = [
     '00-overview-and-index.md',
+    '06-domain-rules.md',
     '08-working-with-agents.md',
     '09-practical-notes.md',
     '18-documentation-automation.md',
@@ -167,6 +182,8 @@ test('new lifecycle navigation resolves relative Markdown anchors', async () => 
     'reference/lessons-registry.md',
     'runbooks/README.md',
     'services/README.md',
+    'services/discovery-service.md',
+    'services/matching-service.md',
     'templates/README.md',
     'templates/learning-record.md',
   ];

@@ -54,7 +54,7 @@ function stubDataSource(input: {
     derived: string;
   }>;
 }): DataSource {
-  return {
+  const dataSource = {
     query: jest.fn(async (sql: string) => {
       if (sql.includes('GROUP BY currency')) return input.imbalances ?? [];
       if (sql.includes('iap_receipts'))
@@ -64,6 +64,18 @@ function stubDataSource(input: {
       throw new Error(`query không nhận diện được trong stub: ${sql}`);
     }),
   } as unknown as DataSource;
+  Object.assign(dataSource, {
+    createQueryRunner: () => ({
+      connect: async () => undefined,
+      startTransaction: async () => undefined,
+      query: async () => [{ acquired: true }],
+      commitTransaction: async () => undefined,
+      rollbackTransaction: async () => undefined,
+      release: async () => undefined,
+      isTransactionActive: true,
+    }),
+  });
+  return dataSource;
 }
 
 function makeService(
@@ -95,7 +107,7 @@ describe('ReconciliationService', () => {
   afterEach(() => jest.useRealTimers());
 
   describe('lập lịch 2 tier độc lập', () => {
-    it('bootstrap đăng ký 2 interval riêng (fast + deep) theo đúng interval config', () => {
+    it('bootstrap đăng ký 2 interval riêng (fast + deep) theo đúng interval config', async () => {
       jest.useFakeTimers();
       const { intervals, scheduler } = stubScheduler();
       const { service } = makeService(
@@ -118,12 +130,12 @@ describe('ReconciliationService', () => {
         .mockResolvedValue({ ok: true } as never);
 
       // 60s: fast chạy 1 lần, deep chưa tới hạn
-      jest.advanceTimersByTime(60_000);
+      await jest.advanceTimersByTimeAsync(60_000);
       expect(fastSpy).toHaveBeenCalledTimes(1);
       expect(deepSpy).toHaveBeenCalledTimes(0);
 
       // tới 300s: fast đã chạy 5 lần, deep 1 lần
-      jest.advanceTimersByTime(240_000);
+      await jest.advanceTimersByTimeAsync(240_000);
       expect(fastSpy).toHaveBeenCalledTimes(5);
       expect(deepSpy).toHaveBeenCalledTimes(1);
 
@@ -152,6 +164,15 @@ describe('ReconciliationService', () => {
       const failingDs = {
         query: jest.fn(async () => {
           throw new Error('db down');
+        }),
+        createQueryRunner: () => ({
+          connect: async () => undefined,
+          startTransaction: async () => undefined,
+          query: async () => [{ acquired: true }],
+          commitTransaction: async () => undefined,
+          rollbackTransaction: async () => undefined,
+          release: async () => undefined,
+          isTransactionActive: true,
         }),
       } as unknown as DataSource;
       const { scheduler } = stubScheduler();

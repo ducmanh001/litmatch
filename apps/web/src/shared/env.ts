@@ -13,11 +13,11 @@ const envSchema = z
     NEXT_PUBLIC_SOCKET_URL: z.url(),
     /** URL LiveKit SFU (ws://). */
     NEXT_PUBLIC_LIVEKIT_URL: z.url(),
-    /** OAuth client id (Google Identity Services) — trống = nút Google báo "chưa cấu hình". */
+    /** Compatibility fallback khi backend cũ chưa có capability endpoint. */
     NEXT_PUBLIC_AUTH_GOOGLE_CLIENT_ID: z.string().optional(),
-    /** Service id Sign in with Apple (web) — trống = nút Apple báo "chưa cấu hình". */
+    /** Compatibility fallback khi backend cũ chưa có capability endpoint. */
     NEXT_PUBLIC_AUTH_APPLE_CLIENT_ID: z.string().optional(),
-    /** Facebook App ID is public; the server-only App Secret verifies its access token. */
+    /** Compatibility fallback khi backend cũ chưa có capability endpoint. */
     NEXT_PUBLIC_AUTH_FACEBOOK_APP_ID: z.string().optional(),
     /** Pin the Facebook SDK/Graph API generation; update through env before Meta retires it. */
     NEXT_PUBLIC_AUTH_FACEBOOK_API_VERSION: z
@@ -30,7 +30,7 @@ const envSchema = z
     NEXT_PUBLIC_SENTRY_ENVIRONMENT: z.string().min(1).default('production'),
     /** Immutable release identifier attached to browser error events. */
     NEXT_PUBLIC_SENTRY_RELEASE: z.string().max(200).optional(),
-    /** Hiển thị flow OTP; phải khớp `AUTH_PHONE_OTP_ENABLED` của core-api. */
+    /** Compatibility fallback khi backend cũ chưa có capability endpoint. */
     NEXT_PUBLIC_PHONE_OTP_ENABLED: z
       .enum(['true', 'false'])
       .default('true')

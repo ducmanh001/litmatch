@@ -14,9 +14,10 @@ giả hoặc chấp nhận giao dịch không được verify.
 ## Quyết định
 
 Bổ sung profile **single-node zero-cost** bằng Docker Compose trên một VM ARM64, Caddy làm TLS
-reverse proxy, LiveKit self-host và Grafana/PostHog Cloud Free ở chế độ optional. Ba deployable
-backend không đổi. Phone OTP, IAP, external push và video upload bị tắt fail-closed; Google OAuth,
-guest, in-app notification và các capability self-host còn lại tiếp tục hoạt động.
+reverse proxy và LiveKit self-host. Sentry + OTel/Grafana Cloud Free là bắt buộc vì profile này
+dùng runtime production; PostHog vẫn optional. Ba deployable backend không đổi. Phone OTP, IAP,
+external push và video upload bị tắt fail-closed; Google OAuth, guest, in-app notification và các
+capability self-host còn lại tiếp tục hoạt động.
 
 Đây là profile alpha/beta có một failure domain, không thay thế Kubernetes/nginx-ingress khi hệ
 thống cần HA hoặc scale ngang. Trong profile Kubernetes, ADR 0004 vẫn là quyết định edge hiện hành.
@@ -35,4 +36,6 @@ thống cần HA hoặc scale ngang. Trong profile Kubernetes, ADR 0004 vẫn l�
 - Cần backup PostgreSQL trước migration và rollback image; migration chỉ forward, không tự revert.
 - VM hỏng sẽ gây downtime; media và database tranh tài nguyên trong giới hạn 2 OCPU/12 GB.
 - Capability bị tắt phải được phản ánh đồng thời ở backend và frontend build-time env.
+- Release preflight phải có DRI observability, Sentry cho bốn app, OTel traces và Grafana
+  metrics/logs; core-api/signaling fail boot nếu pipeline production-like thiếu.
 - Nâng lên multi-node/HA quay về K8s, nginx-ingress và LiveKit `hostNetwork` theo ADR 0004/0005.

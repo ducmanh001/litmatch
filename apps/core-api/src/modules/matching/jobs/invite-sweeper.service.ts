@@ -48,6 +48,7 @@ export class InviteSweeperService
       task: () => this.runOnce(),
       logger: this.logger,
       errorMessage: 'Invite sweeper lỗi',
+      clusterSingleton: { dataSource: this.dataSource },
     });
   }
 

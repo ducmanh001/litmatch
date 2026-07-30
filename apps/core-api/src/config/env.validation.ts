@@ -6,6 +6,7 @@ import * as Joi from 'joi';
 
 import { parseCorsOrigins } from '../common/cors/cors-origins';
 import { parseLivekitRegionUrls } from '../common/livekit/livekit-url';
+import { parseMaintenanceCapabilities } from './capabilities';
 
 /**
  * Khớp 1-1 với `coreApiEnvSchema` bên dưới — dùng làm type param cho `ConfigService<CoreApiEnv, true>`
@@ -17,8 +18,10 @@ export interface CoreApiEnv {
   NODE_ENV: 'development' | 'test' | 'production';
   LOG_LEVEL: 'trace' | 'debug' | 'info' | 'warn' | 'error';
   PORT: number;
+  HTTP_TRUST_PROXY_HOPS: number;
   CORS_ORIGINS: string;
   SWAGGER_ENABLED: boolean;
+  CAPABILITY_MAINTENANCE_FEATURES: string;
   DATABASE_URL: string;
   REDIS_URL: string;
   KAFKA_BROKERS: string;
@@ -29,6 +32,8 @@ export interface CoreApiEnv {
   AUTH_OTP_MAX_ATTEMPTS: number;
   AUTH_OTP_REQUESTS_PER_HOUR: number;
   AUTH_OTP_PEPPER: string;
+  AUTH_GUEST_DEVICE_TOKEN_SECRET: string;
+  AUTH_GUEST_DEVICE_TOKEN_TTL_DAYS: number;
   AUTH_PHONE_OTP_ENABLED: boolean;
   AUTH_GOOGLE_CLIENT_ID: string;
   AUTH_APPLE_CLIENT_ID: string;
@@ -83,6 +88,8 @@ export interface CoreApiEnv {
   MATCHING_PRIORITY_BOOST_MS: number;
   MATCHING_TRUST_PENALTY_MS_PER_POINT: number;
   MATCHING_TRUST_PENALTY_MAX_MS: number;
+  MATCHING_GUEST_DAILY_LIMIT: number;
+  MATCHING_GUEST_QUOTA_PEPPER: string;
   SOUL_CHAT_DURATION_SECONDS: number;
   SOUL_RATING_WINDOW_SECONDS: number;
   SOUL_CHAT_MESSAGE_MAX_LENGTH: number;
@@ -163,6 +170,8 @@ export interface CoreApiEnv {
 export const coreApiEnvSchema = Joi.object({
   ...baseEnvSchema,
   PORT: Joi.number().port().default(3000),
+  // Chỉ trust đúng số proxy do operator kiểm soát; 0 = kết nối trực tiếp, không tin X-Forwarded-For.
+  HTTP_TRUST_PROXY_HOPS: Joi.number().integer().min(0).default(0),
   // Task 0 (docs/12 § 12.7 point 3) — validate format lúc boot, không đợi tới enableCors runtime
   CORS_ORIGINS: Joi.string()
     .allow('')
@@ -172,6 +181,13 @@ export const coreApiEnvSchema = Joi.object({
       return value;
     }, 'danh sách origin http(s) hợp lệ, phân cách bằng dấu phẩy'),
   SWAGGER_ENABLED: Joi.boolean().default(true),
+  CAPABILITY_MAINTENANCE_FEATURES: Joi.string()
+    .allow('')
+    .default('')
+    .custom((value: string) => {
+      parseMaintenanceCapabilities(value);
+      return value;
+    }, 'danh sách capability maintenance hợp lệ'),
 
   DATABASE_URL: Joi.string()
     .uri({ scheme: ['postgres', 'postgresql'] })
@@ -189,6 +205,8 @@ export const coreApiEnvSchema = Joi.object({
   AUTH_OTP_MAX_ATTEMPTS: Joi.number().integer().min(1).default(5),
   AUTH_OTP_REQUESTS_PER_HOUR: Joi.number().integer().min(1).default(5),
   AUTH_OTP_PEPPER: Joi.string().min(16).required(),
+  AUTH_GUEST_DEVICE_TOKEN_SECRET: Joi.string().min(32).required(),
+  AUTH_GUEST_DEVICE_TOKEN_TTL_DAYS: Joi.number().integer().min(1).default(30),
   AUTH_PHONE_OTP_ENABLED: Joi.boolean().default(true),
   AUTH_GOOGLE_CLIENT_ID: Joi.string().allow('').default(''),
   AUTH_APPLE_CLIENT_ID: Joi.string().allow('').default(''),
@@ -302,6 +320,8 @@ export const coreApiEnvSchema = Joi.object({
     .min(0)
     .default(2000),
   MATCHING_TRUST_PENALTY_MAX_MS: Joi.number().integer().min(0).default(120_000),
+  MATCHING_GUEST_DAILY_LIMIT: Joi.number().integer().min(1).default(3),
+  MATCHING_GUEST_QUOTA_PEPPER: Joi.string().min(32).required(),
 
   // Soul Match — Giai đoạn 2 (docs/services/soul-match-service.md § 6); default 2-3 phút theo docs/06
   SOUL_CHAT_DURATION_SECONDS: Joi.number().integer().min(30).default(150),

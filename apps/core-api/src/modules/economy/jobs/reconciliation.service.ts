@@ -91,6 +91,7 @@ export class ReconciliationService
       task: () => this.scheduledRun('fast', () => this.runFast()),
       logger: this.logger,
       errorMessage: 'Reconciliation fast timer lỗi ngoài boundary',
+      clusterSingleton: { dataSource: this.dataSource },
     });
     this.deepJob.start(this.scheduler, {
       jobName: JOB_DEEP,
@@ -100,6 +101,7 @@ export class ReconciliationService
       task: () => this.scheduledRun('deep', () => this.runDeep()),
       logger: this.logger,
       errorMessage: 'Reconciliation deep timer lỗi ngoài boundary',
+      clusterSingleton: { dataSource: this.dataSource },
     });
   }
 

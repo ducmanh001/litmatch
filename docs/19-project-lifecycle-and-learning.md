@@ -20,7 +20,8 @@ primary incident record says so. Generated reports remain views, as defined in
 
 ## 19.2 Fast newcomer path
 
-1. Read `/AGENTS.md`, then [00 · Overview](./00-overview-and-index.md). If working with agent
+1. Read `/AGENTS.md`, then [00 · Overview](./00-overview-and-index.md). Set up the repository with
+   the [local development runbook](./runbooks/local-development.md). If working with agent
    infrastructure or learning the AI-native workflow, read
    [20 · AI-native handbook](./20-ai-native-handbook.md), then run `pnpm agent:context <scope>`.
 2. Select the change surface: architecture/ownership ([03](./03-architecture.md),
@@ -30,21 +31,22 @@ primary incident record says so. Generated reports remain views, as defined in
 3. Before a non-trivial change, record the short task contract in
    [08 § 8.1](./08-working-with-agents.md#81-task-contract), inspect the shared worktree, and
    preserve edits outside the agreed file scope.
-4. Before handoff, use the change lifecycle below and the required scope checks. For a sensitive
-   business flow, the `review-module` gate is additional, not optional.
+4. Before handoff, use the change lifecycle below and the
+   [quality-gate ladder](./runbooks/quality-gates.md). For a sensitive business flow, the
+   `review-module` gate is additional, not optional.
 
 ## 19.3 Change lifecycle
 
-| Stage       | Required outcome                                                                                    | Expected evidence / owner                                                                                         |
-| ----------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Discover    | Problem, user/operational impact, scope, and constraints are explicit.                              | Task contract; roadmap or dated plan only as scope/history, never as technical law.                               |
-| Design      | Ownership, boundary, assumptions, alternatives, and deferred work are clear.                        | Canonical [03](./03-architecture.md), [11](./11-engineering-principles.md), and an ADR for a durable decision.    |
-| Change      | Small, owned edits preserve invariants and compatibility.                                           | Canonical [05](./05-coding-standards.md), [14](./14-rule-enforcement-matrix.md), and local `AGENTS.md`.           |
-| Test/review | Behavior, invariants, and affected contracts have proportional tests and review.                    | Tests plus [10](./10-code-review-checklist.md), the canonical service spec, and `review-module` where applicable. |
-| Release     | Exact artifact/SHA, migration order, rollback/forward plan, and smoke checks are known.             | Applicable runbook; [15](./15-commit-guidelines.md); ADR constraints.                                             |
-| Observe     | Signals, limits, and ownership are recorded; lack of telemetry is a stated gap.                     | [11 § 11.4](./11-engineering-principles.md#114-test-và-vận-hành) and the applicable operational runbook/ADR.      |
-| Learn       | Reusable correction is captured and linked to its guard/test; no blame narrative.                   | [19.5](#195-lesson-lifecycle), a dated primary record, and the lessons registry when reusable.                    |
-| Deprecate   | Consumer migration, compatibility end date/condition, removal owner, and verification are explicit. | Canonical ADR/service spec/runbook plus a tracked implementation change.                                          |
+| Stage       | Required outcome                                                                                    | Expected evidence / owner                                                                                                              |
+| ----------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Discover    | Problem, user/operational impact, scope, and constraints are explicit.                              | Task contract; roadmap or dated plan only as scope/history, never as technical law.                                                    |
+| Design      | Ownership, boundary, assumptions, alternatives, and deferred work are clear.                        | Canonical [03](./03-architecture.md), [11](./11-engineering-principles.md), and an ADR for a durable decision.                         |
+| Change      | Small, owned edits preserve invariants and compatibility.                                           | Canonical [05](./05-coding-standards.md), [14](./14-rule-enforcement-matrix.md), and local `AGENTS.md`.                                |
+| Test/review | Behavior, invariants, and affected contracts have proportional tests and review.                    | [Quality gates](./runbooks/quality-gates.md), [10](./10-code-review-checklist.md), service spec, and `review-module` where applicable. |
+| Release     | Exact artifact/SHA, migration order, rollback/forward plan, and smoke checks are known.             | Applicable runbook; [15](./15-commit-guidelines.md); ADR constraints.                                                                  |
+| Observe     | Signals, limits, and ownership are recorded; lack of telemetry is a stated gap.                     | [11 § 11.4](./11-engineering-principles.md#114-test-và-vận-hành) and the applicable operational runbook/ADR.                           |
+| Learn       | Reusable correction is captured and linked to its guard/test; no blame narrative.                   | [19.5](#195-lesson-lifecycle), a dated primary record, and the lessons registry when reusable.                                         |
+| Deprecate   | Consumer migration, compatibility end date/condition, removal owner, and verification are explicit. | Canonical ADR/service spec/runbook plus a tracked implementation change.                                                               |
 
 The lifecycle is a routing aid, not permission to broaden a task. Concurrent refactors and all
 pre-existing changes belong to their authors unless the task explicitly includes them.

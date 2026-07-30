@@ -1,10 +1,14 @@
 # Litmatch — Load test (Giai đoạn 6 + Giai đoạn 7 roadmap)
 
 3 script k6 cho luồng: Matching Queue, Signaling WebSocket, và luồng đầu-cuối Matching → Calling.
-Không cài k6 thật ở môi trường viết script này (không có quyền cài binary hệ thống) — script đã
-được đối chiếu cẩn thận với API thật (đọc trực tiếp controller/DTO trong code), nhưng **chưa từng
-chạy thử với server thật**. Chạy thử ở máy có k6 + core-api/signaling-gateway đang sống trước khi
-tin số liệu.
+Script không phải bằng chứng capacity. Workflow manual `.github/workflows/staging-reliability.yml`
+chạy k6 thật trên GitHub Environment `staging`, bắt buộc approval/change ticket và lưu raw summary
+cùng commit SHA 90 ngày. Chỉ artifact của workflow đã chạy thành công trên target staging mới
+được dùng trong SLO/capacity review; repo hiện không tự nhận một file script là evidence.
+
+Môi trường viết ban đầu không có k6 hay staging credential nên lịch sử trước workflow này **chưa
+có staging run hợp lệ**. Sau mỗi thay đổi topology/Redis/ingress/resource limit, operator phải
+dispatch lại `Staging reliability evidence` và gắn artifact URL vào change ticket.
 
 Ngoài ra có `party-room-livekit.sh` (Giai đoạn 7) — khác cơ chế hoàn toàn với 3 script k6 trên, xem
 mục 4 bên dưới — và `party-room-slo.yaml` (mục tiêu SLO đi kèm).
@@ -129,9 +133,9 @@ kết thúc. Nếu Prometheus đang scrape `prometheus_port` của LiveKit (xem
 ## Về threshold (p95, error rate)
 
 Toàn bộ ngưỡng trong 3 script + Artillery sketch là **gợi ý khởi điểm**, không phải SLO/số liệu
-marketing — chỉnh theo dữ liệu production thật khi có traffic (đúng tinh thần
-`docs/03-architecture.md § 3.8`: quyết định thiết kế chọn sớm, còn "vận hành thật ở quy mô lớn"
-chỉ chốt số khi có số liệu, xem Giai đoạn 7 trong `docs/07-roadmap.md`).
+marketing. Production promotion phải có staging run thật và artifact theo
+`docs/runbooks/reliability-slo-and-evidence.md`; không có artifact thì
+`pnpm reliability:production-gate` phải FAIL.
 
 ## Response envelope
 

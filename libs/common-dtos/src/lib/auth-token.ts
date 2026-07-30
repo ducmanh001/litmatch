@@ -20,4 +20,6 @@ export interface AccessTokenPayload {
   sub: string;
   isGuest: boolean;
   role: Role;
+  /** Unique per issue/refresh so two tokens created in the same JWT clock second cannot collapse. */
+  jti: string;
 }

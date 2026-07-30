@@ -40,6 +40,8 @@ import { UserModule } from '../modules/user';
 
 import { HealthController } from './health.controller';
 import { ReadinessService } from './readiness.service';
+import { CapabilitiesController } from './capabilities.controller';
+import { CapabilitiesService } from './capabilities.service';
 
 @Module({
   imports: [
@@ -101,9 +103,10 @@ import { ReadinessService } from './readiness.service';
     ShortVideoModule,
     SupportModule,
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, CapabilitiesController],
   providers: [
     ReadinessService,
+    CapabilitiesService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },

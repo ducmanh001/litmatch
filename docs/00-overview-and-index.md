@@ -1,88 +1,111 @@
-# 00. Tổng quan & Mục lục
+# 00. Tổng quan và bản đồ tài liệu
 
-Đây là bộ tài liệu được định tuyến theo owner cho hệ thống kiểu Litmatch — quy mô lớn thật
-(không phải MVP). Quy tắc hiện hành chỉ canonical tại đúng owner được chỉ ra trong mục lục và
-[18 · Documentation automation](./18-documentation-automation.md); plan/review có ngày là bằng
-chứng lịch sử, generated report là view. Bộ docs được tách theo scope để mỗi task chỉ nạp đúng
-phần cần thiết thay vì coi mọi file là một nguồn sự thật ngang nhau.
+Đây là điểm vào chính của tài liệu Litmatch. Đọc `/AGENTS.md` trước khi thay đổi repository; dùng
+file này để tìm đúng **owner của sự thật**, không nạp mọi tài liệu như thể chúng có cùng thẩm
+quyền.
 
-**Agent mới bắt đầu session** phải đọc `/AGENTS.md` ở root trước. Đây là hợp đồng hành vi bắt buộc; các file trong `docs/` là context chi tiết được nạp theo task.
+## 00.1 Cách đọc trạng thái cho đúng
 
-## Mục lục — mục số ↔ file (giữ nguyên số mục cũ để mọi tham chiếu "mục X.Y" ở bất kỳ đâu vẫn tìm đúng)
+| Câu hỏi                                   | Nguồn cần đọc                                                                                                         |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Sản phẩm muốn có capability nào?          | [01 · Product capabilities](./01-product-features.md)                                                                 |
+| Checkout này có source/test evidence gì?  | [`feature-registry.json`](./feature-registry.json) và [report được sinh](./generated/product-spec-evidence-report.md) |
+| Kiến trúc/rule hiện hành là gì?           | [03 · Architecture](./03-architecture.md), [06 · Domain rules](./06-domain-rules.md), `docs/services/` và ADR         |
+| Việc gì đang chờ và điều kiện mở khóa?    | [07 · Roadmap](./07-roadmap.md)                                                                                       |
+| Một thay đổi cũ đã làm/kiểm tra những gì? | [Plans and reviews](./plans/README.md); đây chỉ là bằng chứng lịch sử                                                 |
+| Release hoặc xử lý sự cố bằng cách nào?   | [Runbooks](./runbooks/README.md) và [19 · Project lifecycle](./19-project-lifecycle-and-learning.md)                  |
 
-| Mục | File                                                                           | Nội dung                                                                                                                                                           |
-| --- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | [01-product-features.md](./01-product-features.md)                             | Danh sách tính năng thật của Litmatch                                                                                                                              |
-| 2   | [02-domain-model.md](./02-domain-model.md)                                     | Domain Model tổng thể (entity chính)                                                                                                                               |
-| 3   | [03-architecture.md](./03-architecture.md)                                     | Kiến trúc: modular monolith, 3.1-3.7 nền tảng, **3.8 = quyết định thiết kế cho quy mô lớn (SFU, shard matching, ledger)**                                          |
-| 4   | [04-tech-stack.md](./04-tech-stack.md)                                         | Tech stack đề xuất                                                                                                                                                 |
-| 5   | [05-coding-standards.md](./05-coding-standards.md)                             | Coding standard NestJS + cấu trúc thư mục                                                                                                                          |
-| 6   | [06-domain-rules.md](./06-domain-rules.md)                                     | Domain rules bắt buộc (đừng để agent tự đoán)                                                                                                                      |
-| 7   | [07-roadmap.md](./07-roadmap.md)                                               | Checklist triển khai theo giai đoạn (Giai đoạn 0-7)                                                                                                                |
-| 8   | [08-working-with-agents.md](./08-working-with-agents.md)                       | Quy trình làm việc dùng chung cho mọi agent                                                                                                                        |
-| 9   | [09-practical-notes.md](./09-practical-notes.md)                               | Lưu ý thực tế, tránh vỡ trận giữa đường                                                                                                                            |
-| 10  | [10-code-review-checklist.md](./10-code-review-checklist.md)                   | **Checklist review code — 10.0 phương pháp luận lỗi logic nghiệp vụ, 10.1 lỗi chung, 10.2 lỗi đặc thù từng domain, 10.3 cách áp dụng**                             |
-| 11  | [11-engineering-principles.md](./11-engineering-principles.md)                 | **La bàn thiết kế: ownership, boundary, coupling, abstraction, correctness, security, vận hành và tiêu chí tách service**                                          |
-| 12  | [12-frontend-architecture.md](./12-frontend-architecture.md)                   | **Khung 2 app frontend (admin Vite+React, web Next.js)**: hợp đồng OpenAPI → api-client, quy tắc bắt buộc cho agent frontend, Task 0 backend                       |
-| 13  | [13-frontend-coding-standards.md](./13-frontend-coding-standards.md)           | **Coding standard FE dùng chung cho admin + web**: TypeScript/lint, feature folder, TanStack Query, form, error/UX states, realtime, env, testing                  |
-| 14  | [14-rule-enforcement-matrix.md](./14-rule-enforcement-matrix.md)               | **Bản đồ rule → enforcement → test → owner**; phân biệt gate máy với mục bắt buộc review tay                                                                       |
-| 15  | [15-commit-guidelines.md](./15-commit-guidelines.md)                           | **Chuẩn commit dùng chung**: Conventional Commits, scope, atomicity, verification và ví dụ                                                                         |
-| 16  | [16-module-blueprint.md](./16-module-blueprint.md)                             | **Bản thiết kế xây module NestJS**: cây folder/file, public API, ownership, naming, trình tự tạo và Definition of Done                                             |
-| 17  | [17-naming-conventions.md](./17-naming-conventions.md)                         | **Quy ước đặt tên dùng chung**: mọi identifier từ code, API, DB, event, config tới metric/test                                                                     |
-| 18  | [18-documentation-automation.md](./18-documentation-automation.md)             | **Registry và report sinh tự động**: bằng chứng feature, contract REST/realtime, DOCX và quyết định deferred                                                       |
-| 19  | [19-project-lifecycle-and-learning.md](./19-project-lifecycle-and-learning.md) | **Vòng đời dự án/thay đổi/sự cố/học hỏi**: đường dẫn onboarding, bằng chứng, release, observe, incident và deprecate                                               |
-| 20  | [20-ai-native-handbook.md](./20-ai-native-handbook.md)                         | **AI-native handbook**: kiến trúc prompt/context/harness/eval, ma trận trend, onboarding, lỗi thường gặp và trigger áp dụng công nghệ                              |
-| —   | [services/](./services/README.md)                                              | Directory index đầy đủ cho mọi service specification                                                                                                               |
-| —   | [services/economy-service.md](./services/economy-service.md)                   | **Đặc tả chi tiết Economy module**: schema ledger, loại tài khoản, bất biến, luồng IAP/VIP, quy tắc concurrency                                                    |
-| —   | [services/matching-service.md](./services/matching-service.md)                 | **Đặc tả slice M1 Matching**: state machine ticket, shard Redis, double-lock ghép cặp, speed-up qua Economy                                                        |
-| —   | [services/party-room-service.md](./services/party-room-service.md)             | **Đặc tả Party Room**: role host/speaker/audience enforce ở SFU, cap speaker dưới lock, lifecycle phòng + sweeper backstop                                         |
-| —   | [services/gift-service.md](./services/gift-service.md)                         | **Đặc tả Gift**: transaction 2 chân DIA+PTS, catalog giá server, guest không nhận PTS, realtime sau commit                                                         |
-| —   | [services/safety-service.md](./services/safety-service.md)                     | **Đặc tả Safety (Report/Block/trust score)**: log append-only, canPair matching, penalty chống lạm dụng report, wire vào Matching + Friend Chat                    |
-| —   | [services/feed-service.md](./services/feed-service.md)                         | **Đặc tả Feed**: post/like/comment công khai toàn cục (không fanout), audience per-post (W3), Stories ephemeral ring bạn bè + reply→DM (W3), block cắt điểm chạm   |
-| —   | [services/notification-service.md](./services/notification-service.md)         | **Đặc tả Notification**: gọi trực tiếp qua DI (không Outbox/Kafka) cho match/message/gift/like-comment, push DevPushProvider (chưa FCM/APNs thật)                  |
-| —   | [services/avatar-service.md](./services/avatar-service.md)                     | **Đặc tả Avatar**: multi-layer ghép hình (base/tóc/trang phục/phụ kiện), mua item qua spendDiamond generic, chống IDOR lúc trang bị                                |
-| —   | [services/discovery-service.md](./services/discovery-service.md)               | **Đặc tả Discovery (browse-only W1)**: filter gender/tuổi (khu vực dành cho Nearby W5), loại block+report vĩnh viễn, card composition không sửa `PublicProfileDto` |
-| —   | [services/mood-service.md](./services/mood-service.md)                         | **Đặc tả Mood (preset-only W1)**: append-only set/clear, "mood hiện tại" derive khi đọc, composition qua `getPublicMood`, ẩn 2 chiều khi block                     |
-| —   | [services/streak-service.md](./services/streak-service.md)                     | **Đặc tả Streak (W2, mở rộng friend)**: on-write khoá row FOR UPDATE, ngày UTC calendar, grace 1 ngày lỡ, cron cảnh báo không ghi streak                           |
-| —   | [adr/](./adr/README.md)                                                        | Architecture Decision Records — lịch sử các quyết định đã chốt (bối cảnh, phương án loại, hệ quả); 03 là trạng thái đích, ADR là lý do lịch sử                     |
-| —   | [plans/](./plans/README.md)                                                    | Plan/review có ngày — historical evidence, không phải canonical state; xem README trước khi dùng hoặc thêm note                                                    |
-| —   | [runbooks/](./runbooks/README.md)                                              | Directory index đầy đủ cho mọi runbook vận hành/release                                                                                                            |
-| —   | [reference/](./reference/README.md)                                            | Registry và tài liệu tham chiếu dùng lại                                                                                                                           |
-| —   | [templates/](./templates/README.md)                                            | Template cho record bền vững                                                                                                                                       |
-| —   | [runbooks/posthog-cloud.md](./runbooks/posthog-cloud.md)                       | Hướng dẫn bật user analytics/session replay hosted miễn phí, consent, privacy và giới hạn chi phí                                                                  |
-| —   | [runbooks/grafana-cloud.md](./runbooks/grafana-cloud.md)                       | Hướng dẫn đẩy metrics/log Docker lên Grafana Cloud Free, dashboard, alert và giới hạn cardinality                                                                  |
-| —   | [runbooks/hosted-free-release.md](./runbooks/hosted-free-release.md)           | Provision và release profile cloud-only miễn phí qua Northflank, Cloudflare, Upstash và LiveKit Cloud                                                              |
-| —   | [sources.md](./sources.md)                                                     | Nguồn tham khảo đã dùng để nghiên cứu bộ docs này                                                                                                                  |
-| —   | [feature-registry.json](./feature-registry.json)                               | **Nguồn máy đọc được**: trạng thái feature, owner, contract và evidence source/test                                                                                |
-| —   | [generated/ai-native-handbook.docx](./generated/ai-native-handbook.docx)       | Bản DOCX deterministic của mục 20 để đọc/chia sẻ; source of truth vẫn là Markdown                                                                                  |
+`implemented` chỉ có nghĩa evidence được khai báo đang tồn tại trong repository. Test source
+không chứng minh test vừa chạy; local PASS không chứng minh production; roadmap không phải registry
+trạng thái. Chạy `pnpm docs:check` trước khi dựa vào report được sinh.
 
-## Đường dẫn đọc gợi ý theo tình huống
+## 00.2 Thứ tự thẩm quyền
 
-- **Mới vào dự án / chưa code gì**: đọc 1 → 11 để hiểu sản phẩm/backend; làm frontend đọc thêm
-  12–13; sửa rule/CI đọc thêm 14; trước khi commit đọc 15.
-- **Bắt đầu 1 giai đoạn mới trong roadmap**: đọc `07-roadmap.md` (mục đang làm) + file mục tương ứng nếu giai đoạn đó động tới kiến trúc/domain rule mới.
-- **Sắp merge 1 PR / vừa viết xong 1 module**: bắt buộc đọc `10-code-review-checklist.md`, chạy qua § 10.0 trước khi đọc lại code.
-- **Không chắc 1 quyết định kiến trúc có đúng không**: đọc `03-architecture.md`, đặc biệt § 3.8 nếu liên quan tới SFU/matching scale/ledger.
-- **Không chắc code nên nằm ở đâu hoặc có nên tách không**: đọc `11-engineering-principles.md`, sau đó đối chiếu `03-architecture.md`, `05-coding-standards.md` và `16-module-blueprint.md`.
-- **Đặt tên bất kỳ identifier mới nào**: đọc `17-naming-conventions.md`, sau đó áp dụng quy tắc boundary cụ thể trong coding standard liên quan.
-- **Cần biết trạng thái feature thực tế**: chạy `pnpm docs:check`, sau đó đọc
-  `generated/product-spec-evidence-report.md`; không suy ra production verification từ registry.
-- **Mới vào dự án và cần bắt đầu thay đổi an toàn**: đọc [19 · Project lifecycle](./19-project-lifecycle-and-learning.md)
-  sau `AGENTS.md`; chọn scope qua `pnpm agent:context <scope>`, rồi chỉ nạp canonical docs phù hợp.
-- **Cần hiểu AI-native hoặc sửa prompt/context/skill/harness/eval**: đọc
-  [20 · AI-native handbook](./20-ai-native-handbook.md), chạy `pnpm agent:context agents` và đối
-  chiếu ma trận “Applied/Partial/Not applied” trước khi thêm framework hay model.
-- **Gặp lỗi, alert, CI/release fail hoặc muốn lưu bài học**: theo [19 § 19.4–19.5](./19-project-lifecycle-and-learning.md#194-error-and-incident-lifecycle),
-  dùng runbook phù hợp và thêm evidence-backed record vào [Lessons registry](./reference/lessons-registry.md).
-- **Cần hiểu hoặc viết plan/review cũ**: đọc [plans/README.md](./plans/README.md) trước; các note
-  có ngày chỉ là historical evidence, còn rule hiện hành phải lấy từ canonical source đã liên kết.
+Khi nguồn mâu thuẫn, dừng và sửa owner canonical trong cùng thay đổi:
 
-## Quy ước khi sửa bộ docs này
+1. `/AGENTS.md` giữ ba invariant toàn repository.
+2. Architecture hiện hành và ADR giữ boundary/quyết định bền vững.
+3. Domain rules và service/module spec giữ hành vi nghiệp vụ.
+4. Coding standards, enforcement matrix và local `AGENTS.md` giữ quy tắc thực thi theo scope.
+5. Runbook giữ thủ tục vận hành cho một profile đã nêu rõ.
+6. Roadmap, plan/review, generated report và mockup là projection/evidence; chúng không được ghi đè
+   các nguồn trên.
 
-- Giữ nguyên số mục đã có khi có thể — nhiều chỗ trong code/comment/PR description có thể đã tham chiếu "mục 3.8.A", "mục 10.2"... đổi số mục sẽ làm các tham chiếu đó sai. Mục mới được thêm tiếp theo số hiện tại, không đánh lại số cũ.
-- Khi 1 file phình quá dài (>250-300 dòng) hoặc 1 service đủ phức tạp để cần spec riêng, tách thêm file mới trong `docs/services/` (ví dụ `docs/services/economy-service.md`) và thêm dòng vào bảng mục lục trên — không nhét thêm vào file mục số đang có.
-- Đây là tài liệu sống — khi phát hiện sai/thiếu trong lúc code thật, sửa trực tiếp vào file tương ứng, không chỉ sửa trong hội thoại chat rồi để trôi mất.
+Chi tiết về taxonomy, ownership và cách cập nhật nằm ở
+[18 · Documentation architecture](./18-documentation-automation.md).
+
+## 00.3 Lộ trình đọc theo vai trò
+
+- **Người mới:** `/AGENTS.md` → file này → [19 · Lifecycle](./19-project-lifecycle-and-learning.md)
+  → [03 · Architecture](./03-architecture.md) → spec của scope đang làm.
+- **Product/domain:** [01 · Capabilities](./01-product-features.md) →
+  [02 · Domain model](./02-domain-model.md) → [06 · Domain rules](./06-domain-rules.md) →
+  [service catalog](./services/README.md).
+- **Backend:** 03 → [04 · Tech stack](./04-tech-stack.md) →
+  [05 · Coding standards](./05-coding-standards.md) →
+  [16 · Module blueprint](./16-module-blueprint.md) → service spec.
+- **Frontend:** [12 · Frontend architecture](./12-frontend-architecture.md) →
+  [13 · Frontend standards](./13-frontend-coding-standards.md) → OpenAPI/runtime capability
+  contract.
+- **Review/release:** [10 · Review checklist](./10-code-review-checklist.md) →
+  [14 · Enforcement matrix](./14-rule-enforcement-matrix.md) →
+  [15 · Commit guidelines](./15-commit-guidelines.md) → runbook áp dụng.
+- **Agent/AI-native:** [08 · Working with agents](./08-working-with-agents.md) →
+  [20 · AI-native handbook](./20-ai-native-handbook.md), rồi chạy `pnpm agent:context <scope>`.
+
+## 00.4 Catalog canonical theo trách nhiệm
+
+| Mục | Tài liệu                                                                 | Trách nhiệm duy nhất                                          |
+| --: | ------------------------------------------------------------------------ | ------------------------------------------------------------- |
+|  01 | [Product capabilities](./01-product-features.md)                         | Intent và boundary sản phẩm; không giữ trạng thái triển khai  |
+|  02 | [Domain model](./02-domain-model.md)                                     | Bản đồ aggregate/entity và quan hệ ownership                  |
+|  03 | [Architecture](./03-architecture.md)                                     | Topology, dependency direction và tiêu chí tách deployable    |
+|  04 | [Tech stack](./04-tech-stack.md)                                         | Lựa chọn công nghệ hiện hành                                  |
+|  05 | [Backend coding standards](./05-coding-standards.md)                     | Convention NestJS/API/persistence/test                        |
+|  06 | [Domain rules](./06-domain-rules.md)                                     | Invariant nghiệp vụ xuyên module                              |
+|  07 | [Roadmap](./07-roadmap.md)                                               | Trình tự, khoảng trống và trigger mở khóa công việc tương lai |
+|  08 | [Working with agents](./08-working-with-agents.md)                       | Task contract, context, skill, handoff và execution budget    |
+|  09 | [Practical notes](./09-practical-notes.md)                               | Gotcha ngắn dùng lại trong thực tế                            |
+|  10 | [Code review checklist](./10-code-review-checklist.md)                   | Phương pháp tìm lỗi logic và checklist domain                 |
+|  11 | [Engineering principles](./11-engineering-principles.md)                 | La bàn ownership, coupling, correctness và operability        |
+|  12 | [Frontend architecture](./12-frontend-architecture.md)                   | Boundary của Admin/Web và hợp đồng backend                    |
+|  13 | [Frontend coding standards](./13-frontend-coding-standards.md)           | Convention TypeScript, state, UX, realtime và test            |
+|  14 | [Rule enforcement matrix](./14-rule-enforcement-matrix.md)               | Rule → guard/test → owner; không tạo rule mới                 |
+|  15 | [Commit guidelines](./15-commit-guidelines.md)                           | Commit scope, message và verification                         |
+|  16 | [Module blueprint](./16-module-blueprint.md)                             | Skeleton/DoD cho module NestJS                                |
+|  17 | [Naming conventions](./17-naming-conventions.md)                         | Quy ước định danh xuyên code/API/DB/event                     |
+|  18 | [Documentation architecture](./18-documentation-automation.md)           | Taxonomy, evidence vocabulary, generation và docs DoD         |
+|  19 | [Project lifecycle and learning](./19-project-lifecycle-and-learning.md) | Discover → deprecate, error/incident và lesson lifecycle      |
+|  20 | [AI-native handbook](./20-ai-native-handbook.md)                         | Prompt/context/harness/eval và trigger áp dụng công nghệ      |
+
+## 00.5 Catalog theo loại artifact
+
+| Directory                          | Dùng khi                                                    | Không dùng để                              |
+| ---------------------------------- | ----------------------------------------------------------- | ------------------------------------------ |
+| [Services](./services/README.md)   | Đọc đặc tả boundary của module/domain                       | Suy ra có thêm deployable                  |
+| [ADRs](./adr/README.md)            | Hiểu quyết định đã chốt, phương án loại và hệ quả           | Mô tả trạng thái runtime hiện tại một mình |
+| [Runbooks](./runbooks/README.md)   | Thực hiện local/release/observability/recovery theo profile | Tuyên bố SLA hoặc production PASS          |
+| [Plans/reviews](./plans/README.md) | Tra assumptions, review và kết quả tại một thời điểm        | Ghi đè rule hiện hành                      |
+| [Reference](./reference/README.md) | Tra registry/bài học có link về nguồn gốc                   | Copy lại toàn bộ domain spec               |
+| [Templates](./templates/README.md) | Tạo record có cấu trúc                                      | Xem field trống là evidence                |
+
+Contract máy đọc được nằm ở [`openapi/`](../openapi/README.md) và
+[`specs/`](../specs/README.md). Tài liệu vận hành repository nằm gần artifact:
+[`deploy/`](../deploy/README.md), [`k8s/`](../k8s/README.md),
+[`loadtest/`](../loadtest/README.md), [`scripts/`](../scripts/README.md) và
+[`layouts/`](../layouts/README.md). [Nguồn tham khảo](./sources.md) chỉ hỗ trợ reasoning; code,
+test, ADR và evidence vận hành mới chứng minh hệ thống này.
+
+## 00.6 Quy ước khi sửa tài liệu
+
+- Giữ số mục/anchor cũ khi có tham chiếu; mục mới thêm tiếp, không đánh lại lịch sử.
+- Sửa đúng owner canonical và tất cả projection bị ảnh hưởng trong cùng commit.
+- Không copy status thủ công vào nhiều README; link registry/report hoặc source evidence.
+- Tách file khi một chủ đề có owner/lifecycle khác, không chỉ vì file dài.
+- Ghi rõ fact, historical evidence, inferred risk, deferred work và production verification.
+- Sau thay đổi docs chạy `pnpm docs:check`, `pnpm agent:check` và format check theo scope. Thay đổi
+  business nhạy cảm vẫn phải qua `review-module`; docs-only ghi `review-module: N/A` kèm lý do.
 
 ---
 
-[Tiếp: 01 · Product Features →](./01-product-features.md)
+[Tiếp: 01 · Product capabilities →](./01-product-features.md)

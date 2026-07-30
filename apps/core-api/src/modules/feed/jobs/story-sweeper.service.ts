@@ -6,15 +6,16 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
-import { InjectRepository } from '@nestjs/typeorm';
-import { LessThanOrEqual, Repository } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
 
 import { ManagedInterval } from '../../../common/scheduling/managed-interval';
-import { Story } from '../entities/story.entity';
 
 import type { CoreApiEnv } from '../../../config/env.validation';
+import type { DataSource } from 'typeorm';
 
 const STORY_SWEEPER_JOB = 'story-sweeper';
+/** Giữ transaction delete ngắn; backlog được xử lý dần ở các tick sau. */
+const STORY_SWEEP_BATCH = 500;
 
 /**
  * Dọn rác story hết hạn (docs/services/feed-service.md § 8) — KHÔNG phải chốt correctness
@@ -30,7 +31,7 @@ export class StorySweeperService
   private readonly job = new ManagedInterval();
 
   constructor(
-    @InjectRepository(Story) private readonly storyRepo: Repository<Story>,
+    @InjectDataSource() private readonly dataSource: DataSource,
     private readonly config: ConfigService<CoreApiEnv, true>,
     private readonly scheduler: SchedulerRegistry,
   ) {}
@@ -44,6 +45,7 @@ export class StorySweeperService
       task: () => this.runOnce(),
       logger: this.logger,
       errorMessage: 'Story sweeper lỗi',
+      clusterSingleton: { dataSource: this.dataSource },
     });
   }
 
@@ -54,7 +56,17 @@ export class StorySweeperService
   /** 1 tick — public để test/chạy tay. */
   async runOnce(): Promise<void> {
     await this.job.runExclusive(async () => {
-      await this.storyRepo.delete({ expiresAt: LessThanOrEqual(new Date()) });
+      await this.dataSource.query(
+        `DELETE FROM stories
+          WHERE id IN (
+            SELECT id
+              FROM stories
+             WHERE expires_at <= now()
+             ORDER BY expires_at ASC, id ASC
+             LIMIT $1
+          )`,
+        [STORY_SWEEP_BATCH],
+      );
     }, undefined);
   }
 }

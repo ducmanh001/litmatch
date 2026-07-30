@@ -13,6 +13,7 @@ import { MatchingGenderPreference1752300000000 } from '../../database/migrations
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
 import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
 import { MatchInvite1754700000000 } from '../../database/migrations/1754700000000-match-invite';
+import { GuestMatchQuota1756400000000 } from '../../database/migrations/1756400000000-guest-match-quota';
 import { AuthIdentity } from '../auth/entities/auth-identity.entity';
 import { PhoneOtp } from '../auth/entities/phone-otp.entity';
 import { RefreshToken } from '../auth/entities/refresh-token.entity';
@@ -53,6 +54,8 @@ import {
   MatchSessionStatus,
 } from './entities/match-session.entity';
 import { MatchInvite, MatchInviteStatus } from './entities/match-invite.entity';
+import { GuestMatchQuota } from './entities/guest-match-quota.entity';
+import { GuestMatchQuotaService } from './services/guest-match-quota.service';
 import {
   MATCHING_ACTIVE_SHARDS_KEY,
   matchingShardKey,
@@ -101,6 +104,8 @@ const CONFIG: Record<string, unknown> = {
   // không ảnh hưởng các assertion score đã có (docs/services/safety-service.md § 3.2)
   MATCHING_TRUST_PENALTY_MS_PER_POINT: 2000,
   MATCHING_TRUST_PENALTY_MAX_MS: 120_000,
+  MATCHING_GUEST_DAILY_LIMIT: 3,
+  MATCHING_GUEST_QUOTA_PEPPER: 'matching-integration-quota-pepper-000000',
   USER_DEFAULT_AVATAR_ID: 'default-01',
   // timeout lớn để invite không tự "già" giữa lúc suite chạy chậm; test hết hạn tự backdate thủ công
   MATCHING_INVITE_TTL_SECONDS: 3600,
@@ -161,6 +166,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
       region?: string | null;
       birthDate?: string | null;
       gender?: Gender;
+      isGuest?: boolean;
     } = {},
   ): Promise<User> {
     const repo = ds.getRepository(User);
@@ -168,7 +174,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
       repo.create({
         nickname,
         avatarId: 'default-01',
-        isGuest: false,
+        isGuest: opts.isGuest ?? false,
         region: opts.region === undefined ? 'VN' : opts.region,
         birthDate: opts.birthDate === undefined ? '2000-01-01' : opts.birthDate,
         gender: opts.gender ?? Gender.Unknown,
@@ -229,6 +235,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
         MatchTicket,
         MatchSession,
         MatchInvite,
+        GuestMatchQuota,
       ],
       migrations: [
         InitAuthUser1751900000000,
@@ -241,6 +248,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
         Safety1752800000000,
         ReportTargetVideo1754900000000,
         MatchInvite1754700000000,
+        GuestMatchQuota1756400000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -285,6 +293,12 @@ d('Matching integration (Postgres + Redis thật)', () => {
       sendPush: async () => undefined,
     };
     const matcherWakeup = new MatcherWakeup();
+    const guestQuota = new GuestMatchQuotaService(
+      {
+        verifyForUser: async (token: string) => token,
+      } as never,
+      configStub,
+    );
     matching = new MatchingService(
       ds,
       ds.getRepository(MatchTicket),
@@ -294,6 +308,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
       configStub,
       redis,
       matcherWakeup,
+      guestQuota,
     );
     const matchingMetrics = new MatchingMetrics(
       metrics.getMeter('matching-integration'),
@@ -386,6 +401,66 @@ d('Matching integration (Postgres + Redis thật)', () => {
       ),
     ).rejects.toMatchObject({
       driverError: expect.objectContaining({ code: '23505' }),
+    });
+  });
+
+  it('guest quota: cancel/rejoin không hoàn lượt; đổi IP không reset user/device bucket', async () => {
+    const guest = await createUser('guest-quota', { isGuest: true });
+    const deviceToken = 'a'.repeat(64);
+
+    for (let index = 0; index < 3; index += 1) {
+      const ticket = await matching.joinQueue(
+        auth(guest.id),
+        { matchType: MatchType.Voice },
+        `guest-${index}`,
+        {
+          deviceToken,
+          ip: `203.0.113.${index + 1}`,
+        },
+      );
+      await matching.cancelTicket(auth(guest.id), ticket.id);
+    }
+
+    await expect(
+      matching.joinQueue(
+        auth(guest.id),
+        { matchType: MatchType.Voice },
+        'guest-over-limit',
+        { deviceToken, ip: '198.51.100.9' },
+      ),
+    ).rejects.toMatchObject({
+      code: MatchingErrors.GUEST_DAILY_QUOTA_EXCEEDED,
+    });
+  });
+
+  it('guest quota: concurrent guest mới cùng IP chỉ tối đa limit request thắng', async () => {
+    const guests = await Promise.all(
+      Array.from({ length: 4 }, (_, index) =>
+        createUser(`guest-ip-${index}`, { isGuest: true }),
+      ),
+    );
+    const results = await Promise.allSettled(
+      guests.map((guest, index) =>
+        matching.joinQueue(
+          auth(guest.id),
+          { matchType: MatchType.Voice },
+          `guest-ip-${index}`,
+          {
+            deviceToken: String(index).repeat(64),
+            ip: '192.0.2.44',
+          },
+        ),
+      ),
+    );
+
+    expect(
+      results.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(3);
+    const rejected = results.find(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    );
+    expect(rejected?.reason).toMatchObject({
+      code: MatchingErrors.GUEST_DAILY_QUOTA_EXCEEDED,
     });
   });
 

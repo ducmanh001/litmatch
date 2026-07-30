@@ -1,4 +1,4 @@
-import { Logger, OnApplicationShutdown } from '@nestjs/common';
+import { Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import {
@@ -15,8 +15,11 @@ import {
   parseRealtimeUserChannel,
 } from '@litmatch/common-dtos';
 import { captureSentryException } from '@litmatch/observability';
+import { randomUUID } from 'node:crypto';
 import Redis from 'ioredis';
 
+import { ConnectionQuotaService } from './connection-quota.service';
+import { signalingRedisClientOptions } from './redis-client-options';
 import type { Namespace, Socket } from 'socket.io';
 import type {
   AccessTokenPayload,
@@ -29,8 +32,8 @@ function userRoom(userId: string): string {
   return `user:${userId}`;
 }
 
-/** Một tab lỗi/reconnect không được nhân socket vô hạn cho cùng một user. */
-const MAX_CONNECTIONS_PER_USER = 3;
+const CONNECTION_LIMIT_ERROR = 'CONNECTION_LIMIT';
+const CONNECTION_QUOTA_UNAVAILABLE_ERROR = 'CONNECTION_QUOTA_UNAVAILABLE';
 
 /**
  * Tầng fanout realtime (docs/services/realtime-gateway.md, docs/03 § 3.3): gateway KHÔNG chứa
@@ -45,14 +48,19 @@ export class SignalingGateway
     OnGatewayInit,
     OnGatewayConnection,
     OnGatewayDisconnect,
-    OnApplicationShutdown
+    OnModuleDestroy
 {
   private readonly logger = new Logger(SignalingGateway.name);
   /** Connection Redis RIÊNG cho subscribe — ioredis ở chế độ subscriber không dùng được lệnh khác. */
   private subscriber?: Redis;
   private subscriptionReady = false;
   private subscriptionInFlight?: Promise<void>;
-  private readonly connectionsByUser = new Map<string, number>();
+  private readonly activeQuotaLeases = new Map<
+    string,
+    { userId: string; timer: NodeJS.Timeout; client: Socket }
+  >();
+  private stopQuotaUnavailableListener?: () => void;
+  private shuttingDown = false;
 
   @WebSocketServer()
   private readonly server!: Namespace;
@@ -60,16 +68,25 @@ export class SignalingGateway
   constructor(
     private readonly jwtService: JwtService,
     private readonly config: ConfigService<SignalingEnv, true>,
+    private readonly connectionQuota: ConnectionQuotaService,
   ) {}
 
   afterInit(server: Namespace): void {
+    this.stopQuotaUnavailableListener = this.connectionQuota.onUnavailable(() =>
+      this.disconnectActiveQuotaSockets(),
+    );
     // Middleware handshake: connection KHÔNG token hợp lệ bị từ chối trước khi thành socket
     server.use((socket, next) => {
+      if (this.shuttingDown) {
+        next(new Error(CONNECTION_QUOTA_UNAVAILABLE_ERROR));
+        return;
+      }
       void this.authenticate(socket)
-        .then(() => {
+        .then(async () => {
           const userId = (socket.data as { userId?: string }).userId;
-          if (!userId || !this.admitConnection(socket, userId)) {
-            throw new Error('CONNECTION_LIMIT');
+          if (!userId) throw new Error(RealtimeConnectionErrors.Unauthorized);
+          if (!(await this.admitConnection(socket, userId))) {
+            throw new Error(CONNECTION_LIMIT_ERROR);
           }
           next();
         })
@@ -78,13 +95,7 @@ export class SignalingGateway
 
     this.subscriber = new Redis(
       this.config.getOrThrow('REDIS_URL', { infer: true }),
-      {
-        connectTimeout: 1_000,
-        commandTimeout: 1_000,
-        maxRetriesPerRequest: 1,
-        enableOfflineQueue: false,
-        retryStrategy: (attempt) => Math.min(attempt * 100, 1_000),
-      },
+      signalingRedisClientOptions(),
     );
     this.subscriber.on('ready', () => this.ensureSubscribed());
     this.subscriber.on('close', () => {
@@ -96,12 +107,24 @@ export class SignalingGateway
     this.subscriber.on('pmessage', (_pattern, channel, raw) =>
       this.relay(channel, raw),
     );
-    this.ensureSubscribed();
   }
 
-  async onApplicationShutdown(): Promise<void> {
+  async onModuleDestroy(): Promise<void> {
+    this.shuttingDown = true;
     this.subscriptionReady = false;
-    this.connectionsByUser.clear();
+    this.stopQuotaUnavailableListener?.();
+    this.stopQuotaUnavailableListener = undefined;
+    const leases = [...this.activeQuotaLeases.entries()];
+    this.activeQuotaLeases.clear();
+    await Promise.allSettled(
+      leases.map(([leaseId, { userId, timer, client }]) => {
+        clearInterval(timer);
+        // Stop the transport before freeing its global slot. Nest disposes Socket.IO only after
+        // module-destroy hooks, so release-first would temporarily admit >3 across replicas.
+        client.disconnect(true);
+        return this.connectionQuota.release(userId, leaseId);
+      }),
+    );
     const subscriber = this.subscriber;
     this.subscriber = undefined;
     if (!subscriber) return;
@@ -117,16 +140,29 @@ export class SignalingGateway
 
   /** Readiness thật: Redis đã kết nối VÀ pattern fanout đã subscribe thành công. */
   isReady(): boolean {
-    return this.subscriber?.status === 'ready' && this.subscriptionReady;
+    return (
+      this.subscriber?.status === 'ready' &&
+      this.subscriptionReady &&
+      this.connectionQuota.isReady()
+    );
   }
 
   handleConnection(client: Socket): void {
-    const userId = (client.data as { userId?: string }).userId;
+    const data = client.data as {
+      userId?: string;
+      quotaPreconnectCleanup?: () => void;
+    };
+    const userId = data.userId;
     if (!userId) {
       // middleware đã chặn — tới đây là bug, ngắt để không có socket "vô danh" nhận event
       client.disconnect(true);
       return;
     }
+    if (data.quotaPreconnectCleanup) {
+      client.conn.off('close', data.quotaPreconnectCleanup);
+      data.quotaPreconnectCleanup = undefined;
+    }
+    this.startLeaseRefresh(client, userId);
     void client.join(userRoom(userId));
     this.logger.debug(`User ${userId} connected: ${client.id}`);
   }
@@ -134,13 +170,24 @@ export class SignalingGateway
   handleDisconnect(client: Socket): void {
     const data = client.data as {
       userId?: string;
-      connectionAdmitted?: boolean;
+      quotaLeaseId?: string;
+      quotaRefreshTimer?: NodeJS.Timeout;
     };
-    if (data.connectionAdmitted && data.userId) {
-      const current = this.connectionsByUser.get(data.userId) ?? 0;
-      if (current <= 1) this.connectionsByUser.delete(data.userId);
-      else this.connectionsByUser.set(data.userId, current - 1);
-      data.connectionAdmitted = false;
+    if (data.quotaRefreshTimer) {
+      clearInterval(data.quotaRefreshTimer);
+      data.quotaRefreshTimer = undefined;
+    }
+    if (data.quotaLeaseId && data.userId) {
+      const leaseId = data.quotaLeaseId;
+      this.activeQuotaLeases.delete(leaseId);
+      data.quotaLeaseId = undefined;
+      void this.connectionQuota.release(data.userId, leaseId).catch((error) => {
+        // Fail-safe: lease có TTL nên replica crash/Redis outage không giữ slot vĩnh viễn.
+        this.logger.warn(
+          `Không thể release connection quota: ${String(error)}`,
+        );
+        captureSentryException(error, 'signaling-connection-quota-release');
+      });
     }
     this.logger.debug(`Client disconnected: ${client.id}`);
   }
@@ -168,12 +215,90 @@ export class SignalingGateway
     }
   }
 
-  private admitConnection(client: Socket, userId: string): boolean {
-    const current = this.connectionsByUser.get(userId) ?? 0;
-    if (current >= MAX_CONNECTIONS_PER_USER) return false;
-    this.connectionsByUser.set(userId, current + 1);
-    (client.data as { connectionAdmitted?: boolean }).connectionAdmitted = true;
+  private async admitConnection(
+    client: Socket,
+    userId: string,
+  ): Promise<boolean> {
+    const leaseId = randomUUID();
+    const data = client.data as {
+      quotaLeaseId?: string;
+      quotaPreconnectCleanup?: () => void;
+    };
+    let transportClosed = client.conn.readyState === 'closed';
+    const cleanup = () => {
+      transportClosed = true;
+      if (data.quotaLeaseId !== leaseId) return;
+      data.quotaLeaseId = undefined;
+      void this.connectionQuota.release(userId, leaseId).catch(() => {
+        // Bounded lease expires if the transport and Redis disappear together.
+      });
+    };
+    client.conn.once('close', cleanup);
+
+    let admitted: boolean;
+    try {
+      admitted = await this.connectionQuota.acquire(userId, leaseId);
+    } catch (error) {
+      client.conn.off('close', cleanup);
+      void this.connectionQuota.release(userId, leaseId).catch(() => {
+        // The acquire may have executed server-side before its response timed out. TTL remains
+        // the final safety net when Redis is too unavailable for this best-effort cleanup.
+      });
+      captureSentryException(error, 'signaling-connection-quota');
+      throw new Error(CONNECTION_QUOTA_UNAVAILABLE_ERROR, { cause: error });
+    }
+    if (!admitted) {
+      client.conn.off('close', cleanup);
+      return false;
+    }
+    data.quotaLeaseId = leaseId;
+    data.quotaPreconnectCleanup = cleanup;
+    if (
+      transportClosed ||
+      client.conn.readyState === 'closed' ||
+      this.shuttingDown
+    ) {
+      cleanup();
+      throw new Error(CONNECTION_QUOTA_UNAVAILABLE_ERROR);
+    }
     return true;
+  }
+
+  private startLeaseRefresh(client: Socket, userId: string): void {
+    const data = client.data as {
+      quotaLeaseId?: string;
+      quotaRefreshTimer?: NodeJS.Timeout;
+    };
+    const leaseId = data.quotaLeaseId;
+    if (!leaseId) {
+      client.disconnect(true);
+      return;
+    }
+    const timer = setInterval(
+      () => {
+        void this.connectionQuota
+          .refresh(userId, leaseId)
+          .then((refreshed) => {
+            if (!refreshed) client.disconnect(true);
+          })
+          .catch((error) => {
+            // Fail closed: khi không thể chứng minh lease còn hợp lệ, ngắt socket.
+            captureSentryException(error, 'signaling-connection-quota-refresh');
+            client.disconnect(true);
+          });
+      },
+      Math.floor(this.connectionQuota.leaseMs / 3),
+    );
+    timer.unref();
+    data.quotaRefreshTimer = timer;
+    this.activeQuotaLeases.set(leaseId, { userId, timer, client });
+  }
+
+  private disconnectActiveQuotaSockets(): void {
+    for (const { timer, client } of this.activeQuotaLeases.values()) {
+      clearInterval(timer);
+      client.disconnect(true);
+    }
   }
 
   /** Relay Redis → socket room của đúng user; payload không đọc/sửa (public để unit test). */
@@ -192,7 +317,14 @@ export class SignalingGateway
   }
 
   private ensureSubscribed(): void {
-    if (!this.subscriber || this.subscriptionInFlight) return;
+    if (
+      !this.subscriber ||
+      this.subscriber.status !== 'ready' ||
+      this.subscriptionInFlight ||
+      this.subscriptionReady
+    ) {
+      return;
+    }
     this.subscriptionReady = false;
     this.subscriptionInFlight = this.subscriber
       .psubscribe(REALTIME_USER_CHANNEL_PATTERN)
