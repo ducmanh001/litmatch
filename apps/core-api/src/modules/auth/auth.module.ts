@@ -7,8 +7,8 @@ import type { CoreApiEnv } from '../../config/env.validation';
 import { UserModule } from '../user';
 
 import { AuthController } from './auth.controller';
-import { AuthUpgradeController } from './auth-upgrade.controller';
 import { AuthService } from './auth.service';
+import { AuthUpgradeController } from './controllers/auth-upgrade.controller';
 import { AuthIdentity } from './entities/auth-identity.entity';
 import { PhoneOtp } from './entities/phone-otp.entity';
 import { RefreshToken } from './entities/refresh-token.entity';

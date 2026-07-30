@@ -40,5 +40,5 @@
       }
     }
   },
-  "tags": ["type:app", "scope:signaling"]
+  "tags": ["type:app", "scope:signaling", "platform:server"]
 }

@@ -18,13 +18,13 @@ import { Throttle, minutes } from '@nestjs/throttler';
 import {
   CurrentUser,
   type AuthenticatedUser,
-} from '../../common/decorators/current-user.decorator';
-import { AuthService } from './auth.service';
-import { setAuthCookies } from './auth.cookies';
-import { AuthTokensDto } from './dto/auth-tokens.dto';
-import { SocialLoginDto, VerifyOtpDto } from './dto/auth-request.dtos';
-import type { CoreApiEnv } from '../../config/env.validation';
-import type { IssuedSession } from './auth.service';
+} from '../../../common/decorators/current-user.decorator';
+import { AuthService } from '../auth.service';
+import { setAuthCookies } from '../auth.cookies';
+import { AuthTokensDto } from '../dto/auth-tokens.dto';
+import { SocialLoginDto, VerifyOtpDto } from '../dto/auth-request.dtos';
+import type { CoreApiEnv } from '../../../config/env.validation';
+import type { IssuedSession } from '../auth.service';
 import type { Response } from 'express';
 
 @ApiTags('auth')
