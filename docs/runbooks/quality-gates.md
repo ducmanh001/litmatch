@@ -46,6 +46,8 @@ Local runner cô lập task cache và workspace data theo từng process ở th�
 qua `NX_CACHE_DIRECTORY` và `NX_WORKSPACE_DATA_DIRECTORY`. Vì vậy dev server/Nx Console chạy đồng
 thời không được xoá `terminalOutputs` hoặc project graph của preflight, và formatter không quét
 metadata sinh ra giữa các stage. GitHub Actions dùng cùng cơ chế này trên workspace sạch.
+Các secret bắt buộc để bootstrap contract (`JWT`, OTP, guest device và matching guest quota) dùng
+giá trị CI-only xác định trong runner; gate không được phụ thuộc `.env` không tracked của máy dev.
 
 Target `signaling-gateway:test` chạy tách khỏi pool Core API trong local/GitHub CI. Integration
 suite của gateway dùng TTL lease production tối thiểu để chứng minh renew và replica-crash expiry;

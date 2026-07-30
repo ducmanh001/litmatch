@@ -78,6 +78,12 @@ const environment = {
     process.env['LOCAL_CI_JWT_SECRET'] ?? 'local-ci-jwt-0123456789abcdef-xyz',
   AUTH_OTP_PEPPER:
     process.env['LOCAL_CI_AUTH_OTP_PEPPER'] ?? 'local-ci-pepper-0123456789',
+  AUTH_GUEST_DEVICE_TOKEN_SECRET:
+    process.env['LOCAL_CI_AUTH_GUEST_DEVICE_TOKEN_SECRET'] ??
+    'local-ci-guest-device-secret-0123456789abcdef',
+  MATCHING_GUEST_QUOTA_PEPPER:
+    process.env['LOCAL_CI_MATCHING_GUEST_QUOTA_PEPPER'] ??
+    'local-ci-matching-quota-pepper-0123456789abcdef',
   DATABASE_URL:
     process.env['LOCAL_CI_DATABASE_URL'] ??
     'postgresql://litmatch:litmatch_local@localhost:5432/litmatch_ci',

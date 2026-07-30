@@ -182,6 +182,19 @@ test('quality profiles check formatting without rewriting the workspace', () => 
   assert.match(qualityGates, /Quick\/clean\/preflight không tự sửa source/u);
 });
 
+test('local and GitHub CI provide every required non-database application secret', () => {
+  const localCi = readFileSync('scripts/ci/local.mjs', 'utf8');
+
+  for (const variable of [
+    'JWT_SECRET',
+    'AUTH_OTP_PEPPER',
+    'AUTH_GUEST_DEVICE_TOKEN_SECRET',
+    'MATCHING_GUEST_QUOTA_PEPPER',
+  ]) {
+    assert.match(localCi, new RegExp(`\\b${variable}:`, 'u'), variable);
+  }
+});
+
 test('backend runtime images install with the canonical pnpm settings', () => {
   for (const dockerfilePath of runtimeDockerfiles) {
     const dockerfile = readFileSync(dockerfilePath, 'utf8');
