@@ -1,46 +1,35 @@
 'use client';
 
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect } from 'react';
 
 import { useCurrentUser } from '../auth/use-current-user';
 import { useTranslation } from '../i18n/messages';
 import {
-  getProductAnalyticsConsent,
   identifyProductAnalyticsUser,
   productAnalyticsConfig,
-  setProductAnalyticsConsent,
-  subscribeProductAnalyticsConsent,
 } from './product-analytics';
 
 export function ProductAnalyticsIdentity() {
   const profile = useCurrentUser();
-  const consent = useSyncExternalStore(
-    subscribeProductAnalyticsConsent,
-    getProductAnalyticsConsent,
-    () => null,
-  );
-
   useEffect(() => {
-    if (consent !== 'accepted' || profile.data === undefined) return;
+    if (profile.data === undefined) return;
     identifyProductAnalyticsUser({
       id: profile.data.id,
       isGuest: profile.data.isGuest,
     });
-  }, [consent, profile.data]);
+  }, [profile.data]);
 
   return null;
 }
 
+/**
+ * Analytics luôn bật khi đã cấu hình PostHog.
+ */
 export function ProductAnalyticsPreference() {
   const t = useTranslation();
-  const consent = useSyncExternalStore(
-    subscribeProductAnalyticsConsent,
-    getProductAnalyticsConsent,
-    () => null,
-  );
 
   if (productAnalyticsConfig === null) return null;
-  const enabled = consent === 'accepted';
+  const enabled = true;
 
   return (
     <div>
@@ -54,24 +43,18 @@ export function ProductAnalyticsPreference() {
             {t('analytics.consentDescription')}
           </p>
         </div>
-        <button
-          type="button"
+        <div
           role="switch"
           aria-checked={enabled}
           aria-label={t('analytics.consentTitle')}
-          onClick={() =>
-            setProductAnalyticsConsent(enabled ? 'declined' : 'accepted')
-          }
-          className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-            enabled ? 'bg-irisl' : 'bg-slate-300 dark:bg-slate-600'
-          }`}
+          className="relative h-6 w-11 shrink-0 rounded-full bg-irisl"
         >
           <span
             className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
               enabled ? 'translate-x-5' : ''
             }`}
           />
-        </button>
+        </div>
       </div>
     </div>
   );

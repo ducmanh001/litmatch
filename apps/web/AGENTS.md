@@ -46,9 +46,6 @@ Env: copy `.env.example` → `.env.local` (đã có sẵn cho local). Đọc env
   (`connectRealtime`/`subscribeRealtime`/`onReconnected`) — component không tự `io()`.
   Sau reconnect PHẢI invalidate query liên quan (socket là kênh delta).
 - Media: LiveKit chỉ qua `shared/media/livekit.ts`; token mint từ core-api.
-- Analytics privacy/cost: `shared/analytics/product-analytics.ts` chỉ được khởi tạo sau
-  cookie consent hợp lệ; autocapture và Session Replay phải giữ tắt, không được bật
-  `opt_in_capturing()` sớm, và mọi thay đổi kiểu này phải cập nhật runbook PostHog.
 - Capability: login/top-up/provider readiness lấy từ `GET /api/v1/capabilities`; CTA unavailable
   vẫn hiện và chỉ trình bày message server, không gọi action API.
 - `AuthGate` chờ mount mới quyết định (server snapshot luôn unauthenticated) — component
