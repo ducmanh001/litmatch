@@ -2,6 +2,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, readdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -16,6 +17,11 @@ const bypassRequested =
       .trim()
       .toLowerCase(),
   );
+const runningInCi = ['1', 'true', 'yes', 'on'].includes(
+  (process.env['CI'] ?? process.env['GITHUB_ACTIONS'] ?? '')
+    .trim()
+    .toLowerCase(),
+);
 const cleanRunnerImage =
   process.env['LOCAL_CI_NODE_IMAGE'] ??
   'node:22-bookworm@sha256:a25c9934ff6382cd4f08b6bc26c82bf4ea69b1e6f8dabfb2ead457374127c365';
@@ -28,6 +34,7 @@ const stageRunnerScript = fileURLToPath(
 const stageTimeoutMs = Number(
   process.env['LOCAL_CI_STAGE_TIMEOUT_MS'] ?? 20 * 60 * 1000,
 );
+const localCiNxRoot = join(tmpdir(), 'litmatch-local-ci', String(process.pid));
 const supportedProfiles = new Set([
   'quick',
   'clean',
@@ -45,6 +52,12 @@ if (!supportedProfiles.has(profile)) {
 }
 
 if (bypassRequested) {
+  if (runningInCi) {
+    console.error(
+      `[ci-local] Refusing bypass for profile ${profile} in a CI environment.`,
+    );
+    process.exit(1);
+  }
   console.log(
     `[ci-local] Bypass enabled for profile ${profile}${
       process.env['LITMATCH_CI_BYPASS_REASON']
@@ -79,6 +92,11 @@ const environment = {
   NEXT_PUBLIC_LIVEKIT_URL:
     process.env['NEXT_PUBLIC_LIVEKIT_URL'] ?? 'ws://localhost:7880',
   NX_TUI: 'false',
+  NX_CACHE_DIRECTORY:
+    process.env['LOCAL_CI_NX_CACHE_DIRECTORY'] ?? join(localCiNxRoot, 'cache'),
+  NX_WORKSPACE_DATA_DIRECTORY:
+    process.env['LOCAL_CI_NX_WORKSPACE_DATA_DIRECTORY'] ??
+    join(localCiNxRoot, 'workspace-data'),
 };
 
 let dependenciesPrepared = false;
@@ -148,7 +166,11 @@ function prepareDependencies() {
 
 function prepareNx() {
   if (nxPrepared) return;
-  run('Reset Nx daemon and project-graph cache', pnpm, ['nx', 'reset']);
+  run('Reset Nx daemon and project-graph cache', pnpm, [
+    'nx',
+    'reset',
+    '--outputStyle=static',
+  ]);
   nxPrepared = true;
 }
 
@@ -189,7 +211,6 @@ function startTestServices() {
 function runQuality() {
   prepareDependencies();
   prepareNx();
-  run('Auto-fix formatting before quality checks', pnpm, ['format']);
   run('Agent contract and guard checks', pnpm, ['agent:check']);
   run('Agent guard tests', pnpm, ['agent:test']);
   runWorkflowLint();
@@ -218,8 +239,7 @@ function runCleanQuality() {
       'clean: install dependencies',
       'pnpm install --store-dir /pnpm/store --frozen-lockfile',
     ),
-    stage('clean: reset Nx', 'pnpm nx reset'),
-    stage('clean: format', 'pnpm format'),
+    stage('clean: reset Nx', 'pnpm nx reset --outputStyle=static'),
     stage('clean: agent check', 'pnpm agent:check'),
     stage('clean: agent tests', 'pnpm agent:test'),
     stage(
@@ -252,6 +272,8 @@ function runCleanQuality() {
       'HUSKY=0',
       '--env',
       'NX_DAEMON=false',
+      '--env',
+      'NX_TUI=false',
       cleanRunnerImage,
       'bash',
       '-lc',

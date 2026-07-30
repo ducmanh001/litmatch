@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -22,6 +23,25 @@ function runStage(timeoutMs, source) {
       timeout: 5000,
     },
   );
+}
+
+function isProcessRunning(pid) {
+  try {
+    process.kill(pid, 0);
+  } catch (error) {
+    if (error?.code === 'ESRCH') return false;
+    throw error;
+  }
+
+  if (process.platform !== 'linux') return true;
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
+    const state = stat.slice(stat.lastIndexOf(')') + 2).charAt(0);
+    return state !== 'Z';
+  } catch (error) {
+    if (error?.code === 'ENOENT') return false;
+    throw error;
+  }
 }
 
 test('stage runner preserves a real child failure before the deadline', () => {
@@ -61,10 +81,7 @@ test('stage runner hard-kills descendants that ignore SIGTERM', () => {
   assert.match(result.stderr, /HARD_KILL/u);
   const descendantPid = Number(result.stdout.trim());
   assert.ok(Number.isSafeInteger(descendantPid), result.stdout);
-  assert.throws(
-    () => process.kill(descendantPid, 0),
-    (error) => error?.code === 'ESRCH',
-  );
+  assert.equal(isProcessRunning(descendantPid), false);
 });
 
 test('stage runner hard-kills a stubborn descendant after its parent exits', () => {
@@ -82,8 +99,5 @@ test('stage runner hard-kills a stubborn descendant after its parent exits', () 
   assert.match(result.stderr, /HARD_KILL/u);
   const descendantPid = Number(result.stdout.trim());
   assert.ok(Number.isSafeInteger(descendantPid), result.stdout);
-  assert.throws(
-    () => process.kill(descendantPid, 0),
-    (error) => error?.code === 'ESRCH',
-  );
+  assert.equal(isProcessRunning(descendantPid), false);
 });

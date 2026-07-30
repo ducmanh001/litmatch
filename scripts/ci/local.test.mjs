@@ -20,6 +20,8 @@ function dryRun(profile, ...args) {
     LOCAL_CI_INTEGRATION_DB_URL: _integrationDatabaseUrl,
     LOCAL_CI_SERVICES_READY: _servicesReady,
     LOCAL_CI_DATABASE_READY: _databaseReady,
+    CI: _ci,
+    GITHUB_ACTIONS: _githubActions,
     ...testEnvironment
   } = process.env;
 
@@ -46,8 +48,8 @@ test('quick local CI profile resets Nx and runs the quality gate', () => {
   const result = dryRun('quick');
 
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /Auto-fix formatting before quality checks/u);
   assert.match(result.stdout, /Reset Nx daemon and project-graph cache/u);
+  assert.match(result.stdout, /Format check/u);
   assert.match(result.stdout, /Validate every GitHub Actions workflow/u);
   assert.match(result.stdout, /Lint every Nx project/u);
 });
@@ -61,6 +63,10 @@ test('aggregate gates own stage watchdogs instead of a blanket 45-second timeout
   assert.match(localCi, /run-stage\.mjs/u);
   assert.match(localCi, /LOCAL_CI_STAGE_TIMEOUT_MS/u);
   assert.match(localCi, /NX_TUI:\s*'false'/u);
+  assert.match(localCi, /NX_CACHE_DIRECTORY:/u);
+  assert.match(localCi, /NX_WORKSPACE_DATA_DIRECTORY:/u);
+  assert.match(localCi, /tmpdir\(\), 'litmatch-local-ci'/u);
+  assert.doesNotMatch(localCi, /\.nx', 'local-ci-(?:cache|workspace-data)/u);
   assert.match(localCi, /--outputStyle=static/u);
   assert.match(agentVerify, /run-stage\.mjs/u);
   assert.match(agentVerify, /AGENT_VERIFY_STAGE_TIMEOUT_MS/u);
@@ -86,12 +92,20 @@ test('aggregate gates own stage watchdogs instead of a blanket 45-second timeout
 test('commit owns formatting and staged guard checks; push owns the complete preflight', () => {
   const commitHook = readFileSync('.husky/pre-commit', 'utf8');
   const pushHook = readFileSync('.husky/pre-push', 'utf8');
+  const repositoryCheck = readFileSync(
+    'scripts/agent/repository-check.mjs',
+    'utf8',
+  );
 
   assert.match(commitHook, /lint-staged[\s\S]*agent:check -- --staged/u);
   assert.match(pushHook, /pnpm ci:preflight/u);
   assert.doesNotMatch(pushHook, /ci:local:clean/u);
   assert.match(commitHook, /LITMATCH_CI_BYPASS/u);
   assert.match(pushHook, /LITMATCH_CI_BYPASS/u);
+  assert.match(
+    repositoryCheck,
+    /if \(stagedMode\)[\s\S]{0,120}indexEntries\.has\(path\)[\s\S]{0,80}readIndexSymlink\(path\)/u,
+  );
 });
 
 test('Husky hooks remain POSIX-shell compatible', () => {
@@ -112,6 +126,28 @@ test('local CI bypass exits cleanly before any stage', () => {
   assert.doesNotMatch(result.stdout, /Install dependencies/u);
 });
 
+test('local CI rejects every bypass mechanism in a CI environment', () => {
+  for (const bypass of [
+    { args: ['--bypass'], env: {} },
+    { args: [], env: { LITMATCH_CI_BYPASS: 'true' } },
+    { args: [], env: { CI_BYPASS: 'true' } },
+  ]) {
+    const result = spawnSync(
+      process.execPath,
+      [script, 'quick', '--dry-run', ...bypass.args],
+      {
+        cwd: root,
+        encoding: 'utf8',
+        env: { ...process.env, CI: 'true', ...bypass.env },
+      },
+    );
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Refusing bypass/u);
+    assert.doesNotMatch(result.stdout, /Install dependencies/u);
+  }
+});
+
 test('GitHub CI uses the same local profiles for quality, tests, and containers', () => {
   const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
 
@@ -119,7 +155,11 @@ test('GitHub CI uses the same local profiles for quality, tests, and containers'
   assert.match(workflow, /run: pnpm ci:local\s*$/mu);
   assert.match(workflow, /run: pnpm ci:local:docker/u);
   assert.match(workflow, /needs: \[quality, test\]/u);
-  assert.match(workflow, /bypass_ci:/u);
+  assert.doesNotMatch(
+    workflow,
+    /bypass_ci:|LITMATCH_CI_BYPASS|CI_BYPASS|--bypass/u,
+  );
+  assert.match(workflow, /NX_TUI:\s*['"]false['"]/u);
   assert.match(
     workflow,
     /LOCAL_CI_DATABASE_URL:\s*postgresql:\/\/litmatch:litmatch_local@localhost:5432\/litmatch/u,
@@ -130,6 +170,16 @@ test('GitHub CI uses the same local profiles for quality, tests, and containers'
   );
   assert.match(workflow, /LOCAL_CI_SERVICES_READY:\s*['"]true['"]/u);
   assert.match(workflow, /LOCAL_CI_DATABASE_READY:\s*['"]true['"]/u);
+});
+
+test('quality profiles check formatting without rewriting the workspace', () => {
+  const localCi = readFileSync('scripts/ci/local.mjs', 'utf8');
+  const qualityGates = readFileSync('docs/runbooks/quality-gates.md', 'utf8');
+
+  assert.doesNotMatch(localCi, /Auto-fix formatting before quality checks/u);
+  assert.doesNotMatch(localCi, /stage\('clean: format', 'pnpm format'\)/u);
+  assert.match(localCi, /\['format:check'\]/u);
+  assert.match(qualityGates, /Quick\/clean\/preflight không tự sửa source/u);
 });
 
 test('backend runtime images install with the canonical pnpm settings', () => {

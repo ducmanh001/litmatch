@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       sha:
-        description: Full commit SHA already green in CI
+        description: Full commit SHA on main with a successful push CI
         required: true
         type: string
 
@@ -24,10 +24,14 @@ jobs:
   deploy:
     if: >-
       vars.HOSTED_RELEASE_ENABLED == 'true' &&
-      (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+      (github.event_name == 'workflow_dispatch' ||
+        (github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.conclusion == 'success'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
+      NX_TUI: 'false'
       RELEASE_SHA: ${{ inputs.sha || github.event.workflow_run.head_sha }}
       GH_TOKEN: ${{ github.token }}
       NORTHFLANK_API_TOKEN: ${{ secrets.NORTHFLANK_API_TOKEN }}
@@ -79,12 +83,12 @@ jobs:
             echo "::error::sha must be a full Git commit SHA"
             exit 1
           fi
-          conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_SHA}/check-runs" \
-            --jq '.check_runs[] | select(.name == "CI required") | .conclusion' | tail -n 1)"
-          test "${conclusion}" = success
-      - run: pnpm install --no-frozen-lockfile
+          successful_runs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${RELEASE_SHA}&status=completed&per_page=100" \
+            --jq '[.workflow_runs[] | select(.head_sha == env.RELEASE_SHA and .head_branch == "main" and .event == "push" and .conclusion == "success")] | length')"
+          test "${successful_runs}" -ge 1
+      - run: pnpm install --frozen-lockfile
       - name: Run forward-only database migrations
-        run: pnpm nx run core-api:migration-run --skip-nx-cache
+        run: pnpm nx run core-api:migration-run --skip-nx-cache --outputStyle=static
       - name: Deploy backend services from the green commit
         run: node scripts/release/northflank-deploy.mjs
       - name: Deploy web and admin

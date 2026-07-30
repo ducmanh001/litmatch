@@ -134,16 +134,26 @@ function validateEslintToolchainDeps() {
 }
 
 function validateGithubWorkflowPolicy() {
-  const ciWorkflow = readFileSync(
-    join(root, '.github/workflows/ci.yml'),
-    'utf8',
+  const readPolicyFile = (path) => {
+    if (stagedMode) {
+      return indexEntries.has(path) ? readIndexSymlink(path) : undefined;
+    }
+    const absolutePath = join(root, path);
+    return existsSync(absolutePath)
+      ? readFileSync(absolutePath, 'utf8')
+      : undefined;
+  };
+  const ciWorkflow = readPolicyFile('.github/workflows/ci.yml');
+  const hostedReleaseWorkflow = readPolicyFile(
+    '.github/workflows/hosted-release.yml',
   );
-  const securityWorkflowPath = join(root, '.github/workflows/security.yml');
-  const securityWorkflow = existsSync(securityWorkflowPath)
-    ? readFileSync(securityWorkflowPath, 'utf8')
-    : undefined;
+  const securityWorkflow = readPolicyFile('.github/workflows/security.yml');
 
-  for (const error of workflowPolicyErrors({ ciWorkflow, securityWorkflow })) {
+  for (const error of workflowPolicyErrors({
+    ciWorkflow,
+    hostedReleaseWorkflow,
+    securityWorkflow,
+  })) {
     addError(error);
   }
 }

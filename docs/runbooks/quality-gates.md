@@ -23,15 +23,15 @@ pnpm agent:context <scope>
 
 ## Local CI profiles
 
-| Command                                   | Hành vi                                                                                      |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `pnpm ci:local:plan`                      | In plan của full profile, không chạy gate                                                    |
-| `pnpm ci:local:quick`                     | Install, reset Nx, **format write**, agent checks/tests, workflow lint, format check và lint |
-| `pnpm ci:local:clean`                     | Quality gate trong clean Node 22 Linux container, cũng **format write** workspace mount      |
-| `pnpm ci:local`                           | Quick quality + DB services + tests/build/E2E                                                |
-| `pnpm ci:local:docker`                    | Build image, migration và local container smoke                                              |
-| `pnpm ci:preflight` / `pnpm ci:local:all` | Clean quality + test/build/E2E + image smoke                                                 |
-| `pnpm ci:local:security`                  | Hiện disabled/non-blocking; không được mô tả như security PASS                               |
+| Command                                   | Hành vi                                                                    |
+| ----------------------------------------- | -------------------------------------------------------------------------- |
+| `pnpm ci:local:plan`                      | In plan của full profile, không chạy gate                                  |
+| `pnpm ci:local:quick`                     | Install, reset Nx, agent checks/tests, workflow lint, format check và lint |
+| `pnpm ci:local:clean`                     | Quality gate check-only trong clean Node 22 Linux container                |
+| `pnpm ci:local`                           | Quick quality + DB services + tests/build/E2E                              |
+| `pnpm ci:local:docker`                    | Build image, migration và local container smoke                            |
+| `pnpm ci:preflight` / `pnpm ci:local:all` | Clean quality + test/build/E2E + image smoke                               |
+| `pnpm ci:local:security`                  | Hiện disabled/non-blocking; không được mô tả như security PASS             |
 
 Local CI và `agent:verify` sở hữu watchdog theo từng stage (mặc định lần lượt 20 và 15 phút,
 có thể cấu hình bằng `LOCAL_CI_STAGE_TIMEOUT_MS` / `AGENT_VERIFY_STAGE_TIMEOUT_MS`). Không bọc cả
@@ -42,14 +42,19 @@ phân loại bằng cả marker và exit code. Đây là lỗi hạ tầng/thờ
 `FAIL`. Trước khi retry phải kiểm tra cây process cũ đã dừng. Probe HTTP của container có
 connect/total timeout riêng.
 
+Local runner cô lập task cache và workspace data theo từng process ở thư mục tạm của hệ điều hành
+qua `NX_CACHE_DIRECTORY` và `NX_WORKSPACE_DATA_DIRECTORY`. Vì vậy dev server/Nx Console chạy đồng
+thời không được xoá `terminalOutputs` hoặc project graph của preflight, và formatter không quét
+metadata sinh ra giữa các stage. GitHub Actions dùng cùng cơ chế này trên workspace sạch.
+
 Target `signaling-gateway:test` chạy tách khỏi pool Core API trong local/GitHub CI. Integration
 suite của gateway dùng TTL lease production tối thiểu để chứng minh renew và replica-crash expiry;
 cho suite này tranh CPU với Jest pool lớn có thể làm timer renew trễ quá TTL và tạo failure giả như
 replica đã chết. Không tăng TTL/assertion timeout để che hiện tượng: runner cô lập target nhạy timing,
 sau đó mới chạy các project còn lại song song.
 
-Vì quick/clean/preflight chạy `pnpm format`, chúng có thể ghi vào file ngoài scope. Trong shared
-dirty worktree, không chạy các profile này nếu chưa phối hợp ownership; ưu tiên:
+Quick/clean/preflight không tự sửa source; format sai phải được sửa riêng bằng `pnpm format`.
+Trong shared dirty worktree, vẫn ưu tiên gate theo path để tránh va chạm với thay đổi song song:
 
 ```bash
 pnpm exec prettier --check <owned-paths...>
@@ -57,7 +62,7 @@ pnpm nx test <project> --runTestsByPath <test-file>
 pnpm nx lint <project>
 ```
 
-Không stage file chỉ vì formatter của gate đã chạm nó. Nếu full gate fail ở file concurrent ngoài
+Không stage file ngoài ownership chỉ để làm gate xanh. Nếu full gate fail ở file concurrent ngoài
 scope, ghi rõ baseline/collision và vẫn chứng minh owned paths bằng targeted check.
 
 ## Evidence cần bàn giao
@@ -79,7 +84,9 @@ artifact và phải có caveat.
 
 Emergency bypass contract nằm ở [commit guidelines § 15.4](../15-commit-guidelines.md). Bypass chỉ
 là authority tạm thời có lý do/log; không biến gate đỏ thành PASS và không được dùng để hạ
-threshold/guard cho tiện.
+threshold/guard cho tiện. Bypass chỉ áp dụng cho local hook; local runner từ chối bypass khi
+`CI=true`, và hosted release xác thực run của đúng workflow `ci.yml`, exact SHA, push event và
+branch `main`.
 
 `review-module: N/A` — runbook này định nghĩa tooling/verification workflow, không thay business
 flow.
