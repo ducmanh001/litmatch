@@ -96,7 +96,7 @@ describe('CapabilitiesService', () => {
     }).getCapabilities();
     expect(capabilities.topUp.native).toMatchObject({
       status: CapabilityStatus.Disabled,
-      message: expect.stringContaining('mới chỉ cấu hình Google'),
+      message: expect.stringContaining('chỉ hỗ trợ thanh toán qua Google'),
     });
     expect(capabilities.topUp.nativeGoogle.status).toBe(
       CapabilityStatus.Enabled,
