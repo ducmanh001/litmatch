@@ -40,7 +40,12 @@ export class TokenService {
     const expiresIn = this.config.getOrThrow('JWT_ACCESS_TTL_SECONDS', {
       infer: true,
     });
-    const payload: AccessTokenPayload = { sub: userId, isGuest, role };
+    const payload: AccessTokenPayload = {
+      sub: userId,
+      isGuest,
+      role,
+      jti: randomUUID(),
+    };
     const accessToken = await this.jwtService.signAsync(payload, { expiresIn });
 
     const refreshPlain = randomBytes(REFRESH_TOKEN_BYTES).toString('base64url');

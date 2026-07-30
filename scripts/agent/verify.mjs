@@ -13,6 +13,12 @@ const tierArgument = process.argv.find((argument) =>
 );
 const tier = tierArgument?.slice('--tier='.length) ?? 'full';
 const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+const stageRunnerScript = fileURLToPath(
+  new URL('../ci/run-stage.mjs', import.meta.url),
+);
+const stageTimeoutMs = Number(
+  process.env['AGENT_VERIFY_STAGE_TIMEOUT_MS'] ?? 15 * 60 * 1000,
+);
 
 const scopes = {
   frontend: {
@@ -83,11 +89,21 @@ if (!['fast', 'full'].includes(tier)) {
 
 function runCommand(command, args, environment = {}) {
   console.log(`\n[agent-verify] ${command} ${args.join(' ')}`);
-  const result = spawnSync(command, args, {
-    cwd: root,
-    stdio: 'inherit',
-    env: { ...process.env, ...environment },
-  });
+  const label = `agent-verify ${scope}: ${command} ${args[0] ?? ''}`.trim();
+  const result = spawnSync(
+    process.execPath,
+    [stageRunnerScript, command, ...args],
+    {
+      cwd: root,
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        ...environment,
+        LITMATCH_STAGE_LABEL: label,
+        LITMATCH_STAGE_TIMEOUT_MS: String(stageTimeoutMs),
+      },
+    },
+  );
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
@@ -100,6 +116,8 @@ function output(args) {
     cwd: root,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'inherit'],
+    timeout: 45_000,
+    killSignal: 'SIGKILL',
   });
 }
 

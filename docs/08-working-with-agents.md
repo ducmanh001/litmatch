@@ -183,8 +183,13 @@ Prompt, contract, context map, guard và skill được coi là code:
 Mọi agent tuân theo giới hạn ở `AGENTS.md` và `adaptive-orchestration`: không polling/sleep loop,
 không progress filler, log/context theo bounded range, tối đa hai retry cho cùng failure và unit
 test theo file/target bị ảnh hưởng. Full test suite chỉ chạy khi người dùng yêu cầu rõ; gate riêng
-của domain nhạy cảm vẫn bắt buộc. Sub-agent cap hai; agent phải dừng delegate khi đã đủ evidence
-thay vì để chạy nền không cần thiết.
+của domain nhạy cảm vẫn bắt buộc. `timeout 45s` chỉ dành cho probe ngắn có nguy cơ treo và phải có
+hard-kill grace; không áp vào aggregate CI/test/build. Các gate đó dùng watchdog theo stage, yield
+output cho runtime và phải báo riêng marker `TIMED_OUT` thay vì suy ra code/test fail. Không được
+chỉ nhìn exit `124` vì command thật cũng có thể trả code đó. Sau timeout, xác minh cây process đã
+dừng trước khi chạy lại để tránh Nx/cache/process cũ làm sai lần
+chẩn đoán sau. Sub-agent cap hai; agent phải dừng delegate khi đã đủ evidence thay vì để chạy nền
+không cần thiết.
 
 ---
 

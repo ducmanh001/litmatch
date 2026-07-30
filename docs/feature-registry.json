@@ -553,26 +553,26 @@
     },
     {
       "id": "privacy-analytics-consent",
-      "title": "Consent-gated hosted analytics with autocapture and session replay disabled",
+      "title": "Hosted analytics with quota controls and an explicit privacy warning",
       "status": "implemented",
       "owner": "web/shared-analytics",
       "contracts": ["docs/runbooks/posthog-cloud.md"],
       "evidence": [
         {
           "path": "apps/web/src/shared/analytics/product-analytics.ts",
-          "contains": "posthog.opt_in_capturing({ captureEventName: false });"
+          "contains": "posthog.opt_in_capturing();"
         },
         {
           "path": "apps/web/src/shared/analytics/product-analytics.ts",
-          "contains": "maskAllInputs: true"
+          "contains": "maskAllInputs: false"
         },
         {
           "path": "apps/web/src/shared/analytics/product-analytics.ts",
-          "contains": "autocapture: false"
+          "contains": "autocapture: true"
         },
         {
           "path": "apps/web/src/shared/analytics/product-analytics-components.tsx",
-          "contains": "setProductAnalyticsConsent(enabled ? 'declined' : 'accepted')"
+          "contains": "Analytics luôn bật khi đã cấu hình PostHog."
         }
       ],
       "verification": {
@@ -580,15 +580,15 @@
         "evidence": [
           {
             "path": "apps/web/src/shared/analytics/product-analytics.spec.ts",
-            "contains": "không khởi tạo hoặc opt-in khi"
+            "contains": "khởi tạo SDK ngay cả khi chưa có cookie consent"
           },
           {
             "path": "apps/web/src/shared/analytics/product-analytics.spec.ts",
-            "contains": "tắt autocapture/session replay"
+            "contains": "khởi tạo trực tiếp với cấu hình tối ưu quota và debug UI"
           },
           {
             "path": "apps/web/src/shared/analytics/product-analytics-components.spec.tsx",
-            "contains": "mặc định tắt, cho phép accept rồi decline lại"
+            "contains": "hiển thị analytics đang bật và không có thao tác opt-in riêng"
           }
         ]
       }

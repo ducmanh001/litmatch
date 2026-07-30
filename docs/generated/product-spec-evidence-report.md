@@ -52,7 +52,7 @@ The service catalog names every top-level Core API module and links module-speci
 | palm-match                | Deterministic palm reading and anonymous palm match                           | core-api/palm-match                                | automated-test-source |
 | short-video               | Short-video lifecycle, moderation and derived ranking                         | core-api/short-video                               | automated-test-source |
 | user-profile-open-entry   | Optional profile birth date without an age-based access gate                  | core-api/user                                      | automated-test-source |
-| privacy-analytics-consent | Consent-gated hosted analytics with autocapture and session replay disabled   | web/shared-analytics                               | automated-test-source |
+| privacy-analytics-consent | Hosted analytics with quota controls and an explicit privacy warning          | web/shared-analytics                               | automated-test-source |
 | realtime-fanout           | Authenticated Socket.IO fanout and distributed connection quota through Redis | signaling-gateway with core-api producers          | automated-test-source |
 
 ## Evidence details
@@ -209,13 +209,13 @@ The service catalog names every top-level Core API module and links module-speci
 - Implementation evidence: `apps/core-api/src/modules/user/user.service.ts:398` — contains `Ngày sinh là dữ liệu profile tự chọn`; `apps/core-api/src/modules/user/dto/update-profile.dto.ts:40` — contains `không cho ngày trong tương lai`
 - Verification evidence (automated-test-source): `apps/core-api/src/modules/user/user.service.spec.ts:64` — contains `birthDate không phải access gate`
 
-### Consent-gated hosted analytics with autocapture and session replay disabled
+### Hosted analytics with quota controls and an explicit privacy warning
 
 - Status: `implemented`
 - Owner: web/shared-analytics
 - Contracts: `docs/runbooks/posthog-cloud.md`
-- Implementation evidence: `apps/web/src/shared/analytics/product-analytics.ts:37` — contains `posthog.opt_in_capturing({ captureEventName: false });`; `apps/web/src/shared/analytics/product-analytics.ts:75` — contains `maskAllInputs: true`; `apps/web/src/shared/analytics/product-analytics.ts:69` — contains `autocapture: false`; `apps/web/src/shared/analytics/product-analytics-components.tsx:63` — contains `setProductAnalyticsConsent(enabled ? 'declined' : 'accepted')`
-- Verification evidence (automated-test-source): `apps/web/src/shared/analytics/product-analytics.spec.ts:46` — contains `không khởi tạo hoặc opt-in khi`; `apps/web/src/shared/analytics/product-analytics.spec.ts:56` — contains `tắt autocapture/session replay`; `apps/web/src/shared/analytics/product-analytics-components.spec.tsx:52` — contains `mặc định tắt, cho phép accept rồi decline lại`
+- Implementation evidence: `apps/web/src/shared/analytics/product-analytics.ts:67` — contains `posthog.opt_in_capturing();`; `apps/web/src/shared/analytics/product-analytics.ts:58` — contains `maskAllInputs: false`; `apps/web/src/shared/analytics/product-analytics.ts:53` — contains `autocapture: true`; `apps/web/src/shared/analytics/product-analytics-components.tsx:26` — contains `Analytics luôn bật khi đã cấu hình PostHog.`
+- Verification evidence (automated-test-source): `apps/web/src/shared/analytics/product-analytics.spec.ts:42` — contains `khởi tạo SDK ngay cả khi chưa có cookie consent`; `apps/web/src/shared/analytics/product-analytics.spec.ts:47` — contains `khởi tạo trực tiếp với cấu hình tối ưu quota và debug UI`; `apps/web/src/shared/analytics/product-analytics-components.spec.tsx:23` — contains `hiển thị analytics đang bật và không có thao tác opt-in riêng`
 
 ### Authenticated Socket.IO fanout and distributed connection quota through Redis
 
@@ -266,7 +266,7 @@ The service catalog names every top-level Core API module and links module-speci
 
 - Result: PASS on 2026-07-24: agent check; 76 agent/tool tests; OpenAPI and formatting; lint/build for core-api, web, admin and api-client; core 551, web 230, admin 52 and api-client 23 tests
 - Command: `pnpm agent:check; pnpm agent:test; pnpm openapi:check; pnpm format:check; NX_DAEMON=false nx run-many -t lint build test -p core-api web admin api-client --skip-nx-cache`
-- Source evidence: `package.json:39` — contains `"agent:check":`; `scripts/agent/verify.mjs:20` — contains `requiredTargets: ['lint', 'test', 'build']`
+- Source evidence: `package.json:39` — contains `"agent:check":`; `scripts/agent/verify.mjs:26` — contains `requiredTargets: ['lint', 'test', 'build']`
 - Caveat: The core unit command intentionally skipped 16 integration suites without a shared integration URL. The changed short-video PostgreSQL integration suite is recorded separately. Canonical verify wrappers exceeded the mandatory 45-second shell budget, so their underlying commands were run separately and passed.
 
 ## Review-module verification

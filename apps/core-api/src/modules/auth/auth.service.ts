@@ -69,6 +69,7 @@ export class AuthService {
   }
 
   async verifyOtpAndLogin(phone: string, code: string): Promise<IssuedSession> {
+    console.log('toi dang o day', phone);
     this.assertPhoneOtpEnabled();
     await this.otpService.verifyOtp(phone, code);
     const user = await this.findOrCreateUser(AuthProvider.Phone, phone, {

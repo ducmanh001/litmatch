@@ -33,6 +33,21 @@ pnpm agent:context <scope>
 | `pnpm ci:preflight` / `pnpm ci:local:all` | Clean quality + test/build/E2E + image smoke                                                 |
 | `pnpm ci:local:security`                  | Hiện disabled/non-blocking; không được mô tả như security PASS                               |
 
+Local CI và `agent:verify` sở hữu watchdog theo từng stage (mặc định lần lượt 20 và 15 phút,
+có thể cấu hình bằng `LOCAL_CI_STAGE_TIMEOUT_MS` / `AGENT_VERIFY_STAGE_TIMEOUT_MS`). Không bọc cả
+profile bằng `timeout 45s`: aggregate gate hợp lệ thường dài hơn 45 giây. Stage quá hạn được ghi
+`TIMED_OUT`, trả exit `124`, gửi `SIGTERM` cho cả process group rồi `SIGKILL` sau grace period;
+command tự trả `124` vẫn được giữ nguyên nhưng không có marker `TIMED_OUT`, nên consumer phải
+phân loại bằng cả marker và exit code. Đây là lỗi hạ tầng/thời lượng, không phải bằng chứng test
+`FAIL`. Trước khi retry phải kiểm tra cây process cũ đã dừng. Probe HTTP của container có
+connect/total timeout riêng.
+
+Target `signaling-gateway:test` chạy tách khỏi pool Core API trong local/GitHub CI. Integration
+suite của gateway dùng TTL lease production tối thiểu để chứng minh renew và replica-crash expiry;
+cho suite này tranh CPU với Jest pool lớn có thể làm timer renew trễ quá TTL và tạo failure giả như
+replica đã chết. Không tăng TTL/assertion timeout để che hiện tượng: runner cô lập target nhạy timing,
+sau đó mới chạy các project còn lại song song.
+
 Vì quick/clean/preflight chạy `pnpm format`, chúng có thể ghi vào file ngoài scope. Trong shared
 dirty worktree, không chạy các profile này nếu chưa phối hợp ownership; ưu tiên:
 
@@ -48,6 +63,8 @@ scope, ghi rõ baseline/collision và vẫn chứng minh owned paths bằng targ
 ## Evidence cần bàn giao
 
 - Exact command và exit result
+- Phân loại `PASS`, `FAIL`, `TIMED_OUT` (marker + exit `124`) hoặc `CANCELLED`; không gom timeout
+  thành test fail hay suy timeout chỉ từ exit code
 - Checkout/commit SHA khi evidence dùng cho release
 - Môi trường thật hay mock; database/provider nào được dùng
 - Test source hay test vừa chạy

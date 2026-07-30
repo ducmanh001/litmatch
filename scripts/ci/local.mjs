@@ -22,6 +22,12 @@ const cleanRunnerImage =
 const securityToolsScript = fileURLToPath(
   new URL('./security-tools.mjs', import.meta.url),
 );
+const stageRunnerScript = fileURLToPath(
+  new URL('./run-stage.mjs', import.meta.url),
+);
+const stageTimeoutMs = Number(
+  process.env['LOCAL_CI_STAGE_TIMEOUT_MS'] ?? 20 * 60 * 1000,
+);
 const supportedProfiles = new Set([
   'quick',
   'clean',
@@ -87,11 +93,25 @@ function run(label, command, args, options = {}) {
 
   if (dryRun) return 0;
 
-  const result = spawnSync(command, args, {
-    cwd: root,
-    env: { ...process.env, ...environment, ...(options.env ?? {}) },
-    stdio: 'inherit',
-  });
+  const timeoutMs = options.timeoutMs ?? stageTimeoutMs;
+  const ownsInnerWatchdogs = options.ownsInnerWatchdogs === true;
+  const result = spawnSync(
+    ownsInnerWatchdogs ? command : process.execPath,
+    ownsInnerWatchdogs ? args : [stageRunnerScript, command, ...args],
+    {
+      cwd: root,
+      env: {
+        ...process.env,
+        ...environment,
+        ...(options.env ?? {}),
+        ...(!ownsInnerWatchdogs && {
+          LITMATCH_STAGE_LABEL: label,
+          LITMATCH_STAGE_TIMEOUT_MS: String(timeoutMs),
+        }),
+      },
+      stdio: 'inherit',
+    },
+  );
 
   if (result.error) {
     if (options.allowFailure) return 1;
@@ -110,6 +130,8 @@ function commandSucceeds(command, args) {
     cwd: root,
     env: { ...process.env, ...environment },
     stdio: 'ignore',
+    timeout: 10_000,
+    killSignal: 'SIGKILL',
   });
   return result.status === 0;
 }
@@ -177,45 +199,59 @@ function runQuality() {
 function runCleanQuality() {
   if (!dryRun) mkdirSync(join(root, '.nx'), { recursive: true });
 
+  const shellQuote = (value) => `'${value.replaceAll("'", "'\"'\"'")}'`;
+  const stage = (label, command) =>
+    `LITMATCH_STAGE_LABEL=${shellQuote(label)} ` +
+    `LITMATCH_STAGE_TIMEOUT_MS=${stageTimeoutMs} ` +
+    `node scripts/ci/run-stage.mjs bash -lc ${shellQuote(command)}`;
   const command = [
     'git config --global --add safe.directory /workspace',
     'corepack enable',
-    'pnpm install --store-dir /pnpm/store --frozen-lockfile',
-    'pnpm nx reset',
-    'pnpm format',
-    'pnpm agent:check',
-    'pnpm agent:test',
-    'SHELLCHECK="$(node scripts/ci/security-tools.mjs shellcheck --print-path)"',
-    'ACTIONLINT="$(node scripts/ci/security-tools.mjs actionlint --print-path)"',
-    '"$ACTIONLINT" -shellcheck="$SHELLCHECK" .github/workflows/*.yml',
-    'pnpm format:check',
-    'pnpm nx run-many -t lint',
+    stage(
+      'clean: install dependencies',
+      'pnpm install --store-dir /pnpm/store --frozen-lockfile',
+    ),
+    stage('clean: reset Nx', 'pnpm nx reset'),
+    stage('clean: format', 'pnpm format'),
+    stage('clean: agent check', 'pnpm agent:check'),
+    stage('clean: agent tests', 'pnpm agent:test'),
+    stage(
+      'clean: workflow lint',
+      'SHELLCHECK="$(node scripts/ci/security-tools.mjs shellcheck --print-path)" && ACTIONLINT="$(node scripts/ci/security-tools.mjs actionlint --print-path)" && "$ACTIONLINT" -shellcheck="$SHELLCHECK" .github/workflows/*.yml',
+    ),
+    stage('clean: format check', 'pnpm format:check'),
+    stage('clean: lint', 'pnpm nx run-many -t lint'),
   ].join(' && ');
 
-  run('Run quality gate in a clean Node 22 Linux container', 'docker', [
-    'run',
-    '--rm',
-    '--volume',
-    `${root}:/workspace`,
-    '--mount',
-    'type=volume,destination=/workspace/node_modules',
-    '--mount',
-    'type=volume,source=litmatch-local-ci-pnpm-store,destination=/pnpm/store',
-    '--mount',
-    'type=volume,destination=/workspace/.nx',
-    '--workdir',
-    '/workspace',
-    '--env',
-    'CI=true',
-    '--env',
-    'HUSKY=0',
-    '--env',
-    'NX_DAEMON=false',
-    cleanRunnerImage,
-    'bash',
-    '-lc',
-    command,
-  ]);
+  run(
+    'Run quality gate in a clean Node 22 Linux container',
+    'docker',
+    [
+      'run',
+      '--rm',
+      '--volume',
+      `${root}:/workspace`,
+      '--mount',
+      'type=volume,destination=/workspace/node_modules',
+      '--mount',
+      'type=volume,source=litmatch-local-ci-pnpm-store,destination=/pnpm/store',
+      '--mount',
+      'type=volume,destination=/workspace/.nx',
+      '--workdir',
+      '/workspace',
+      '--env',
+      'CI=true',
+      '--env',
+      'HUSKY=0',
+      '--env',
+      'NX_DAEMON=false',
+      cleanRunnerImage,
+      'bash',
+      '-lc',
+      command,
+    ],
+    { ownsInnerWatchdogs: true },
+  );
 }
 
 function runTestAndBuild() {
@@ -223,17 +259,30 @@ function runTestAndBuild() {
   prepareNx();
   startTestServices();
   ensureLocalCiDatabase();
-  run('Frontend contract, tests, builds and bundle audit', pnpm, [
-    'agent:verify',
-    'frontend',
+  run(
+    'Frontend contract, tests, builds and bundle audit',
+    pnpm,
+    ['agent:verify', 'frontend'],
+    { ownsInnerWatchdogs: true },
+  );
+  // This Redis lease suite intentionally uses the minimum production TTL to prove crash expiry
+  // and live renewal. Running it beside the Core API's large Jest pool can starve its event-loop
+  // refresh timer long enough to simulate a dead replica, so keep the timing-sensitive target
+  // isolated and let the remaining pure/unit-heavy projects retain Nx parallelism.
+  run('Signaling Redis integration tests with isolated CPU', pnpm, [
+    'nx',
+    'test',
+    'signaling-gateway',
+    '--coverage',
+    '--skip-nx-cache',
   ]);
-  run('Unit and integration tests with coverage', pnpm, [
+  run('Remaining unit and integration tests with coverage', pnpm, [
     'nx',
     'run-many',
     '-t',
     'test',
     '--coverage',
-    '--exclude=admin,web,api-client',
+    '--exclude=admin,web,api-client,signaling-gateway',
   ]);
   run('Build backend projects', pnpm, [
     'nx',
@@ -344,16 +393,28 @@ function waitForHealthEndpoints() {
     const coreReady = commandSucceeds('curl', [
       '--fail',
       '--silent',
+      '--connect-timeout',
+      '2',
+      '--max-time',
+      '3',
       'http://127.0.0.1:3000/health/ready',
     ]);
     const signalingReady = commandSucceeds('curl', [
       '--fail',
       '--silent',
+      '--connect-timeout',
+      '2',
+      '--max-time',
+      '3',
       'http://127.0.0.1:3001/health/ready',
     ]);
     const webReady = commandSucceeds('curl', [
       '--fail',
       '--silent',
+      '--connect-timeout',
+      '2',
+      '--max-time',
+      '3',
       'http://127.0.0.1:4300/',
     ]);
     if (coreReady && signalingReady && webReady) return;

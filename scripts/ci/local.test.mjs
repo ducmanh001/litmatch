@@ -52,6 +52,23 @@ test('quick local CI profile resets Nx and runs the quality gate', () => {
   assert.match(result.stdout, /Lint every Nx project/u);
 });
 
+test('aggregate gates own stage watchdogs instead of a blanket 45-second timeout', () => {
+  const localCi = readFileSync('scripts/ci/local.mjs', 'utf8');
+  const agentVerify = readFileSync('scripts/agent/verify.mjs', 'utf8');
+  const agentContract = readFileSync('AGENTS.md', 'utf8');
+
+  assert.match(localCi, /run-stage\.mjs/u);
+  assert.match(localCi, /LOCAL_CI_STAGE_TIMEOUT_MS/u);
+  assert.match(agentVerify, /run-stage\.mjs/u);
+  assert.match(agentVerify, /AGENT_VERIFY_STAGE_TIMEOUT_MS/u);
+  assert.match(agentVerify, /timeout: 45_000/u);
+  assert.match(localCi, /ownsInnerWatchdogs/u);
+  assert.match(
+    agentContract,
+    /Không bọc\s+nguyên quality gate\/test\/build\/CI bằng 45 giây/u,
+  );
+});
+
 test('commit owns formatting and staged guard checks; push owns the complete preflight', () => {
   const commitHook = readFileSync('.husky/pre-commit', 'utf8');
   const pushHook = readFileSync('.husky/pre-push', 'utf8');
@@ -145,6 +162,23 @@ test('all local CI profile plans quality, test, and Docker smoke stages', () => 
   assert.match(result.stdout, /Ensure isolated database litmatch_ci/u);
   assert.match(result.stdout, /Start local PostgreSQL and Redis/u);
   assert.match(result.stdout, /End-to-end smoke tests/u);
+  assert.match(
+    result.stdout,
+    /Signaling Redis integration tests with isolated CPU/u,
+  );
+  assert.match(
+    result.stdout,
+    /Remaining unit and integration tests with coverage/u,
+  );
+  assert.ok(
+    result.stdout.indexOf('Signaling Redis integration tests') <
+      result.stdout.indexOf('Remaining unit and integration tests'),
+  );
+  const localCi = readFileSync('scripts/ci/local.mjs', 'utf8');
+  assert.match(
+    localCi,
+    /Remaining unit and integration tests with coverage[\s\S]{0,350}--exclude=admin,web,api-client,signaling-gateway/u,
+  );
   assert.match(result.stdout, /Build Core API image/u);
   assert.match(result.stdout, /Build Web image/u);
   assert.match(result.stdout, /Build Edge image/u);
