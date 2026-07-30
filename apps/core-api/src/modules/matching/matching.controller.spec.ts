@@ -56,6 +56,8 @@ describe('MatchingController — API contract', () => {
       me,
       { matchType: MatchType.Voice },
       'join-1',
+      undefined,
+      { ip: '127.0.0.1', socket: {} } as never,
     );
 
     expect(result.speedupPriceDiamond).toBe(73);

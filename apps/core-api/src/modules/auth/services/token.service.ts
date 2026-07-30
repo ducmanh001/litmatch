@@ -97,7 +97,7 @@ export class TokenService {
     const user = await this.userService.getByIdOrThrow(token.userId);
     const tokens = await this.issueForUser(
       token.userId,
-      false,
+      user.isGuest,
       user.role,
       token.familyId,
     );

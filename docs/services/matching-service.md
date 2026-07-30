@@ -98,6 +98,29 @@ Check block/report **không chỉ lúc vào queue** — bắt buộc verify lạ
 `MATCHING_PRIORITY_BOOST_MS` đã có đủ trong `.env.example`, `CoreApiEnv` và
 `coreApiEnvSchema` (Joi); code đọc qua `ConfigService<CoreApiEnv, true>`.
 
+### 8.1 Guest quota và device proof
+
+- `POST /auth/guest` trả thêm `guestDeviceToken` được server ký, ràng buộc `userId` với HMAC của
+  deviceId. Guest gửi token này qua `X-Guest-Device-Token` khi tạo ticket; deviceId thô không
+  được dùng làm bằng chứng ở Matching.
+- `POST /matching/tickets` luôn đọc lại `users.is_guest` trong transaction và lock user. Guest
+  consume quota ngày UTC atomically theo ba chiều HMAC bắt buộc: user, device token và IP.
+  IP là network-risk signal phía server; không lưu IP/deviceId/fingerprint thô. Fingerprint không
+  tham gia làm nguồn định danh duy nhất. Chạm trần ở bất kỳ chiều nào đều chặn toàn bộ request.
+- Replay cùng `Idempotency-Key` được nhận diện trước consume nên không mất lượt. Một lượt chỉ
+  được ghi cùng transaction tạo ticket thành công; cancel/expire không hoàn lượt.
+- `POST /auth/upgrade/otp|social` gắn identity vào cùng user rồi đặt `is_guest=false`. Identity
+  thuộc user khác trả 409, không merge; retry identity đã thuộc chính user là idempotent.
+
+Config: `AUTH_GUEST_DEVICE_TOKEN_SECRET`, `AUTH_GUEST_DEVICE_TOKEN_TTL_DAYS`,
+`MATCHING_GUEST_DAILY_LIMIT`, `MATCHING_GUEST_QUOTA_PEPPER`. `HTTP_TRUST_PROXY_HOPS` phải khớp
+đúng số ingress/LB tin cậy của môi trường; mặc định `0` để không tin `X-Forwarded-For` từ client.
+
+Khi upgrade lần đầu, transaction đồng thời xoá guest auth identity và revoke toàn bộ refresh
+session cũ trước khi đặt `is_guest=false`; access token cũ chỉ còn sống tới TTL JWT ngắn hiện tại.
+Retry đúng identity đã gắn vào chính user vẫn idempotent, nhưng tài khoản thật không được dùng
+endpoint upgrade để gắn thêm identity mới.
+
 ## 9. Invite — CTA "mời Voice/Soul Match" (W4) {#invite}
 
 > Mitigation chính cho rủi ro graph bạn bè sparse (docs/plans/2026-07-14-plan-6-tinh-nang-social-discovery.md

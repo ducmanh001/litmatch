@@ -285,6 +285,74 @@
         "tags": ["auth"]
       }
     },
+    "/api/v1/auth/upgrade/otp": {
+      "post": {
+        "operationId": "AuthUpgradeController_upgradeOtp",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/VerifyOtpDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AuthTokensDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Gắn phone đã xác minh vào guest hiện tại, giữ nguyên userId",
+        "tags": ["auth"]
+      }
+    },
+    "/api/v1/auth/upgrade/social": {
+      "post": {
+        "operationId": "AuthUpgradeController_upgradeSocial",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SocialLoginDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AuthTokensDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Gắn social identity vào guest hiện tại, giữ nguyên userId",
+        "tags": ["auth"]
+      }
+    },
     "/api/v1/economy/wallet": {
       "get": {
         "operationId": "EconomyController_getWallet",
@@ -568,6 +636,13 @@
       "post": {
         "operationId": "MatchingController_joinQueue",
         "parameters": [
+          {
+            "name": "X-Guest-Device-Token",
+            "in": "header",
+            "description": "Bắt buộc nếu trạng thái user tươi trong DB vẫn là guest",
+            "required": false,
+            "schema": { "type": "string" }
+          },
           {
             "name": "Idempotency-Key",
             "in": "header",
@@ -5816,7 +5891,11 @@
             "description": "TTL access token (giây)"
           },
           "userId": { "type": "string" },
-          "isGuest": { "type": "boolean" }
+          "isGuest": { "type": "boolean" },
+          "guestDeviceToken": {
+            "type": "string",
+            "description": "Chỉ trả khi guest login; gửi qua X-Guest-Device-Token khi vào matching queue"
+          }
         },
         "required": [
           "accessToken",

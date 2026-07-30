@@ -192,6 +192,40 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/auth/upgrade/otp': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Gắn phone đã xác minh vào guest hiện tại, giữ nguyên userId */
+    post: operations['AuthUpgradeController_upgradeOtp'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/auth/upgrade/social': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Gắn social identity vào guest hiện tại, giữ nguyên userId */
+    post: operations['AuthUpgradeController_upgradeSocial'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/economy/wallet': {
     parameters: {
       query?: never;
@@ -2558,6 +2592,8 @@ export interface components {
       expiresIn: number;
       userId: string;
       isGuest: boolean;
+      /** @description Chỉ trả khi guest login; gửi qua X-Guest-Device-Token khi vào matching queue */
+      guestDeviceToken?: string;
     };
     RequestOtpDto: {
       /**
@@ -3929,6 +3965,62 @@ export interface operations {
       };
     };
   };
+  AuthUpgradeController_upgradeOtp: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['VerifyOtpDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AuthTokensDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AuthUpgradeController_upgradeSocial: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SocialLoginDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['AuthTokensDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
   EconomyController_getWallet: {
     parameters: {
       query?: never;
@@ -4160,6 +4252,8 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
+        /** @description Bắt buộc nếu trạng thái user tươi trong DB vẫn là guest */
+        'X-Guest-Device-Token'?: string;
         /** @description Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10) */
         'Idempotency-Key': string;
       };
