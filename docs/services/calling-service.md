@@ -14,9 +14,11 @@
         ▼
      pending ──(webhook participant_joined đủ CẢ 2 → startedAt=now)──▶ active
         │                                                               │
-        │ ticker: quá CALLING_PENDING_TIMEOUT_SECONDS                   │ end bởi: member gọi end /
-        ▼                                                               │ webhook left|room_finished /
-     ended(pending_timeout)                                             │ ticker free_limit / thiếu tiền
+        │ ticker: quá CALLING_PENDING_TIMEOUT_SECONDS                   │ member gọi end
+        ▼                                                               │
+     ended(pending_timeout)                                             │ participant rời/connection abort/
+                                                                        │ room_finished → reconnect grace
+                                                                        │ (timer/billing tạm dừng), quá grace mới end
                                                                         ▼
                                                         ended(completed|free_limit|
                                                               insufficient_balance|pending_timeout)
@@ -26,9 +28,11 @@
   end-if-not-ended) → webhook LiveKit retry/đến trễ/out-of-order không phá state (docs/10
   § Distributed).
 - `durationSeconds = endedAt - startedAt` (giờ server core-api — nguồn sự thật thời lượng,
-  không tin client lẫn không phụ thuộc LiveKit).
+  không tin client lẫn không phụ thuộc LiveKit); khoảng reconnect grace được loại khỏi
+  `startedAt`.
 - MỌI nhánh end đều `deleteRoom` LiveKit best-effort (chống leak resource — docs/10
-  § Calling); webhook `room_finished` là chốt chiều ngược lại (LiveKit tự đóng phòng rỗng).
+  § Calling); `room_finished` chỉ mở reconnect grace khi call còn active, còn webhook đến sau
+  khi call đã ended là retry/no-op.
 
 ## 2. Join & token (docs/10 § 10.1.D)
 
@@ -46,8 +50,10 @@ ticker timeout.
 
 Verify chữ ký bằng `WebhookReceiver` (JWT ký bởi API key/secret — pattern verify-rồi-mới-tin
 của economy webhooks). Event xử lý: `participant_joined` (ghi `joinedAAt/joinedBAt` theo
-identity, đủ 2 → `active` + `startedAt`), `participant_left` + `room_finished` (end
-`completed`). Event khác bỏ qua. Room không phải của calling (`call-*`) → bỏ qua.
+identity, đủ 2 → `active` + `startedAt`), `participant_left` /
+`participant_connection_aborted` / `room_finished` (mở reconnect grace). Khi cả hai quay lại,
+timer tiếp tục; quá grace mới end `completed`. Event khác bỏ qua. Room không phải của calling
+(`call-*`) → bỏ qua.
 
 ## 4. Ticker — timer + billing đều ở server (docs/10 § Calling: KHÔNG tin timer client)
 
@@ -56,8 +62,11 @@ identity, đủ 2 → `active` + `startedAt`), `participant_left` + `room_finish
 `(updated_at, id) WHERE status='active'` để không sort/quét toàn bộ tập call đang sống:
 
 - `pending` quá `CALLING_PENDING_TIMEOUT_SECONDS` kể từ `createdAt` → end `pending_timeout`.
+- `active` có participant bị mất kết nối: trong `CALLING_RECONNECT_WINDOW_SECONDS` (default
+  30s), timer free và billing tạm dừng. Cả hai quay lại thì dời mốc `startedAt` qua đoạn gián
+  đoạn; quá grace thì end `completed`.
 - `active`, `CALLING_PRICE_PER_MINUTE_DIAMOND = 0` (default): quá `CALLING_FREE_CALL_SECONDS`
-  kể từ `startedAt` → end `free_limit`. Không đụng Economy.
+  kể từ `startedAt` (đã loại trừ reconnect grace) → end `free_limit`. Không đụng Economy.
 - `active`, price > 0: sau free window, **mỗi phút bắt đầu** trừ diamond **cả 2 bên đối
   xứng** (voice match ngẫu nhiên không có "caller" — quyết định mở § 6) qua
   `EconomyService.spendDiamond` với idempotency `calling:tick:{callId}:{userId}:{minute}` —
@@ -98,7 +107,8 @@ double tap/retry không tạo thêm bạn hay conversation.
 `LIVEKIT_URL` (ws URL client nối), `LIVEKIT_API_KEY/SECRET` (khớp
 `livekit.yaml`; dev = devkey), `CALLING_FREE_CALL_SECONDS` (default 420 — docs/06 ~7 phút),
 `CALLING_PRICE_PER_MINUTE_DIAMOND` (default **0** = free + tự end), `CALLING_PENDING_TIMEOUT_SECONDS`
-(default 60), `CALLING_TICKER_INTERVAL_MS` (default 1000), `CALLING_TOKEN_TTL_SECONDS` (default 120).
+(default 60), `CALLING_RECONNECT_WINDOW_SECONDS` (default 30), `CALLING_TICKER_INTERVAL_MS`
+(default 1000), `CALLING_TOKEN_TTL_SECONDS` (default 120).
 
 Khi test điện thoại, `LIVEKIT_URL` phải là `wss://` public, không phải `ws://localhost`; còn
 `LIVEKIT_API_URL` của core-api vẫn là DNS nội bộ tới SFU. Tunnel HTTP chỉ giải quyết signaling,

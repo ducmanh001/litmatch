@@ -65,6 +65,9 @@ function makeCall(overrides: Partial<CallSession> = {}): CallSession {
     joinedAAt: null,
     joinedBAt: null,
     startedAt: null,
+    reconnectStartedAt: null,
+    disconnectedAAt: null,
+    disconnectedBAt: null,
     endedAt: null,
     endReason: null,
     durationSeconds: null,
@@ -342,7 +345,7 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
       expect(manager.save).not.toHaveBeenCalled();
     });
 
-    it('participant_left / room_finished → end completed', async () => {
+    it('participant_left mở reconnect grace, không end call ngay', async () => {
       const call = makeCall({
         status: CallSessionStatus.Active,
         startedAt: new Date(Date.now() - 10_000),
@@ -354,9 +357,73 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
         roomName: call.roomName,
         participantIdentity: PARTNER_ID,
       });
-      expect(call.status).toBe(CallSessionStatus.Ended);
-      expect(call.endReason).toBe(CallEndReason.Completed);
-      expect(call.durationSeconds).toBeGreaterThanOrEqual(9);
+      expect(call.status).toBe(CallSessionStatus.Active);
+      expect(call.endReason).toBeNull();
+      expect(call.reconnectStartedAt).not.toBeNull();
+      expect(call.disconnectedBAt).not.toBeNull();
+      expect(livekit.deleteRoom).not.toHaveBeenCalled();
+    });
+
+    it('participant_connection_aborted và room_finished đều idempotent trong grace', async () => {
+      const call = makeCall({
+        status: CallSessionStatus.Active,
+        startedAt: new Date(Date.now() - 10_000),
+      });
+      callRepo.findOneBy.mockResolvedValue(call);
+      manager.findOne.mockResolvedValue(call);
+
+      await service.handleWebhookEvent({
+        event: 'participant_connection_aborted',
+        roomName: call.roomName,
+        participantIdentity: me.userId,
+      });
+      await service.handleWebhookEvent({
+        event: 'room_finished',
+        roomName: call.roomName,
+        participantIdentity: null,
+      });
+
+      expect(call.status).toBe(CallSessionStatus.Active);
+      expect(call.reconnectStartedAt).not.toBeNull();
+      expect(call.disconnectedAAt).not.toBeNull();
+      expect(call.disconnectedBAt).not.toBeNull();
+      expect(livekit.deleteRoom).not.toHaveBeenCalled();
+    });
+
+    it('cả hai re-join thì resume timer sau khoảng gián đoạn', async () => {
+      const startedAt = new Date(Date.now() - 20_000);
+      const reconnectStartedAt = new Date(Date.now() - 5_000);
+      const call = makeCall({
+        status: CallSessionStatus.Active,
+        startedAt,
+        reconnectStartedAt,
+        disconnectedAAt: reconnectStartedAt,
+        disconnectedBAt: reconnectStartedAt,
+        joinedAAt: new Date(Date.now() - 20_000),
+        joinedBAt: new Date(Date.now() - 20_000),
+      });
+      callRepo.findOneBy.mockResolvedValue(call);
+      manager.findOne.mockResolvedValue(call);
+
+      await service.handleWebhookEvent({
+        event: 'participant_joined',
+        roomName: call.roomName,
+        participantIdentity: me.userId,
+      });
+      expect(call.status).toBe(CallSessionStatus.Active);
+      expect(call.reconnectStartedAt).not.toBeNull();
+      expect(call.disconnectedAAt).toBeNull();
+
+      await service.handleWebhookEvent({
+        event: 'participant_joined',
+        roomName: call.roomName,
+        participantIdentity: PARTNER_ID,
+      });
+      expect(call.reconnectStartedAt).toBeNull();
+      expect(call.disconnectedBAt).toBeNull();
+      expect((call.startedAt as Date).getTime()).toBeGreaterThan(
+        startedAt.getTime(),
+      );
     });
   });
 

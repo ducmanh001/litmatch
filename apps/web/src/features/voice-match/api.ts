@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from '../../shared/api/client';
+import { matchingKeys } from '../matching/api';
 
 import type { ApiSchema } from '@litmatch/api-client';
 
@@ -91,7 +92,8 @@ export function useEndVoiceMatch(matchSessionId: string) {
       );
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['matching'] });
+      queryClient.setQueryData(matchingKeys.current, { ticket: null });
+      void queryClient.invalidateQueries({ queryKey: matchingKeys.all });
     },
   });
 }

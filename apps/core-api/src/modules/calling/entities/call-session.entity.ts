@@ -33,6 +33,9 @@ export enum CallEndReason {
 @Index('idx_call_sessions_active_updated', ['updatedAt', 'id'], {
   where: "status = 'active'",
 })
+@Index('idx_call_sessions_reconnect_started', ['reconnectStartedAt', 'id'], {
+  where: "status = 'active' AND reconnect_started_at IS NOT NULL",
+})
 export class CallSession extends BaseAppEntity {
   @Column({ type: 'uuid' })
   matchSessionId!: string;
@@ -58,6 +61,17 @@ export class CallSession extends BaseAppEntity {
 
   @Column({ type: 'timestamptz', nullable: true })
   startedAt!: Date | null;
+
+  /** Mốc bắt đầu cửa sổ reconnect; trong khoảng này timer/billing được tạm dừng. */
+  @Column({ type: 'timestamptz', nullable: true })
+  reconnectStartedAt!: Date | null;
+
+  /** Dấu vết rời phòng của từng bên, để chỉ resume timer khi cả hai đã quay lại. */
+  @Column({ type: 'timestamptz', nullable: true })
+  disconnectedAAt!: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  disconnectedBAt!: Date | null;
 
   @Column({ type: 'timestamptz', nullable: true })
   endedAt!: Date | null;

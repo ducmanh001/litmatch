@@ -354,6 +354,16 @@ export class CallingService {
       call.status = CallSessionStatus.Ended;
       call.endReason = reason;
       call.endedAt = new Date();
+      // Không tính thời gian nằm trong cửa sổ reconnect vào thời lượng đã dùng.
+      // Nếu cửa sổ hết hạn thì mốc startedAt được dời qua đoạn gián đoạn trước khi
+      // duration/billing được chốt.
+      if (call.startedAt && call.reconnectStartedAt) {
+        const pausedMs = Math.max(
+          0,
+          call.endedAt.getTime() - call.reconnectStartedAt.getTime(),
+        );
+        call.startedAt = new Date(call.startedAt.getTime() + pausedMs);
+      }
       // durationSeconds theo giờ server core-api — nguồn sự thật thời lượng (spec § 1)
       call.durationSeconds = call.startedAt
         ? Math.max(
@@ -391,9 +401,15 @@ export class CallingService {
         }
         return;
       case 'participant_left':
+      case 'participant_connection_aborted':
+        if (event.participantIdentity) {
+          await this.markDisconnected(call.id, event.participantIdentity);
+        }
+        return;
       case 'room_finished':
-        // phòng 2 người: 1 bên rời là call kết thúc (spec § 1)
-        await this.endById(call.id, CallEndReason.Completed);
+        // LiveKit có thể phát participant_left/room_finished do mất mạng hoặc
+        // connection bị abort. Chờ reconnect ngắn trước khi terminal hóa call.
+        await this.markRoomDisconnected(call.id);
         return;
       default:
         return;
@@ -461,6 +477,63 @@ export class CallingService {
         call.status = CallSessionStatus.Active;
         call.startedAt = call.startedAt ?? now; // mốc free window + billing (spec § 4)
       }
+
+      if (call.status === CallSessionStatus.Active) {
+        if (identity === call.userAId) call.disconnectedAAt = null;
+        if (identity === call.userBId) call.disconnectedBAt = null;
+
+        // Chỉ resume khi cả 2 đã quay lại. Mốc này cũng giúp reconnect sau
+        // room_finished không làm mất phần thời gian đã dùng trước đó.
+        if (
+          call.reconnectStartedAt &&
+          call.disconnectedAAt === null &&
+          call.disconnectedBAt === null &&
+          call.startedAt
+        ) {
+          const pausedMs = Math.max(
+            0,
+            now.getTime() - call.reconnectStartedAt.getTime(),
+          );
+          call.startedAt = new Date(call.startedAt.getTime() + pausedMs);
+          call.reconnectStartedAt = null;
+        }
+      }
+      await manager.save(call);
+    });
+  }
+
+  private async markDisconnected(
+    callId: string,
+    identity: string,
+  ): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      const call = await manager.findOne(CallSession, {
+        where: { id: callId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!call || call.status !== CallSessionStatus.Active) return;
+
+      const now = new Date();
+      if (identity === call.userAId) call.disconnectedAAt ??= now;
+      else if (identity === call.userBId) call.disconnectedBAt ??= now;
+      else return;
+      call.reconnectStartedAt ??= now;
+      await manager.save(call);
+    });
+  }
+
+  private async markRoomDisconnected(callId: string): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      const call = await manager.findOne(CallSession, {
+        where: { id: callId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!call || call.status !== CallSessionStatus.Active) return;
+
+      const now = new Date();
+      call.reconnectStartedAt ??= now;
+      call.disconnectedAAt ??= now;
+      call.disconnectedBAt ??= now;
       await manager.save(call);
     });
   }

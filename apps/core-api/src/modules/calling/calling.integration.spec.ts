@@ -14,6 +14,7 @@ import { Calling1752500000000 } from '../../database/migrations/1752500000000-ca
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
 import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
 import { VoiceMatchCompletion1756000000000 } from '../../database/migrations/1756000000000-voice-match-completion';
+import { CallingReconnectWindow1756500000000 } from '../../database/migrations/1756500000000-calling-reconnect-window';
 
 import { CallingService } from './calling.service';
 import { CallTickerService } from './jobs/call-ticker.service';
@@ -82,6 +83,7 @@ const CONFIG: Record<string, unknown> = {
   CALLING_FREE_CALL_SECONDS: 5,
   CALLING_PRICE_PER_MINUTE_DIAMOND: 0,
   CALLING_PENDING_TIMEOUT_SECONDS: 3600,
+  CALLING_RECONNECT_WINDOW_SECONDS: 30,
   CALLING_TICKER_INTERVAL_MS: 1000,
   USER_DEFAULT_AVATAR_ID: 'default-01',
 };
@@ -262,6 +264,7 @@ d('Calling integration (Postgres thật)', () => {
         Safety1752800000000,
         ReportTargetVideo1754900000000,
         VoiceMatchCompletion1756000000000,
+        CallingReconnectWindow1756500000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -503,7 +506,7 @@ d('Calling integration (Postgres thật)', () => {
     ).rejects.toMatchObject({ code: 'CALLING_CALL_ENDED' });
   });
 
-  it('webhook participant_left → end completed; end lặp idempotent (không dọn room 2 lần)', async () => {
+  it('webhook disconnect → pause timer, quá reconnect grace mới end idempotent', async () => {
     const [a, b] = await Promise.all([createUser('w-a'), createUser('w-b')]);
     const call = await activeCall(a, b, 2);
 
@@ -512,9 +515,29 @@ d('Calling integration (Postgres thật)', () => {
       roomName: call.roomName,
       participantIdentity: b.id,
     });
+    await ticker.runOnce();
+    let fresh = await ds
+      .getRepository(CallSession)
+      .findOneByOrFail({ id: call.id });
+    expect(fresh.status).toBe(CallSessionStatus.Active);
+    expect(fresh.reconnectStartedAt).not.toBeNull();
+    expect(deletedRooms).not.toContain(call.roomName);
+
+    // Giả lập quá cửa sổ 30s; ticker mới được phép terminal hóa call.
+    await ds.query(
+      `UPDATE call_sessions SET reconnect_started_at = now() - interval '31 seconds' WHERE id = $1`,
+      [call.id],
+    );
+    await ticker.runOnce();
+    fresh = await ds
+      .getRepository(CallSession)
+      .findOneByOrFail({ id: call.id });
+    expect(fresh.status).toBe(CallSessionStatus.Ended);
+    expect(fresh.endReason).toBe(CallEndReason.Completed);
     const cleanupsAfterFirst = deletedRooms.filter(
       (r) => r === call.roomName,
     ).length;
+
     // room_finished đến SAU (out-of-order/retry) — no-op
     await calling.handleWebhookEvent({
       event: 'room_finished',
@@ -522,11 +545,6 @@ d('Calling integration (Postgres thật)', () => {
       participantIdentity: null,
     });
 
-    const fresh = await ds
-      .getRepository(CallSession)
-      .findOneByOrFail({ id: call.id });
-    expect(fresh.status).toBe(CallSessionStatus.Ended);
-    expect(fresh.endReason).toBe(CallEndReason.Completed);
     expect(deletedRooms.filter((r) => r === call.roomName).length).toBe(
       cleanupsAfterFirst,
     ); // không dọn thêm
