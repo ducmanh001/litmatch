@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { parse as parseYaml } from 'yaml';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const script = 'scripts/ci/local.mjs';
@@ -150,11 +151,19 @@ test('local CI rejects every bypass mechanism in a CI environment', () => {
 
 test('GitHub CI uses the same local profiles for quality, tests, and containers', () => {
   const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
+  const workflowConfig = parseYaml(workflow);
 
   assert.match(workflow, /run: pnpm ci:local:quick/u);
   assert.match(workflow, /run: pnpm ci:local\s*$/mu);
   assert.match(workflow, /run: pnpm ci:local:docker/u);
-  assert.match(workflow, /needs: \[quality, test\]/u);
+  assert.deepEqual(workflowConfig.jobs.quality.needs, undefined);
+  assert.deepEqual(workflowConfig.jobs.test.needs, ['quality']);
+  assert.deepEqual(workflowConfig.jobs.docker.needs, ['quality']);
+  assert.deepEqual(workflowConfig.jobs.required.needs, [
+    'quality',
+    'test',
+    'docker',
+  ]);
   assert.doesNotMatch(
     workflow,
     /bypass_ci:|LITMATCH_CI_BYPASS|CI_BYPASS|--bypass/u,

@@ -111,7 +111,7 @@ jobs:
 
   docker:
     name: Container build and runtime smoke
-    needs: [quality, test]
+    needs: [quality]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     services:
