@@ -188,7 +188,12 @@ export function AppShell() {
             onClick={() => setIsMobileDrawerOpen(false)}
           />
         )}
-        <div className="relative hidden h-screen w-[74px] shrink-0 self-start md:sticky md:top-0 md:block">
+        <div
+          className={cn(
+            'relative hidden h-screen shrink-0 self-start transition-[width] duration-200 ease-out md:sticky md:top-0 md:block',
+            isSidebarExpanded ? 'w-[272px]' : 'w-[74px]',
+          )}
+        >
           <aside
             aria-label={
               isSidebarExpanded ? 'Menu đang mở rộng' : 'Menu đang thu gọn'
