@@ -19,10 +19,12 @@
 - Token join mint server-side, identity = userId, room name = `party-{roomId}` (client không tự chọn).
 - `audience`: token `canPublish=false` — **tự unmute bị chặn ở tầng LiveKit**, không chỉ UI
   ([10 § Party Room](../10-code-review-checklist.md)). `host`/`speaker`: `canPublish=true`.
-- Cấp/thu speaker (CHỈ host — [06-domain-rules.md](../06-domain-rules.md)) đổi grant runtime qua
-  `RoomService.updateParticipant` và **đợi ACK trong cùng DB transaction**: SFU fail → rollback role
-  DB (không bao giờ DB nói `audience` mà SFU vẫn cho publish); participant không nối → coi như xong
-  (không nối thì không publish được, token lần sau lấy role từ DB).
+- Cấp/thu speaker (CHỈ host — [06-domain-rules.md](../06-domain-rules.md)) đi qua luồng
+  `invite → target accept`: invite chỉ ghi `speaker_invite_pending`, target vẫn là audience và
+  token vẫn `canPublish=false`; chỉ endpoint accept của chính target mới đổi role. Khi accept,
+  `RoomService.updateParticipant` được gọi và **đợi ACK trong cùng DB transaction**: SFU fail →
+  rollback role DB (không bao giờ DB nói `audience` mà SFU vẫn cho publish); participant không nối
+  thì coi như xong (token lần sau lấy role từ DB). Target có thể decline idempotent.
 - `speaker_limit` đếm role `speaker` (host là publisher mặc định, không chiếm slot).
 
 ## 3. Concurrency
@@ -98,8 +100,8 @@ với calling (1 cụm LiveKit — đổi tên từ `CALLING_LIVEKIT_*` ở GĐ3
 Fanout per-user channel hiện có `realtime:user:{userId}` cho từng member active — gateway giữ
 zero-logic, KHÔNG thêm room channel ([realtime-gateway.md](./realtime-gateway.md)); chuyển sang room
 channel chỉ khi số liệu fanout ép (GĐ6/7). Event: `party.member.joined`, `party.member.left`,
-`party.role.changed`, `party.room.closed` (+ `gift.sent` từ Gift). Publish luôn SAU commit, best-effort
-(client còn REST polling: `GET /party/rooms/:id`).
+`party.role.changed`, `party.speaker.invite.received`, `party.room.closed` (+ `gift.sent` từ Gift).
+Publish luôn SAU commit, best-effort (client còn REST polling: `GET /party/rooms/:id`).
 
 ## 9. Public API cho module khác
 

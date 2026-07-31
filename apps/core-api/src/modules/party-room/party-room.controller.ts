@@ -73,10 +73,16 @@ export class PartyRoomController {
   @ApiOperation({ summary: 'Chi tiết phòng + member active' })
   @ApiOkResponse({ type: PartyRoomDetailDto })
   async get(
+    @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<PartyRoomDetailDto> {
-    const { room, members } = await this.partyRoomService.getRoom(id);
-    return PartyRoomDetailDto.from(room, members);
+    const { room, members, profiles } = await this.partyRoomService.getRoom(id);
+    return PartyRoomDetailDto.from(
+      room,
+      members,
+      user.userId,
+      new Map(profiles.map((profile) => [profile.id, profile.nickname])),
+    );
   }
 
   @Post(':id/join')
@@ -125,6 +131,46 @@ export class PartyRoomController {
   ): Promise<PartyRoomMemberDto> {
     return PartyRoomMemberDto.from(
       await this.partyRoomService.changeRole(user, id, targetUserId, body.role),
+    );
+  }
+
+  @Post(':id/members/:userId/speaker-invite')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Host gửi lời mời audience lên speaker' })
+  @ApiOkResponse({ type: PartyRoomMemberDto })
+  async inviteSpeaker(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) targetUserId: string,
+  ): Promise<PartyRoomMemberDto> {
+    return PartyRoomMemberDto.from(
+      await this.partyRoomService.inviteSpeaker(user, id, targetUserId),
+    );
+  }
+
+  @Post(':id/speaker-invite/accept')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Audience đồng ý lời mời lên speaker' })
+  @ApiOkResponse({ type: PartyRoomMemberDto })
+  async acceptSpeakerInvite(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<PartyRoomMemberDto> {
+    return PartyRoomMemberDto.from(
+      await this.partyRoomService.acceptSpeakerInvite(user, id),
+    );
+  }
+
+  @Post(':id/speaker-invite/decline')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Audience từ chối lời mời lên speaker' })
+  @ApiOkResponse({ type: PartyRoomMemberDto })
+  async declineSpeakerInvite(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<PartyRoomMemberDto> {
+    return PartyRoomMemberDto.from(
+      await this.partyRoomService.declineSpeakerInvite(user, id),
     );
   }
 }
