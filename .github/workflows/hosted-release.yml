@@ -86,32 +86,17 @@ jobs:
           successful_runs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${RELEASE_SHA}&status=completed&per_page=100" \
             --jq '[.workflow_runs[] | select(.head_sha == env.RELEASE_SHA and .head_branch == "main" and .event == "push" and .conclusion == "success")] | length')"
           test "${successful_runs}" -ge 1
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --prefer-offline
       - name: Run forward-only database migrations
         run: pnpm nx run core-api:migration-run --skip-nx-cache --outputStyle=static
       - name: Deploy backend services from the green commit
         run: node scripts/release/northflank-deploy.mjs
       - name: Deploy web and admin
-        run: pnpm nx run-many -t cloudflare-deploy -p web,admin --parallel=1 --skip-nx-cache --outputStyle=static
+        run: pnpm nx run-many -t cloudflare-deploy -p web,admin --parallel=2 --skip-nx-cache --outputStyle=static
       - name: Smoke public endpoints
         env:
           PUBLIC_API_URL: ${{ vars.PUBLIC_API_URL }}
           PUBLIC_SIGNALING_URL: ${{ vars.PUBLIC_SIGNALING_URL }}
           PUBLIC_WEB_URL: ${{ vars.PUBLIC_WEB_URL }}
           PUBLIC_ADMIN_URL: ${{ vars.PUBLIC_ADMIN_URL }}
-        run: |
-          smoke() {
-            local url="$1"
-            for _ in {1..30}; do
-              if curl --fail --silent --show-error "${url}" >/dev/null; then
-                return 0
-              fi
-              sleep 10
-            done
-            echo "::error::Smoke failed: ${url}"
-            return 1
-          }
-          smoke "${PUBLIC_API_URL}/health/ready"
-          smoke "${PUBLIC_SIGNALING_URL}/health/ready"
-          smoke "${PUBLIC_WEB_URL}/"
-          smoke "${PUBLIC_ADMIN_URL}/login"
+        run: node scripts/release/public-smoke.mjs

@@ -107,6 +107,7 @@ const environment = {
 
 let dependenciesPrepared = false;
 let nxPrepared = false;
+let projectsBuilt = false;
 
 function commandText(command) {
   return `${command} [args hidden]`;
@@ -329,6 +330,7 @@ function runTestAndBuild() {
     '--exclude=admin,web,api-client',
     '--outputStyle=static',
   ]);
+  projectsBuilt = true;
   run('End-to-end smoke tests', pnpm, [
     'nx',
     'run-many',
@@ -495,13 +497,19 @@ function runContainerSmoke() {
   prepareNx();
   startTestServices();
   ensureLocalCiDatabase();
-  run('Build all projects for Docker images', pnpm, [
-    'nx',
-    'run-many',
-    '-t',
-    'build',
-    '--outputStyle=static',
-  ]);
+  if (projectsBuilt) {
+    console.log(
+      '\n[ci-local] Reuse validated application build outputs for Docker images',
+    );
+  } else {
+    run('Build all projects for Docker images', pnpm, [
+      'nx',
+      'run-many',
+      '-t',
+      'build',
+      '--outputStyle=static',
+    ]);
+  }
   run('Run database migrations in the isolated local CI database', pnpm, [
     'db:migrate',
   ]);
