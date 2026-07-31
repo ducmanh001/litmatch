@@ -6,4 +6,8 @@ case "${bypass_value}" in
   ;;
 esac
 
+# Nx's native command runner may allocate a pseudo-terminal even with static output.
+# Git hooks can have a TTY-shaped stdout without a usable controlling terminal.
+export NX_NATIVE_COMMAND_RUNNER=false
+
 pnpm ci:preflight

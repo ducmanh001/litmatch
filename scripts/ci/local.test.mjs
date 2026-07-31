@@ -64,6 +64,7 @@ test('aggregate gates own stage watchdogs instead of a blanket 45-second timeout
   assert.match(localCi, /run-stage\.mjs/u);
   assert.match(localCi, /LOCAL_CI_STAGE_TIMEOUT_MS/u);
   assert.match(localCi, /NX_TUI:\s*'false'/u);
+  assert.match(localCi, /NX_NATIVE_COMMAND_RUNNER:\s*'false'/u);
   assert.match(localCi, /NX_CACHE_DIRECTORY:/u);
   assert.match(localCi, /NX_WORKSPACE_DATA_DIRECTORY:/u);
   assert.match(localCi, /tmpdir\(\), 'litmatch-local-ci'/u);
@@ -72,6 +73,7 @@ test('aggregate gates own stage watchdogs instead of a blanket 45-second timeout
   assert.match(agentVerify, /run-stage\.mjs/u);
   assert.match(agentVerify, /AGENT_VERIFY_STAGE_TIMEOUT_MS/u);
   assert.match(agentVerify, /NX_TUI:\s*'false'/u);
+  assert.match(agentVerify, /NX_NATIVE_COMMAND_RUNNER:\s*'false'/u);
   assert.match(agentVerify, /--outputStyle=static/u);
   assert.match(
     packageJson,
@@ -100,6 +102,7 @@ test('commit owns formatting and staged guard checks; push owns the complete pre
 
   assert.match(commitHook, /lint-staged[\s\S]*agent:check -- --staged/u);
   assert.match(pushHook, /pnpm ci:preflight/u);
+  assert.match(pushHook, /NX_NATIVE_COMMAND_RUNNER=false/u);
   assert.doesNotMatch(pushHook, /ci:local:clean/u);
   assert.match(commitHook, /LITMATCH_CI_BYPASS/u);
   assert.match(pushHook, /LITMATCH_CI_BYPASS/u);

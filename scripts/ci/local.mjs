@@ -74,6 +74,10 @@ const environment = {
   CI: 'true',
   HUSKY: '0',
   NX_DAEMON: 'false',
+  // Nx 23's native run-commands runner can allocate a PTY from a Git hook whose
+  // stdout is a TTY but has no usable controlling terminal. Use regular child
+  // processes for deterministic local/CI execution instead.
+  NX_NATIVE_COMMAND_RUNNER: 'false',
   JWT_SECRET:
     process.env['LOCAL_CI_JWT_SECRET'] ?? 'local-ci-jwt-0123456789abcdef-xyz',
   AUTH_OTP_PEPPER:
@@ -279,6 +283,8 @@ function runCleanQuality() {
       'HUSKY=0',
       '--env',
       'NX_DAEMON=false',
+      '--env',
+      'NX_NATIVE_COMMAND_RUNNER=false',
       '--env',
       'NX_TUI=false',
       cleanRunnerImage,

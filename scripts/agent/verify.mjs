@@ -100,6 +100,7 @@ function runCommand(command, args, environment = {}) {
         ...process.env,
         ...environment,
         NX_TUI: 'false',
+        NX_NATIVE_COMMAND_RUNNER: 'false',
         LITMATCH_STAGE_LABEL: label,
         LITMATCH_STAGE_TIMEOUT_MS: String(stageTimeoutMs),
       },
