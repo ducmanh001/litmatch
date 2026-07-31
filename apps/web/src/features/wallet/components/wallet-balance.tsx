@@ -40,7 +40,7 @@ export function WalletBalance({
   }
 
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-diamond to-irisl p-6 text-white">
+    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-irisl to-aqual p-6 text-white shadow-lg shadow-iris/20">
       <div className="absolute -right-6 -top-6 h-32 w-32 rounded-full bg-white/10" />
       <p className="relative mb-2 text-xs font-bold uppercase tracking-wide opacity-80">
         Số dư kim cương
@@ -63,14 +63,14 @@ export function WalletBalance({
         <button
           type="button"
           onClick={onTopUp}
-          className="flex-1 rounded-full bg-white py-2.5 text-sm font-bold text-ink"
+          className="flex-1 rounded-full bg-iris py-2.5 text-sm font-bold text-white shadow-sm shadow-ink/10 transition hover:bg-irisl"
         >
           Nạp Diamond
         </button>
         <button
           type="button"
           onClick={onUpgradeVip}
-          className="flex-1 rounded-full bg-white/20 py-2.5 text-sm font-bold backdrop-blur"
+          className="flex-1 rounded-full bg-iris/85 py-2.5 text-sm font-bold text-white shadow-sm shadow-ink/10 ring-1 ring-white/25 transition hover:bg-irisl"
         >
           Nâng cấp VIP
         </button>

@@ -138,6 +138,16 @@ body {
     color 0.3s ease;
 }
 
+/* Mobile Safari/Chrome tự phóng to khi input có chữ nhỏ hơn 16px. Giữ nguyên viewport và
+   layout khi focus; không khóa pinch-zoom để vẫn bảo toàn khả năng tiếp cận. */
+@media (max-width: 767px) {
+  input:not([type='hidden']):not([type='checkbox']):not([type='radio']),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 .font-display {
   font-family: var(--font-display);
 }
