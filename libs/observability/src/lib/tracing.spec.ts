@@ -1,6 +1,8 @@
 import {
   resolveMetricsEndpoint,
   resolveMetricsHeaders,
+  resolveLogsEndpoint,
+  resolveLogsHeaders,
   startTracing,
 } from './tracing';
 
@@ -14,6 +16,8 @@ describe('startTracing', () => {
     delete process.env['OTEL_EXPORTER_OTLP_METRICS_ENDPOINT'];
     delete process.env['GRAFANA_CLOUD_PROMETHEUS_URL'];
     delete process.env['GRAFANA_CLOUD_PROMETHEUS_USER'];
+    delete process.env['GRAFANA_CLOUD_LOKI_URL'];
+    delete process.env['GRAFANA_CLOUD_LOKI_USER'];
     delete process.env['GRAFANA_CLOUD_API_TOKEN'];
     delete process.env['OBSERVABILITY_REQUIRED'];
   });
@@ -78,6 +82,25 @@ describe('startTracing', () => {
     });
   });
 
+  it('chuẩn hoá Loki push URL thành OTLP logs endpoint', async () => {
+    process.env['GRAFANA_CLOUD_LOKI_URL'] =
+      'https://logs-prod.grafana.net/loki/api/v1/push';
+    process.env['GRAFANA_CLOUD_LOKI_USER'] = 'logs-user';
+    process.env['GRAFANA_CLOUD_API_TOKEN'] = 'secret-token';
+
+    expect(resolveLogsEndpoint()).toBe(
+      'https://logs-prod.grafana.net/otlp/v1/logs',
+    );
+    expect(resolveLogsHeaders()).toEqual({
+      Authorization: `Basic ${Buffer.from('logs-user:secret-token').toString(
+        'base64',
+      )}`,
+    });
+    const sdk = startTracing({ serviceName: 'core-api' });
+    expect(sdk).not.toBeNull();
+    await sdk?.shutdown();
+  });
+
   it('fail boot khi profile bắt buộc telemetry nhưng pipeline chưa đủ', () => {
     process.env['OBSERVABILITY_REQUIRED'] = 'true';
 
@@ -93,6 +116,9 @@ describe('startTracing', () => {
     process.env['GRAFANA_CLOUD_PROMETHEUS_URL'] =
       'http://127.0.0.1:4318/v1/metrics';
     process.env['GRAFANA_CLOUD_PROMETHEUS_USER'] = '123';
+    process.env['GRAFANA_CLOUD_LOKI_URL'] =
+      'http://127.0.0.1:4318/otlp/v1/logs';
+    process.env['GRAFANA_CLOUD_LOKI_USER'] = 'logs-user';
     process.env['GRAFANA_CLOUD_API_TOKEN'] = 'token';
 
     const sdk = startTracing({ serviceName: 'core-api' });
