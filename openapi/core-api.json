@@ -6804,7 +6804,10 @@
             "format": "date-time",
             "type": "string",
             "nullable": true
-          }
+          },
+          "liked": { "type": "boolean" },
+          "matched": { "type": "boolean" },
+          "friendUserId": { "type": "string", "nullable": true }
         },
         "required": [
           "id",
@@ -6815,7 +6818,10 @@
           "endReason",
           "durationSeconds",
           "billedMinutes",
-          "freeCallEndsAt"
+          "freeCallEndsAt",
+          "liked",
+          "matched",
+          "friendUserId"
         ]
       },
       "JoinCallDto": {

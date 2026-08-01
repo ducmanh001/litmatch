@@ -23,6 +23,12 @@ Cả 2 câu lệnh cùng 1 transaction Postgres của caller (Soul Match rating,
 vậy mọi thao tác chat chỉ cần kiểm tra `Conversation` tồn tại + caller là thành viên, không
 cần gọi thêm `areFriends`.
 
+Khi một flow chat ẩn danh đạt mutual-like, caller truyền `FriendMessageSeed[]` trung lập vào
+`ensureFriendship`. Friend ghi seed vào `messages` theo đúng sender/nội dung/thời điểm và key
+import ổn định, cùng transaction với hai dòng quan hệ; `ON CONFLICT DO NOTHING` giúp replay
+không nhân đôi. Module Friend không import entity của flow nguồn, còn flow nguồn giữ nguyên các
+dòng chat ẩn danh append-only cho T&S.
+
 Không có API "unfriend" ở slice này — `Friendship`/`Conversation` là quan hệ vĩnh viễn khi đã
 tạo.
 

@@ -3078,6 +3078,9 @@ export interface components {
       billedMinutes: number;
       /** Format: date-time */
       freeCallEndsAt: string | null;
+      liked: boolean;
+      matched: boolean;
+      friendUserId: string | null;
     };
     JoinCallDto: {
       call: components['schemas']['CallDto'];
