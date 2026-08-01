@@ -98,6 +98,9 @@ const environment = {
   NEXT_PUBLIC_LIVEKIT_URL:
     process.env['NEXT_PUBLIC_LIVEKIT_URL'] ?? 'ws://localhost:7880',
   NX_TUI: 'false',
+  NX_TASKS_RUNNER_DYNAMIC_OUTPUT: 'false',
+  TERM: 'dumb',
+  FORCE_COLOR: '0',
   NX_CACHE_DIRECTORY:
     process.env['LOCAL_CI_NX_CACHE_DIRECTORY'] ?? join(localCiNxRoot, 'cache'),
   NX_WORKSPACE_DATA_DIRECTORY:

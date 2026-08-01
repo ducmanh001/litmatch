@@ -11,5 +11,8 @@ esac
 # ci-local and agent:verify also set this variable for their child processes.
 export NX_TUI=false
 export NX_DAEMON=false
+export NX_TASKS_RUNNER_DYNAMIC_OUTPUT=false
+export TERM=dumb
+export FORCE_COLOR=0
 
 pnpm ci:preflight
