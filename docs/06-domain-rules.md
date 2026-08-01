@@ -74,6 +74,13 @@
   ghi/đọc. Loại trừ banned/guest/block/report dùng LẠI đúng bộ luật của Discovery browse (không
   tự chế luật riêng). Chi tiết:
   [services/discovery-service.md § 8](./services/discovery-service.md#8-nearby-w4).
+- **Privacy visibility settings là server-side**: `showOnlineStatus`, `showDistance`,
+  `searchableByPhone` và `hideProfile` mặc định lần lượt là `true`, `true`, `false`, `false`.
+  `hideProfile=true` phải loại user khỏi Discovery và Feed ngay ở query/guard server; không
+  được chỉ ẩn card ở web. `showDistance=false` trả `distanceBucket=null` cho Nearby, không
+  trả số km thay thế. Presence chỉ được trả khi chủ hồ sơ bật `showOnlineStatus`; presence là
+  lease Redis dẫn xuất từ socket realtime và fail-closed khi Redis lỗi. Tìm bằng phone phải
+  trả cùng `null` cho số không tồn tại và user chưa bật `searchableByPhone` để tránh oracle.
 - **CTA "mời Voice/Soul Match" (W4) — directed invite, KHÔNG phải friend-request flow mới**:
   accept tạo trực tiếp `MatchTicket`/`MatchSession` bỏ qua hàng đợi shard, tái dùng nguyên
   `canPair`/invariant 1-user-1-queue của auto-match; KHÔNG check gender preference (đây là

@@ -1,7 +1,11 @@
 {
   "default": {
     "description": "Định vị repo và chọn scope trước khi sửa",
-    "read": ["AGENTS.md", "docs/00-overview-and-index.md"],
+    "read": [
+      "AGENTS.md",
+      "docs/00-overview-and-index.md",
+      "docs/reference/project-handoff.md"
+    ],
     "readWhen": [
       {
         "path": "docs/07-roadmap.md",
@@ -20,12 +24,17 @@
       "AGENTS.md",
       "docs/00-overview-and-index.md",
       "docs/18-documentation-automation.md",
-      "docs/19-project-lifecycle-and-learning.md"
+      "docs/19-project-lifecycle-and-learning.md",
+      "docs/reference/project-handoff.md"
     ],
     "readWhen": [
       {
         "path": "docs/reference/lessons-registry.md",
         "when": "điều tra correction/near-miss/incident hoặc ghi bài học tái sử dụng"
+      },
+      {
+        "path": "docs/reference/project-handoff.md",
+        "when": "onboard model/người mới hoặc cần truyền kiến thức bền vững giữa các session"
       },
       {
         "path": "docs/templates/incident-record.md",

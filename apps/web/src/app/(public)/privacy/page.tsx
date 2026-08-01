@@ -1,10 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
 
+import {
+  usePrivacySettings,
+  useUpdatePrivacySettings,
+} from '../../../features/privacy/api';
 import { ProductAnalyticsPreference } from '../../../shared/analytics/product-analytics-components';
+import { isApiError } from '@litmatch/api-client';
+import { useIsAuthenticated } from '../../../shared/auth/use-session';
 import { showToast } from '../../../shared/lib/toast-store';
+
+import type { PrivacySettingsDto } from '../../../features/privacy/api';
 
 const VISIBILITY_SETTINGS = [
   {
@@ -46,34 +53,25 @@ const VISIBILITY_SETTINGS = [
 ] as const;
 
 function Toggle({
-  defaultOn,
+  on,
+  disabled,
   label,
-  onMessage,
-  offMessage,
-  warnOnEnable,
+  onToggle,
 }: {
-  defaultOn: boolean;
+  on: boolean;
+  disabled?: boolean;
   label: string;
-  onMessage: string;
-  offMessage: string;
-  warnOnEnable?: boolean;
+  onToggle: () => void;
 }) {
-  const [on, setOn] = useState(defaultOn);
   return (
     <button
       type="button"
       role="switch"
       aria-checked={on}
       aria-label={label}
-      onClick={() => {
-        const next = !on;
-        setOn(next);
-        showToast(
-          next ? onMessage : offMessage,
-          next && warnOnEnable ? 'warn' : 'default',
-        );
-      }}
-      className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+      disabled={disabled}
+      onClick={onToggle}
+      className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
         on ? 'bg-irisl' : 'bg-black/15 dark:bg-white/15'
       }`}
     >
@@ -86,8 +84,43 @@ function Toggle({
   );
 }
 
-/** Trang quyền riêng tư tĩnh — đúng layouts/web/privacy.html (bỏ danh sách chặn giả). */
+/** Trang quyền riêng tư — state visibility được đọc/ghi qua core-api. */
 export default function PrivacyPage() {
+  const isAuthenticated = useIsAuthenticated();
+  const settingsQuery = usePrivacySettings();
+  const updateSettings = useUpdatePrivacySettings();
+  const settings: PrivacySettingsDto = settingsQuery.data ?? {
+    showOnlineStatus: true,
+    showDistance: true,
+    searchableByPhone: false,
+    hideProfile: false,
+  };
+
+  const toggle = (
+    key: keyof PrivacySettingsDto,
+    onMessage: string,
+    offMessage: string,
+    warnOnEnable = false,
+  ) => {
+    if (!isAuthenticated) {
+      showToast('Đăng nhập để thay đổi quyền riêng tư', 'warn');
+      return;
+    }
+    const next = { ...settings, [key]: !settings[key] };
+    updateSettings.mutate(next, {
+      onSuccess: () =>
+        showToast(
+          next[key] ? onMessage : offMessage,
+          next[key] && warnOnEnable ? 'warn' : 'default',
+        ),
+      onError: (error) =>
+        showToast(
+          isApiError(error) ? error.message : 'Không thể lưu quyền riêng tư.',
+          'warn',
+        ),
+    });
+  };
+
   return (
     <main className="mx-auto min-h-screen w-full max-w-xl px-5 py-10">
       <h1 className="font-display mb-6 text-xl font-semibold italic">
@@ -112,11 +145,22 @@ export default function PrivacyPage() {
                   </p>
                 </div>
                 <Toggle
-                  defaultOn={setting.defaultOn}
+                  on={settings[setting.key]}
                   label={setting.label}
-                  onMessage={setting.onMessage}
-                  offMessage={setting.offMessage}
-                  warnOnEnable={setting.warnOnEnable}
+                  disabled={
+                    !isAuthenticated ||
+                    settingsQuery.isPending ||
+                    settingsQuery.isError ||
+                    updateSettings.isPending
+                  }
+                  onToggle={() =>
+                    toggle(
+                      setting.key,
+                      setting.onMessage,
+                      setting.offMessage,
+                      setting.warnOnEnable,
+                    )
+                  }
                 />
               </div>
             ))}

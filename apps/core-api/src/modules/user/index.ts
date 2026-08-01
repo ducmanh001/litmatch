@@ -4,6 +4,8 @@
  */
 export { UserModule } from './user.module';
 export { UserService } from './user.service';
+export { PrivacySettingsService } from './services/privacy-settings.service';
+export { PrivacySetting } from './entities/privacy-setting.entity';
 export type {
   CreateUserInput,
   UserPageFilter,

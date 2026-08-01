@@ -303,7 +303,10 @@ export class UserService {
   ): Promise<CursorPage<User>> {
     const qb = this.userRepo
       .createQueryBuilder('u')
-      .where('u.status = :status', { status: UserStatus.Active });
+      .where('u.status = :status', { status: UserStatus.Active })
+      .andWhere(
+        'NOT EXISTS (SELECT 1 FROM user_privacy_settings ups WHERE ups.user_id = u.id AND ups.hide_profile = true)',
+      );
 
     if (filter.gender) {
       qb.andWhere('u.gender = :gender', { gender: filter.gender });
@@ -362,6 +365,9 @@ export class UserService {
     const qb = this.userRepo
       .createQueryBuilder('u')
       .where('u.status = :status', { status: UserStatus.Active })
+      .andWhere(
+        'NOT EXISTS (SELECT 1 FROM user_privacy_settings ups WHERE ups.user_id = u.id AND ups.hide_profile = true)',
+      )
       .andWhere('u.id IN (:...userIds)', { userIds });
 
     if (filter.gender) {

@@ -62,7 +62,9 @@ Mỗi module publish bằng Redis client riêng của mình (docs/05 § 5.3) qua
 - Quota connection/user là lease trong Redis (`signaling:connection-quota:{userId}`), acquire
   atomic bằng Lua trên toàn cụm. `WS_MAX_CONNECTIONS_PER_USER` mặc định 3;
   `WS_CONNECTION_LEASE_MS` mặc định 90 giây. Socket sống refresh lease, disconnect release; pod
-  chết thì lease tự hết hạn. Redis/quota lỗi thì handshake fail closed
+  chết thì lease tự hết hạn. Cùng lease đó cập nhật `realtime:presence:{userId}` để core-api đọc
+  trạng thái online; presence cũng có member theo lease, TTL và bị dọn khi disconnect nên không
+  có race xoá trạng thái khi user còn socket khác. Redis/quota lỗi thì handshake fail closed
   `CONNECTION_QUOTA_UNAVAILABLE`, không fallback về Map cục bộ.
 - 1 connection Redis riêng cho `PSUBSCRIBE realtime:user:*` (ioredis subscriber mode không
   dùng chung với lệnh khác); channel lạ/payload rác → bỏ qua + log, không chết.
