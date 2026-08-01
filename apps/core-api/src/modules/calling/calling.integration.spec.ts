@@ -112,6 +112,7 @@ d('Calling integration (Postgres thật)', () => {
     deleteRoom: async (room) => {
       deletedRooms.push(room);
     },
+    listParticipantIdentities: async () => [],
     receiveWebhook: async () => {
       throw new Error(
         'không dùng trong suite này — verify chữ ký thuộc port SDK',

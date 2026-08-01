@@ -95,6 +95,9 @@ function build() {
   const publicBuildEnv = {
     ...runtimeEnv,
     NEXT_PUBLIC_API_URL: `https://api.${values.DOMAIN}`,
+    NEXT_PUBLIC_SITE_URL: `https://app.${values.DOMAIN}`,
+    NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION:
+      values.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION || '',
     NEXT_PUBLIC_SOCKET_URL: `https://realtime.${values.DOMAIN}`,
     NEXT_PUBLIC_LIVEKIT_URL: `wss://media.${values.DOMAIN}`,
     NEXT_PUBLIC_AUTH_GOOGLE_CLIENT_ID: values.GOOGLE_OAUTH_CLIENT_ID,

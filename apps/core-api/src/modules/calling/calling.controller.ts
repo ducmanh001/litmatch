@@ -62,9 +62,11 @@ export class CallingController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<CallDto> {
+    const call = await this.callingService.getCall(user, id);
     return CallDto.from(
-      await this.callingService.getCall(user, id),
+      call,
       this.callingService.getFreeCallSeconds(),
+      await this.callingService.getLikeState(user, call),
     );
   }
 
@@ -79,9 +81,11 @@ export class CallingController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<CallDto> {
+    const call = await this.callingService.endCall(user, id);
     return CallDto.from(
-      await this.callingService.endCall(user, id),
+      call,
       this.callingService.getFreeCallSeconds(),
+      await this.callingService.getLikeState(user, call),
     );
   }
 

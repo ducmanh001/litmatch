@@ -6,8 +6,14 @@ case "${bypass_value}" in
   ;;
 esac
 
-# Nx's native command runner may allocate a pseudo-terminal even with static output.
-# Git hooks can have a TTY-shaped stdout without a usable controlling terminal.
+# Pre-push can run without a real TTY (IDE, GUI Git client, or detached hook).
+# Keep Nx's terminal UI and native command runner disabled at the outermost boundary;
+# ci-local and agent:verify also set these variables for their child processes.
+export NX_TUI=false
+export NX_DAEMON=false
+export NX_TASKS_RUNNER_DYNAMIC_OUTPUT=false
 export NX_NATIVE_COMMAND_RUNNER=false
+export TERM=dumb
+export FORCE_COLOR=0
 
 pnpm ci:preflight

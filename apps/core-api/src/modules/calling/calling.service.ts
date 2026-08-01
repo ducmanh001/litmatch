@@ -56,6 +56,8 @@ export interface VoiceMatchLikeResult {
   friendUserId: string | null;
 }
 
+export type VoiceMatchLikeState = VoiceMatchLikeResult;
+
 /**
  * Nghiệp vụ voice call 2 người trên LiveKit (docs/services/calling-service.md).
  * State machine spec § 1 — `ended` terminal, mọi transition idempotent (webhook retry an toàn).
@@ -192,7 +194,7 @@ export class CallingService {
 
   /** Poll fallback của realtime `call.ended` — chỉ member (gộp 404, chống oracle). */
   async getCall(user: AuthenticatedUser, callId: string): Promise<CallSession> {
-    const call = await this.callRepo.findOneBy({ id: callId });
+    let call = await this.callRepo.findOneBy({ id: callId });
     if (
       !call ||
       (call.userAId !== user.userId && call.userBId !== user.userId)
@@ -203,7 +205,30 @@ export class CallingService {
         HttpStatus.NOT_FOUND,
       );
     }
+    call = await this.reconcileCallWithLivekit(call, user.userId);
     return call;
+  }
+
+  /**
+   * Trạng thái reaction đọc từ DB để nút tim không bị reset sau reload/refetch. `matched` chỉ
+   * trả friendUserId sau khi mutual like đã tạo Friendship (hoặc cặp vốn đã là bạn).
+   */
+  async getLikeState(
+    user: AuthenticatedUser,
+    call: CallSession,
+  ): Promise<VoiceMatchLikeState> {
+    const partnerId =
+      call.userAId === user.userId ? call.userBId : call.userAId;
+    const liked = await this.reactionRepo.existsBy({
+      callId: call.id,
+      raterUserId: user.userId,
+    });
+    const matched = await this.friendService.areFriends(user.userId, partnerId);
+    return {
+      liked,
+      matched,
+      friendUserId: matched ? partnerId : null,
+    };
   }
 
   /** Member chủ động kết thúc — idempotent (đã ended thì trả trạng thái hiện tại). */
@@ -417,6 +442,50 @@ export class CallingService {
   }
 
   // ---------- nội bộ ----------
+
+  /**
+   * Webhook là kênh chính; đối soát RoomService là backstop cho cấu hình webhook lỗi/mất mạng.
+   * Pending chỉ được chuyển khi LiveKit xác nhận member thật sự có mặt. Active mà đối phương
+   * không còn trong room thì chốt ended để client không treo màn hình vô hạn.
+   */
+  private async reconcileCallWithLivekit(
+    call: CallSession,
+    userId: string,
+  ): Promise<CallSession> {
+    let identities: string[];
+    try {
+      identities = await this.livekit.listParticipantIdentities(call.roomName);
+    } catch (err) {
+      // Webhook/ticker vẫn là nguồn fallback khi RoomService tạm unavailable; GET không được
+      // biến lỗi hạ tầng SFU thành lỗi 500 làm mất màn hình cuộc gọi.
+      this.logger.debug(
+        `Không đối soát được participant của ${call.roomName}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return call;
+    }
+
+    if (call.status === CallSessionStatus.Pending) {
+      // RoomService đã là nguồn sự thật cho cả room: ghi nhận mọi identity hợp lệ mà
+      // LiveKit trả về, không phụ thuộc việc browser của phía còn lại có đang poll hay không.
+      const memberIds = identities.filter(
+        (identity) => identity === call.userAId || identity === call.userBId,
+      );
+      if (memberIds.length === 0) return call;
+      for (const identity of memberIds) {
+        await this.markJoined(call.id, identity);
+      }
+      return (await this.callRepo.findOneBy({ id: call.id })) ?? call;
+    }
+
+    if (call.status === CallSessionStatus.Active) {
+      const partnerId = call.userAId === userId ? call.userBId : call.userAId;
+      if (!identities.includes(partnerId)) {
+        const ended = await this.endById(call.id, CallEndReason.Completed);
+        return ended.call ?? call;
+      }
+    }
+    return call;
+  }
 
   /**
    * Chọn LiveKit URL theo region (GĐ7 — ADR 0005). QUY TẮC: dùng region của `call.userAId` —

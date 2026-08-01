@@ -52,7 +52,7 @@ describe('AppShell', () => {
     expect(
       screen.getByRole('complementary', { name: 'Menu đang mở rộng' }),
     ).toBeVisible();
-    expect(sidebarSlot).toHaveClass('w-[74px]');
+    expect(sidebarSlot).toHaveClass('w-[272px]');
     expect(
       screen.getByRole('complementary', { name: 'Menu đang mở rộng' }),
     ).toHaveTextContent('Litmatch Admin');

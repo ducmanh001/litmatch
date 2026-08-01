@@ -3,6 +3,7 @@ import { isApiError } from '@litmatch/api-client';
 import { useForm } from 'react-hook-form';
 
 import { showToast } from '../../../shared/lib/toast-store';
+import { useT } from '../../../shared/i18n/catalog';
 import { Button } from '../../../shared/ui/button';
 import { Card } from '../../../shared/ui/card';
 import { Field } from '../../../shared/ui/field';
@@ -22,6 +23,7 @@ import type {
 } from '../create-gift-schema';
 
 export function GiftsPage() {
+  const t = useT();
   const { data, isPending, error } = useGiftsList();
   const createGift = useCreateGift();
   const updateGift = useUpdateGift();
@@ -35,12 +37,14 @@ export function GiftsPage() {
       ? undefined
       : isApiError(err)
         ? err.message
-        : 'Có lỗi xảy ra, thử lại.';
+        : t('common.tryAgain');
 
   return (
     <section className="space-y-4">
       <Card>
-        <h3 className="mb-3.5 text-[14.5px] font-extrabold">Tạo quà mới</h3>
+        <h3 className="mb-3.5 text-[14.5px] font-extrabold">
+          {t('gifts.createTitle')}
+        </h3>
         <form
           className="flex flex-wrap items-end gap-4"
           onSubmit={form.handleSubmit((values) => {
@@ -49,7 +53,7 @@ export function GiftsPage() {
               {
                 onSuccess: () => {
                   form.reset();
-                  showToast(`Đã tạo quà mới "${values.name}"`);
+                  showToast(t('gifts.created', { name: values.name }));
                 },
               },
             );
@@ -58,29 +62,29 @@ export function GiftsPage() {
         >
           <Field
             htmlFor="gift-code"
-            label="Mã (code)"
+            label={t('gifts.code')}
             error={form.formState.errors.code?.message}
           >
             <Input
               id="gift-code"
-              placeholder="VD: ROSE"
+              placeholder={t('gifts.codePlaceholder')}
               {...form.register('code')}
             />
           </Field>
           <Field
             htmlFor="gift-name"
-            label="Tên"
+            label={t('gifts.name')}
             error={form.formState.errors.name?.message}
           >
             <Input
               id="gift-name"
-              placeholder="VD: Hoa hồng"
+              placeholder={t('gifts.namePlaceholder')}
               {...form.register('name')}
             />
           </Field>
           <Field
             htmlFor="gift-price"
-            label="Giá (diamond)"
+            label={t('gifts.price')}
             error={
               form.formState.errors.priceDiamond?.message ??
               mutationError(createGift.error)
@@ -95,7 +99,7 @@ export function GiftsPage() {
             />
           </Field>
           <Button type="submit" className="h-9" disabled={createGift.isPending}>
-            {createGift.isPending ? 'Đang tạo…' : 'Tạo quà'}
+            {createGift.isPending ? t('gifts.creating') : t('gifts.create')}
           </Button>
         </form>
       </Card>
@@ -103,7 +107,7 @@ export function GiftsPage() {
       {isPending && <LoadingState />}
       {error !== null && <ErrorState error={error} />}
       {data !== undefined && data.length === 0 && (
-        <EmptyState title="Chưa có quà nào trong catalog" />
+        <EmptyState title={t('gifts.empty')} />
       )}
 
       {data !== undefined && data.length > 0 && (
@@ -113,16 +117,16 @@ export function GiftsPage() {
               <thead className="border-b border-border">
                 <tr>
                   <th className="px-[18px] py-3 text-left text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
-                    Code
+                    {t('gifts.codeColumn')}
                   </th>
                   <th className="px-[18px] py-3 text-left text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
-                    Tên
+                    {t('gifts.name')}
                   </th>
                   <th className="px-[18px] py-3 text-left text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
-                    Giá (DIA)
+                    {t('gifts.priceColumn')}
                   </th>
                   <th className="px-[18px] py-3 text-left text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
-                    Trạng thái
+                    {t('gifts.status')}
                   </th>
                   <th className="px-[18px] py-3" />
                 </tr>
@@ -139,7 +143,12 @@ export function GiftsPage() {
                         {
                           onSuccess: () =>
                             showToast(
-                              `${gift.active ? 'Đã tắt' : 'Đã bật'} quà "${gift.name}"`,
+                              t('gifts.toggled', {
+                                action: gift.active
+                                  ? t('common.disabled')
+                                  : t('common.enabled'),
+                                name: gift.name,
+                              }),
                             ),
                         },
                       )
@@ -150,7 +159,10 @@ export function GiftsPage() {
                         {
                           onSuccess: () =>
                             showToast(
-                              `Đã lưu giá quà "${gift.name}": ${priceDiamond} DIA`,
+                              t('gifts.priceSaved', {
+                                name: gift.name,
+                                price: priceDiamond,
+                              }),
                             ),
                         },
                       )
@@ -189,23 +201,24 @@ function GiftRow({
   onTogglePending: boolean;
   onSavePrice: (price: number) => void;
 }) {
+  const t = useT();
   return (
     <tr className="border-b border-border last:border-0 hover:bg-muted">
       <td
-        data-label="Code"
+        data-label={t('gifts.codeColumn')}
         className="px-[18px] py-[13px] font-mono text-[11.5px] text-muted-foreground"
       >
         {gift.code}
       </td>
-      <td data-label="Tên" className="px-[18px] py-[13px]">
+      <td data-label={t('gifts.name')} className="px-[18px] py-[13px]">
         {gift.name}
       </td>
-      <td data-label="Giá (DIA)" className="px-[18px] py-[13px]">
+      <td data-label={t('gifts.priceColumn')} className="px-[18px] py-[13px]">
         <PriceEditor initial={gift.priceDiamond} onSave={onSavePrice} />
       </td>
-      <td data-label="Trạng thái" className="px-[18px] py-[13px]">
+      <td data-label={t('gifts.status')} className="px-[18px] py-[13px]">
         <Pill variant={gift.active ? 'green' : 'neutral'}>
-          {gift.active ? 'Đang bán' : 'Đã tắt'}
+          {gift.active ? t('gifts.onSale') : t('common.disabled')}
         </Pill>
       </td>
       <td data-label="" className="px-[18px] py-[13px] text-right">
@@ -215,7 +228,7 @@ function GiftRow({
           disabled={onTogglePending}
           onClick={onToggle}
         >
-          {gift.active ? 'Tắt' : 'Bật'}
+          {gift.active ? t('gifts.disable') : t('gifts.enable')}
         </Button>
       </td>
     </tr>
@@ -229,6 +242,7 @@ function PriceEditor({
   initial: number;
   onSave: (price: number) => void;
 }) {
+  const t = useT();
   return (
     <form
       className="flex items-center gap-2"
@@ -247,7 +261,7 @@ function PriceEditor({
         className="h-8 w-[100px]"
       />
       <Button type="submit" size="sm" variant="ghost">
-        Lưu
+        {t('common.save')}
       </Button>
     </form>
   );

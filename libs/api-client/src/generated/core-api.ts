@@ -1001,6 +1001,57 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/party/rooms/{id}/members/{userId}/speaker-invite': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Host gửi lời mời audience lên speaker */
+    post: operations['PartyRoomController_inviteSpeaker'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/party/rooms/{id}/speaker-invite/accept': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Audience đồng ý lời mời lên speaker */
+    post: operations['PartyRoomController_acceptSpeakerInvite'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/party/rooms/{id}/speaker-invite/decline': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Audience từ chối lời mời lên speaker */
+    post: operations['PartyRoomController_declineSpeakerInvite'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/gifts': {
     parameters: {
       query?: never;
@@ -3027,6 +3078,9 @@ export interface components {
       billedMinutes: number;
       /** Format: date-time */
       freeCallEndsAt: string | null;
+      liked: boolean;
+      matched: boolean;
+      friendUserId: string | null;
     };
     JoinCallDto: {
       call: components['schemas']['CallDto'];
@@ -3071,6 +3125,8 @@ export interface components {
       role: 'host' | 'speaker' | 'audience';
       /** Format: date-time */
       joinedAt: string;
+      nickname?: string;
+      speakerInvitePending: boolean;
     };
     JoinPartyRoomDto: {
       room: components['schemas']['PartyRoomDto'];
@@ -3090,7 +3146,7 @@ export interface components {
     };
     ChangePartyRoleDto: {
       /** @enum {string} */
-      role: 'speaker' | 'audience';
+      role: 'audience';
     };
     GiftDto: {
       id: string;
@@ -5427,6 +5483,85 @@ export interface operations {
         'application/json': components['schemas']['ChangePartyRoleDto'];
       };
     };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['PartyRoomMemberDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  PartyRoomController_inviteSpeaker: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+        userId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['PartyRoomMemberDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  PartyRoomController_acceptSpeakerInvite: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['PartyRoomMemberDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  PartyRoomController_declineSpeakerInvite: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
     responses: {
       200: {
         headers: {

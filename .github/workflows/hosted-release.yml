@@ -42,6 +42,8 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       NEXT_PUBLIC_API_URL: ${{ vars.PUBLIC_API_URL }}
+      NEXT_PUBLIC_SITE_URL: ${{ vars.PUBLIC_WEB_URL }}
+      NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION: ${{ vars.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION }}
       NEXT_PUBLIC_SOCKET_URL: ${{ vars.PUBLIC_SIGNALING_URL }}
       NEXT_PUBLIC_LIVEKIT_URL: ${{ vars.PUBLIC_LIVEKIT_URL }}
       # Rolling-deploy fallback until every core-api instance exposes /capabilities.

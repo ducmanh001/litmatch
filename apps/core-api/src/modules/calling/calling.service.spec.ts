@@ -83,7 +83,7 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
     findOneBy: jest.Mock;
     findOneByOrFail: jest.Mock;
   };
-  let reactionRepo: { findOneBy: jest.Mock };
+  let reactionRepo: { findOneBy: jest.Mock; existsBy: jest.Mock };
   let matchingService: {
     findSessionById: jest.Mock;
     endVoiceSession: jest.Mock;
@@ -93,6 +93,7 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
   let livekit: {
     mintJoinToken: jest.Mock;
     deleteRoom: jest.Mock;
+    listParticipantIdentities: jest.Mock;
     receiveWebhook: jest.Mock;
   };
   let manager: { findOne: jest.Mock; save: jest.Mock };
@@ -109,7 +110,10 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
       findOneBy: jest.fn(async () => null),
       findOneByOrFail: jest.fn(),
     };
-    reactionRepo = { findOneBy: jest.fn(async () => null) };
+    reactionRepo = {
+      findOneBy: jest.fn(async () => null),
+      existsBy: jest.fn(async () => false),
+    };
     matchingService = {
       findSessionById: jest.fn(async () => makeVoiceSession()),
       endVoiceSession: jest.fn(async () => undefined),
@@ -122,6 +126,7 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
     livekit = {
       mintJoinToken: jest.fn(async (room, id) => `tok:${room}:${id}`),
       deleteRoom: jest.fn(async () => undefined),
+      listParticipantIdentities: jest.fn(async () => []),
       receiveWebhook: jest.fn(),
     };
     manager = { findOne: jest.fn(), save: jest.fn(async (c) => c) };
@@ -247,6 +252,58 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
         created.userAId,
         created.userBId,
       );
+    });
+  });
+
+  describe('GET call — đối soát participant và reaction đã lưu', () => {
+    it('webhook bị mất nhưng user đã thật sự ở room → pending chuyển active', async () => {
+      const pending = makeCall();
+      const active = makeCall({
+        status: CallSessionStatus.Active,
+        joinedAAt: new Date(),
+        startedAt: new Date(),
+      });
+      callRepo.findOneBy
+        .mockResolvedValueOnce(pending)
+        .mockResolvedValueOnce(active);
+      livekit.listParticipantIdentities.mockResolvedValue([
+        me.userId,
+        PARTNER_ID,
+      ]);
+      manager.findOne.mockResolvedValue(pending);
+
+      const result = await service.getCall(me, pending.id);
+
+      expect(result.status).toBe(CallSessionStatus.Active);
+      expect(manager.save).toHaveBeenCalledTimes(2);
+    });
+
+    it('active nhưng participant đối phương biến mất → tự kết thúc, không treo call', async () => {
+      const active = makeCall({
+        status: CallSessionStatus.Active,
+        startedAt: new Date(Date.now() - 2_000),
+      });
+      callRepo.findOneBy.mockResolvedValue(active);
+      livekit.listParticipantIdentities.mockResolvedValue([me.userId]);
+      manager.findOne.mockResolvedValue(active);
+
+      const result = await service.getCall(me, active.id);
+
+      expect(result.status).toBe(CallSessionStatus.Ended);
+      expect(result.endReason).toBe(CallEndReason.Completed);
+      expect(livekit.deleteRoom).toHaveBeenCalledWith(active.roomName);
+    });
+
+    it('GET trả lại reaction đã lưu để reload vẫn giữ trạng thái tim', async () => {
+      const ended = makeCall({ status: CallSessionStatus.Ended });
+      reactionRepo.existsBy.mockResolvedValue(true);
+      friendService.areFriends.mockResolvedValue(false);
+
+      await expect(service.getLikeState(me, ended)).resolves.toEqual({
+        liked: true,
+        matched: false,
+        friendUserId: null,
+      });
     });
   });
 

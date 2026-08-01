@@ -37,6 +37,18 @@ export interface EnsureFriendshipResult {
   created: boolean;
 }
 
+/**
+ * Message được import từ một phòng chat ẩn danh sau khi hai user match.
+ * Caller sở hữu nguồn message; Friend chỉ nhận dữ liệu trung lập để ghi vào
+ * bảng `messages`, không import entity nội bộ của module khác.
+ */
+export interface FriendMessageSeed {
+  senderUserId: string;
+  content: string;
+  idempotencyKey: string;
+  createdAt: Date;
+}
+
 export interface FriendListEntry {
   partnerId: string;
   conversationId: string;
@@ -90,6 +102,7 @@ export class FriendService {
     userAId: string,
     userBId: string,
     source: FriendshipSource,
+    messageSeeds: readonly FriendMessageSeed[] = [],
   ): Promise<EnsureFriendshipResult> {
     if (userAId === userBId) {
       throw new Error(
@@ -112,6 +125,51 @@ export class FriendService {
       .values({ userLowId, userHighId, lastMessageAt: null })
       .orIgnore()
       .execute();
+
+    if (messageSeeds.length > 0) {
+      const conversation = await manager.findOne(Conversation, {
+        where: { userLowId, userHighId },
+      });
+      if (!conversation) {
+        throw new Error(
+          `Không tìm thấy conversation sau khi ensure friendship ${userLowId}/${userHighId}`,
+        );
+      }
+
+      await manager
+        .createQueryBuilder()
+        .insert()
+        .into(Message)
+        .values(
+          messageSeeds.map((message) => ({
+            conversationId: conversation.id,
+            senderUserId: message.senderUserId,
+            content: message.content,
+            idempotencyKey: message.idempotencyKey,
+            createdAt: message.createdAt,
+          })),
+        )
+        .orIgnore()
+        .execute();
+
+      // Không làm lùi mốc sort của conversation nếu đây là lần import/replay
+      // của một cặp đã có chat trước đó.
+      const latestMessageAt = messageSeeds.reduce(
+        (latest, message) =>
+          message.createdAt > latest ? message.createdAt : latest,
+        messageSeeds[0].createdAt,
+      );
+      await manager
+        .createQueryBuilder()
+        .update(Conversation)
+        .set({ lastMessageAt: latestMessageAt })
+        .where('id = :conversationId', { conversationId: conversation.id })
+        .andWhere(
+          '(last_message_at IS NULL OR last_message_at < :latestMessageAt)',
+          { latestMessageAt },
+        )
+        .execute();
+    }
     // ON CONFLICT DO NOTHING → RETURNING rỗng khi dòng đã tồn tại
     return { created: result.raw.length > 0 };
   }

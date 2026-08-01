@@ -29,8 +29,9 @@ Quyết định đã chốt (đổi được bằng config/slice sau, không ph�
 - Không có API "end chat sớm" — hết giờ tự đóng; muốn thoát thì ngừng chat và rate.
 - Rating mở **từ khi phòng mở** (rate sớm ngay trong lúc chat là hợp lệ) đến hết
   `ratingEndsAt`.
-- Sau `closed` không đọc lại history (Friend Chat 1-1 sau này là kênh mới, bảng mới) —
-  message giữ trong DB làm bằng chứng cho Report/T&S (Giai đoạn 4), không expose lại qua API.
+- Sau `closed`, history không còn đọc qua API Soul ẩn danh. Nếu hai bên đã `like`,
+  history được import vào Friend Chat trong transaction tạo Friendship/Conversation; các dòng
+  `SoulChatMessage` gốc vẫn giữ append-only trong DB làm bằng chứng cho Report/T&S.
 - Session `expired` (thiếu confirm) không bao giờ có phòng chat.
 
 ## 2. Ẩn danh (docs/01 #1)
@@ -58,6 +59,10 @@ Quyết định đã chốt (đổi được bằng config/slice sau, không ph�
   `(user_low_id, user_high_id)`; `ensureFriendship` idempotent (ON CONFLICT DO NOTHING) —
   cặp cũ match lại lần 2 không vỡ. Soul-match gọi qua DI, truyền `EntityManager` để tham gia
   transaction (docs/03 § 3.7 — cùng process, cùng DB).
+- Khi đủ 2 `like`, Soul-match đọc `SoulChatMessage` theo `seq` và truyền seed trung lập cho
+  `FriendService.ensureFriendship`. Friend ghi các dòng `Message` với `senderUserId`,
+  `content`, `createdAt` và key import ổn định trong **cùng transaction** với rating,
+  Friendship và Conversation. Retry không nhân đôi; source Soul vẫn được giữ nguyên.
 
 ## 4. Message
 
