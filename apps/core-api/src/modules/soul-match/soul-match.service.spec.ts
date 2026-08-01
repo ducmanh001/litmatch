@@ -71,7 +71,10 @@ describe('SoulMatchService (unit — mock repo/matching/friend)', () => {
     createQueryBuilder: jest.Mock;
   };
   let ratingRepo: { findOneBy: jest.Mock };
-  let matchingService: { findSessionById: jest.Mock };
+  let matchingService: {
+    findSessionById: jest.Mock;
+    endSoulSession: jest.Mock;
+  };
   let friendService: { areFriends: jest.Mock; ensureFriendship: jest.Mock };
   let userService: { getByIdOrThrow: jest.Mock };
   let manager: {
@@ -101,6 +104,9 @@ describe('SoulMatchService (unit — mock repo/matching/friend)', () => {
     ratingRepo = { findOneBy: jest.fn(async () => null) };
     matchingService = {
       findSessionById: jest.fn(async () => makeSession(0)),
+      endSoulSession: jest.fn(async () =>
+        makeSession(0, { status: MatchSessionStatus.Ended }),
+      ),
     };
     friendService = {
       areFriends: jest.fn(async () => false),
@@ -207,6 +213,45 @@ describe('SoulMatchService (unit — mock repo/matching/friend)', () => {
         expect(view.room.phase).toBe(phase);
       },
     );
+
+    it('mutual like → chat không hết hạn theo đồng hồ server', async () => {
+      friendService.areFriends.mockResolvedValue(true);
+      matchingService.findSessionById.mockResolvedValue(makeSession(300));
+
+      const view = await service.getSessionView(me, 'session-1');
+
+      expect(view.room.phase).toBe(SoulRoomPhase.Chatting);
+      expect(view.matched).toBe(true);
+    });
+
+    it('session đã rời → phase closed nhưng vẫn đọc được trạng thái match', async () => {
+      matchingService.findSessionById.mockResolvedValue(
+        makeSession(0, { status: MatchSessionStatus.Ended }),
+      );
+
+      const view = await service.getSessionView(me, 'session-1');
+
+      expect(view.room.phase).toBe(SoulRoomPhase.Closed);
+      expect(view.matched).toBe(false);
+    });
+  });
+
+  describe('endSession', () => {
+    it('đóng session durable và báo realtime cho cả hai bên', async () => {
+      await service.endSession(me, 'session-1');
+
+      expect(matchingService.endSoulSession).toHaveBeenCalledWith(
+        me,
+        'session-1',
+      );
+      expect(redis.publish).toHaveBeenCalledTimes(2);
+      for (const [, raw] of redis.publish.mock.calls as [string, string][]) {
+        expect(JSON.parse(raw)).toMatchObject({
+          event: 'soul.ended',
+          data: { sessionId: 'session-1', reason: 'member_left' },
+        });
+      }
+    });
   });
 
   describe('sendMessage', () => {
@@ -225,6 +270,15 @@ describe('SoulMatchService (unit — mock repo/matching/friend)', () => {
         .catch((e) => e);
       expectDomainError(err, SoulMatchErrors.CHAT_NOT_OPEN);
       expect(messageRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('mutual like → vẫn gửi được message sau deadline cũ', async () => {
+      friendService.areFriends.mockResolvedValue(true);
+      matchingService.findSessionById.mockResolvedValue(makeSession(200));
+
+      const saved = await service.sendMessage(me, 'session-1', dto, 'k1');
+
+      expect(saved.content).toBe('hello');
     });
 
     it('bị ban giữa chừng → 403 USER_BANNED (re-check tại thời điểm gửi — § 10.0.C)', async () => {

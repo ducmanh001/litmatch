@@ -1,6 +1,7 @@
 'use client';
 
 import { isApiError } from '@litmatch/api-client';
+import { useEffect, useRef } from 'react';
 
 import { useFeed } from '../api';
 import { FeedBanners } from './feed-banners';
@@ -10,6 +11,29 @@ import { PostComposer } from './post-composer';
 export function PostList() {
   const feed = useFeed();
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = feed;
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (
+      target === null ||
+      !hasNextPage ||
+      isFetchingNextPage ||
+      typeof IntersectionObserver === 'undefined'
+    ) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) void fetchNextPage();
+      },
+      { rootMargin: '320px 0px' },
+    );
+    observer.observe(target);
+
+    return () => observer.disconnect();
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   const items = feed.data?.pages.flatMap((page) => page?.items ?? []) ?? [];
 
@@ -52,14 +76,17 @@ export function PostList() {
       )}
 
       {hasNextPage && (
-        <button
-          type="button"
-          className="h-10 w-full rounded-full border border-black/5 text-sm font-semibold hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/5"
-          disabled={isFetchingNextPage}
-          onClick={() => void fetchNextPage()}
+        <div
+          ref={loadMoreRef}
+          className="flex min-h-10 items-center justify-center"
+          aria-live="polite"
         >
-          {isFetchingNextPage ? 'Đang tải…' : 'Xem thêm'}
-        </button>
+          {isFetchingNextPage && (
+            <span className="text-sm text-slate-500 dark:text-slate-400">
+              Đang tải…
+            </span>
+          )}
+        </div>
       )}
     </div>
   );

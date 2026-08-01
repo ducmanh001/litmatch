@@ -36,6 +36,9 @@ import type {
   PartyRoomClosedEventData,
   PartySpeakerInviteReceivedEventData,
 } from '@litmatch/common-dtos/pure';
+import type { ApiSchema } from '@litmatch/api-client';
+
+type PartyRoomDetailDto = ApiSchema<'PartyRoomDetailDto'>;
 
 const CLOSE_REASON_LABEL: Record<string, string> = {
   host_left: 'Host đã rời phòng',
@@ -107,6 +110,24 @@ export function PartyStage({ roomId }: { roomId: string }) {
     (data) => {
       if (data.roomId === roomId) {
         media.disconnect();
+        // Hiện trạng thái đóng ngay cả khi request refetch còn đang chờ; nếu không,
+        // UI giữ cache active và trông như vẫn ở trong phòng thêm vài giây.
+        queryClient.setQueryData<PartyRoomDetailDto | undefined>(
+          partyRoomKeys.detail(roomId),
+          (current) =>
+            current === undefined
+              ? current
+              : {
+                  ...current,
+                  room: {
+                    ...current.room,
+                    status: 'closed',
+                    closeReason: data.reason as NonNullable<
+                      PartyRoomDetailDto['room']['closeReason']
+                    >,
+                  },
+                },
+        );
         invalidateDetail();
       }
     },

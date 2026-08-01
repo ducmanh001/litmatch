@@ -3,8 +3,8 @@
     "description": "Định vị repo và chọn scope trước khi sửa",
     "read": [
       "AGENTS.md",
-      "docs/00-overview-and-index.md",
-      "docs/reference/project-handoff.md"
+      "docs/reference/project-memory.md",
+      "docs/00-overview-and-index.md"
     ],
     "readWhen": [
       {
@@ -14,6 +14,10 @@
       {
         "path": "docs/11-engineering-principles.md",
         "when": "task có quyết định thiết kế, boundary hoặc refactor"
+      },
+      {
+        "path": "docs/reference/project-handoff.md",
+        "when": "onboard, chuyển giao ownership hoặc cần reconstruct lịch sử dự án"
       }
     ],
     "checks": ["pnpm agent:check", "pnpm format:check", "pnpm lint"]
@@ -22,10 +26,10 @@
     "description": "Tài liệu canonical, onboarding, bằng chứng và bài học vận hành",
     "read": [
       "AGENTS.md",
+      "docs/reference/project-memory.md",
       "docs/00-overview-and-index.md",
       "docs/18-documentation-automation.md",
-      "docs/19-project-lifecycle-and-learning.md",
-      "docs/reference/project-handoff.md"
+      "docs/19-project-lifecycle-and-learning.md"
     ],
     "readWhen": [
       {
@@ -56,6 +60,7 @@
     "description": "Prompt, context engineering, skills, harness, guardrails, orchestration và agent evals",
     "read": [
       "AGENTS.md",
+      "docs/reference/project-memory.md",
       "docs/20-ai-native-handbook.md",
       "docs/08-working-with-agents.md",
       "docs/14-rule-enforcement-matrix.md"
@@ -72,6 +77,10 @@
       {
         "path": "docs/19-project-lifecycle-and-learning.md",
         "when": "đổi handoff, memory/learning, error hoặc incident workflow"
+      },
+      {
+        "path": "docs/reference/project-handoff.md",
+        "when": "onboard agent, chuyển giao ownership hoặc cần reconstruct lịch sử dự án"
       }
     ],
     "paths": [
@@ -105,6 +114,7 @@
     "description": "Modular monolith, module boundary và API backend",
     "read": [
       "AGENTS.md",
+      "docs/reference/project-memory.md",
       "apps/core-api/AGENTS.md",
       "docs/05-coding-standards.md"
     ],
@@ -125,6 +135,7 @@
     "description": "Ledger, wallet, IAP, refund và mọi luồng chạm diamond",
     "read": [
       "AGENTS.md",
+      "docs/reference/project-memory.md",
       "apps/core-api/AGENTS.md",
       "docs/06-domain-rules.md",
       "docs/services/economy-service.md"
@@ -158,6 +169,7 @@
     "description": "Ticket state machine, Redis shards, pairing, race conditions + Soul Match (chat ẩn danh, rating, Friendship) + Friend Chat 1-1",
     "read": [
       "AGENTS.md",
+      "docs/reference/project-memory.md",
       "apps/core-api/AGENTS.md",
       "docs/06-domain-rules.md",
       "docs/services/matching-service.md"
@@ -199,6 +211,7 @@
     "description": "Voice call 2 người trên LiveKit — CallSession lifecycle, token, free-call timer, billing theo phút",
     "read": [
       "AGENTS.md",
+      "docs/reference/project-memory.md",
       "apps/core-api/AGENTS.md",
       "docs/06-domain-rules.md",
       "docs/services/calling-service.md"
@@ -238,6 +251,7 @@
     "description": "WebSocket, room state và realtime signaling (fanout theo user — gateway không business logic)",
     "read": [
       "AGENTS.md",
+      "docs/reference/project-memory.md",
       "apps/signaling-gateway/AGENTS.md",
       "docs/services/realtime-gateway.md"
     ],
@@ -269,7 +283,12 @@
   },
   "content": {
     "description": "Content phụ trợ Giai đoạn 5: Movie Match (đồng bộ playback qua WebSocket, tái dùng Friend Chat), Palm Match (template random theo input), Mini game (rock-paper-scissors 2 người, thấp ưu tiên nhất)",
-    "read": ["AGENTS.md", "apps/core-api/AGENTS.md", "docs/06-domain-rules.md"],
+    "read": [
+      "AGENTS.md",
+      "docs/reference/project-memory.md",
+      "apps/core-api/AGENTS.md",
+      "docs/06-domain-rules.md"
+    ],
     "readWhen": [
       {
         "path": "docs/02-domain-model.md",
@@ -322,6 +341,7 @@
     "description": "LiveKit/SFU và media runtime",
     "read": [
       "AGENTS.md",
+      "docs/reference/project-memory.md",
       "apps/media-server/AGENTS.md",
       "docs/adr/0001-livekit-self-host-lam-media-server.md"
     ],
@@ -344,7 +364,11 @@
   },
   "infra": {
     "description": "CI, container, local tooling, security và agent infrastructure",
-    "read": ["AGENTS.md", "docs/08-working-with-agents.md"],
+    "read": [
+      "AGENTS.md",
+      "docs/reference/project-memory.md",
+      "docs/08-working-with-agents.md"
+    ],
     "readWhen": [
       {
         "path": "docs/04-tech-stack.md",
@@ -368,7 +392,11 @@
   },
   "frontend": {
     "description": "Frontend browser: apps/admin (Vite+React SPA nội bộ), apps/web (Next.js end-user), libs/api-client (hợp đồng REST duy nhất)",
-    "read": ["AGENTS.md", "docs/13-frontend-coding-standards.md"],
+    "read": [
+      "AGENTS.md",
+      "docs/reference/project-memory.md",
+      "docs/13-frontend-coding-standards.md"
+    ],
     "readWhen": [
       {
         "path": "apps/admin/AGENTS.md",

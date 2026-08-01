@@ -122,6 +122,19 @@ export class SoulMatchController {
     return RatingResultDto.from(result.verdict, result.matched);
   }
 
+  @Post('sessions/:id/end')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary:
+      'Rời Soul Match — đóng phòng cho cả hai bên và giữ Friendship nếu đã match',
+  })
+  async endSession(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<void> {
+    await this.soulMatchService.endSession(user, id);
+  }
+
   @Get('sessions/:id/partner')
   @ApiOperation({
     summary:

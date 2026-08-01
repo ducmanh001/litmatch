@@ -542,6 +542,50 @@ export class MatchingService {
     });
   }
 
+  /**
+   * Đóng Soul Match khi một bên rời màn. Matching vẫn là module duy nhất được ghi
+   * MatchSession; Soul Match chỉ điều phối realtime sau khi transaction commit.
+   */
+  async endSoulSession(
+    user: AuthenticatedUser,
+    sessionId: string,
+  ): Promise<MatchSession> {
+    return this.dataSource.transaction(async (manager) => {
+      const session = await manager.findOne(MatchSession, {
+        where: { id: sessionId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (
+        !session ||
+        (session.userAId !== user.userId && session.userBId !== user.userId)
+      ) {
+        throw new DomainException(
+          MatchingErrors.SESSION_NOT_FOUND,
+          'Không tìm thấy session',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+      if (session.matchType !== MatchType.Soul) {
+        throw new DomainException(
+          MatchingErrors.SESSION_NOT_CALLABLE,
+          'Chỉ có thể kết thúc Soul Match',
+          HttpStatus.CONFLICT,
+        );
+      }
+      if (session.status === MatchSessionStatus.Ended) return session;
+      if (session.status !== MatchSessionStatus.Confirmed) {
+        throw new DomainException(
+          MatchingErrors.SESSION_NOT_PENDING,
+          'Session không ở trạng thái có thể kết thúc',
+          HttpStatus.CONFLICT,
+        );
+      }
+      session.status = MatchSessionStatus.Ended;
+      session.endedAt = new Date();
+      return manager.save(session);
+    });
+  }
+
   /** Calling gọi sau khi terminal call; kiểm tra đúng cặp call trước khi chốt session. */
   async endVoiceSessionForCall(
     sessionId: string,
