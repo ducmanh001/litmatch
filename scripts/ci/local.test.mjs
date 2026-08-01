@@ -71,6 +71,9 @@ test('aggregate gates own stage watchdogs instead of a blanket 45-second timeout
   assert.match(agentVerify, /run-stage\.mjs/u);
   assert.match(agentVerify, /AGENT_VERIFY_STAGE_TIMEOUT_MS/u);
   assert.match(agentVerify, /NX_TUI:\s*'false'/u);
+  assert.match(agentVerify, /NX_INTERACTIVE:\s*'false'/u);
+  assert.match(agentVerify, /NX_NATIVE_COMMAND_RUNNER:\s*'false'/u);
+  assert.match(agentVerify, /CI:\s*'true'/u);
   assert.match(agentVerify, /--outputStyle=static/u);
   assert.match(
     packageJson,
