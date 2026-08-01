@@ -44,6 +44,7 @@ export class VideoSweeperService
       task: () => this.runOnce(),
       logger: this.logger,
       errorMessage: 'Video sweeper lỗi',
+      skipWhenIdle: true,
       clusterSingleton: { dataSource: this.dataSource },
     });
   }

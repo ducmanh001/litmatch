@@ -45,7 +45,8 @@ if (entry.readWhen?.length) {
 }
 
 if (entry.paths?.length) {
-  console.log('\n## Expected paths');
+  console.log('\n## Potential change surface');
+  console.log('- Chỉ dùng để định vị; không đọc đệ quy hoặc nạp cả thư mục.');
   for (const path of entry.paths) console.log(`- ${path}`);
 }
 if (entry.invariants?.length) {

@@ -1,11 +1,18 @@
 import { SchedulerRegistry } from '@nestjs/schedule';
 
 import { ManagedInterval } from './managed-interval';
+import {
+  markRuntimeActivity,
+  resetRuntimeActivity,
+} from '../runtime/runtime-activity';
 
 import type { DataSource, QueryRunner } from 'typeorm';
 
 describe('ManagedInterval', () => {
-  afterEach(() => jest.useRealTimers());
+  afterEach(() => {
+    jest.useRealTimers();
+    resetRuntimeActivity();
+  });
 
   it('registers and removes its named interval', () => {
     const scheduler = new SchedulerRegistry();
@@ -95,6 +102,30 @@ describe('ManagedInterval', () => {
     await Promise.resolve();
     await jest.advanceTimersByTimeAsync(10);
     expect(task).toHaveBeenCalledTimes(2);
+    job.stop();
+  });
+
+  it('skips idle backstop ticks and resumes after meaningful activity', async () => {
+    jest.useFakeTimers();
+    const scheduler = new SchedulerRegistry();
+    const task = jest.fn(async () => undefined);
+    const job = new ManagedInterval();
+
+    job.start(scheduler, {
+      jobName: 'idle-backstop',
+      intervalMs: 10,
+      task,
+      logger: { error: jest.fn() },
+      errorMessage: 'tick failed',
+      skipWhenIdle: true,
+    });
+
+    await jest.advanceTimersByTimeAsync(20);
+    expect(task).not.toHaveBeenCalled();
+
+    markRuntimeActivity('/api/v1/home');
+    await jest.advanceTimersByTimeAsync(10);
+    expect(task).toHaveBeenCalledTimes(1);
     job.stop();
   });
 

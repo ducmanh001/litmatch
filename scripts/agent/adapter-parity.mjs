@@ -218,6 +218,40 @@ export function assessIndexAdapterParity({
   };
 }
 
+/**
+ * Kiểm tra một bề mặt adapter dạng bản sao có còn đồng nhất với canonical không.
+ * Adapter vendor có thể chỉ mirror một phần skill, nên không ép canonical phải
+ * có mặt đầy đủ trong adapter; chỉ bắt file adapter thừa hoặc nội dung bị drift.
+ */
+export function assessDirectoryMirror({
+  canonicalFiles,
+  adapterFiles,
+  readFile,
+}) {
+  const canonical = new Set([...canonicalFiles].map(normalizePath));
+  const findings = [];
+
+  for (const rawPath of [...adapterFiles].map(normalizePath).sort()) {
+    if (!canonical.has(rawPath)) {
+      findings.push({
+        code: 'missing-canonical',
+        path: rawPath,
+        message: `Adapter file ${rawPath} không có canonical tương ứng trong .agents/skills/.`,
+      });
+      continue;
+    }
+    if (readFile('canonical', rawPath) !== readFile('adapter', rawPath)) {
+      findings.push({
+        code: 'content-drift',
+        path: rawPath,
+        message: `Adapter file ${rawPath} lệch nội dung canonical; cập nhật một nguồn rồi mirror lại.`,
+      });
+    }
+  }
+
+  return findings;
+}
+
 export function adapterReadinessLine(report) {
   return (
     `Agent adapter readiness (${report.surface ?? 'fixture'}): ` +
