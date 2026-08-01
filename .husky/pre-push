@@ -6,4 +6,10 @@ case "${bypass_value}" in
   ;;
 esac
 
+# Pre-push can run without a real TTY (IDE, GUI Git client, or detached hook).
+# Keep Nx's native terminal UI disabled at the outermost boundary as a defense in depth;
+# ci-local and agent:verify also set this variable for their child processes.
+export NX_TUI=false
+export NX_DAEMON=false
+
 pnpm ci:preflight

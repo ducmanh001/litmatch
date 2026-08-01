@@ -99,6 +99,8 @@ test('commit owns formatting and staged guard checks; push owns the complete pre
 
   assert.match(commitHook, /lint-staged[\s\S]*agent:check -- --staged/u);
   assert.match(pushHook, /pnpm ci:preflight/u);
+  assert.match(pushHook, /export NX_TUI=false/u);
+  assert.match(pushHook, /export NX_DAEMON=false/u);
   assert.doesNotMatch(pushHook, /ci:local:clean/u);
   assert.match(commitHook, /LITMATCH_CI_BYPASS/u);
   assert.match(pushHook, /LITMATCH_CI_BYPASS/u);
