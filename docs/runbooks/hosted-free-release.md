@@ -55,6 +55,27 @@ Release lỗi dừng tại bước lỗi và không tự nâng plan. Khi Upstash
 động, restore database trong console rồi cập nhật `REDIS_URL`; Redis không phải nguồn sự thật của
 ledger. Kafka giữ `ECONOMY_OUTBOX_RELAY_ENABLED=false`; event vẫn nằm trong outbox để replay sau.
 
+### 3.1. Idle runtime và kiểm tra Upstash usage
+
+Core API coi process là **idle** sau 5 phút không có request nghiệp vụ; `/health`, `/health/ready`,
+`/metrics` và `/swagger` không đánh thức trạng thái này. Khi idle, các timer chỉ làm backstop hoặc
+dọn dữ liệu không cấp thiết sẽ bỏ qua tick, trong đó có matcher backstop. Matching vẫn được đánh
+thức ngay bởi enqueue event; call ticker, reconciliation và outbox không bị gate vì chúng bảo vệ
+trạng thái đang chạy hoặc tính đúng đắn.
+
+Nếu Upstash vẫn tăng command khi không có user, kiểm tra theo thứ tự:
+
+1. Usage → **Top Commands Usage** hoặc Monitor để xác định lệnh và client phát sinh.
+2. Nếu vừa mở Data Browser/Usage của Upstash, Console có thể tự gửi `SCAN`, `GET`, `TTL` và
+   `EXISTS`; đó không nhất thiết là traffic từ ứng dụng.
+3. Nếu thấy `SMEMBERS` từ Core API, kiểm tra matcher interval và activity gate; không tắt Redis
+   readiness bằng cách xoá health check vì `PING` là probe không đại diện cho user traffic.
+
+Profile hosted-free không tự nâng plan hoặc tự tăng số service ngoài quota. Khi release thật vượt
+ngưỡng, Kubernetes profile mới là đường autoscaling hiện hành qua HPA CPU/memory; custom metric
+như queue depth/Socket.IO connections chỉ bật sau khi có số liệu production và adapter đã được
+kiểm chứng.
+
 ### 4. Facebook Login và observability
 
 1. Trong Meta for Developers tạo app loại Consumer, thêm Facebook Login/Web, khai **App Domains**

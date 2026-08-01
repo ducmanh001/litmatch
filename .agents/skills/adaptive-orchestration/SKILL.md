@@ -52,6 +52,10 @@ Chạy:
 node .agents/skills/adaptive-orchestration/scripts/route-task.mjs '<json>'
 ```
 
+Output của router là quyết định điều phối dạng dữ liệu, không phải bằng chứng runtime đã tạo
+delegate hoặc đổi model. Chỉ claim execution/model selection khi runtime adapter thực sự consume
+output đó; nếu không thì giữ model hiện tại và áp dụng giới hạn/quality gate tương ứng.
+
 Nếu không chạy được script, áp dụng cùng policy: simple/standard làm trực tiếp; complex dùng tối
 đa hai delegate; critical dùng một worker cost-balanced và một reviewer mạnh.
 

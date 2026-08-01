@@ -100,10 +100,18 @@ test('agents scope route AI-native harness, eval và checks riêng', async () =>
   assert.deepEqual(map.agents.read, [
     'AGENTS.md',
     'docs/reference/project-memory.md',
-    'docs/20-ai-native-handbook.md',
     'docs/08-working-with-agents.md',
-    'docs/14-rule-enforcement-matrix.md',
   ]);
+  assert.ok(
+    map.agents.readWhen.some(
+      (item) => item.path === 'docs/20-ai-native-handbook.md',
+    ),
+  );
+  assert.ok(
+    map.agents.readWhen.some(
+      (item) => item.path === 'docs/14-rule-enforcement-matrix.md',
+    ),
+  );
   assert.ok(
     map.agents.readWhen.some(
       (item) => item.path === 'docs/10-code-review-checklist.md',
@@ -131,6 +139,22 @@ test('agents scope route AI-native harness, eval và checks riêng', async () =>
   assert.match(stdout, /pnpm agent:test/u);
 });
 
+test('agents startup context giữ budget để tránh phình token âm thầm', async () => {
+  const map = JSON.parse(await readFile('.agents/context-map.json', 'utf8'));
+  const contents = await Promise.all(
+    map.agents.read.map((path) => readFile(path, 'utf8')),
+  );
+  const bytes = contents.reduce(
+    (total, content) => total + Buffer.byteLength(content),
+    0,
+  );
+
+  assert.ok(
+    bytes <= 32 * 1024,
+    `agents Read first vượt budget: ${bytes} bytes (giới hạn 32768)`,
+  );
+});
+
 test('agent:context in rõ routing điều kiện', async () => {
   const { stdout } = await run(
     process.execPath,
@@ -141,6 +165,7 @@ test('agent:context in rõ routing điều kiện', async () => {
   assert.match(stdout, /## Read first/u);
   assert.match(stdout, /## Read when applicable/u);
   assert.match(stdout, /## Shared-workspace safety/u);
+  assert.match(stdout, /không đọc đệ quy/u);
   assert.match(stdout, /Local changes có sẵn:/u);
   assert.match(
     stdout,

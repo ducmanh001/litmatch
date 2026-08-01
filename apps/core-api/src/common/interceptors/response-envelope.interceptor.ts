@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { Observable, map } from 'rxjs';
 
+import { markRuntimeActivity } from '../runtime/runtime-activity';
+
 import type { ApiResponse } from '@litmatch/common-dtos';
 
 /** Bọc mọi response thành công vào envelope { data, meta? } (docs/05 § 5.4). */
@@ -15,9 +17,14 @@ export class ResponseEnvelopeInterceptor<T> implements NestInterceptor<
   ApiResponse<T>
 > {
   intercept(
-    _context: ExecutionContext,
+    context: ExecutionContext,
     next: CallHandler<T>,
   ): Observable<ApiResponse<T>> {
+    const request = context
+      .switchToHttp()
+      .getRequest<{ originalUrl?: string; url?: string }>();
+    markRuntimeActivity(request.originalUrl ?? request.url ?? '');
+
     return next.handle().pipe(
       map((value) => {
         // Controller trả { data, meta } sẵn (vd list có nextCursor) thì giữ nguyên

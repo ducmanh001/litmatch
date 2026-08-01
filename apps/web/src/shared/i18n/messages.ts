@@ -33,6 +33,7 @@ const MESSAGES = {
   'public.community': { vi: 'Cộng đồng', en: 'Community' },
   'public.signIn': { vi: 'Đăng nhập', en: 'Sign in' },
   'public.signUp': { vi: 'Đăng ký miễn phí', en: 'Sign up for free' },
+  'public.tryNow': { vi: 'Trải nghiệm ngay', en: 'Try it now' },
   'public.tagline': {
     vi: 'Ẩn danh trước, chân thật sau — kết nối đúng người, đúng nhịp.',
     en: 'Anonymous first, genuine later — connect with the right person at the right pace.',
@@ -130,6 +131,14 @@ const MESSAGES = {
   'landing.ctaDescription': {
     vi: 'Miễn phí tạo hồ sơ. Không cần thẻ thanh toán.',
     en: 'Create a profile for free. No credit card needed.',
+  },
+  'landing.ctaTitleAuthenticated': {
+    vi: 'Sẵn sàng khám phá Litmatch?',
+    en: 'Ready to explore Litmatch?',
+  },
+  'landing.ctaDescriptionAuthenticated': {
+    vi: 'Mở trang chủ để tiếp tục kết nối và khám phá người mới.',
+    en: 'Open Home to continue connecting and discover new people.',
   },
   'nav.home': { vi: 'Trang chủ', en: 'Home' },
   'nav.discovery': { vi: 'Quanh đây', en: 'Nearby' },

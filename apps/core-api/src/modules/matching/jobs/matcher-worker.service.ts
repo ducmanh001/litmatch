@@ -102,6 +102,8 @@ export class MatcherWorkerService
       task: () => this.runOnce(),
       logger: this.logger,
       errorMessage: 'Matcher tick lỗi',
+      // Matching is event-driven; this interval is only an idle-safe backstop.
+      skipWhenIdle: true,
       // Enqueue wake-up vẫn chạy song song theo pod; chỉ backstop định kỳ cần một replica.
       clusterSingleton: { dataSource: this.dataSource },
     });

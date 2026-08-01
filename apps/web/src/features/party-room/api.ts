@@ -29,6 +29,13 @@ export const partyRoomKeys = {
   profile: (userId: string) => ['party-room', 'profile', userId] as const,
 };
 
+/** Phòng đã đóng là terminal, không còn delta room detail để fallback REST phải lấy. */
+export function isActiveRoomStatus(
+  status: PartyRoomDto['status'] | undefined,
+): boolean {
+  return status !== undefined && status !== 'closed';
+}
+
 export function useRoomList(filters?: {
   q?: string;
   category?: PartyRoomDto['category'];
@@ -75,7 +82,7 @@ export function useCreateRoom() {
   });
 }
 
-/** Poll fallback y như mọi feature khác — realtime chỉ là gợi ý refetch sớm. */
+/** Poll fallback khi phòng còn mở — realtime chỉ là gợi ý refetch sớm. */
 export function useRoomDetail(roomId: string) {
   return useQuery({
     queryKey: partyRoomKeys.detail(roomId),
@@ -85,7 +92,10 @@ export function useRoomDetail(roomId: string) {
       });
       return res.data?.data;
     },
-    refetchInterval: PARTY_ROOM_DETAIL_REFETCH_INTERVAL_MS,
+    refetchInterval: (query) =>
+      isActiveRoomStatus(query.state.data?.room.status)
+        ? PARTY_ROOM_DETAIL_REFETCH_INTERVAL_MS
+        : false,
   });
 }
 

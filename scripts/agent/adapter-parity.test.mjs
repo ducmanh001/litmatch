@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  assessDirectoryMirror,
   assessIndexAdapterParity,
   assessAdapterManifest,
   buildAdapterManifest,
@@ -17,6 +18,26 @@ function file(identity) {
 function symlink(identity) {
   return { kind: 'symlink', identity, resolvedPath: identity };
 }
+
+test('directory mirror phát hiện file adapter thừa và content drift', () => {
+  const files = {
+    'canonical:SKILL.md': 'canonical-v1',
+    'adapter:SKILL.md': 'adapter-v2',
+  };
+  const findings = assessDirectoryMirror({
+    canonicalFiles: ['SKILL.md'],
+    adapterFiles: ['SKILL.md', 'references/extra.md'],
+    readFile: (kind, path) => files[`${kind}:${path}`] ?? '',
+  });
+
+  assert.deepEqual(
+    findings.map(({ code, path }) => ({ code, path })),
+    [
+      { code: 'content-drift', path: 'SKILL.md' },
+      { code: 'missing-canonical', path: 'references/extra.md' },
+    ],
+  );
+});
 
 test('manifest tự khám phá instruction tracked/untracked và skill bắt buộc', () => {
   const trackedPaths = ['README.md', 'AGENTS.md'];

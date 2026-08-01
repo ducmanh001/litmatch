@@ -5,12 +5,13 @@ import { vi } from 'vitest';
 
 import { LoginForm } from './login-form';
 import { getGoogleIdToken } from './social-sdk';
-import { apiClient } from '../api/client';
+import { apiClient, tokenStore } from '../api/client';
 import type { CapabilitiesDto } from '../capabilities/api';
 import { ToastStack } from '../ui/toast-stack';
 
+const { routerReplace } = vi.hoisted(() => ({ routerReplace: vi.fn() }));
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: vi.fn() }),
+  useRouter: () => ({ replace: routerReplace }),
 }));
 vi.mock('./social-sdk', () => ({
   getGoogleIdToken: vi.fn().mockResolvedValue('google-id-token'),
@@ -67,7 +68,19 @@ describe('LoginForm', () => {
     });
   });
 
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    tokenStore.setSession(null);
+    routerReplace.mockClear();
+    vi.restoreAllMocks();
+  });
+
+  it('đã có phiên thì tự chuyển về Home thay vì hiện lại form đăng nhập', async () => {
+    tokenStore.setSession({ accessToken: 'access', csrfToken: 'csrf' });
+    renderForm();
+
+    await waitFor(() => expect(routerReplace).toHaveBeenCalledWith('/home'));
+    expect(screen.queryByLabelText('Số điện thoại')).not.toBeInTheDocument();
+  });
 
   it('validate phone format bằng Zod trước khi gọi API', async () => {
     renderForm();

@@ -23,6 +23,7 @@ import {
   getFacebookAccessToken,
   getGoogleIdToken,
 } from './social-sdk';
+import { useSessionStatus } from './use-session';
 
 import type { ClipboardEvent, KeyboardEvent } from 'react';
 import type { CapabilitiesDto } from '../capabilities/api';
@@ -94,6 +95,7 @@ function legacyAuthCapabilities(
 export function LoginForm() {
   const router = useRouter();
   const t = useTranslation();
+  const sessionStatus = useSessionStatus();
   const capabilities = useCapabilities();
   const authCapabilities = capabilities.data?.auth ?? legacyAuthCapabilities(t);
   const phoneSchema = z.object({
@@ -180,6 +182,14 @@ export function LoginForm() {
     const id = setTimeout(() => setResendCooldown((s) => s - 1), 1000);
     return () => clearTimeout(id);
   }, [resendCooldown]);
+
+  useEffect(() => {
+    if (sessionStatus === 'restorable') {
+      void apiClient.restoreSession();
+    } else if (sessionStatus === 'authenticated') {
+      router.replace('/home');
+    }
+  }, [router, sessionStatus]);
 
   const postOtpRequest = async (phone: string) => {
     const res = await apiClient.POST('/api/v1/auth/otp/request', {
@@ -300,6 +310,14 @@ export function LoginForm() {
     return (
       <p className="text-center text-sm text-slate-500 dark:text-slate-400">
         {t('auth.checkingProviders')}
+      </p>
+    );
+  }
+
+  if (sessionStatus !== 'unauthenticated') {
+    return (
+      <p className="text-center text-sm text-slate-500 dark:text-slate-400">
+        {t('auth.checkingSession')}
       </p>
     );
   }

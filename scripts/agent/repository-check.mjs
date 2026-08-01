@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   adapterReadinessLine,
+  assessDirectoryMirror,
   assessIndexAdapterParity,
   assessRepositoryAdapterParity,
   parseGitIndexEntries,
@@ -304,6 +305,39 @@ function validateAdapterParity() {
   return report;
 }
 
+function relativeFiles(directory, base = directory) {
+  if (!existsSync(directory)) return [];
+  const files = [];
+  for (const name of readdirSync(directory)) {
+    const absolute = join(directory, name);
+    const stat = lstatSync(absolute);
+    if (stat.isDirectory()) {
+      files.push(...relativeFiles(absolute, base));
+    } else if (stat.isFile()) {
+      files.push(relative(base, absolute).replaceAll('\\', '/'));
+    }
+  }
+  return files;
+}
+
+function validateGithubSkillMirrors() {
+  const canonicalRoot = join(root, '.agents/skills');
+  const adapterRoot = join(root, '.github/skills');
+  const adapterFiles = relativeFiles(adapterRoot);
+  if (adapterFiles.length === 0) return;
+
+  const findings = assessDirectoryMirror({
+    canonicalFiles: relativeFiles(canonicalRoot),
+    adapterFiles,
+    readFile: (kind, path) =>
+      readFileSync(
+        join(kind === 'canonical' ? canonicalRoot : adapterRoot, path),
+        'utf8',
+      ),
+  });
+  for (const finding of findings) addError(`.github/skills/${finding.message}`);
+}
+
 function validateMarkdownLinks() {
   const markdownFiles = new Set([
     ...trackedFiles,
@@ -335,6 +369,7 @@ validateGithubWorkflowPolicy();
 validateDiff();
 validateNeutralWording();
 const adapterParity = validateAdapterParity();
+validateGithubSkillMirrors();
 validateSymlinks();
 validateMarkdownLinks();
 

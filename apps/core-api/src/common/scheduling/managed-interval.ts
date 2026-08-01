@@ -2,6 +2,8 @@ import type { Logger } from '@nestjs/common';
 import type { SchedulerRegistry } from '@nestjs/schedule';
 import type { DataSource, QueryRunner } from 'typeorm';
 
+import { isRuntimeActive } from '../runtime/runtime-activity';
+
 const CLUSTER_FOLLOWER_RETRY_MIN_MS = 5_000;
 
 interface ClusterSingletonOptions {
@@ -32,6 +34,8 @@ export class ManagedInterval {
       task: () => Promise<unknown>;
       logger: Pick<Logger, 'error'>;
       errorMessage: string;
+      /** Skip this periodic backstop while the alpha process is idle. */
+      skipWhenIdle?: boolean;
       clusterSingleton?: ClusterSingletonOptions;
     },
   ): void {
@@ -71,9 +75,11 @@ export class ManagedInterval {
     intervalMs: number;
     task: () => Promise<unknown>;
     clusterSingleton?: ClusterSingletonOptions;
+    skipWhenIdle?: boolean;
   }): Promise<void> {
     // setInterval does not await async callbacks. Keep slow ticks from piling up in one process.
     if (this.scheduledRunInFlight) return;
+    if (options.skipWhenIdle && !isRuntimeActive()) return;
     if (
       options.clusterSingleton !== undefined &&
       Date.now() < this.clusterRetryAfter

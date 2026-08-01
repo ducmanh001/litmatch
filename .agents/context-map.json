@@ -61,11 +61,17 @@
     "read": [
       "AGENTS.md",
       "docs/reference/project-memory.md",
-      "docs/20-ai-native-handbook.md",
-      "docs/08-working-with-agents.md",
-      "docs/14-rule-enforcement-matrix.md"
+      "docs/08-working-with-agents.md"
     ],
     "readWhen": [
+      {
+        "path": "docs/20-ai-native-handbook.md",
+        "when": "đánh giá hoặc thay đổi kiến trúc, capability, trend hoặc claim AI-native"
+      },
+      {
+        "path": "docs/14-rule-enforcement-matrix.md",
+        "when": "đổi guard, enforcement, adapter parity hoặc ma trận bằng chứng"
+      },
       {
         "path": "docs/10-code-review-checklist.md",
         "when": "đổi review methodology, golden-bug fixture hoặc cách chấm eval"

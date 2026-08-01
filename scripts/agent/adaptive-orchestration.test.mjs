@@ -147,8 +147,39 @@ test('critical review mặc định chạy tuần tự khi chưa xác minh paral
 
   assert.equal(route.strategy, 'sequential-delegates');
   assert.equal(route.agentCount, 2);
-  assert.ok(route.delegates.every((delegate) => delegate.count > 0));
+  assert.deepEqual(
+    route.delegates.map((delegate) => delegate.role),
+    ['explorer', 'reviewer'],
+  );
+  assert.deepEqual(
+    route.delegates.map((delegate) => delegate.promptType),
+    ['evidence', 'counterexample-review'],
+  );
   assert.match(route.reasons.at(-1), /Independent review/u);
+});
+
+test('review high-risk không tạo hai reviewer trùng prompt', () => {
+  const route = routeTask({
+    action: 'review',
+    workstreams: 1,
+    risk: 'high',
+    uncertainty: 'low',
+    context: 'small',
+    changeSize: 'none',
+    verification: 'standard',
+  });
+
+  assert.equal(route.complexity, 'complex');
+  assert.equal(route.agentCount, 1);
+  assert.deepEqual(route.delegates, [
+    {
+      role: 'reviewer',
+      promptType: 'counterexample-review',
+      count: 1,
+      modelTier: 'balanced',
+      reasoningEffort: 'high',
+    },
+  ]);
 });
 
 test('critical review chỉ chạy song song khi có hai workstream độc lập', () => {
