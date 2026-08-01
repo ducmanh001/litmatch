@@ -93,6 +93,41 @@ export interface paths {
     patch: operations['UserController_updateMe'];
     trace?: never;
   };
+  '/api/v1/users/me/privacy': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Privacy settings của chính mình */
+    get: operations['UserController_getMyPrivacy'];
+    /** Cập nhật privacy settings của chính mình */
+    put: operations['UserController_updateMyPrivacy'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/users/{id}/presence': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Trạng thái online công khai nếu user đó cho phép hiển thị */
+    get: operations['UserController_getPublicPresence'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/users/{id}': {
     parameters: {
       query?: never;
@@ -240,6 +275,23 @@ export interface paths {
     put?: never;
     /** Gắn social identity vào guest hiện tại, giữ nguyên userId */
     post: operations['AuthUpgradeController_upgradeSocial'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/auth/search-by-phone': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Tìm hồ sơ bằng số điện thoại khi chủ hồ sơ cho phép */
+    get: operations['PhoneSearchController_search'];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -2682,6 +2734,30 @@ export interface components {
       seekingAgeMin?: number;
       seekingAgeMax?: number;
     };
+    PrivacySettingsDto: {
+      /** @default true */
+      showOnlineStatus: boolean;
+      /** @default true */
+      showDistance: boolean;
+      /** @default false */
+      searchableByPhone: boolean;
+      /** @default false */
+      hideProfile: boolean;
+    };
+    UpdatePrivacySettingsDto: {
+      /** @default true */
+      showOnlineStatus: boolean;
+      /** @default true */
+      showDistance: boolean;
+      /** @default false */
+      searchableByPhone: boolean;
+      /** @default false */
+      hideProfile: boolean;
+    };
+    UserPresenceDto: {
+      /** @description Có đang kết nối realtime hay không. */
+      isOnline: boolean;
+    };
     PublicProfileDto: {
       id: string;
       nickname: string;
@@ -3764,7 +3840,7 @@ export interface components {
     };
     NearbyCardDto: {
       profile: components['schemas']['PublicProfileDto'];
-      distanceBucket: string;
+      distanceBucket: string | null;
     };
     NearbyCardsPageDto: {
       items: components['schemas']['NearbyCardDto'][];
@@ -3918,6 +3994,84 @@ export interface operations {
         content: {
           'application/json': {
             data: components['schemas']['MyProfileDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  UserController_getMyPrivacy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['PrivacySettingsDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  UserController_updateMyPrivacy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdatePrivacySettingsDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['PrivacySettingsDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  UserController_getPublicPresence: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['UserPresenceDto'];
             meta?: {
               [key: string]: unknown;
             };
@@ -4153,6 +4307,32 @@ export interface operations {
         content: {
           'application/json': {
             data: components['schemas']['AuthTokensDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  PhoneSearchController_search: {
+    parameters: {
+      query: {
+        phone: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['PublicProfileDto'] | null;
             meta?: {
               [key: string]: unknown;
             };

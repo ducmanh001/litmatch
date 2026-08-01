@@ -5,6 +5,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { realtimePresenceKey } from '@litmatch/common-dtos';
 import Redis from 'ioredis';
 
 import { signalingRedisClientOptions } from './redis-client-options';
@@ -21,6 +22,8 @@ redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', now_ms)
 if redis.call('ZSCORE', KEYS[1], ARGV[1]) then
   redis.call('ZADD', KEYS[1], expires_at, ARGV[1])
   redis.call('PEXPIRE', KEYS[1], ARGV[2])
+  redis.call('ZADD', KEYS[2], expires_at, ARGV[1])
+  redis.call('PEXPIRE', KEYS[2], ARGV[2])
   return 1
 end
 if redis.call('ZCARD', KEYS[1]) >= tonumber(ARGV[3]) then
@@ -28,6 +31,8 @@ if redis.call('ZCARD', KEYS[1]) >= tonumber(ARGV[3]) then
 end
 redis.call('ZADD', KEYS[1], expires_at, ARGV[1])
 redis.call('PEXPIRE', KEYS[1], ARGV[2])
+redis.call('ZADD', KEYS[2], expires_at, ARGV[1])
+redis.call('PEXPIRE', KEYS[2], ARGV[2])
 return 1
 `;
 
@@ -40,6 +45,8 @@ if not redis.call('ZSCORE', KEYS[1], ARGV[1]) then
 end
 redis.call('ZADD', KEYS[1], now_ms + tonumber(ARGV[2]), ARGV[1])
 redis.call('PEXPIRE', KEYS[1], ARGV[2])
+redis.call('ZADD', KEYS[2], now_ms + tonumber(ARGV[2]), ARGV[1])
+redis.call('PEXPIRE', KEYS[2], ARGV[2])
 return 1
 `;
 
@@ -47,6 +54,10 @@ const RELEASE_SCRIPT = `
 local removed = redis.call('ZREM', KEYS[1], ARGV[1])
 if redis.call('ZCARD', KEYS[1]) == 0 then
   redis.call('DEL', KEYS[1])
+end
+redis.call('ZREM', KEYS[2], ARGV[1])
+if redis.call('ZCARD', KEYS[2]) == 0 then
+  redis.call('DEL', KEYS[2])
 end
 return removed
 `;
@@ -114,8 +125,9 @@ export class ConnectionQuotaService
   async acquire(userId: string, leaseId: string): Promise<boolean> {
     const result = await this.redis.eval(
       ACQUIRE_SCRIPT,
-      1,
+      2,
       this.key(userId),
+      realtimePresenceKey(userId),
       leaseId,
       this.leaseMs,
       this.maxConnections,
@@ -126,8 +138,9 @@ export class ConnectionQuotaService
   async refresh(userId: string, leaseId: string): Promise<boolean> {
     const result = await this.redis.eval(
       REFRESH_SCRIPT,
-      1,
+      2,
       this.key(userId),
+      realtimePresenceKey(userId),
       leaseId,
       this.leaseMs,
     );
@@ -135,7 +148,13 @@ export class ConnectionQuotaService
   }
 
   async release(userId: string, leaseId: string): Promise<void> {
-    await this.redis.eval(RELEASE_SCRIPT, 1, this.key(userId), leaseId);
+    await this.redis.eval(
+      RELEASE_SCRIPT,
+      2,
+      this.key(userId),
+      realtimePresenceKey(userId),
+      leaseId,
+    );
   }
 
   async onApplicationShutdown(): Promise<void> {

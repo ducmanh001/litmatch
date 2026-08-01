@@ -11,6 +11,7 @@ import { StoryView } from '../entities/story-view.entity';
 import { isUniqueViolation } from '../../../database/postgres-errors';
 import { FriendService } from '../../friend';
 import { SafetyService } from '../../safety';
+import { PrivacySettingsService } from '../../user';
 
 import type { AuthenticatedUser } from '../../../common/decorators/current-user.decorator';
 import type { Message } from '../../friend';
@@ -40,6 +41,7 @@ export class StoryService {
     private readonly friendService: FriendService,
     private readonly safetyService: SafetyService,
     private readonly config: ConfigService<CoreApiEnv, true>,
+    private readonly privacySettings: PrivacySettingsService,
   ) {}
 
   async createStory(
@@ -91,8 +93,12 @@ export class StoryService {
       this.friendService.listFriendIds(user.userId),
       this.safetyService.getBlockedUserIds(user.userId),
     ]);
-    const authorIds = [user.userId, ...friendIds].filter(
+    const visibleIds = [user.userId, ...friendIds].filter(
       (id) => !blockedIds.includes(id),
+    );
+    const settings = await this.privacySettings.findForUsers(visibleIds);
+    const authorIds = visibleIds.filter(
+      (id) => id === user.userId || !settings.get(id)?.hideProfile,
     );
     if (authorIds.length === 0) return [];
 
@@ -129,7 +135,8 @@ export class StoryService {
       const audienceAllowed =
         story.audience === StoryAudience.Public ||
         (await this.friendService.areFriends(user.userId, story.authorUserId));
-      if (blocked || !audienceAllowed) {
+      const hidden = await this.privacySettings.isHidden(story.authorUserId);
+      if (blocked || hidden || !audienceAllowed) {
         throw new DomainException(
           FeedErrors.STORY_NOT_FOUND,
           'Không tìm thấy story',

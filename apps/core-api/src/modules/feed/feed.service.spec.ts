@@ -10,6 +10,7 @@ import type { EntityManager, Repository } from 'typeorm';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import type { FriendService } from '../friend';
 import type { SafetyService } from '../safety';
+import type { PrivacySettingsService } from '../user';
 
 const me: AuthenticatedUser = {
   userId: 'user-me',
@@ -56,6 +57,7 @@ describe('FeedService (unit — mock repo/safetyService)', () => {
     createWithManager: jest.Mock;
     sendPush: jest.Mock;
   };
+  let privacySettings: { isHidden: jest.Mock };
   let manager: {
     save: jest.Mock;
     create: jest.Mock;
@@ -96,6 +98,7 @@ describe('FeedService (unit — mock repo/safetyService)', () => {
       })),
       sendPush: jest.fn(async () => undefined),
     };
+    privacySettings = { isHidden: jest.fn(async () => false) };
     manager = {
       save: jest.fn(async (e) => e),
       create: jest.fn((Entity, input) =>
@@ -119,6 +122,7 @@ describe('FeedService (unit — mock repo/safetyService)', () => {
       safetyService as unknown as SafetyService,
       friendService as unknown as FriendService,
       notificationService as never,
+      privacySettings as unknown as PrivacySettingsService,
     );
   });
 

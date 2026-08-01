@@ -112,6 +112,103 @@
         "tags": ["users"]
       }
     },
+    "/api/v1/users/me/privacy": {
+      "get": {
+        "operationId": "UserController_getMyPrivacy",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PrivacySettingsDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Privacy settings của chính mình",
+        "tags": ["users"]
+      },
+      "put": {
+        "operationId": "UserController_updateMyPrivacy",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePrivacySettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PrivacySettingsDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Cập nhật privacy settings của chính mình",
+        "tags": ["users"]
+      }
+    },
+    "/api/v1/users/{id}/presence": {
+      "get": {
+        "operationId": "UserController_getPublicPresence",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/UserPresenceDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Trạng thái online công khai nếu user đó cho phép hiển thị",
+        "tags": ["users"]
+      }
+    },
     "/api/v1/users/{id}": {
       "get": {
         "operationId": "UserController_getPublicProfile",
@@ -376,6 +473,44 @@
         },
         "security": [{ "bearer": [] }],
         "summary": "Gắn social identity vào guest hiện tại, giữ nguyên userId",
+        "tags": ["auth"]
+      }
+    },
+    "/api/v1/auth/search-by-phone": {
+      "get": {
+        "operationId": "PhoneSearchController_search",
+        "parameters": [
+          {
+            "name": "phone",
+            "required": true,
+            "in": "query",
+            "schema": { "example": "+84912345678", "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "oneOf": [
+                        { "$ref": "#/components/schemas/PublicProfileDto" },
+                        { "type": "null" }
+                      ]
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Tìm hồ sơ bằng số điện thoại khi chủ hồ sơ cho phép",
         "tags": ["auth"]
       }
     },
@@ -6079,6 +6214,46 @@
           "seekingAgeMax": { "type": "number", "minimum": 18, "maximum": 99 }
         }
       },
+      "PrivacySettingsDto": {
+        "type": "object",
+        "properties": {
+          "showOnlineStatus": { "type": "boolean", "default": true },
+          "showDistance": { "type": "boolean", "default": true },
+          "searchableByPhone": { "type": "boolean", "default": false },
+          "hideProfile": { "type": "boolean", "default": false }
+        },
+        "required": [
+          "showOnlineStatus",
+          "showDistance",
+          "searchableByPhone",
+          "hideProfile"
+        ]
+      },
+      "UpdatePrivacySettingsDto": {
+        "type": "object",
+        "properties": {
+          "showOnlineStatus": { "type": "boolean", "default": true },
+          "showDistance": { "type": "boolean", "default": true },
+          "searchableByPhone": { "type": "boolean", "default": false },
+          "hideProfile": { "type": "boolean", "default": false }
+        },
+        "required": [
+          "showOnlineStatus",
+          "showDistance",
+          "searchableByPhone",
+          "hideProfile"
+        ]
+      },
+      "UserPresenceDto": {
+        "type": "object",
+        "properties": {
+          "isOnline": {
+            "type": "boolean",
+            "description": "Có đang kết nối realtime hay không."
+          }
+        },
+        "required": ["isOnline"]
+      },
       "PublicProfileDto": {
         "type": "object",
         "properties": {
@@ -8165,7 +8340,7 @@
         "type": "object",
         "properties": {
           "profile": { "$ref": "#/components/schemas/PublicProfileDto" },
-          "distanceBucket": { "type": "string" }
+          "distanceBucket": { "type": "string", "nullable": true }
         },
         "required": ["profile", "distanceBucket"]
       },

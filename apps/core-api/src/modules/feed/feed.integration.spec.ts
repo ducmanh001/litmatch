@@ -16,6 +16,7 @@ import { ConversationStreak1754200000000 } from '../../database/migrations/17542
 import { FeedAudience1754300000000 } from '../../database/migrations/1754300000000-feed-audience';
 import { MessageAttachment1754400000000 } from '../../database/migrations/1754400000000-message-attachment';
 import { Story1754500000000 } from '../../database/migrations/1754500000000-story';
+import { UserPrivacySettings1756800000000 } from '../../database/migrations/1756800000000-user-privacy-settings';
 
 import { FeedService } from './feed.service';
 import { FeedErrors } from './feed.errors';
@@ -25,25 +26,23 @@ import { Reaction } from './entities/reaction.entity';
 import { Story, StoryAudience } from './entities/story.entity';
 import { StoryView } from './entities/story-view.entity';
 import { StoryService } from './services/story.service';
-import { Conversation } from '../friend/entities/conversation.entity';
-import { ConversationStreak } from '../friend/entities/conversation-streak.entity';
 import {
+  Conversation,
+  ConversationService,
+  ConversationStreak,
+  FriendService,
   Friendship,
   FriendshipSource,
-} from '../friend/entities/friendship.entity';
-import { Message } from '../friend/entities/message.entity';
-import { FriendService } from '../friend/friend.service';
-import { ConversationService } from '../friend/services/conversation.service';
-import { StreakService } from '../friend/services/streak.service';
-import { NotificationService } from '../notification';
+  Message,
+  StreakService,
+} from '../friend';
 import {
   Notification,
+  NotificationService,
   NotificationType,
-} from '../notification/entities/notification.entity';
-import { SafetyService } from '../safety';
-import { Block } from '../safety/entities/block.entity';
-import { Report } from '../safety/entities/report.entity';
-import { Gender, User } from '../user';
+} from '../notification';
+import { Block, Report, SafetyService } from '../safety';
+import { Gender, PrivacySetting, PrivacySettingsService, User } from '../user';
 
 import type { ConfigService } from '@nestjs/config';
 import type { CoreApiEnv } from '../../config/env.validation';
@@ -134,6 +133,7 @@ d('Feed integration (Postgres thật)', () => {
       url: url.toString(),
       entities: [
         User,
+        PrivacySetting,
         Report,
         Block,
         Post,
@@ -163,6 +163,7 @@ d('Feed integration (Postgres thật)', () => {
         FeedAudience1754300000000,
         MessageAttachment1754400000000,
         Story1754500000000,
+        UserPrivacySettings1756800000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -214,6 +215,7 @@ d('Feed integration (Postgres thật)', () => {
       safety,
       friend,
       notification,
+      new PrivacySettingsService(ds.getRepository(PrivacySetting)),
     );
     story = new StoryService(
       ds.getRepository(Story),
@@ -221,6 +223,7 @@ d('Feed integration (Postgres thật)', () => {
       friend,
       safety,
       configStub,
+      new PrivacySettingsService(ds.getRepository(PrivacySetting)),
     );
   });
 
