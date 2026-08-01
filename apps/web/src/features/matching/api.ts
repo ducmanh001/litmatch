@@ -84,6 +84,9 @@ export function useCancelTicket(ticketId: string) {
       return res.data?.data;
     },
     onSuccess: () => {
+      // Xóa snapshot để màn Matching không dùng lại ticket queued cũ trong lúc
+      // request current đang được refetch sau khi hủy.
+      queryClient.setQueryData(matchingKeys.current, { ticket: null });
       void queryClient.invalidateQueries({
         queryKey: matchingKeys.ticket(ticketId),
       });

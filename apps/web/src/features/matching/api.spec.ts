@@ -1,4 +1,11 @@
 import { isPollingStatus, MATCHING_TICKET_REFETCH_INTERVAL_MS } from './api';
+import { matchingKeys, useCancelTicket } from './api';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { renderHook, waitFor } from '@testing-library/react';
+import { createElement } from 'react';
+import { vi } from 'vitest';
+
+import { apiClient } from '../../shared/api/client';
 
 describe('isPollingStatus', () => {
   it('dùng fallback 10 giây vì realtime là kênh chính', () => {
@@ -15,5 +22,35 @@ describe('isPollingStatus', () => {
     expect(isPollingStatus('expired')).toBe(false);
     expect(isPollingStatus('cancelled')).toBe(false);
     expect(isPollingStatus(undefined)).toBe(false);
+  });
+});
+
+describe('matching ticket cache lifecycle', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('xóa current ticket ngay sau khi hủy để tìm lượt mới không cần reload', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    queryClient.setQueryData(matchingKeys.current, {
+      ticket: { id: 'ticket-1' },
+    });
+    vi.spyOn(apiClient, 'DELETE').mockResolvedValue({
+      data: { data: { id: 'ticket-1', status: 'cancelled' } },
+    } as never);
+
+    const { result } = renderHook(() => useCancelTicket('ticket-1'), {
+      wrapper: ({ children }) =>
+        createElement(QueryClientProvider, { client: queryClient }, children),
+    });
+    result.current.mutate();
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(queryClient.getQueryData(matchingKeys.current)).toEqual({
+      ticket: null,
+    });
   });
 });

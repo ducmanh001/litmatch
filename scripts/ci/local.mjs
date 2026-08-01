@@ -74,6 +74,10 @@ const environment = {
   CI: 'true',
   HUSKY: '0',
   NX_DAEMON: 'false',
+  // Nx 23's native run-commands runner can allocate a PTY from a Git hook whose
+  // stdout is a TTY but has no usable controlling terminal. Use regular child
+  // processes for deterministic local/CI execution instead.
+  NX_NATIVE_COMMAND_RUNNER: 'false',
   JWT_SECRET:
     process.env['LOCAL_CI_JWT_SECRET'] ?? 'local-ci-jwt-0123456789abcdef-xyz',
   AUTH_OTP_PEPPER:
@@ -113,6 +117,7 @@ const environment = {
 
 let dependenciesPrepared = false;
 let nxPrepared = false;
+let projectsBuilt = false;
 
 function commandText(command) {
   return `${command} [args hidden]`;
@@ -289,6 +294,8 @@ function runCleanQuality() {
       '--env',
       'NX_DAEMON=false',
       '--env',
+      'NX_NATIVE_COMMAND_RUNNER=false',
+      '--env',
       'NX_TUI=false',
       cleanRunnerImage,
       'bash',
@@ -339,6 +346,7 @@ function runTestAndBuild() {
     '--exclude=admin,web,api-client',
     '--outputStyle=static',
   ]);
+  projectsBuilt = true;
   run('End-to-end smoke tests', pnpm, [
     'nx',
     'run-many',
@@ -505,13 +513,19 @@ function runContainerSmoke() {
   prepareNx();
   startTestServices();
   ensureLocalCiDatabase();
-  run('Build all projects for Docker images', pnpm, [
-    'nx',
-    'run-many',
-    '-t',
-    'build',
-    '--outputStyle=static',
-  ]);
+  if (projectsBuilt) {
+    console.log(
+      '\n[ci-local] Reuse validated application build outputs for Docker images',
+    );
+  } else {
+    run('Build all projects for Docker images', pnpm, [
+      'nx',
+      'run-many',
+      '-t',
+      'build',
+      '--outputStyle=static',
+    ]);
+  }
   run('Run database migrations in the isolated local CI database', pnpm, [
     'db:migrate',
   ]);

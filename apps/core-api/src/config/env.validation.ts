@@ -105,6 +105,7 @@ export interface CoreApiEnv {
   CALLING_FREE_CALL_SECONDS: number;
   CALLING_PRICE_PER_MINUTE_DIAMOND: number;
   CALLING_PENDING_TIMEOUT_SECONDS: number;
+  CALLING_RECONNECT_WINDOW_SECONDS: number;
   CALLING_TICKER_INTERVAL_MS: number;
   CALLING_TOKEN_TTL_SECONDS: number;
   PARTY_MAX_SPEAKERS: number;
@@ -383,6 +384,7 @@ export const coreApiEnvSchema = Joi.object({
   // 0 (default) = free-only, hết free window server tự end; >0 = trừ cả 2 bên mỗi phút
   CALLING_PRICE_PER_MINUTE_DIAMOND: Joi.number().integer().min(0).default(0),
   CALLING_PENDING_TIMEOUT_SECONDS: Joi.number().integer().min(5).default(60),
+  CALLING_RECONNECT_WINDOW_SECONDS: Joi.number().integer().min(5).default(30),
   CALLING_TICKER_INTERVAL_MS: Joi.number().integer().min(200).default(1000),
   CALLING_TOKEN_TTL_SECONDS: Joi.number().integer().min(30).default(120),
 

@@ -79,6 +79,7 @@ export class CallTickerService
       // (spendDiamond) trong 1 trace.
       await withSpan('litmatch.calling', 'calling.ticker.tick', async () => {
         await this.sweepPending();
+        await this.sweepReconnectTimeouts();
         await this.processActiveCalls();
       });
     }, undefined);
@@ -101,6 +102,26 @@ export class CallTickerService
     }
   }
 
+  private async sweepReconnectTimeouts(): Promise<void> {
+    const reconnectSeconds = this.config.getOrThrow(
+      'CALLING_RECONNECT_WINDOW_SECONDS',
+      { infer: true },
+    );
+    const cutoff = new Date(Date.now() - reconnectSeconds * 1000);
+    const stale = await this.dataSource.getRepository(CallSession).find({
+      select: { id: true },
+      where: {
+        status: CallSessionStatus.Active,
+        reconnectStartedAt: LessThan(cutoff),
+      },
+      order: { reconnectStartedAt: 'ASC', id: 'ASC' },
+      take: TICK_BATCH_SIZE,
+    });
+    for (const call of stale) {
+      await this.callingService.endById(call.id, CallEndReason.Completed);
+    }
+  }
+
   private async processActiveCalls(): Promise<void> {
     const freeSeconds = this.config.getOrThrow('CALLING_FREE_CALL_SECONDS', {
       infer: true,
@@ -113,6 +134,7 @@ export class CallTickerService
       .createQueryBuilder('call')
       .select(['call.id'])
       .where('call.status = :status', { status: CallSessionStatus.Active })
+      .andWhere('call.reconnect_started_at IS NULL')
       .andWhere('call.started_at IS NOT NULL')
       .orderBy('call.updated_at', 'ASC')
       .addOrderBy('call.id', 'ASC')

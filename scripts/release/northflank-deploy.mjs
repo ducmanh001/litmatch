@@ -33,6 +33,7 @@ export async function deployNorthflank({
   fetchImpl = fetch,
   sleep = (milliseconds) =>
     new Promise((resolve) => setTimeout(resolve, milliseconds)),
+  pollDelayMs = (attempt) => Math.min(2_000 * 2 ** attempt, 10_000),
   log = console.log,
 }) {
   const config = readConfig(env);
@@ -70,7 +71,7 @@ export async function deployNorthflank({
         }
         return;
       }
-      await sleep(10_000);
+      await sleep(pollDelayMs(attempt));
     }
     throw new Error(`${serviceId} build timed out`);
   }
