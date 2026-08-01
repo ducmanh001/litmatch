@@ -97,7 +97,7 @@ export function VipPlans() {
 
   return (
     <div className="space-y-3">
-      <div className="rounded-3xl bg-gradient-to-br from-amber-400 to-amber-600 p-6 text-white">
+      <div className="rounded-3xl bg-gradient-to-br from-irisl to-iris p-6 text-white shadow-lg shadow-iris/20">
         <p className="mb-1 text-xs font-bold uppercase tracking-wide opacity-90">
           Litmatch VIP
         </p>
@@ -124,7 +124,7 @@ export function VipPlans() {
             key={benefit.title}
             className="flex items-center gap-3 rounded-2xl border border-black/5 bg-white px-4 py-3.5 dark:border-white/10 dark:bg-surf"
           >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-400/15 text-amber-500">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-iris/15 text-irisl">
               <BenefitIcon>
                 <path d={benefit.path} />
                 {benefit.extra}
@@ -161,13 +161,13 @@ export function VipPlans() {
                 type="button"
                 disabled={purchaseVip.isPending}
                 onClick={() => purchase(plan)}
-                className="w-full rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-left transition hover:border-amber-400 disabled:opacity-50"
+                className="w-full rounded-2xl border border-iris/30 bg-iris/10 p-4 text-left transition hover:border-irisl hover:bg-iris/15 disabled:opacity-50"
                 aria-label={`Mua ${plan.tier.toUpperCase()} ${plan.days} ngày với ${plan.priceDiamond} diamond`}
               >
                 <p className="font-bold">
                   {plan.tier.toUpperCase()} · {plan.days} ngày
                 </p>
-                <p className="mt-1 flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-300">
+                <p className="mt-1 flex items-center gap-1.5 text-sm text-irisl">
                   <DiamondIcon width={14} height={14} />
                   {plan.priceDiamond} diamond
                 </p>

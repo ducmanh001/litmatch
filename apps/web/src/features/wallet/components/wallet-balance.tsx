@@ -63,14 +63,14 @@ export function WalletBalance({
         <button
           type="button"
           onClick={onTopUp}
-          className="flex-1 rounded-full bg-iris py-2.5 text-sm font-bold text-white shadow-sm shadow-ink/10 transition hover:bg-irisl"
+          className="flex-1 rounded-full bg-white py-2.5 text-sm font-bold text-iris shadow-sm shadow-ink/10 transition hover:bg-white/90"
         >
           Nạp Diamond
         </button>
         <button
           type="button"
           onClick={onUpgradeVip}
-          className="flex-1 rounded-full bg-iris/85 py-2.5 text-sm font-bold text-white shadow-sm shadow-ink/10 ring-1 ring-white/25 transition hover:bg-irisl"
+          className="flex-1 rounded-full bg-ink/75 py-2.5 text-sm font-bold text-white shadow-sm shadow-ink/20 ring-1 ring-white/25 transition hover:bg-ink/85"
         >
           Nâng cấp VIP
         </button>
