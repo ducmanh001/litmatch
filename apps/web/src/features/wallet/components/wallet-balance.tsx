@@ -8,9 +8,11 @@ import { useWallet } from '../api';
 export function WalletBalance({
   onTopUp,
   onUpgradeVip,
+  activeAction = 'topup',
 }: {
   onTopUp?: () => void;
   onUpgradeVip?: () => void;
+  activeAction?: 'topup' | 'vip';
 } = {}) {
   const wallet = useWallet();
 
@@ -62,15 +64,25 @@ export function WalletBalance({
       <div className="relative mt-5 flex gap-2">
         <button
           type="button"
+          aria-pressed={activeAction === 'topup'}
           onClick={onTopUp}
-          className="flex-1 rounded-full bg-white py-2.5 text-sm font-bold text-iris shadow-sm shadow-ink/10 transition hover:bg-white/90"
+          className={`flex-1 rounded-full py-2.5 text-sm font-bold shadow-sm shadow-ink/10 transition ${
+            activeAction === 'topup'
+              ? 'bg-white text-iris hover:bg-white/90'
+              : 'bg-ink/75 text-white ring-1 ring-white/25 hover:bg-ink/85'
+          }`}
         >
           Nạp Diamond
         </button>
         <button
           type="button"
+          aria-pressed={activeAction === 'vip'}
           onClick={onUpgradeVip}
-          className="flex-1 rounded-full bg-ink/75 py-2.5 text-sm font-bold text-white shadow-sm shadow-ink/20 ring-1 ring-white/25 transition hover:bg-ink/85"
+          className={`flex-1 rounded-full py-2.5 text-sm font-bold shadow-sm shadow-ink/10 transition ${
+            activeAction === 'vip'
+              ? 'bg-white text-iris hover:bg-white/90'
+              : 'bg-ink/75 text-white ring-1 ring-white/25 hover:bg-ink/85'
+          }`}
         >
           Nâng cấp VIP
         </button>
