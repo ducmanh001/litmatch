@@ -1,11 +1,13 @@
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
+import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-http';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
+import { BatchLogRecordProcessor } from '@opentelemetry/sdk-logs';
 
 import type {
   PushMetricExporter,
@@ -32,7 +34,8 @@ export interface StartTracingInput {
  *
  * Opt-in tường minh: KHÔNG khởi động SDK nếu chưa cấu hình trace hoặc metrics endpoint — tránh
  * export lỗi âm thầm tới `localhost:4318` làm nhiễu log ở dev/test/CI chưa có collector thật.
- * Logs vẫn do pino xử lý; metrics dùng OTLP HTTP push trực tiếp khi có
+ * Logs từ pino được chuyển qua OTel log pipeline và push thẳng tới Grafana Cloud Loki khi có
+ * `GRAFANA_CLOUD_LOKI_URL`; metrics vẫn dùng OTLP HTTP push trực tiếp khi có
  * `GRAFANA_CLOUD_PROMETHEUS_URL`.
  */
 export function startTracing(input: StartTracingInput): NodeSDK | null {
@@ -40,10 +43,11 @@ export function startTracing(input: StartTracingInput): NodeSDK | null {
     process.env['OTEL_EXPORTER_OTLP_ENDPOINT'] ??
     process.env['OTEL_EXPORTER_OTLP_TRACES_ENDPOINT'];
   const metricsEndpoint = resolveMetricsEndpoint();
-  assertRequiredTelemetry(traceEndpoint, metricsEndpoint);
-  if (!traceEndpoint && !metricsEndpoint) {
+  const logsEndpoint = resolveLogsEndpoint();
+  assertRequiredTelemetry(traceEndpoint, metricsEndpoint, logsEndpoint);
+  if (!traceEndpoint && !metricsEndpoint && !logsEndpoint) {
     console.warn(
-      '[metrics] OTLP exporter disabled: GRAFANA_CLOUD_PROMETHEUS_URL is missing or invalid',
+      '[telemetry] OTLP exporters disabled: no trace, metrics, or Loki logs endpoint is configured',
     );
     return null;
   }
@@ -72,13 +76,22 @@ export function startTracing(input: StartTracingInput): NodeSDK | null {
       })
     : undefined;
 
+  const logRecordProcessor = logsEndpoint
+    ? new BatchLogRecordProcessor({
+        exporter: new OTLPLogExporter({
+          url: logsEndpoint,
+          headers: resolveLogsHeaders(),
+        }),
+      })
+    : undefined;
+
   const sdk = new NodeSDK({
     resource: resourceFromAttributes({
       [ATTR_SERVICE_NAME]: input.serviceName,
     }),
     ...(traceEndpoint ? { traceExporter: new OTLPTraceExporter() } : {}),
     metricReaders: metricReader ? [metricReader] : [],
-    logRecordProcessors: [],
+    logRecordProcessors: logRecordProcessor ? [logRecordProcessor] : [],
     instrumentations: [
       getNodeAutoInstrumentations({
         // fs instrumentation cực ồn (mọi read/write file) — khuyến nghị chuẩn của OTel là tắt
@@ -111,14 +124,17 @@ const DEFAULT_METRICS_EXPORT_INTERVAL_MS = 15_000;
 function assertRequiredTelemetry(
   traceEndpoint: string | undefined,
   metricsEndpoint: string | undefined,
+  logsEndpoint: string | undefined,
 ): void {
   if (process.env['OBSERVABILITY_REQUIRED'] !== 'true') return;
 
   const missing: string[] = [];
   if (!traceEndpoint) missing.push('OTEL trace endpoint');
   if (!metricsEndpoint) missing.push('OTEL metrics endpoint');
+  if (!logsEndpoint) missing.push('Loki OTLP logs endpoint');
   if (!process.env['GRAFANA_CLOUD_PROMETHEUS_USER'])
     missing.push('metrics user');
+  if (!process.env['GRAFANA_CLOUD_LOKI_USER']) missing.push('logs user');
   if (!process.env['GRAFANA_CLOUD_API_TOKEN']) missing.push('metrics token');
 
   if (missing.length > 0) {
@@ -161,6 +177,43 @@ export function resolveMetricsEndpoint(): string | undefined {
     );
     return undefined;
   }
+}
+
+/** Resolve Grafana Cloud Loki's OTLP HTTP logs endpoint from the deployment URL. */
+export function resolveLogsEndpoint(): string | undefined {
+  const configured = process.env['GRAFANA_CLOUD_LOKI_URL'];
+  if (!configured) return undefined;
+
+  try {
+    const url = new URL(configured);
+    const pathname = url.pathname.replace(/\/+$/u, '');
+    if (pathname.endsWith('/loki/api/v1/push')) {
+      url.pathname =
+        pathname.slice(0, -'/loki/api/v1/push'.length) + '/otlp/v1/logs';
+    } else if (pathname.endsWith('/otlp')) {
+      url.pathname = `${pathname}/v1/logs`;
+    } else if (!pathname.endsWith('/otlp/v1/logs')) {
+      url.pathname = `${pathname}/otlp/v1/logs`;
+    }
+    return url.toString();
+  } catch (err) {
+    console.error(
+      `[logs] OTLP exporter disabled: Loki URL không hợp lệ (${String(err)})`,
+    );
+    return undefined;
+  }
+}
+
+export function resolveLogsHeaders(): Record<string, string> {
+  const username = process.env['GRAFANA_CLOUD_LOKI_USER'];
+  const token = process.env['GRAFANA_CLOUD_API_TOKEN'];
+  if (!username || !token) return {};
+
+  return {
+    Authorization: `Basic ${Buffer.from(`${username}:${token}`).toString(
+      'base64',
+    )}`,
+  };
 }
 
 function resolveMetricsExportInterval(): number {
