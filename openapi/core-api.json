@@ -1836,6 +1836,23 @@
         "tags": ["soul-match"]
       }
     },
+    "/api/v1/soul-match/sessions/{id}/end": {
+      "post": {
+        "operationId": "SoulMatchController_endSession",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Rời Soul Match — đóng phòng cho cả hai bên và giữ Friendship nếu đã match",
+        "tags": ["soul-match"]
+      }
+    },
     "/api/v1/soul-match/sessions/{id}/partner": {
       "get": {
         "operationId": "SoulMatchController_getPartner",

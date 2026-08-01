@@ -45,6 +45,7 @@ describe('VoiceCallRoom', () => {
     const connect = vi.fn();
     mockedUseCallRoom.mockReturnValue({
       connect,
+      disconnect: vi.fn(),
       room: null,
       callId: null,
       roomDisconnected: false,
@@ -63,6 +64,7 @@ describe('VoiceCallRoom', () => {
   it('connecting — hiển thị trạng thái đang kết nối', () => {
     mockedUseCallRoom.mockReturnValue({
       connect: vi.fn(),
+      disconnect: vi.fn(),
       room: null,
       callId: null,
       roomDisconnected: false,
@@ -78,6 +80,7 @@ describe('VoiceCallRoom', () => {
   it('Strict Mode không kết thúc Voice Match ngay sau khi vừa mount', async () => {
     mockedUseCallRoom.mockReturnValue({
       connect: vi.fn(),
+      disconnect: vi.fn(),
       room: null,
       callId: null,
       roomDisconnected: false,
@@ -106,6 +109,7 @@ describe('VoiceCallRoom', () => {
   it('pagehide kết thúc Voice Match khi người dùng đóng hoặc reload trang', async () => {
     mockedUseCallRoom.mockReturnValue({
       connect: vi.fn(),
+      disconnect: vi.fn(),
       room: null,
       callId: null,
       roomDisconnected: false,
@@ -128,6 +132,7 @@ describe('VoiceCallRoom', () => {
   it('error — hiển thị message từ ApiError', () => {
     mockedUseCallRoom.mockReturnValue({
       connect: vi.fn(),
+      disconnect: vi.fn(),
       room: null,
       callId: null,
       roomDisconnected: false,
@@ -147,6 +152,7 @@ describe('VoiceCallRoom', () => {
   it('connected — hiển thị nút tắt mic và kết thúc', () => {
     mockedUseCallRoom.mockReturnValue({
       connect: vi.fn(),
+      disconnect: vi.fn(),
       room: {
         on: vi.fn(),
         off: vi.fn(),
@@ -187,6 +193,7 @@ describe('VoiceCallRoom', () => {
   it('reload — reaction đã lưu từ GET làm tim sáng và không gửi lại lần hai', async () => {
     mockedUseCallRoom.mockReturnValue({
       connect: vi.fn(),
+      disconnect: vi.fn(),
       room: {
         on: vi.fn(),
         off: vi.fn(),
@@ -231,6 +238,7 @@ describe('VoiceCallRoom', () => {
     const startedAt = new Date();
     mockedUseCallRoom.mockReturnValue({
       connect: vi.fn(),
+      disconnect: vi.fn(),
       room: {
         on: vi.fn(),
         off: vi.fn(),
@@ -279,6 +287,7 @@ describe('VoiceCallRoom', () => {
   it('pending — giải thích đang chờ webhook LiveKit, chưa đếm giờ và chưa cho gửi yêu thích', async () => {
     mockedUseCallRoom.mockReturnValue({
       connect: vi.fn(),
+      disconnect: vi.fn(),
       room: {
         on: vi.fn(),
         off: vi.fn(),
@@ -326,6 +335,7 @@ describe('VoiceCallRoom', () => {
   it('active — gửi yêu thích rồi hiển thị xác nhận từ response server', async () => {
     mockedUseCallRoom.mockReturnValue({
       connect: vi.fn(),
+      disconnect: vi.fn(),
       room: {
         on: vi.fn(),
         off: vi.fn(),
@@ -376,6 +386,7 @@ describe('VoiceCallRoom', () => {
   it('ended — hiển thị trạng thái kết thúc + thời lượng', async () => {
     mockedUseCallRoom.mockReturnValue({
       connect: vi.fn(),
+      disconnect: vi.fn(),
       room: {
         on: vi.fn(),
         off: vi.fn(),
@@ -414,6 +425,7 @@ describe('VoiceCallRoom', () => {
   it('đã tim từ trước và khi call đã kết thúc — mở chat Litfriend', async () => {
     mockedUseCallRoom.mockReturnValue({
       connect: vi.fn(),
+      disconnect: vi.fn(),
       room: {
         on: vi.fn(),
         off: vi.fn(),

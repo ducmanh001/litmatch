@@ -31,6 +31,12 @@ Output chia hai mức: **Read first** là context tối thiểu bắt buộc; **
 đọc khi điều kiện sau dấu `—` khớp task. Cách này tránh nạp checklist/spec không liên quan nhưng
 không được dùng để bỏ qua tài liệu domain khi điều kiện đã khớp.
 
+Mọi scope đều nạp [`compact project memory`](./reference/project-memory.md) ở startup. Đây là
+snapshot ổn định về nguồn sự thật, topology, invariant và retrieval route. Full
+[`project handoff`](./reference/project-handoff.md) chỉ nạp khi onboarding, chuyển giao ownership,
+reconstruct lịch sử hoặc thay đổi memory/learning workflow; không đưa toàn bộ handoff, roadmap,
+registry hay chat history vào mỗi session.
+
 Mỗi lần chạy, command cũng in **Shared-workspace safety** từ Git với danh sách path bị giới hạn.
 Đây là tín hiệu phòng va chạm khi nhiều session dùng chung worktree, không phải bằng chứng ownership:
 agent vẫn phải coi thay đổi có sẵn là của session khác, chốt vùng file trước khi sửa và không revert

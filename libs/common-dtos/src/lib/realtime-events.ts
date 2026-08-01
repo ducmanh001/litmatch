@@ -36,6 +36,8 @@ export const RealtimeEvents = {
   SoulMessage: 'soul.message',
   /** Cả 2 cùng "Thích" — đã match, profile unlock. */
   SoulMatched: 'soul.matched',
+  /** Một thành viên rời Soul Match — client phải đóng phòng ẩn danh ngay. */
+  SoulEnded: 'soul.ended',
   /** Ticket được ghép cặp — chờ 2 bên confirm. */
   MatchMatched: 'match.matched',
   /** Cả 2 đã confirm — session bắt đầu. */
@@ -107,6 +109,12 @@ export interface SoulMessageEventData {
 
 export interface SoulMatchedEventData {
   sessionId: string;
+}
+
+export interface SoulEndedEventData {
+  sessionId: string;
+  /** member_left — không chứa userId để giữ nguyên ẩn danh. */
+  reason: 'member_left';
 }
 
 export interface MatchMatchedEventData {

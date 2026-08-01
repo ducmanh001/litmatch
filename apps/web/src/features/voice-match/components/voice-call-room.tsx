@@ -99,6 +99,7 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
   const router = useRouter();
   const {
     connect,
+    disconnect,
     room,
     callId,
     roomDisconnected,
@@ -117,6 +118,7 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
   // Giữ xác nhận ngay trong UI thay vì chỉ dựa vào mutation cache. Điều này cũng tránh
   // mất trạng thái nút tim khi query Call refetch trong lúc đang gọi.
   const [hasLikedCall, setHasLikedCall] = useState(false);
+  const [sessionEnded, setSessionEnded] = useState(false);
   const audioContainerRef = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState(() => Date.now());
   const endVoiceMatchMutate = useRef(endVoiceMatch.mutate);
@@ -129,9 +131,9 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
   // Vào đúng Voice Match là xin quyền mic/kết nối ngay; không bắt người dùng bấm thêm một
   // "Bắt đầu" dư thừa. Retry chỉ hiện khi browser/SFU trả lỗi thật.
   useEffect(() => {
-    if (room !== null) return;
+    if (room !== null || sessionEnded) return;
     connect();
-  }, [connect, room]);
+  }, [connect, room, sessionEnded]);
 
   // Không gọi API trong cleanup React: Strict Mode development cố ý mount → cleanup → mount,
   // và cleanup cũ đã đóng session thật ngay khi vừa vào màn. Thay vào đó chỉ bắt hành động rời
@@ -197,11 +199,21 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
 
   useRealtimeEvent<CallEndedEventData>(RealtimeEvents.CallEnded, (data) => {
     if (callId !== null && data.callId === callId) {
+      setSessionEnded(true);
+      disconnect();
       void queryClient.invalidateQueries({
         queryKey: voiceMatchKeys.call(callId),
       });
     }
   });
+
+  // Poll là fallback khi socket rớt. Không để LiveKit còn giữ mic/audio khi GET đã
+  // xác nhận trạng thái terminal.
+  useEffect(() => {
+    if (call.data?.status !== 'ended') return;
+    setSessionEnded(true);
+    disconnect();
+  }, [call.data?.status, disconnect]);
 
   // Room chỉ join + publish mic (useCallRoom) — attach audio đối phương là việc UI, làm ở đây.
   useEffect(() => {
@@ -293,6 +305,55 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
     })();
   };
 
+  if (sessionEnded || call.data?.status === 'ended') {
+    const c = call.data;
+    const reasonLabel =
+      c?.endReason !== null && c?.endReason !== undefined
+        ? (END_REASON_LABEL[c.endReason] ?? c.endReason)
+        : 'Phiên ghép đôi đã kết thúc';
+    return (
+      <div className="flex flex-col items-center px-8 pb-10 pt-6 text-center">
+        <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 dark:bg-surf2">
+          <EndCallIcon
+            width={26}
+            height={26}
+            className="text-slate-400 dark:text-slate-300"
+          />
+        </div>
+        <h2 className="font-display mb-2 text-2xl font-semibold italic">
+          {reasonLabel}
+        </h2>
+        <p className="mb-8 text-sm text-slate-500 dark:text-slate-400">
+          {c?.durationSeconds !== null && c?.durationSeconds !== undefined
+            ? `Đã trò chuyện ${c.durationSeconds}s`
+            : 'Đối phương đã rời phiên. Bạn có thể ghép đôi lại ngay.'}
+        </p>
+        {callId !== null && (
+          <button
+            type="button"
+            className="mb-3 w-full rounded-full bg-irisl py-3 font-bold text-white disabled:opacity-50"
+            disabled={likeCall.isPending}
+            onClick={handleEndedLikeCall}
+          >
+            {matched
+              ? 'Mở chat với Litfriend'
+              : liked
+                ? 'Đã gửi yêu thích — chờ đối phương'
+                : likeCall.isPending
+                  ? 'Đang gửi yêu thích…'
+                  : 'Yêu thích để làm bạn'}
+          </button>
+        )}
+        <Link
+          href="/matching"
+          className="w-full rounded-full border border-black/10 py-3 text-center font-bold dark:border-white/10"
+        >
+          Tìm Voice Match mới
+        </Link>
+      </div>
+    );
+  }
+
   if (room === null) {
     if (isClosedVoiceMatchError(error)) {
       return (
@@ -351,55 +412,6 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
             Thử kết nối lại
           </button>
         )}
-      </div>
-    );
-  }
-
-  if (call.data?.status === 'ended') {
-    const c = call.data;
-    const reasonLabel =
-      c.endReason !== null
-        ? (END_REASON_LABEL[c.endReason] ?? c.endReason)
-        : 'Cuộc gọi đã kết thúc';
-    return (
-      <div className="flex flex-col items-center px-8 pb-10 pt-6 text-center">
-        <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 dark:bg-surf2">
-          <EndCallIcon
-            width={26}
-            height={26}
-            className="text-slate-400 dark:text-slate-300"
-          />
-        </div>
-        <h2 className="font-display mb-2 text-2xl font-semibold italic">
-          {reasonLabel}
-        </h2>
-        <p className="mb-8 text-sm text-slate-500 dark:text-slate-400">
-          {c.durationSeconds !== null
-            ? `Đã trò chuyện ${c.durationSeconds}s`
-            : 'Không sao — thử một cuộc gọi khác nhé.'}
-        </p>
-        {callId !== null && (
-          <button
-            type="button"
-            className="mb-3 w-full rounded-full bg-irisl py-3 font-bold text-white disabled:opacity-50"
-            disabled={likeCall.isPending}
-            onClick={handleEndedLikeCall}
-          >
-            {matched
-              ? 'Mở chat với Litfriend'
-              : liked
-                ? 'Đã gửi yêu thích — chờ đối phương'
-                : likeCall.isPending
-                  ? 'Đang gửi yêu thích…'
-                  : 'Yêu thích để làm bạn'}
-          </button>
-        )}
-        <Link
-          href="/matching"
-          className="w-full rounded-full border border-black/10 py-3 text-center font-bold dark:border-white/10"
-        >
-          Tìm Voice Match mới
-        </Link>
       </div>
     );
   }
