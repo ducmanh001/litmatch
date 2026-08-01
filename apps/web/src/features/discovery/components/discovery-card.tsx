@@ -9,7 +9,9 @@ function cardMeta(card: DiscoveryCardDto | NearbyCardDto): string | undefined {
   if ('ageBucket' in card) {
     return card.ageBucket === null ? undefined : `${card.ageBucket} tuổi`;
   }
-  return `Trong khoảng ${card.distanceBucket}`;
+  return card.distanceBucket === null
+    ? undefined
+    : `Trong khoảng ${card.distanceBucket}`;
 }
 
 /** Card dùng đúng dữ liệu public mà Discovery/Nearby trả về: ảnh đại diện, nickname và

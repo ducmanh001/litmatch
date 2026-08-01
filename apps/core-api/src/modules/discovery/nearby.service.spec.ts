@@ -7,7 +7,7 @@ import type Redis from 'ioredis';
 import type { CoreApiEnv } from '../../config/env.validation';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import type { SafetyService } from '../safety';
-import type { UserService } from '../user';
+import type { PrivacySettingsService, UserService } from '../user';
 import type { DiscoverySetting } from './entities/discovery-setting.entity';
 import type { UserLocation } from './entities/user-location.entity';
 
@@ -40,6 +40,7 @@ describe('NearbyService (unit — mock repo/redis/deps)', () => {
   let dataSource: { transaction: jest.Mock };
   let userService: { findActiveByIds: jest.Mock };
   let safetyService: { getHiddenUserIds: jest.Mock };
+  let privacySettings: { findForUsers: jest.Mock };
   let redis: { eval: jest.Mock };
   let service: NearbyService;
 
@@ -51,6 +52,9 @@ describe('NearbyService (unit — mock repo/redis/deps)', () => {
     };
     userService = { findActiveByIds: jest.fn(async () => []) };
     safetyService = { getHiddenUserIds: jest.fn(async () => []) };
+    privacySettings = {
+      findForUsers: jest.fn(async () => new Map()),
+    };
     redis = { eval: jest.fn(async () => 1) }; // 1 = trong hạn mức (không phải -1)
 
     service = new NearbyService(
@@ -59,6 +63,7 @@ describe('NearbyService (unit — mock repo/redis/deps)', () => {
       dataSource as unknown as DataSource,
       userService as unknown as UserService,
       safetyService as unknown as SafetyService,
+      privacySettings as unknown as PrivacySettingsService,
       redis as unknown as Redis,
       configStub,
     );

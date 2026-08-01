@@ -31,10 +31,16 @@ test('docs scope route onboarding, learning và checks riêng', async () => {
     'docs/00-overview-and-index.md',
     'docs/18-documentation-automation.md',
     'docs/19-project-lifecycle-and-learning.md',
+    'docs/reference/project-handoff.md',
   ]);
   assert.ok(
     map.docs.readWhen.some(
       (item) => item.path === 'docs/reference/lessons-registry.md',
+    ),
+  );
+  assert.ok(
+    map.docs.readWhen.some(
+      (item) => item.path === 'docs/reference/project-handoff.md',
     ),
   );
   assert.deepEqual(map.docs.checks, [
