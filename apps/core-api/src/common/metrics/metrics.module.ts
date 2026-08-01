@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { createMetricsMeter } from '@litmatch/observability';
 
 import { METRICS_METER } from './metrics.constants';
+import { registerRuntimeActivityMetrics } from '../runtime/runtime-activity';
 
 /**
  * Global — mọi module domain (matching/calling/economy...) inject METRICS_METER trực tiếp
@@ -12,7 +13,11 @@ import { METRICS_METER } from './metrics.constants';
   providers: [
     {
       provide: METRICS_METER,
-      useFactory: () => createMetricsMeter({ appName: 'core-api' }),
+      useFactory: () => {
+        const meter = createMetricsMeter({ appName: 'core-api' });
+        registerRuntimeActivityMetrics(meter, 'core-api');
+        return meter;
+      },
     },
   ],
   exports: [METRICS_METER],
