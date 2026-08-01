@@ -4,6 +4,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 
 import { cn } from '../lib/cn';
 import { confirmStore } from '../lib/confirm-store';
+import { useTranslation } from '../i18n/messages';
 
 import type { ConfirmOptions } from '../lib/confirm-store';
 
@@ -14,6 +15,7 @@ const CLOSE_ANIMATION_MS = 300;
  * Đúng layouts/web/*.html § lmConfirm()/lmCloseConfirm() nhưng trả Promise<boolean> thay vì callback.
  */
 export function ConfirmSheet() {
+  const t = useTranslation();
   const state = useSyncExternalStore(
     confirmStore.subscribe,
     confirmStore.getSnapshot,
@@ -41,7 +43,7 @@ export function ConfirmSheet() {
     <div className="fixed inset-0 z-[310]">
       <button
         type="button"
-        aria-label="Đóng"
+        aria-label={t('common.close')}
         className="absolute inset-0 bg-black/50"
         onClick={() => close(false)}
       />
@@ -63,7 +65,7 @@ export function ConfirmSheet() {
             onClick={() => close(false)}
             className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-bold dark:bg-surf2"
           >
-            Huỷ
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -75,7 +77,7 @@ export function ConfirmSheet() {
                 : 'bg-gradient-to-br from-irisl to-irisl',
             )}
           >
-            {rendered.actionLabel ?? 'Xác nhận'}
+            {rendered.actionLabel ?? t('common.confirm')}
           </button>
         </div>
       </div>

@@ -3,7 +3,6 @@
 import { isApiError } from '@litmatch/api-client';
 import { RealtimeEvents } from '@litmatch/common-dtos/pure';
 import { useQueryClient } from '@tanstack/react-query';
-import { RoomEvent, Track } from 'livekit-client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -11,6 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import { confirmAction } from '../../../shared/lib/confirm-store';
 import { formatMinutesSeconds } from '../../../shared/lib/format-minutes-seconds';
 import { showToast } from '../../../shared/lib/toast-store';
+import { attachRemoteAudio } from '../../../shared/media/livekit';
 import { MicIcon } from '../../../shared/ui/icons';
 import { useRealtimeEvent } from '../../../shared/realtime/use-realtime-event';
 import {
@@ -24,7 +24,6 @@ import { friendChatKeys } from '../../friend-chat/api';
 import { useCallRoom } from '../hooks/use-call-room';
 
 import type { CallEndedEventData } from '@litmatch/common-dtos/pure';
-import type { RemoteTrack } from 'livekit-client';
 import type { SVGProps } from 'react';
 
 function MicOffIcon(props: SVGProps<SVGSVGElement>) {
@@ -98,13 +97,23 @@ function isClosedVoiceMatchError(error: unknown): boolean {
 export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
   const queryClient = useQueryClient();
   const router = useRouter();
-  const { connect, room, callId, roomDisconnected, isConnecting, error } =
-    useCallRoom(matchSessionId);
+  const {
+    connect,
+    room,
+    callId,
+    roomDisconnected,
+    isConnecting,
+    error,
+    microphoneEnabled,
+    setMicrophoneEnabled,
+  } = useCallRoom(matchSessionId);
   const call = useCall(callId);
   const endCall = useEndCall(callId ?? '');
   const endVoiceMatch = useEndVoiceMatch(matchSessionId);
   const likeCall = useLikeCall(callId ?? '');
   const [isMuted, setIsMuted] = useState(false);
+  const micIsMuted =
+    microphoneEnabled === undefined ? isMuted : !microphoneEnabled;
   // Giữ xác nhận ngay trong UI thay vì chỉ dựa vào mutation cache. Điều này cũng tránh
   // mất trạng thái nút tim khi query Call refetch trong lúc đang gọi.
   const [hasLikedCall, setHasLikedCall] = useState(false);
@@ -112,6 +121,10 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
   const [now, setNow] = useState(() => Date.now());
   const endVoiceMatchMutate = useRef(endVoiceMatch.mutate);
   endVoiceMatchMutate.current = endVoiceMatch.mutate;
+  const liked =
+    hasLikedCall || likeCall.data?.liked === true || call.data?.liked === true;
+  const matched =
+    likeCall.data?.matched === true || call.data?.matched === true;
 
   // Vào đúng Voice Match là xin quyền mic/kết nối ngay; không bắt người dùng bấm thêm một
   // "Bắt đầu" dư thừa. Retry chỉ hiện khi browser/SFU trả lỗi thật.
@@ -194,28 +207,25 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
   useEffect(() => {
     if (room === null) return;
     const container = audioContainerRef.current;
-    const attach = (track: RemoteTrack) => {
-      if (track.kind !== Track.Kind.Audio) return;
-      const el = track.attach();
-      container?.appendChild(el);
-    };
-    const detach = (track: RemoteTrack) => {
-      track.detach().forEach((el) => el.remove());
-    };
-    room.on(RoomEvent.TrackSubscribed, attach);
-    room.on(RoomEvent.TrackUnsubscribed, detach);
-    return () => {
-      room.off(RoomEvent.TrackSubscribed, attach);
-      room.off(RoomEvent.TrackUnsubscribed, detach);
-    };
+    if (container === null) return undefined;
+    return attachRemoteAudio(room, container);
   }, [room]);
 
   const toggleMute = (): void => {
     if (room === null) return;
-    const next = !isMuted;
-    void room.localParticipant.setMicrophoneEnabled(!next);
-    setIsMuted(next);
-    showToast(next ? 'Đã tắt mic' : 'Đã bật mic');
+    const nextMuted = !micIsMuted;
+    const updateMic =
+      setMicrophoneEnabled ??
+      ((enabled: boolean) =>
+        room.localParticipant.setMicrophoneEnabled(enabled));
+    void updateMic(!nextMuted)
+      .then(() => {
+        setIsMuted(nextMuted);
+        showToast(nextMuted ? 'Đã tắt mic' : 'Đã bật mic');
+      })
+      .catch(() => {
+        showToast('Không thể đổi trạng thái mic, thử lại.', 'warn');
+      });
   };
 
   const openFriendChat = (friendUserId: string): void => {
@@ -246,7 +256,7 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
         await endCall.mutateAsync();
         // Người này đã bấm tim trong call: gọi lại reaction idempotent sau end để đọc kết quả
         // mutual mới nhất. Không tự gửi like cho người chưa đồng ý.
-        if (hasLikedCall || likeCall.data?.liked === true) {
+        if (liked) {
           if (await refreshLikeAndOpenChat()) return;
         }
         router.replace('/matching');
@@ -375,9 +385,9 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
             disabled={likeCall.isPending}
             onClick={handleEndedLikeCall}
           >
-            {likeCall.data?.matched
+            {matched
               ? 'Mở chat với Litfriend'
-              : hasLikedCall || likeCall.data?.liked
+              : liked
                 ? 'Đã gửi yêu thích — chờ đối phương'
                 : likeCall.isPending
                   ? 'Đang gửi yêu thích…'
@@ -397,7 +407,7 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
   return (
     <div className="flex flex-col items-center px-8 pb-10 pt-2 text-center">
       {/* Audio đối phương — không cần hiển thị, chỉ cần phát */}
-      <div ref={audioContainerRef} className="hidden" />
+      <div ref={audioContainerRef} className="sr-only" aria-hidden="true" />
 
       {call.data?.status === 'pending' && (
         <p
@@ -454,9 +464,9 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
         </div>
       )}
 
-      {(hasLikedCall || likeCall.data?.liked) && (
+      {liked && (
         <p role="status" className="mb-4 text-sm font-semibold text-irisl">
-          {likeCall.data?.matched
+          {matched
             ? 'Cả hai đã yêu thích — kết thúc cuộc gọi để mở chat riêng.'
             : 'Đã gửi yêu thích — chờ đối phương.'}
         </p>
@@ -466,27 +476,20 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
         <button
           type="button"
           className={`flex h-14 w-14 items-center justify-center rounded-full transition disabled:cursor-default ${
-            hasLikedCall || likeCall.data?.liked
+            liked
               ? 'bg-iris/15 text-irisl opacity-75'
               : 'bg-gradient-to-br from-irisl to-aqual text-white shadow-lg shadow-iris/30'
           }`}
           disabled={
-            likeCall.isPending ||
-            hasLikedCall ||
-            likeCall.data?.liked === true ||
-            call.data?.status !== 'active'
+            likeCall.isPending || liked || call.data?.status !== 'active'
           }
           onClick={handleLikeCall}
         >
-          <HeartIcon
-            className={
-              hasLikedCall || likeCall.data?.liked ? 'fill-current' : undefined
-            }
-          />
+          <HeartIcon className={liked ? 'fill-current' : undefined} />
           <span className="sr-only">
             {likeCall.isPending
               ? 'Đang gửi yêu thích…'
-              : hasLikedCall || likeCall.data?.liked
+              : liked
                 ? 'Đã yêu thích'
                 : 'Yêu thích để thành Litfriend'}
           </span>
@@ -496,12 +499,12 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
           className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 dark:bg-surf2"
           onClick={toggleMute}
         >
-          {isMuted ? (
+          {micIsMuted ? (
             <MicOffIcon width={20} height={20} />
           ) : (
             <MicIcon width={20} height={20} />
           )}
-          <span className="sr-only">{isMuted ? 'Bật mic' : 'Tắt mic'}</span>
+          <span className="sr-only">{micIsMuted ? 'Bật mic' : 'Tắt mic'}</span>
         </button>
         <button
           type="button"

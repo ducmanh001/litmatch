@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useWallet } from '../../features/wallet/api';
 import { NotificationBell } from '../../features/notification/components/notification-bell';
 import { cn } from '../lib/cn';
+import { useTranslation } from '../i18n/messages';
 import { DiamondIcon } from './icons';
 import { LanguageSelector } from './language-selector';
 import { ThemeToggleButton } from './theme-toggle-button';
@@ -13,10 +14,11 @@ import type { ReactNode } from 'react';
 
 function DiamondChip() {
   const { data: wallet } = useWallet();
+  const t = useTranslation();
   return (
     <Link
       href="/wallet"
-      aria-label={`Mở ví, số dư ${wallet?.balance ?? 0} diamond`}
+      aria-label={t('common.walletBalance', { balance: wallet?.balance ?? 0 })}
       className="flex shrink-0 items-center gap-1.5 rounded-full border border-diamond/20 bg-diamond/15 px-3 py-2 text-xs font-extrabold text-diamond-foreground transition hover:bg-diamond/20 dark:text-white"
     >
       <DiamondIcon />

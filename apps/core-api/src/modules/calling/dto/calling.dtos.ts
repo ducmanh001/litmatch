@@ -6,6 +6,8 @@ import {
   CallSessionStatus,
 } from '../entities/call-session.entity';
 
+import type { VoiceMatchLikeState } from '../calling.service';
+
 export class CallDto {
   @ApiProperty() id!: string;
   @ApiProperty() matchSessionId!: string;
@@ -19,8 +21,22 @@ export class CallDto {
   @ApiProperty() billedMinutes!: number;
   /** Server derive từ CALLING_FREE_CALL_SECONDS; client chỉ hiển thị countdown, không tự enforce. */
   @ApiProperty({ nullable: true, type: Date }) freeCallEndsAt!: Date | null;
+  /** Đọc từ reaction DB — không mất trạng thái khi client reload. */
+  @ApiProperty() liked!: boolean;
+  /** true khi cặp đã là bạn sau mutual like. */
+  @ApiProperty() matched!: boolean;
+  /** Chỉ reveal sau mutual like; null trước đó. */
+  @ApiProperty({ type: String, nullable: true }) friendUserId!: string | null;
 
-  static from(call: CallSession, freeCallSeconds: number): CallDto {
+  static from(
+    call: CallSession,
+    freeCallSeconds: number,
+    likeState: VoiceMatchLikeState = {
+      liked: false,
+      matched: false,
+      friendUserId: null,
+    },
+  ): CallDto {
     const dto = new CallDto();
     dto.id = call.id;
     dto.matchSessionId = call.matchSessionId;
@@ -33,6 +49,9 @@ export class CallDto {
     dto.freeCallEndsAt = call.startedAt
       ? new Date(call.startedAt.getTime() + freeCallSeconds * 1000)
       : null;
+    dto.liked = likeState.liked;
+    dto.matched = likeState.matched;
+    dto.friendUserId = likeState.friendUserId;
     return dto;
   }
 }

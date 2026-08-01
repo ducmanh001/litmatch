@@ -24,10 +24,10 @@ x-backend-env: &backend-env
   # là "task tự gọi lại chính nó" và core-api/signaling-gateway thoát ngay khi start.
   # Trỏ workspace-data ra /tmp (không phải volume nào) để mỗi container có state Nx riêng.
   NX_WORKSPACE_DATA_DIRECTORY: /tmp/nx-workspace-data
-  # LIVEKIT_URL trả cho browser và có thể là URL tunnel; RoomServiceClient luôn dùng endpoint
-  # nội bộ riêng để không phụ thuộc tunnel/proxy của client.
+  # LIVEKIT_URL trả cho browser và có thể là URL tunnel. Core API chạy cùng Compose network,
+  # nên RoomServiceClient luôn gọi LiveKit qua DNS nội bộ; không cho client tunnel ghi đè endpoint này.
   LIVEKIT_URL: ${LIVEKIT_URL:-ws://localhost:7880}
-  LIVEKIT_API_URL: ${LIVEKIT_API_URL:-http://livekit:7880}
+  LIVEKIT_API_URL: http://livekit:7880
 
 services:
   deps:

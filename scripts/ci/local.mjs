@@ -98,6 +98,12 @@ const environment = {
   NEXT_PUBLIC_LIVEKIT_URL:
     process.env['NEXT_PUBLIC_LIVEKIT_URL'] ?? 'ws://localhost:7880',
   NX_TUI: 'false',
+  NX_TASKS_RUNNER_DYNAMIC_OUTPUT: 'false',
+  NX_INTERACTIVE: 'false',
+  NX_NATIVE_COMMAND_RUNNER: 'false',
+  TERM: 'dumb',
+  NO_COLOR: '1',
+  FORCE_COLOR: '0',
   NX_CACHE_DIRECTORY:
     process.env['LOCAL_CI_NX_CACHE_DIRECTORY'] ?? join(localCiNxRoot, 'cache'),
   NX_WORKSPACE_DATA_DIRECTORY:
@@ -143,7 +149,11 @@ function run(label, command, args, options = {}) {
     throw result.error;
   }
   if (result.status !== 0 && !options.allowFailure) {
-    throw new Error(`${label} failed with exit code ${result.status ?? 1}`);
+    const signal = result.signal ? `, signal ${result.signal}` : '';
+    throw new Error(
+      `${label} failed (exit code ${result.status ?? 1}${signal}). ` +
+        `Replay this exact stage with: pnpm ci:local:plan; then run the command above directly.`,
+    );
   }
 
   return result.status ?? 1;
@@ -718,6 +728,14 @@ try {
   console.log(`\n[ci-local] ${profile}: PASS`);
 } catch (error) {
   console.error(`\n[ci-local] ${profile}: FAIL`);
-  console.error(error instanceof Error ? error.message : error);
+  console.error(
+    error instanceof Error
+      ? `${error.name}: ${error.message}\n${error.stack ?? ''}`
+      : error,
+  );
+  console.error(
+    '[ci-local] Diagnosis: the first failing [ci-local] stage above is the root failure; ' +
+      'later stages are not executed. Re-run that stage after applying the fix.',
+  );
   process.exitCode = 1;
 }

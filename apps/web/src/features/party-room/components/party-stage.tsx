@@ -15,6 +15,8 @@ import { MicIcon } from '../../../shared/ui/icons';
 import {
   canPublishRole,
   partyRoomKeys,
+  useAcceptSpeakerInvite,
+  useDeclineSpeakerInvite,
   useGiftCatalog,
   useLeaveRoom,
   useRoomDetail,
@@ -32,6 +34,7 @@ import type {
   PartyMemberLeftEventData,
   PartyRoleChangedEventData,
   PartyRoomClosedEventData,
+  PartySpeakerInviteReceivedEventData,
 } from '@litmatch/common-dtos/pure';
 
 const CLOSE_REASON_LABEL: Record<string, string> = {
@@ -53,13 +56,15 @@ export function PartyStage({ roomId }: { roomId: string }) {
   const canPublish = canPublishRole(myMembership?.role);
   const media = usePartyRoomMedia(roomId, canPublish);
   const leaveRoom = useLeaveRoom(roomId);
-  const giftCatalog = useGiftCatalog();
+  const acceptSpeakerInvite = useAcceptSpeakerInvite(roomId);
+  const declineSpeakerInvite = useDeclineSpeakerInvite(roomId);
   const [isGiftPanelOpen, setIsGiftPanelOpen] = useState(false);
   const [lastGift, setLastGift] = useState<GiftSentEventData | null>(null);
-  // Mute/unmute mic thủ công của chính mình — CHỈ khả dụng khi role cho publish (host/speaker).
-  // Đây là state UI thuần (bật/tắt track cục bộ qua LiveKit thật), không phải quyền publish
-  // (canPublish) vốn do use-party-room-media.ts tự set theo role và không đổi ở đây.
-  const [micOn, setMicOn] = useState(true);
+  const giftCatalog = useGiftCatalog(isGiftPanelOpen);
+  // `microphoneEnabled` chỉ true sau khi LiveKit ACK bật track. Trên mobile permission có thể
+  // bị từ chối trong effect tự kết nối; khi đó nút vẫn phải cho user bấm lại trong gesture.
+  const micOn = media.microphoneEnabled ?? canPublish;
+  const [micChanging, setMicChanging] = useState(false);
   const mediaErrorMessage = isApiError(media.error)
     ? media.error.message
     : media.error !== null
@@ -87,6 +92,12 @@ export function PartyStage({ roomId }: { roomId: string }) {
   );
   useRealtimeEvent<PartyRoleChangedEventData>(
     RealtimeEvents.PartyRoleChanged,
+    (data) => {
+      if (data.roomId === roomId) invalidateDetail();
+    },
+  );
+  useRealtimeEvent<PartySpeakerInviteReceivedEventData>(
+    RealtimeEvents.PartySpeakerInviteReceived,
     (data) => {
       if (data.roomId === roomId) invalidateDetail();
     },
@@ -134,27 +145,24 @@ export function PartyStage({ roomId }: { roomId: string }) {
     }
   }, [isMember, mediaRoom, connect]);
 
-  // Mỗi lần (re)kết nối media hoặc vừa được cấp quyền publish, mic mặc định bật lại — khớp với
-  // effect [room, canPublish] ở use-party-room-media.ts (nó tự setMicrophoneEnabled(canPublish)
-  // đúng lúc này). Mọi lần bấm nút mic SAU đó chỉ đổi state cục bộ, không bị effect này ghi đè
-  // vì mediaRoom/canPublish không đổi khi user tự bấm.
-  useEffect(() => {
-    if (canPublish) setMicOn(true);
-  }, [canPublish, mediaRoom]);
-
   const toggleMic = (): void => {
     if (media.room === null) return;
     const next = !micOn;
-    media.room.localParticipant
-      .setMicrophoneEnabled(next)
+    setMicChanging(true);
+    const updateMic =
+      media.setMicrophoneEnabled ??
+      ((enabled: boolean) =>
+        media.room?.localParticipant.setMicrophoneEnabled(enabled) ??
+        Promise.resolve());
+    void updateMic(next)
       .then(() => {
-        setMicOn(next);
-        // layouts/web/party-room.html: lmToast(micOn ? 'Đã bật mic' : 'Đã tắt mic') — pure client
-        // UI state, mute/unmute track cục bộ thật qua LiveKit, không phải quyền publish.
         showToast(next ? 'Đã bật mic' : 'Đã tắt mic');
       })
       .catch(() => {
         showToast('Không thể đổi trạng thái mic, thử lại.', 'warn');
+      })
+      .finally(() => {
+        setMicChanging(false);
       });
   };
 
@@ -287,6 +295,38 @@ export function PartyStage({ roomId }: { roomId: string }) {
         </p>
       )}
 
+      {myMembership.speakerInvitePending && (
+        <div className="mx-5 space-y-3 rounded-2xl border border-irisl/20 bg-irisl/10 p-4">
+          <p className="text-sm font-semibold text-irisl">
+            Host mời bạn lên nói. Bạn có đồng ý bật mic trên sân khấu không?
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="flex-1 rounded-full bg-irisl px-3 py-2 text-sm font-bold text-white disabled:opacity-50"
+              disabled={
+                acceptSpeakerInvite.isPending || declineSpeakerInvite.isPending
+              }
+              onClick={() => acceptSpeakerInvite.mutate()}
+            >
+              {acceptSpeakerInvite.isPending
+                ? 'Đang đồng ý…'
+                : 'Đồng ý lên nói'}
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-black/10 px-3 py-2 text-sm font-bold disabled:opacity-50 dark:border-white/10"
+              disabled={
+                acceptSpeakerInvite.isPending || declineSpeakerInvite.isPending
+              }
+              onClick={() => declineSpeakerInvite.mutate()}
+            >
+              {declineSpeakerInvite.isPending ? 'Đang từ chối…' : 'Để sau'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {media.room !== null && <PartyAudio room={media.room} />}
 
       {(media.roomDisconnected || mediaErrorMessage !== undefined) && (
@@ -332,7 +372,7 @@ export function PartyStage({ roomId }: { roomId: string }) {
             type="button"
             aria-pressed={micOn}
             aria-label={micOn ? 'Tắt mic' : 'Bật mic'}
-            disabled={media.room === null}
+            disabled={media.room === null || micChanging}
             onClick={toggleMic}
             className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full disabled:opacity-50 ${
               micOn

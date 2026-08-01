@@ -12,7 +12,10 @@ import { DataSource, Repository } from 'typeorm';
 
 import { isUniqueViolation } from '../../database/postgres-errors';
 import { publishRealtimeEvent } from '../../common/realtime/publish-realtime';
-import { messageIdempotencyKey } from './soul-match.constants';
+import {
+  friendHistoryImportKey,
+  messageIdempotencyKey,
+} from './soul-match.constants';
 import { SOUL_MATCH_REDIS } from './redis/soul-match-redis.provider';
 import { SoulMatchErrors } from './soul-match.errors';
 import { SoulRoomPhase } from './soul-match.types';
@@ -21,7 +24,11 @@ import {
   SoulMatchRating,
   SoulMatchVerdict,
 } from './entities/soul-match-rating.entity';
-import { FriendService, FriendshipSource } from '../friend';
+import {
+  FriendService,
+  FriendshipSource,
+  type FriendMessageSeed,
+} from '../friend';
 import {
   MatchSession,
   MatchSessionStatus,
@@ -131,14 +138,41 @@ export class SoulMatchService {
 
     const prefixedKey = messageIdempotencyKey(user.userId, idempotencyKey);
     try {
-      const message = await this.messageRepo.save(
-        this.messageRepo.create({
-          sessionId,
-          senderUserId: user.userId,
-          content: dto.content,
-          idempotencyKey: prefixedKey,
-        }),
-      );
+      const message = await this.dataSource.transaction(async (manager) => {
+        // Rating cũng lock session row trước khi import history. Gửi message dùng cùng
+        // lock để một message không lọt giữa bước snapshot và bước chuyển sang Friend Chat.
+        const lockedSession = await manager.findOne(MatchSession, {
+          where: { id: sessionId },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (
+          !lockedSession ||
+          (lockedSession.userAId !== user.userId &&
+            lockedSession.userBId !== user.userId)
+        ) {
+          throw new DomainException(
+            SoulMatchErrors.SESSION_NOT_FOUND,
+            'Không tìm thấy session',
+            HttpStatus.NOT_FOUND,
+          );
+        }
+        if (Date.now() >= room.chatEndsAt.getTime()) {
+          throw new DomainException(
+            SoulMatchErrors.CHAT_NOT_OPEN,
+            'Hết giờ chat — phòng đã chuyển sang đánh giá hoặc đã đóng',
+            HttpStatus.CONFLICT,
+            { phase: SoulRoomPhase.Rating },
+          );
+        }
+        return manager.save(
+          manager.create(SoulChatMessage, {
+            sessionId,
+            senderUserId: user.userId,
+            content: dto.content,
+            idempotencyKey: prefixedKey,
+          }),
+        );
+      });
       // Realtime SAU khi persist, chỉ cho message MỚI (replay không bắn lại) — best-effort,
       // senderRole tính per-recipient TẠI ĐÂY để gateway không phải biết gì về ẩn danh (spec § 7)
       const partnerId = this.partnerIdOf(room.session, user.userId);
@@ -283,22 +317,35 @@ export class SoulMatchService {
           }),
         );
 
-        // Đã là bạn từ session trước → matched luôn đúng, không tạo lại
+        // Đã là bạn từ session trước → matched luôn đúng, không tạo lại.
         let matched = await this.friendService.areFriends(
           user.userId,
           partnerId,
         );
-        if (dto.verdict === SoulMatchVerdict.Like && !matched) {
+        if (dto.verdict === SoulMatchVerdict.Like) {
           const partnerRating = await manager.findOneBy(SoulMatchRating, {
             sessionId,
             raterUserId: partnerId,
           });
           if (partnerRating?.verdict === SoulMatchVerdict.Like) {
+            const anonymousMessages = await manager.find(SoulChatMessage, {
+              where: { sessionId },
+              order: { seq: 'ASC' },
+            });
+            const messageSeeds: FriendMessageSeed[] = anonymousMessages.map(
+              (message) => ({
+                senderUserId: message.senderUserId,
+                content: message.content,
+                createdAt: message.createdAt,
+                idempotencyKey: friendHistoryImportKey(sessionId, message.id),
+              }),
+            );
             const { created } = await this.friendService.ensureFriendship(
               manager,
               user.userId,
               partnerId,
               FriendshipSource.SoulMatch,
+              messageSeeds,
             );
             newlyMatched = created;
             matched = true;

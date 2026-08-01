@@ -6,7 +6,8 @@ import type { ApiSchema } from '@litmatch/api-client';
 
 export type CallDto = ApiSchema<'CallDto'>;
 
-export const VOICE_CALL_REFETCH_INTERVAL_MS = 10_000;
+/** Calling cần phản hồi gần với server ticker 1s để countdown/end không đứng hình nhiều giây. */
+export const VOICE_CALL_REFETCH_INTERVAL_MS = 1_000;
 
 export const voiceMatchKeys = {
   call: (id: string) => ['voice-match', 'call', id] as const,

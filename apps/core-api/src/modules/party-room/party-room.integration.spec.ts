@@ -17,6 +17,7 @@ import { ReportTargetVideo1754900000000 } from '../../database/migrations/175490
 import { PartyRoomLivekitUrl1753500000000 } from '../../database/migrations/1753500000000-party-room-livekit-url';
 import { PartyRoomHostDisconnectGrace1753900000000 } from '../../database/migrations/1753900000000-party-room-host-disconnect-grace';
 import { PartyRoomCategory1755200000000 } from '../../database/migrations/1755200000000-party-room-category';
+import { PartyRoomSpeakerInvite1756500000000 } from '../../database/migrations/1756500000000-party-room-speaker-invite';
 
 import { PartyRoomService } from './party-room.service';
 import { PartyRoomSweeperService } from './jobs/party-room-sweeper.service';
@@ -205,6 +206,7 @@ d('Party Room integration (Postgres thật)', () => {
         PartyRoomLivekitUrl1753500000000,
         PartyRoomHostDisconnectGrace1753900000000,
         PartyRoomCategory1755200000000,
+        PartyRoomSpeakerInvite1756500000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -223,6 +225,10 @@ d('Party Room integration (Postgres thật)', () => {
       {
         getByIdOrThrow: async (id: string) =>
           ds.getRepository(User).findOneByOrFail({ id }),
+        findByIds: async (ids: readonly string[]) => {
+          const users = await ds.getRepository(User).find();
+          return users.filter((user) => ids.includes(user.id));
+        },
       } as never,
       // stub publish — realtime end-to-end đã test ở suite signaling-gateway
       { publish: async () => 1 } as never,
@@ -349,7 +355,7 @@ d('Party Room integration (Postgres thật)', () => {
     );
   });
 
-  it('RACE speaker cap: 3 promote đồng thời với limit 2 → đúng 2 thắng, SFU chỉ đổi grant 2 lần', async () => {
+  it('RACE speaker consent + cap: 3 accept đồng thời với limit 2 → đúng 2 thắng', async () => {
     const host = await createUser('r-host');
     const { room } = await party.createRoom(auth(host.id), 'Phòng race');
     const members = await Promise.all([
@@ -359,10 +365,17 @@ d('Party Room integration (Postgres thật)', () => {
     ]);
     for (const m of members) await party.joinRoom(auth(m.id), room.id);
 
-    const results = await Promise.allSettled(
-      members.map((m) =>
-        party.changeRole(auth(host.id), room.id, m.id, PartyRole.Speaker),
+    await Promise.all(
+      members.map((m) => party.inviteSpeaker(auth(host.id), room.id, m.id)),
+    );
+    expect(
+      (await activeMembers(room.id)).every(
+        (m) => m.role === PartyRole.Host || m.role === PartyRole.Audience,
       ),
+    ).toBe(true);
+
+    const results = await Promise.allSettled(
+      members.map((m) => party.acceptSpeakerInvite(auth(m.id), room.id)),
     );
     const wins = results.filter((r) => r.status === 'fulfilled');
     const losses = results.filter(
@@ -383,7 +396,7 @@ d('Party Room integration (Postgres thật)', () => {
       ),
     ).toHaveLength(2);
 
-    // demote 1 speaker → slot mở lại, người thua promote được
+    // demote 1 speaker → slot mở lại, người thua phải được mời lại rồi mới accept được
     const demoted = speakers[0];
     await party.changeRole(
       auth(host.id),
@@ -399,12 +412,8 @@ d('Party Room integration (Postgres thật)', () => {
     const loser = members.find(
       (m) => !speakers.some((s) => s.userId === m.id),
     ) as User;
-    const promoted = await party.changeRole(
-      auth(host.id),
-      room.id,
-      loser.id,
-      PartyRole.Speaker,
-    );
+    await party.inviteSpeaker(auth(host.id), room.id, loser.id);
+    const promoted = await party.acceptSpeakerInvite(auth(loser.id), room.id);
     expect(promoted.role).toBe(PartyRole.Speaker);
   });
 
@@ -416,13 +425,13 @@ d('Party Room integration (Postgres thật)', () => {
     await party.joinRoom(auth(member.id), room.id);
 
     await expect(
-      party.changeRole(auth(member.id), room.id, member.id, PartyRole.Speaker),
+      party.changeRole(auth(member.id), room.id, member.id, PartyRole.Audience),
     ).rejects.toMatchObject({ code: 'PARTY_MEMBER_NOT_HOST' });
     await expect(
-      party.changeRole(auth(host.id), room.id, host.id, PartyRole.Speaker),
+      party.changeRole(auth(host.id), room.id, host.id, PartyRole.Audience),
     ).rejects.toMatchObject({ code: 'PARTY_MEMBER_CANNOT_CHANGE_HOST_ROLE' });
     await expect(
-      party.changeRole(auth(host.id), room.id, outsider.id, PartyRole.Speaker),
+      party.changeRole(auth(host.id), room.id, outsider.id, PartyRole.Audience),
     ).rejects.toMatchObject({ code: 'PARTY_TARGET_NOT_A_MEMBER' });
   });
 

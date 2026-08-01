@@ -128,6 +128,16 @@ body {
     color 0.3s ease;
 }
 
+/* Ngăn Safari/Chrome tự zoom khi focus form control có chữ nhỏ hơn 16px trên mobile; không khóa
+   pinch-zoom để vẫn giữ khả năng tiếp cận. */
+@media (max-width: 767px) {
+  input:not([type='hidden']):not([type='checkbox']):not([type='radio']),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 /*
  * Bảng vận hành giữ semantics ở desktop và trở thành danh sách card có nhãn ở màn hình hẹp.
  * Mỗi td phải khai data-label; action cell dùng data-label="".

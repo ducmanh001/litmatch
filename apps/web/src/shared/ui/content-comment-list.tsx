@@ -4,6 +4,7 @@ import { isApiError } from '@litmatch/api-client';
 import Link from 'next/link';
 
 import { useLocale } from '../i18n/locale-store';
+import { useTranslation } from '../i18n/messages';
 import { getUserDisplayName } from '../lib/user-display-name';
 import { cn } from '../lib/cn';
 import { PlaceholderAvatar } from './placeholder-avatar';
@@ -34,11 +35,12 @@ export function ContentCommentList({
   variant?: 'card' | 'plain';
 }) {
   const locale = useLocale();
+  const t = useTranslation();
 
   if (isPending) {
     return (
       <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">
-        Đang tải bình luận…
+        {t('comments.loading')}
       </p>
     );
   }
@@ -46,7 +48,7 @@ export function ContentCommentList({
   if (error !== null) {
     const message = isApiError(error)
       ? error.message
-      : 'Có lỗi xảy ra, thử lại.';
+      : t('common.somethingWentWrong');
     return (
       <p
         role="alert"
@@ -61,7 +63,7 @@ export function ContentCommentList({
     <div className="space-y-3">
       {comments.length === 0 && (
         <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">
-          Chưa có bình luận nào.
+          {t('comments.empty')}
         </p>
       )}
 
@@ -84,7 +86,7 @@ export function ContentCommentList({
               >
                 <Link
                   href={`/users/${author.id}`}
-                  aria-label={`Xem hồ sơ ${author.nickname}`}
+                  aria-label={t('common.profileFor', { name: author.nickname })}
                 >
                   <PlaceholderAvatar seed={author.avatarId} alt="" size={32} />
                 </Link>
@@ -105,7 +107,9 @@ export function ContentCommentList({
                     {comment.content}
                   </p>
                   <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
-                    {new Date(comment.createdAt).toLocaleString('vi-VN')}
+                    {new Date(comment.createdAt).toLocaleString(
+                      locale === 'vi' ? 'vi-VN' : 'en-US',
+                    )}
                   </p>
                 </div>
               </li>
@@ -121,7 +125,9 @@ export function ContentCommentList({
           disabled={isFetchingNextPage}
           onClick={onLoadMore}
         >
-          {isFetchingNextPage ? 'Đang tải…' : 'Xem thêm bình luận'}
+          {isFetchingNextPage
+            ? t('comments.loadMorePending')
+            : t('comments.loadMore')}
         </button>
       )}
     </div>

@@ -7,6 +7,10 @@ import { z } from 'zod';
  */
 const envSchema = z
   .object({
+    /** Public origin used for canonical URLs, sitemap and social previews. */
+    NEXT_PUBLIC_SITE_URL: z.url().default('http://localhost:4300'),
+    /** Optional Google Search Console verification token. */
+    NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION: z.string().min(1).optional(),
     /** Origin core-api, KHÔNG kèm /api/v1 (spec đã chứa prefix trong path). */
     NEXT_PUBLIC_API_URL: z.url(),
     /** Origin signaling-gateway (Socket.IO). */
@@ -53,6 +57,9 @@ const envSchema = z
   );
 
 export const env = envSchema.parse({
+  NEXT_PUBLIC_SITE_URL: process.env['NEXT_PUBLIC_SITE_URL'] || undefined,
+  NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION:
+    process.env['NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION'] || undefined,
   NEXT_PUBLIC_API_URL: process.env['NEXT_PUBLIC_API_URL'],
   NEXT_PUBLIC_SOCKET_URL: process.env['NEXT_PUBLIC_SOCKET_URL'],
   NEXT_PUBLIC_LIVEKIT_URL: process.env['NEXT_PUBLIC_LIVEKIT_URL'],

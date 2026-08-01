@@ -97,7 +97,7 @@ Current route map và backend capability còn thiếu xem `apps/admin/AGENTS.md`
 ```text
 apps/web/src/
   app/
-    (public)/             SSR/SSG/SEO
+    (public)/             SSR/SSG/SEO — landing, product info, support and legal pages
     (app)/                route sau login; vẫn là Server Component theo mặc định của Next
   features/<domain>/      client feature được route gọi vào
   shared/

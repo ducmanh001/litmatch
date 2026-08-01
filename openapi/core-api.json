@@ -2101,6 +2101,117 @@
         "tags": ["party-room"]
       }
     },
+    "/api/v1/party/rooms/{id}/members/{userId}/speaker-invite": {
+      "post": {
+        "operationId": "PartyRoomController_inviteSpeaker",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PartyRoomMemberDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Host gửi lời mời audience lên speaker",
+        "tags": ["party-room"]
+      }
+    },
+    "/api/v1/party/rooms/{id}/speaker-invite/accept": {
+      "post": {
+        "operationId": "PartyRoomController_acceptSpeakerInvite",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PartyRoomMemberDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Audience đồng ý lời mời lên speaker",
+        "tags": ["party-room"]
+      }
+    },
+    "/api/v1/party/rooms/{id}/speaker-invite/decline": {
+      "post": {
+        "operationId": "PartyRoomController_declineSpeakerInvite",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PartyRoomMemberDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Audience từ chối lời mời lên speaker",
+        "tags": ["party-room"]
+      }
+    },
     "/api/v1/gifts": {
       "get": {
         "operationId": "GiftController_listCatalog",
@@ -6693,7 +6804,10 @@
             "format": "date-time",
             "type": "string",
             "nullable": true
-          }
+          },
+          "liked": { "type": "boolean" },
+          "matched": { "type": "boolean" },
+          "friendUserId": { "type": "string", "nullable": true }
         },
         "required": [
           "id",
@@ -6704,7 +6818,10 @@
           "endReason",
           "durationSeconds",
           "billedMinutes",
-          "freeCallEndsAt"
+          "freeCallEndsAt",
+          "liked",
+          "matched",
+          "friendUserId"
         ]
       },
       "JoinCallDto": {
@@ -6782,9 +6899,11 @@
         "properties": {
           "userId": { "type": "string" },
           "role": { "type": "string", "enum": ["host", "speaker", "audience"] },
-          "joinedAt": { "format": "date-time", "type": "string" }
+          "joinedAt": { "format": "date-time", "type": "string" },
+          "nickname": { "type": "string" },
+          "speakerInvitePending": { "type": "boolean" }
         },
-        "required": ["userId", "role", "joinedAt"]
+        "required": ["userId", "role", "joinedAt", "speakerInvitePending"]
       },
       "JoinPartyRoomDto": {
         "type": "object",
@@ -6825,9 +6944,7 @@
       },
       "ChangePartyRoleDto": {
         "type": "object",
-        "properties": {
-          "role": { "type": "string", "enum": ["speaker", "audience"] }
-        },
+        "properties": { "role": { "type": "string", "enum": ["audience"] } },
         "required": ["role"]
       },
       "GiftDto": {

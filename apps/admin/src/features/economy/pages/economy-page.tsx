@@ -2,6 +2,8 @@ import { isApiError } from '@litmatch/api-client';
 import { useState } from 'react';
 
 import { showToast } from '../../../shared/lib/toast-store';
+import { useT } from '../../../shared/i18n/catalog';
+import { useLocale } from '../../../shared/i18n/locale-store';
 import { Button } from '../../../shared/ui/button';
 import { Card } from '../../../shared/ui/card';
 import { Field } from '../../../shared/ui/field';
@@ -20,18 +22,19 @@ import {
 
 import type { AdminTransactionDto } from '../api';
 
-const TXN_TYPE_LABEL: Record<string, string> = {
-  iap_purchase: 'Nạp Diamond (IAP)',
-  vip_purchase: 'Mua gói VIP',
-  matching_speedup: 'Tăng tốc ghép đôi',
-  calling_per_minute: 'Cước gọi thoại',
-  gift_send: 'Tặng quà',
-  avatar_purchase: 'Mua item avatar',
-  reversal: 'Hoàn tiền',
-  adjustment: 'Điều chỉnh',
-};
+const TXN_TYPE_LABEL_KEYS = {
+  iap_purchase: 'economy.type.iapPurchase',
+  vip_purchase: 'economy.type.vipPurchase',
+  matching_speedup: 'economy.type.matchingSpeedup',
+  calling_per_minute: 'economy.type.callingPerMinute',
+  gift_send: 'economy.type.giftSend',
+  avatar_purchase: 'economy.type.avatarPurchase',
+  reversal: 'economy.type.reversal',
+  adjustment: 'economy.type.adjustment',
+} as const;
 
 export function EconomyPage() {
+  const t = useT();
   const [userIdInput, setUserIdInput] = useState('');
   const [lookupUserId, setLookupUserId] = useState<string | null>(null);
 
@@ -44,21 +47,21 @@ export function EconomyPage() {
       ? undefined
       : isApiError(err)
         ? err.message
-        : 'Có lỗi xảy ra, thử lại.';
+        : t('common.tryAgain');
 
   return (
     <section className="space-y-4">
       <Card className="flex flex-wrap items-end gap-2.5">
         <Field
           htmlFor="lookup-user-id"
-          label="User ID"
+          label={t('economy.userId')}
           className="min-w-[340px]"
         >
           <Input
             id="lookup-user-id"
             value={userIdInput}
             onChange={(e) => setUserIdInput(e.target.value)}
-            placeholder="uuid của user (lấy từ trang Người dùng)"
+            placeholder={t('economy.userIdPlaceholder')}
           />
         </Field>
         <Button
@@ -66,23 +69,26 @@ export function EconomyPage() {
           onClick={() => setLookupUserId(userIdInput.trim() || null)}
           disabled={userIdInput.trim() === ''}
         >
-          Xem
+          {t('economy.view')}
         </Button>
       </Card>
 
-      {lookupUserId === null && (
-        <EmptyState title="Nhập User ID để xem ví + lịch sử giao dịch" />
-      )}
+      {lookupUserId === null && <EmptyState title={t('economy.enterUserId')} />}
 
       {lookupUserId !== null && (
         <>
-          {wallet.isPending && <LoadingState label="Đang tải ví…" />}
+          {wallet.isPending && (
+            <LoadingState label={t('economy.loadingWallet')} />
+          )}
           {wallet.error !== null && <ErrorState error={wallet.error} />}
           {wallet.data !== undefined && (
             <Card className="flex flex-wrap gap-9">
-              <WalletStat label="Balance" value={`${wallet.data.balance} 💎`} />
               <WalletStat
-                label="Earnings (PTS)"
+                label={t('economy.balance')}
+                value={`${wallet.data.balance} 💎`}
+              />
+              <WalletStat
+                label={t('economy.earnings')}
                 value={String(wallet.data.earnings)}
               />
               <div>
@@ -103,38 +109,37 @@ export function EconomyPage() {
           )}
 
           {transactions.isPending && (
-            <LoadingState label="Đang tải giao dịch…" />
+            <LoadingState label={t('economy.loadingTransactions')} />
           )}
           {transactions.error !== null && (
             <ErrorState error={transactions.error} />
           )}
           {transactions.data !== undefined &&
             transactions.data.items.length === 0 && (
-              <EmptyState title="User này chưa có giao dịch nào (do user chủ động thực hiện)" />
+              <EmptyState title={t('economy.noTransactions')} />
             )}
 
           {transactions.data !== undefined &&
             transactions.data.items.length > 0 && (
               <Card className="overflow-hidden p-0">
                 <p className="px-[18px] pt-3.5 text-[11.5px] text-muted-foreground">
-                  Chỉ hiện giao dịch user này chủ động thực hiện (nạp/mua/tặng)
-                  — chưa gồm giao dịch chỉ là người nhận quà.
+                  {t('economy.transactionsHint')}
                 </p>
                 <div className="overflow-x-auto">
                   <table className="responsive-table w-full border-collapse text-[13px] md:min-w-[640px]">
                     <thead className="border-b border-border">
                       <tr>
                         <th className="px-[18px] py-3 text-left text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
-                          Loại
+                          {t('economy.type')}
                         </th>
                         <th className="px-[18px] py-3 text-left text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
-                          Trạng thái
+                          {t('economy.status')}
                         </th>
                         <th className="px-[18px] py-3 text-left text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
-                          Diamond delta
+                          {t('economy.delta')}
                         </th>
                         <th className="px-[18px] py-3 text-left text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
-                          Thời gian
+                          {t('economy.time')}
                         </th>
                         <th className="px-[18px] py-3" />
                       </tr>
@@ -151,7 +156,7 @@ export function EconomyPage() {
                               {
                                 onSuccess: () =>
                                   showToast(
-                                    `Đã hoàn tiền giao dịch #${txn.id}`,
+                                    t('economy.refundSuccess', { id: txn.id }),
                                   ),
                               },
                             )
@@ -195,20 +200,27 @@ function TransactionRow({
   onRefund: (reason: string) => void;
   refundPending: boolean;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const isReversal = txn.type === 'reversal';
   const isPositive = txn.diamondDelta.trim().startsWith('+');
   return (
     <tr className="border-b border-border align-top last:border-0 hover:bg-muted">
-      <td data-label="Loại" className="px-[18px] py-[13px]">
-        {TXN_TYPE_LABEL[txn.type] ?? txn.type}
+      <td data-label={t('economy.type')} className="px-[18px] py-[13px]">
+        {TXN_TYPE_LABEL_KEYS[txn.type as keyof typeof TXN_TYPE_LABEL_KEYS] !==
+        undefined
+          ? t(TXN_TYPE_LABEL_KEYS[txn.type as keyof typeof TXN_TYPE_LABEL_KEYS])
+          : txn.type}
       </td>
-      <td data-label="Trạng thái" className="px-[18px] py-[13px]">
+      <td data-label={t('economy.status')} className="px-[18px] py-[13px]">
         <Pill variant={txn.status === 'completed' ? 'green' : 'neutral'}>
-          {txn.status === 'completed' ? 'Hoàn tất' : 'Đã hoàn tiền'}
+          {txn.status === 'completed'
+            ? t('economy.completed')
+            : t('economy.refunded')}
         </Pill>
       </td>
       <td
-        data-label="Diamond delta"
+        data-label={t('economy.delta')}
         className={
           isPositive
             ? 'px-[18px] py-[13px] font-extrabold text-success'
@@ -217,8 +229,10 @@ function TransactionRow({
       >
         {txn.diamondDelta}
       </td>
-      <td data-label="Thời gian" className="px-[18px] py-[13px]">
-        {new Date(txn.createdAt).toLocaleString('vi-VN')}
+      <td data-label={t('economy.time')} className="px-[18px] py-[13px]">
+        {new Date(txn.createdAt).toLocaleString(
+          locale === 'vi' ? 'vi-VN' : 'en-US',
+        )}
       </td>
       <td data-label="" className="px-[18px] py-[13px] text-right">
         {!isReversal && txn.status !== 'reversed' && (
@@ -236,6 +250,7 @@ function RefundForm({
   onSubmit: (reason: string) => void;
   disabled: boolean;
 }) {
+  const t = useT();
   const [reason, setReason] = useState('');
   return (
     <form
@@ -250,7 +265,7 @@ function RefundForm({
       <Input
         value={reason}
         onChange={(e) => setReason(e.target.value)}
-        placeholder="Lý do hoàn tiền"
+        placeholder={t('economy.refundReason')}
         className="h-8 w-[150px]"
       />
       <Button
@@ -259,7 +274,7 @@ function RefundForm({
         variant="destructive"
         disabled={disabled || reason.trim() === ''}
       >
-        Hoàn tiền
+        {t('economy.refund')}
       </Button>
     </form>
   );

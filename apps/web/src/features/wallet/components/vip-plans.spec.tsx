@@ -65,13 +65,13 @@ describe('VipPlans', () => {
     renderPlans();
     await userEvent.click(
       await screen.findByRole('button', {
-        name: 'Mua VIP 30 ngày với 500 diamond',
+        name: 'Mua gói VIP 30 ngày với 500 Diamond',
       }),
     );
 
     expect(post).not.toHaveBeenCalled();
     expect(confirmStore.getSnapshot()?.options.message).toContain(
-      '500 diamond',
+      '500 Diamond',
     );
     act(() => confirmStore.resolve(true));
 

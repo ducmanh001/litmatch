@@ -112,6 +112,20 @@ quan trọng hơn một ngày hoàn thành giả.
 - [ ] Browser/device E2E cho provider thật chỉ chạy khi môi trường/credential tồn tại; unit/mock
       PASS không được nâng thành production claim.
 
+### Public web, SEO và trust
+
+- [x] Public information surface: landing, tính năng, cách hoạt động, about, contact, help,
+      community guidelines, terms, privacy policy và cookie policy; footer không còn dead link `#`.
+- [x] Technical SEO baseline: canonical theo public origin, metadata Open Graph/Twitter, JSON-LD
+      cho Organization/WebSite/SoftwareApplication và các trang public, `robots.txt`, `sitemap.xml`,
+      manifest, social preview image; route sau đăng nhập được `noindex`.
+- [ ] Legal/product owner review nội dung terms, privacy, cookies và community guidelines trước
+      khi công bố như chính sách pháp lý chính thức; bản source hiện là baseline theo behavior hiện có.
+- [ ] Sau khi có domain production: khai báo Search Console, gửi sitemap, kiểm tra rich result,
+      canonical, Core Web Vitals và cập nhật `NEXT_PUBLIC_SITE_URL` đúng public web URL.
+- [ ] Đo organic acquisition và AI-search citations bằng dữ liệu thật trước khi tuyên bố SEO đã
+      đạt mục tiêu; JSON-LD/SSR giúp máy hiểu nội dung nhưng không đảm bảo thứ hạng hay việc được trích dẫn.
+
 Route map hiện hành nằm trong `apps/admin/AGENTS.md`, `apps/web/AGENTS.md` và source route tree.
 Visual reference ở [`layouts/`](../layouts/README.md) chỉ định hướng presentation; backend/OpenAPI/
 domain docs thắng khi mockup mâu thuẫn.

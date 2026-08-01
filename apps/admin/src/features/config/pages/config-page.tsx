@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { showToast } from '../../../shared/lib/toast-store';
+import { t, useT } from '../../../shared/i18n/catalog';
 import { Button } from '../../../shared/ui/button';
 import { Card } from '../../../shared/ui/card';
 import { ErrorState, LoadingState } from '../../../shared/ui/states';
@@ -24,6 +25,7 @@ type CatalogRow =
   | { type: 'vip'; value: AdminVipPlanDto };
 
 export function ConfigPage() {
+  const t = useT();
   const catalog = useEconomyCatalog();
   const setIapActive = useSetIapProductActive();
   const setVipActive = useSetVipPlanActive();
@@ -47,7 +49,12 @@ export function ConfigPage() {
         : setVipActive.mutateAsync({ id: row.value.id, active });
     void mutation
       .then(() =>
-        showToast(`${active ? 'Đã bật' : 'Đã ẩn'} "${catalogName(row)}"`),
+        showToast(
+          t('config.packageUpdated', {
+            action: active ? t('common.enabled') : t('common.hidden'),
+            name: catalogName(row),
+          }),
+        ),
       )
       .catch(() => undefined);
   };
@@ -59,10 +66,12 @@ export function ConfigPage() {
       <Card>
         <div className="mb-3.5 flex items-center gap-2.5">
           <h3 className="text-[14.5px] font-extrabold">
-            Gói nạp Diamond &amp; gói VIP
+            {t('config.catalogTitle')}
           </h3>
         </div>
-        {catalog.isPending && <LoadingState label="Đang tải catalog…" />}
+        {catalog.isPending && (
+          <LoadingState label={t('config.loadingCatalog')} />
+        )}
         {catalog.error !== null && <ErrorState error={catalog.error} />}
         {mutationError !== null && <ErrorState error={mutationError} />}
         {catalog.data !== undefined && (
@@ -70,11 +79,11 @@ export function ConfigPage() {
             <table className="responsive-table w-full border-collapse text-[13px] md:min-w-[640px]">
               <thead className="border-b border-border">
                 <tr>
-                  <HeaderCell>Tên gói</HeaderCell>
-                  <HeaderCell>Loại</HeaderCell>
-                  <HeaderCell>Giá trị</HeaderCell>
-                  <HeaderCell>Giá</HeaderCell>
-                  <HeaderCell>Trạng thái</HeaderCell>
+                  <HeaderCell>{t('config.packageName')}</HeaderCell>
+                  <HeaderCell>{t('config.packageType')}</HeaderCell>
+                  <HeaderCell>{t('config.value')}</HeaderCell>
+                  <HeaderCell>{t('config.price')}</HeaderCell>
+                  <HeaderCell>{t('config.status')}</HeaderCell>
                 </tr>
               </thead>
               <tbody>
@@ -90,31 +99,37 @@ export function ConfigPage() {
                       className="border-b border-border last:border-0 hover:bg-muted"
                     >
                       <td
-                        data-label="Tên gói"
+                        data-label={t('config.packageName')}
                         className="px-[18px] py-[13px] font-mono text-xs"
                       >
                         {catalogName(row)}
                       </td>
                       <td
-                        data-label="Loại"
+                        data-label={t('config.packageType')}
                         className="px-[18px] py-[13px] uppercase"
                       >
                         {row.type === 'iap'
                           ? row.value.provider
                           : row.value.tier}
                       </td>
-                      <td data-label="Giá trị" className="px-[18px] py-[13px]">
+                      <td
+                        data-label={t('config.value')}
+                        className="px-[18px] py-[13px]"
+                      >
                         {row.type === 'iap'
                           ? `${row.value.diamonds} 💎`
-                          : `${row.value.days} ngày`}
+                          : t('config.days', { count: row.value.days })}
                       </td>
-                      <td data-label="Giá" className="px-[18px] py-[13px]">
+                      <td
+                        data-label={t('config.price')}
+                        className="px-[18px] py-[13px]"
+                      >
                         {row.type === 'iap'
-                          ? 'Do App Store/Google Play quản lý'
+                          ? t('config.storeManaged')
                           : `${row.value.priceDiamond} 💎`}
                       </td>
                       <td
-                        data-label="Trạng thái"
+                        data-label={t('config.status')}
                         className="px-[18px] py-[13px]"
                       >
                         <div className="flex items-center gap-2.5">
@@ -122,10 +137,14 @@ export function ConfigPage() {
                             checked={row.value.active}
                             onChange={() => togglePackage(row)}
                             disabled={busy}
-                            label={`Bật/tắt ${catalogName(row)}`}
+                            label={t('config.togglePackage', {
+                              name: catalogName(row),
+                            })}
                           />
                           <span className="text-xs text-muted-foreground">
-                            {row.value.active ? 'Đang bán' : 'Đã ẩn'}
+                            {row.value.active
+                              ? t('config.onSale')
+                              : t('common.hidden')}
                           </span>
                         </div>
                       </td>
@@ -154,10 +173,11 @@ function HeaderCell({ children }: { children: ReactNode }) {
 function catalogName(row: CatalogRow): string {
   return row.type === 'iap'
     ? row.value.productId
-    : `${row.value.tier.toUpperCase()} · ${row.value.days} ngày`;
+    : `${row.value.tier.toUpperCase()} · ${t('config.days', { count: row.value.days })}`;
 }
 
 function NotifyComposerCard() {
+  const t = useT();
   const [title, setTitle] = useState('');
   const [audience, setAudience] = useState<BroadcastAudience>('all');
   const [body, setBody] = useState('');
@@ -166,11 +186,12 @@ function NotifyComposerCard() {
   return (
     <Card>
       <div className="mb-1 flex items-center gap-2.5">
-        <h3 className="text-[14.5px] font-extrabold">Soạn thông báo đẩy</h3>
+        <h3 className="text-[14.5px] font-extrabold">
+          {t('config.composeNotification')}
+        </h3>
       </div>
       <p className="pb-3.5 text-[11.5px] text-muted-foreground">
-        Tạo thông báo in-app cho đúng nhóm người nhận; push được gửi best-effort
-        sau khi dữ liệu đã lưu thành công.
+        {t('config.notificationHint')}
       </p>
       <form
         className="space-y-4"
@@ -179,7 +200,7 @@ function NotifyComposerCard() {
           const normalizedTitle = title.trim();
           const normalizedBody = body.trim();
           if (normalizedTitle === '' || normalizedBody === '') {
-            showToast('Vui lòng nhập tiêu đề và nội dung', 'warn');
+            showToast(t('config.requiredNotification'), 'warn');
             return;
           }
           broadcast.mutate(
@@ -192,7 +213,9 @@ function NotifyComposerCard() {
               onSuccess: (result) => {
                 if (result === undefined) return;
                 showToast(
-                  `Đã gửi thông báo tới ${result.recipientCount.toLocaleString('vi-VN')} người`,
+                  t('config.notificationSent', {
+                    count: result.recipientCount.toLocaleString(),
+                  }),
                 );
                 setTitle('');
                 setBody('');
@@ -208,20 +231,20 @@ function NotifyComposerCard() {
             htmlFor="notify-title"
           >
             <span className="text-xs font-bold text-muted-foreground">
-              Tiêu đề
+              {t('config.title')}
             </span>
             <input
               id="notify-title"
               value={title}
               maxLength={120}
               onChange={(event) => setTitle(event.target.value)}
-              placeholder="VD: Ưu đãi nạp Diamond cuối tuần"
+              placeholder={t('config.titlePlaceholder')}
               className="h-9 rounded-[9px] border border-border bg-muted px-3 text-[13px] focus-visible:outline-2 focus-visible:outline-ring"
             />
           </label>
           <label className="flex flex-col gap-1.5" htmlFor="notify-audience">
             <span className="text-xs font-bold text-muted-foreground">
-              Đối tượng nhận
+              {t('config.audience')}
             </span>
             <select
               id="notify-audience"
@@ -231,15 +254,15 @@ function NotifyComposerCard() {
               }
               className="h-9 rounded-[9px] border border-border bg-muted px-3 text-[13px] focus-visible:outline-2 focus-visible:outline-ring"
             >
-              <option value="all">Tất cả người dùng</option>
-              <option value="vip">Chỉ VIP/SVIP</option>
-              <option value="free">Chỉ tài khoản Free</option>
+              <option value="all">{t('config.allUsers')}</option>
+              <option value="vip">{t('config.vipUsers')}</option>
+              <option value="free">{t('config.freeUsers')}</option>
             </select>
           </label>
         </div>
         <label className="flex flex-col gap-1.5" htmlFor="notify-body">
           <span className="text-xs font-bold text-muted-foreground">
-            Nội dung
+            {t('config.body')}
           </span>
           <textarea
             id="notify-body"
@@ -247,12 +270,14 @@ function NotifyComposerCard() {
             maxLength={500}
             onChange={(event) => setBody(event.target.value)}
             rows={3}
-            placeholder="Nội dung thông báo..."
+            placeholder={t('config.bodyPlaceholder')}
             className="resize-y rounded-[9px] border border-border bg-muted px-3 py-2.5 text-[13px] focus-visible:outline-2 focus-visible:outline-ring"
           />
         </label>
         <Button type="submit" disabled={broadcast.isPending}>
-          {broadcast.isPending ? 'Đang gửi…' : 'Gửi thông báo'}
+          {broadcast.isPending
+            ? t('config.sending')
+            : t('config.sendNotification')}
         </Button>
         {broadcast.error !== null && <ErrorState error={broadcast.error} />}
       </form>

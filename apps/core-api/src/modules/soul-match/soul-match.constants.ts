@@ -14,3 +14,11 @@ export const MESSAGE_CONTENT_HARD_CAP = 2000;
 export function messageIdempotencyKey(userId: string, key: string): string {
   return `soul:msg:${userId}:${key}`;
 }
+
+/** Stable key for copying one anonymous message into the permanent conversation. */
+export function friendHistoryImportKey(
+  sessionId: string,
+  messageId: string,
+): string {
+  return `friend:import:soul:${sessionId}:${messageId}`;
+}

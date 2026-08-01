@@ -55,21 +55,33 @@ export class ListPartyRoomsQueryDto extends CursorPageQueryDto {
 }
 
 export class ChangePartyRoleDto {
-  @ApiProperty({ enum: [PartyRole.Speaker, PartyRole.Audience] })
-  @IsIn([PartyRole.Speaker, PartyRole.Audience])
-  role!: PartyRole.Speaker | PartyRole.Audience;
+  @ApiProperty({ enum: [PartyRole.Audience] })
+  @IsIn([PartyRole.Audience])
+  role!: PartyRole.Audience;
 }
 
 export class PartyRoomMemberDto {
   @ApiProperty() userId!: string;
   @ApiProperty({ enum: PartyRole }) role!: PartyRole;
   @ApiProperty() joinedAt!: Date;
+  @ApiPropertyOptional() nickname?: string;
+  /** Chỉ true cho chính viewer đang có lời mời; không leak lời mời của người khác. */
+  @ApiProperty() speakerInvitePending!: boolean;
 
-  static from(member: PartyRoomMember): PartyRoomMemberDto {
+  static from(
+    member: PartyRoomMember,
+    viewerUserId?: string,
+    hostUserId?: string,
+    nicknameById?: ReadonlyMap<string, string>,
+  ): PartyRoomMemberDto {
     const dto = new PartyRoomMemberDto();
     dto.userId = member.userId;
     dto.role = member.role;
     dto.joinedAt = member.joinedAt;
+    dto.nickname = nicknameById?.get(member.userId);
+    dto.speakerInvitePending =
+      member.speakerInvitePending &&
+      (member.userId === viewerUserId || viewerUserId === hostUserId);
     return dto;
   }
 }
@@ -112,10 +124,22 @@ export class PartyRoomDetailDto {
   @ApiProperty() room!: PartyRoomDto;
   @ApiProperty({ type: [PartyRoomMemberDto] }) members!: PartyRoomMemberDto[];
 
-  static from(room: PartyRoom, members: PartyRoomMember[]): PartyRoomDetailDto {
+  static from(
+    room: PartyRoom,
+    members: PartyRoomMember[],
+    viewerUserId?: string,
+    nicknameById?: ReadonlyMap<string, string>,
+  ): PartyRoomDetailDto {
     const dto = new PartyRoomDetailDto();
     dto.room = PartyRoomDto.from(room, members.length);
-    dto.members = members.map(PartyRoomMemberDto.from);
+    dto.members = members.map((member) =>
+      PartyRoomMemberDto.from(
+        member,
+        viewerUserId,
+        room.hostUserId,
+        nicknameById,
+      ),
+    );
     return dto;
   }
 }

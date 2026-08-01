@@ -31,6 +31,10 @@ export class PartyRoomMember {
   @Column({ type: 'varchar', length: 16 })
   role!: PartyRole;
 
+  /** Host đã mời audience lên speaker nhưng người đó chưa đồng ý — không phải role publish. */
+  @Column({ type: 'boolean', default: false })
+  speakerInvitePending!: boolean;
+
   @Column({ type: 'timestamptz', default: () => 'now()' })
   joinedAt!: Date;
 

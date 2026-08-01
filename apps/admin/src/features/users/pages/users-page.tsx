@@ -14,6 +14,7 @@ import {
   LoadingState,
 } from '../../../shared/ui/states';
 import { showToast } from '../../../shared/lib/toast-store';
+import { useT } from '../../../shared/i18n/catalog';
 import { useBanUser, useUnbanUser, useUsersList } from '../api';
 
 import type { ReactNode } from 'react';
@@ -49,6 +50,7 @@ function initialsOf(nickname: string): string {
 }
 
 export function UsersPage() {
+  const t = useT();
   const currentUserId = useCurrentUserId();
   const [nickname, setNickname] = useState('');
   const [status, setStatus] = useState<AdminUserDto['status'] | ''>('');
@@ -65,25 +67,27 @@ export function UsersPage() {
 
   const actionError = (err: unknown): string | null => {
     if (err === null || err === undefined) return null;
-    return isApiError(err) ? err.message : 'Có lỗi xảy ra, thử lại.';
+    return isApiError(err) ? err.message : t('common.tryAgain');
   };
 
   function ban(user: AdminUserDto): void {
     banUser.mutate(user.id, {
-      onSuccess: () => showToast(`Đã khoá tài khoản @${user.nickname}`, 'warn'),
+      onSuccess: () =>
+        showToast(t('users.bannedToast', { nickname: user.nickname }), 'warn'),
     });
   }
 
   function unban(user: AdminUserDto): void {
     unbanUser.mutate(user.id, {
-      onSuccess: () => showToast(`Đã mở khoá tài khoản @${user.nickname}`),
+      onSuccess: () =>
+        showToast(t('users.unbannedToast', { nickname: user.nickname })),
     });
   }
 
   return (
     <section className="space-y-4">
       <Card className="flex flex-wrap items-end gap-4">
-        <Field htmlFor="nickname-filter" label="Nickname">
+        <Field htmlFor="nickname-filter" label={t('users.nickname')}>
           <Input
             id="nickname-filter"
             value={nickname}
@@ -91,11 +95,11 @@ export function UsersPage() {
               setNickname(e.target.value);
               setOffset(0);
             }}
-            placeholder="Tìm theo nickname"
+            placeholder={t('users.searchNickname')}
             className="min-w-[200px]"
           />
         </Field>
-        <Field htmlFor="status-filter" label="Trạng thái">
+        <Field htmlFor="status-filter" label={t('users.status')}>
           <select
             id="status-filter"
             className="h-9 rounded-[9px] border border-border bg-muted px-3 text-[13px] text-foreground focus-visible:outline-2 focus-visible:outline-ring"
@@ -105,9 +109,9 @@ export function UsersPage() {
               setOffset(0);
             }}
           >
-            <option value="">Tất cả</option>
-            <option value="active">Active</option>
-            <option value="banned">Banned</option>
+            <option value="">{t('users.all')}</option>
+            <option value="active">{t('users.active')}</option>
+            <option value="banned">{t('users.banned')}</option>
           </select>
         </Field>
       </Card>
@@ -115,7 +119,7 @@ export function UsersPage() {
       {isPending && <LoadingState />}
       {error !== null && <ErrorState error={error} />}
       {data !== undefined && data.items.length === 0 && (
-        <EmptyState title="Không có user nào khớp bộ lọc" />
+        <EmptyState title={t('users.empty')} />
       )}
 
       {data !== undefined && data.items.length > 0 && (
@@ -125,16 +129,16 @@ export function UsersPage() {
               <thead className="border-b border-border">
                 <tr>
                   <th className="px-[18px] py-3 text-left text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
-                    Nickname
+                    {t('users.nickname')}
                   </th>
                   <th className="px-[18px] py-3 text-left text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
-                    Role
+                    {t('users.role')}
                   </th>
                   <th className="px-[18px] py-3 text-left text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
-                    Trạng thái
+                    {t('users.status')}
                   </th>
                   <th className="px-[18px] py-3 text-left text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
-                    Guest
+                    {t('users.guest')}
                   </th>
                   <th className="px-[18px] py-3" />
                 </tr>
@@ -145,7 +149,10 @@ export function UsersPage() {
                     key={user.id}
                     className="border-b border-border last:border-0 hover:bg-muted"
                   >
-                    <td data-label="Nickname" className="px-[18px] py-[13px]">
+                    <td
+                      data-label={t('users.nickname')}
+                      className="px-[18px] py-[13px]"
+                    >
                       <button
                         type="button"
                         onClick={() => setProfileUser(user)}
@@ -162,18 +169,29 @@ export function UsersPage() {
                         </span>
                       </button>
                     </td>
-                    <td data-label="Role" className="px-[18px] py-[13px]">
+                    <td
+                      data-label={t('users.role')}
+                      className="px-[18px] py-[13px]"
+                    >
                       <Pill variant={ROLE_PILL[user.role]}>{user.role}</Pill>
                     </td>
-                    <td data-label="Trạng thái" className="px-[18px] py-[13px]">
+                    <td
+                      data-label={t('users.status')}
+                      className="px-[18px] py-[13px]"
+                    >
                       <Pill
                         variant={user.status === 'active' ? 'green' : 'red'}
                       >
-                        {user.status === 'active' ? 'Active' : 'Banned'}
+                        {user.status === 'active'
+                          ? t('users.active')
+                          : t('users.banned')}
                       </Pill>
                     </td>
-                    <td data-label="Guest" className="px-[18px] py-[13px]">
-                      {user.isGuest ? 'Có' : 'Không'}
+                    <td
+                      data-label={t('users.guest')}
+                      className="px-[18px] py-[13px]"
+                    >
+                      {user.isGuest ? t('users.yes') : t('users.no')}
                     </td>
                     <td
                       data-label=""
@@ -186,7 +204,7 @@ export function UsersPage() {
                           disabled={unbanUser.isPending}
                           onClick={() => unban(user)}
                         >
-                          Mở khoá
+                          {t('users.unban')}
                         </Button>
                       ) : (
                         <Button
@@ -197,12 +215,12 @@ export function UsersPage() {
                           }
                           title={
                             user.id === currentUserId
-                              ? 'Không thể tự khoá tài khoản của chính mình'
+                              ? t('users.cannotBanSelf')
                               : undefined
                           }
                           onClick={() => ban(user)}
                         >
-                          Khoá
+                          {t('users.ban')}
                         </Button>
                       )}
                     </td>
@@ -219,7 +237,7 @@ export function UsersPage() {
                 disabled={offset === 0}
                 onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
               >
-                Trang trước
+                {t('users.previous')}
               </Button>
               <span>
                 {offset + 1}–{Math.min(offset + PAGE_SIZE, data.total)} /{' '}
@@ -230,7 +248,7 @@ export function UsersPage() {
                 disabled={offset + PAGE_SIZE >= data.total}
                 onClick={() => setOffset(offset + PAGE_SIZE)}
               >
-                Trang sau
+                {t('users.next')}
               </Button>
             </div>
           )}
@@ -252,7 +270,7 @@ export function UsersPage() {
         {profileUser !== null && (
           <>
             <ModalHeader
-              title="Hồ sơ người dùng"
+              title={t('users.profile')}
               titleId="user-profile-title"
               onClose={() => setProfileUser(null)}
             />
@@ -274,23 +292,25 @@ export function UsersPage() {
                 </div>
               </div>
               <div className="mb-[18px] grid grid-cols-2 gap-3.5">
-                <ProfileField label="Role">
+                <ProfileField label={t('users.role')}>
                   <Pill variant={ROLE_PILL[profileUser.role]}>
                     {profileUser.role}
                   </Pill>
                 </ProfileField>
-                <ProfileField label="Trạng thái">
+                <ProfileField label={t('users.status')}>
                   <Pill
                     variant={profileUser.status === 'active' ? 'green' : 'red'}
                   >
-                    {profileUser.status === 'active' ? 'Active' : 'Banned'}
+                    {profileUser.status === 'active'
+                      ? t('users.active')
+                      : t('users.banned')}
                   </Pill>
                 </ProfileField>
-                <ProfileField label="Giới tính">
+                <ProfileField label={t('users.gender')}>
                   {profileUser.gender ?? '—'}
                 </ProfileField>
-                <ProfileField label="Guest">
-                  {profileUser.isGuest ? 'Có' : 'Không'}
+                <ProfileField label={t('users.guest')}>
+                  {profileUser.isGuest ? t('users.yes') : t('users.no')}
                 </ProfileField>
               </div>
               <div className="flex gap-2.5 border-t border-border pt-3.5">
@@ -305,7 +325,7 @@ export function UsersPage() {
                       setProfileUser(null);
                     }}
                   >
-                    Khoá tài khoản
+                    {t('users.banAccount')}
                   </Button>
                 ) : (
                   <Button
@@ -316,7 +336,7 @@ export function UsersPage() {
                       setProfileUser(null);
                     }}
                   >
-                    Mở khoá tài khoản
+                    {t('users.unban')}
                   </Button>
                 )}
               </div>

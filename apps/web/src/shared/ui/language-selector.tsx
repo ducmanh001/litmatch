@@ -7,11 +7,14 @@ import { useTranslation } from '../i18n/messages';
 import { cn } from '../lib/cn';
 import { ChevronDownIcon, GlobeIcon } from './icons';
 
-type LanguageOption = { code: 'vi' | 'en'; label: string };
+type LanguageOption = {
+  code: 'vi' | 'en';
+  labelKey: 'language.vietnamese' | 'language.english';
+};
 
 const LANGUAGE_OPTIONS: readonly LanguageOption[] = [
-  { code: 'vi', label: 'Tiếng Việt' },
-  { code: 'en', label: 'English' },
+  { code: 'vi', labelKey: 'language.vietnamese' },
+  { code: 'en', labelKey: 'language.english' },
 ];
 
 export function LanguageSelector({ className }: { className?: string }) {
@@ -25,7 +28,7 @@ export function LanguageSelector({ className }: { className?: string }) {
         type="button"
         aria-expanded={open}
         aria-haspopup="listbox"
-        aria-label={`${t('language.choose')}, ${locale === 'vi' ? 'Tiếng Việt' : 'English'}`}
+        aria-label={`${t('language.choose')}, ${t(locale === 'vi' ? 'language.vietnamese' : 'language.english')}`}
         onClick={() => setOpen((value) => !value)}
         className="flex h-10 items-center gap-1.5 rounded-full border border-black/5 bg-white px-3 text-xs font-bold text-slate-600 transition hover:border-iris/30 dark:border-white/10 dark:bg-surf dark:text-white/80"
       >
@@ -67,7 +70,7 @@ export function LanguageSelector({ className }: { className?: string }) {
                     'text-foreground dark:text-white',
                   )}
                 >
-                  {option.label}
+                  {t(option.labelKey)}
                 </span>
                 {option.code === locale && (
                   <span aria-hidden className="text-iris">

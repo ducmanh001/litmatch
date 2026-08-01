@@ -22,6 +22,7 @@ import { useReportsList } from '../features/moderation/api';
 import { apiClient, tokenStore } from '../shared/api/client';
 import { useRole } from '../shared/auth/use-role';
 import { cn } from '../shared/lib/cn';
+import { useT } from '../shared/i18n/catalog';
 import { Button } from '../shared/ui/button';
 import { LanguageToggle } from '../shared/ui/language-toggle';
 import { Modal, ModalBody, ModalHeader } from '../shared/ui/modal';
@@ -33,53 +34,53 @@ import { ToastStack } from '../shared/ui/toast-stack';
  * Thứ tự + icon khớp layouts/admins/litmatch-admin-dashboard (2).html.
  */
 const NAV_ITEMS = [
-  { to: '/', label: 'Tổng quan', icon: LayoutDashboard, end: true },
-  { to: '/users', label: 'Quản lý người dùng', icon: Users },
-  { to: '/moderation', label: 'Kiểm duyệt & báo cáo', icon: ShieldAlert },
-  { to: '/economy', label: 'Giao dịch & Diamond', icon: Gem },
-  { to: '/gifts', label: 'Quà tặng', icon: Gift },
-  { to: '/rooms', label: 'Party Room', icon: Radio },
-  { to: '/config', label: 'Cấu hình gói/Thông báo', icon: SlidersHorizontal },
-  { to: '/permissions', label: 'Phân quyền admin', icon: ShieldCheck },
+  { to: '/', labelKey: 'shell.dashboard', icon: LayoutDashboard, end: true },
+  { to: '/users', labelKey: 'shell.users', icon: Users },
+  { to: '/moderation', labelKey: 'shell.moderation', icon: ShieldAlert },
+  { to: '/economy', labelKey: 'shell.economy', icon: Gem },
+  { to: '/gifts', labelKey: 'shell.gifts', icon: Gift },
+  { to: '/rooms', labelKey: 'shell.rooms', icon: Radio },
+  { to: '/config', labelKey: 'shell.config', icon: SlidersHorizontal },
+  { to: '/permissions', labelKey: 'shell.permissions', icon: ShieldCheck },
 ] as const;
 
-const PAGE_META: Record<string, { title: string; subtitle: string }> = {
+const PAGE_META = {
   '/': {
-    title: 'Tổng quan',
-    subtitle: 'Số liệu vận hành, Economy và audit log theo thời gian thực',
+    title: 'shell.dashboard',
+    subtitle: 'shell.dashboardSubtitle',
   },
   '/users': {
-    title: 'Quản lý người dùng',
-    subtitle: 'Danh sách toàn bộ tài khoản',
+    title: 'shell.users',
+    subtitle: 'shell.usersSubtitle',
   },
   '/moderation': {
-    title: 'Kiểm duyệt & báo cáo',
-    subtitle: 'Báo cáo người dùng + video ngắn chờ duyệt',
+    title: 'shell.moderation',
+    subtitle: 'shell.moderationSubtitle',
   },
   '/economy': {
-    title: 'Giao dịch & Diamond',
-    subtitle: 'Tra cứu ví và lịch sử giao dịch theo user',
+    title: 'shell.economy',
+    subtitle: 'shell.economySubtitle',
   },
   '/gifts': {
-    title: 'Quà tặng',
-    subtitle: 'Gift catalog — quản lý danh mục quà tặng',
+    title: 'shell.gifts',
+    subtitle: 'shell.giftsSubtitle',
   },
-  '/rooms': { title: 'Party Room', subtitle: 'Danh sách phòng đang hoạt động' },
+  '/rooms': { title: 'shell.rooms', subtitle: 'shell.roomsSubtitle' },
   '/config': {
-    title: 'Cấu hình gói & thông báo',
-    subtitle: 'Catalog Economy và thông báo toàn hệ thống',
+    title: 'shell.config',
+    subtitle: 'shell.configSubtitle',
   },
   '/permissions': {
-    title: 'Phân quyền admin',
-    subtitle: 'Policy backend và vai trò nhân sự đang có hiệu lực',
+    title: 'shell.permissions',
+    subtitle: 'shell.permissionsSubtitle',
   },
-};
+} as const;
 
-const ROLE_LABEL: Record<string, { initials: string; label: string }> = {
-  admin: { initials: 'AD', label: 'Quản trị viên' },
-  moderator: { initials: 'MO', label: 'Kiểm duyệt viên' },
-  user: { initials: 'U', label: 'Người dùng' },
-};
+const ROLE_LABEL = {
+  admin: { initials: 'AD', labelKey: 'shell.admin' },
+  moderator: { initials: 'MO', labelKey: 'shell.moderator' },
+  user: { initials: 'U', labelKey: 'shell.user' },
+} as const;
 
 interface SearchCommand {
   label: string;
@@ -88,6 +89,7 @@ interface SearchCommand {
 }
 
 export function AppShell() {
+  const t = useT();
   const navigate = useNavigate();
   const location = useLocation();
   const role = useRole();
@@ -175,7 +177,7 @@ export function AppShell() {
   const pageMeta = PAGE_META[location.pathname] ?? PAGE_META['/'];
   const roleInfo = (role !== null ? ROLE_LABEL[role] : undefined) ?? {
     initials: '?',
-    label: 'Đang tải…',
+    labelKey: 'common.loading',
   };
   return (
     <div className="flex min-h-screen w-full bg-page">
@@ -183,15 +185,22 @@ export function AppShell() {
         {isMobileDrawerOpen && (
           <button
             type="button"
-            aria-label="Đóng menu"
+            aria-label={t('shell.closeMenu')}
             className="fixed inset-0 z-40 bg-black/60 md:hidden"
             onClick={() => setIsMobileDrawerOpen(false)}
           />
         )}
-        <div className="relative hidden h-screen w-[74px] shrink-0 self-start md:sticky md:top-0 md:block">
+        <div
+          className={cn(
+            'relative hidden h-screen shrink-0 self-start transition-[width] duration-200 ease-out md:sticky md:top-0 md:block',
+            isSidebarExpanded ? 'w-[272px]' : 'w-[74px]',
+          )}
+        >
           <aside
             aria-label={
-              isSidebarExpanded ? 'Menu đang mở rộng' : 'Menu đang thu gọn'
+              isSidebarExpanded
+                ? t('shell.expandedMenu')
+                : t('shell.collapsedMenu')
             }
             className={cn(
               'absolute inset-y-0 left-0 z-40 flex w-[74px] flex-col gap-3 overflow-x-hidden overflow-y-auto border-r border-border bg-muted py-[22px] transition-[width,padding,box-shadow] duration-200 ease-out',
@@ -225,8 +234,8 @@ export function AppShell() {
                 <button
                   type="button"
                   aria-expanded={false}
-                  aria-label="Mở rộng menu"
-                  title="Mở rộng menu"
+                  aria-label={t('shell.expandMenu')}
+                  title={t('shell.expandMenu')}
                   onClick={() => setIsSidebarExpanded(true)}
                   className="absolute top-[48px] right-1 flex size-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-md transition-colors hover:border-primary hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                 >
@@ -242,8 +251,8 @@ export function AppShell() {
                 <button
                   type="button"
                   aria-expanded
-                  aria-label="Thu gọn menu"
-                  title="Thu gọn menu"
+                  aria-label={t('shell.collapseMenu')}
+                  title={t('shell.collapseMenu')}
                   onClick={() => setIsSidebarExpanded(false)}
                   className="ml-auto flex size-[38px] shrink-0 items-center justify-center rounded-[11px] border border-border bg-card text-muted-foreground transition-colors hover:border-primary hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                 >
@@ -256,9 +265,9 @@ export function AppShell() {
                 'flex flex-col gap-2.5',
                 isSidebarExpanded && 'w-full',
               )}
-              aria-label="Điều hướng chính"
+              aria-label={t('shell.mainNavigation')}
             >
-              {NAV_ITEMS.map(({ to, label, icon: Icon, ...rest }) => (
+              {NAV_ITEMS.map(({ to, labelKey, icon: Icon, ...rest }) => (
                 <NavLink
                   key={to}
                   to={to}
@@ -295,7 +304,7 @@ export function AppShell() {
                         : 'nav-tip rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold text-foreground',
                     )}
                   >
-                    {label}
+                    {t(labelKey)}
                   </span>
                 </NavLink>
               ))}
@@ -307,7 +316,7 @@ export function AppShell() {
           ref={mobileDrawerRef}
           role="dialog"
           aria-modal="true"
-          aria-label="Menu mobile"
+          aria-label={t('shell.mobileMenu')}
           aria-hidden={!isMobileDrawerOpen}
           inert={!isMobileDrawerOpen}
           className={cn(
@@ -324,15 +333,18 @@ export function AppShell() {
             </span>
             <button
               type="button"
-              aria-label="Đóng menu"
+              aria-label={t('shell.closeMenu')}
               onClick={() => setIsMobileDrawerOpen(false)}
               className="ml-auto flex size-[38px] items-center justify-center rounded-[11px] border border-border bg-card text-muted-foreground hover:border-primary hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
             >
               <PanelLeftClose className="size-[18px]" aria-hidden />
             </button>
           </div>
-          <nav className="flex flex-col gap-2" aria-label="Điều hướng mobile">
-            {NAV_ITEMS.map(({ to, label, icon: Icon, ...rest }) => (
+          <nav
+            className="flex flex-col gap-2"
+            aria-label={t('shell.mobileNavigation')}
+          >
+            {NAV_ITEMS.map(({ to, labelKey, icon: Icon, ...rest }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -346,7 +358,7 @@ export function AppShell() {
                 }
               >
                 <Icon className="size-[19px]" aria-hidden />
-                <span>{label}</span>
+                <span>{t(labelKey)}</span>
               </NavLink>
             ))}
           </nav>
@@ -362,8 +374,8 @@ export function AppShell() {
                 ref={mobileMenuTriggerRef}
                 type="button"
                 aria-expanded={isMobileDrawerOpen}
-                aria-label="Mở menu"
-                title="Mở menu"
+                aria-label={t('shell.openMenu')}
+                title={t('shell.openMenu')}
                 onClick={() => setIsMobileDrawerOpen(true)}
                 className="flex size-[38px] shrink-0 items-center justify-center rounded-[11px] border border-border bg-card text-muted-foreground hover:border-primary hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary md:hidden"
               >
@@ -371,18 +383,18 @@ export function AppShell() {
               </button>
               <div>
                 <h1 className="m-0 text-[21px] font-extrabold tracking-tight">
-                  {pageMeta.title}
+                  {t(pageMeta.title)}
                 </h1>
                 <p className="mt-1 hidden text-[12.5px] text-muted-foreground sm:block">
-                  {pageMeta.subtitle}
+                  {t(pageMeta.subtitle)}
                 </p>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2.5">
               <button
                 type="button"
-                aria-label="Mở tìm kiếm lệnh"
-                title="Tìm kiếm (Ctrl/⌘ K hoặc /)"
+                aria-label={t('shell.openCommandSearch')}
+                title={t('shell.searchShortcut')}
                 onClick={() => {
                   setIsMobileDrawerOpen(false);
                   setIsCommandSearchOpen(true);
@@ -393,8 +405,8 @@ export function AppShell() {
               </button>
               <button
                 type="button"
-                aria-label="Mở report đang chờ"
-                title="Report đang chờ"
+                aria-label={t('shell.openPendingReports')}
+                title={t('shell.pendingReports')}
                 onClick={() =>
                   navigate('/moderation?tab=reports&status=pending')
                 }
@@ -413,7 +425,7 @@ export function AppShell() {
                   {roleInfo.initials}
                 </div>
                 <span className="hidden text-[12.5px] font-bold xl:inline">
-                  {roleInfo.label}
+                  {t(roleInfo.labelKey)}
                 </span>
               </div>
               <Button
@@ -422,7 +434,7 @@ export function AppShell() {
                 className="size-[38px] rounded-[11px] p-0"
                 onClick={() => logout.mutate()}
                 disabled={logout.isPending}
-                aria-label="Đăng xuất"
+                aria-label={t('auth.signOut')}
               >
                 <LogOut className="size-4" aria-hidden />
               </Button>
@@ -453,33 +465,34 @@ function CommandSearch({
   onClose: () => void;
   onNavigate: (to: string) => void;
 }) {
+  const t = useT();
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
 
   const commands = useMemo<SearchCommand[]>(() => {
-    const normalized = query.trim().toLocaleLowerCase('vi');
+    const normalized = query.trim().toLocaleLowerCase();
     return NAV_ITEMS.filter(
       (item) =>
         normalized === '' ||
-        item.label.toLocaleLowerCase('vi').includes(normalized) ||
-        item.to.toLocaleLowerCase('vi').includes(normalized),
+        t(item.labelKey).toLocaleLowerCase().includes(normalized) ||
+        item.to.toLocaleLowerCase().includes(normalized),
     ).map((item) => ({
-      label: item.label,
+      label: t(item.labelKey),
       hint: item.to,
       to: item.to,
     }));
-  }, [query]);
+  }, [query, t]);
 
   return (
     <Modal open onClose={onClose} labelledBy="command-search-title">
       <ModalHeader
-        title="Tìm kiếm nhanh"
+        title={t('shell.commandSearchTitle')}
         titleId="command-search-title"
         onClose={onClose}
       />
       <ModalBody>
         <label htmlFor="command-search" className="sr-only">
-          Tìm trang quản trị
+          {t('shell.commandSearchLabel')}
         </label>
         <div className="flex items-center gap-2 rounded-xl border border-border bg-muted px-3 focus-within:border-primary">
           <Search className="size-4 text-muted-foreground" aria-hidden />
@@ -507,14 +520,14 @@ function CommandSearch({
                 onNavigate(commands[activeIndex].to);
               }
             }}
-            placeholder="Nhập tên trang…"
+            placeholder={t('shell.commandSearchPlaceholder')}
             className="h-11 min-w-0 flex-1 bg-transparent text-sm outline-none"
           />
           <Command className="size-4 text-muted-foreground" aria-hidden />
         </div>
         <div
           role="listbox"
-          aria-label="Kết quả tìm kiếm"
+          aria-label={t('shell.commandSearchResults')}
           className="mt-3 max-h-72 space-y-1 overflow-y-auto"
         >
           {commands.map((command, index) => (
@@ -535,12 +548,12 @@ function CommandSearch({
           ))}
           {commands.length === 0 && (
             <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-              Không có trang nào khớp tìm kiếm.
+              {t('shell.noSearchResults')}
             </p>
           )}
         </div>
         <p className="mt-3 text-[11px] text-muted-foreground">
-          ↑↓ để chọn · Enter để mở · Esc để đóng
+          {t('shell.commandSearchHint')}
         </p>
       </ModalBody>
     </Modal>

@@ -30,6 +30,12 @@ export abstract class LivekitRoomPort {
   /** Đóng room trên SFU — caller gọi best-effort ở MỌI nhánh end (chống leak, docs/10 § Calling). */
   abstract deleteRoom(roomName: string): Promise<void>;
 
+  /**
+   * Đọc participant đang thật sự ở trong room. Đây là fallback đối soát khi webhook bị mất;
+   * service chỉ dùng identity đã được token server cấp, không tin trạng thái do client tự khai.
+   */
+  abstract listParticipantIdentities(roomName: string): Promise<string[]>;
+
   /** Verify chữ ký webhook (JWT ký bằng API key/secret) — sai chữ ký thì throw. */
   abstract receiveWebhook(
     rawBody: string,
@@ -85,6 +91,11 @@ export class SdkLivekitRoomPort extends LivekitRoomPort {
 
   async deleteRoom(roomName: string): Promise<void> {
     await this.roomService.deleteRoom(roomName);
+  }
+
+  async listParticipantIdentities(roomName: string): Promise<string[]> {
+    const participants = await this.roomService.listParticipants(roomName);
+    return participants.map((participant) => participant.identity);
   }
 
   async receiveWebhook(

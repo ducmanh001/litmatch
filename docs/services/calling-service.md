@@ -49,6 +49,12 @@ của economy webhooks). Event xử lý: `participant_joined` (ghi `joinedAAt/jo
 identity, đủ 2 → `active` + `startedAt`), `participant_left` + `room_finished` (end
 `completed`). Event khác bỏ qua. Room không phải của calling (`call-*`) → bỏ qua.
 
+`GET /calling/calls/:id` có backstop đối soát bằng `RoomServiceClient.listParticipants`: nếu
+webhook bị mất, mọi identity member đang thật sự có mặt sẽ được ghi nhận như
+`participant_joined` (không phụ thuộc browser bên kia có đang poll); khi call đã `active` mà đối
+phương không còn trong LiveKit, API chốt `ended(completed)`. Client không được tự gửi cờ
+`active`/`joined`; identity đối soát lấy từ JWT và participant LiveKit.
+
 ## 4. Ticker — timer + billing đều ở server (docs/10 § Calling: KHÔNG tin timer client)
 
 `CallTickerService` interval `CALLING_TICKER_INTERVAL_MS`, mỗi tick chỉ lấy `id` theo batch:
@@ -83,6 +89,9 @@ khóa `CallSession`, unique reaction theo `(callId, raterUserId)` và chỉ tạ
 `Conversation` trong cùng transaction khi đã có like từ cả hai. Response chỉ trả `friendUserId`
 khi mutual để client có thể đi thẳng `/chat/:friendUserId` sau khi người dùng kết thúc call;
 double tap/retry không tạo thêm bạn hay conversation.
+
+`GET /calling/calls/:id` cũng trả `liked`, `matched`, `friendUserId` đọc từ DB để trạng thái nút
+tim được giữ sau refetch/reload; trước mutual like `friendUserId` luôn là `null`.
 
 | Endpoint                                | Mô tả                                                                           |
 | --------------------------------------- | ------------------------------------------------------------------------------- |

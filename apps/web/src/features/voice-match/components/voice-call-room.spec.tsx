@@ -184,6 +184,48 @@ describe('VoiceCallRoom', () => {
     ).toBeInTheDocument();
   });
 
+  it('reload — reaction đã lưu từ GET làm tim sáng và không gửi lại lần hai', async () => {
+    mockedUseCallRoom.mockReturnValue({
+      connect: vi.fn(),
+      room: {
+        on: vi.fn(),
+        off: vi.fn(),
+        localParticipant: { setMicrophoneEnabled: vi.fn() },
+      },
+      callId: 'call-1',
+      roomDisconnected: false,
+      isConnecting: false,
+      error: null,
+    } as never);
+    vi.spyOn(apiClient, 'GET').mockResolvedValue({
+      data: {
+        data: {
+          id: 'call-1',
+          matchSessionId: 'session-1',
+          status: 'active',
+          startedAt: new Date().toISOString(),
+          endedAt: null,
+          endReason: null,
+          durationSeconds: null,
+          billedMinutes: 0,
+          freeCallEndsAt: new Date(Date.now() + 420_000).toISOString(),
+          liked: true,
+          matched: false,
+          friendUserId: null,
+        },
+      },
+    } as never);
+
+    renderRoom();
+
+    expect(
+      await screen.findByRole('button', { name: 'Đã yêu thích' }),
+    ).toBeDisabled();
+    expect(
+      screen.getByText('Đã gửi yêu thích — chờ đối phương.'),
+    ).toBeVisible();
+  });
+
   it('connected — chỉ hiển thị countdown 7 phút, không hiển thị thời lượng đã nói', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const startedAt = new Date();

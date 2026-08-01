@@ -20,6 +20,8 @@ import { PartyRoomLivekitUrl1753500000000 } from '../../database/migrations/1753
 import { PartyRoomHostDisconnectGrace1753900000000 } from '../../database/migrations/1753900000000-party-room-host-disconnect-grace';
 import { PartyRoomCategory1755200000000 } from '../../database/migrations/1755200000000-party-room-category';
 import { GiftEventVideo1755700000000 } from '../../database/migrations/1755700000000-gift-event-video';
+import { MessageAttachment1754400000000 } from '../../database/migrations/1754400000000-message-attachment';
+import { PartyRoomSpeakerInvite1756500000000 } from '../../database/migrations/1756500000000-party-room-speaker-invite';
 
 import { GiftService } from './gift.service';
 import { Gift } from './entities/gift.entity';
@@ -230,6 +232,8 @@ d('Gift integration (Postgres thật)', () => {
         PartyRoomHostDisconnectGrace1753900000000,
         PartyRoomCategory1755200000000,
         GiftEventVideo1755700000000,
+        MessageAttachment1754400000000,
+        PartyRoomSpeakerInvite1756500000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,

@@ -33,16 +33,8 @@ const OTP_LENGTH = 6;
 /** Khoá localStorage lưu deviceId ổn định cho tài khoản khách (docs/06 § Auth guest). */
 const GUEST_DEVICE_ID_STORAGE_KEY = 'litmatch.guestDeviceId';
 
-const phoneSchema = z.object({
-  // Input là số nội địa (0xxx hoặc bỏ số 0) — chuẩn hoá sang E.164 lúc submit (normalizeVnPhone).
-  phone: z.string().regex(VN_LOCAL_PHONE_PATTERN, 'Số điện thoại không hợp lệ'),
-});
-const codeSchema = z.object({
-  code: z.string().regex(/^[0-9]{6}$/u, 'Mã OTP gồm 6 chữ số'),
-});
-
-type PhoneForm = z.infer<typeof phoneSchema>;
-type CodeForm = z.infer<typeof codeSchema>;
+type PhoneForm = { phone: string };
+type CodeForm = { code: string };
 
 function getOrCreateGuestDeviceId(): string {
   const existing = window.localStorage.getItem(GUEST_DEVICE_ID_STORAGE_KEY);
@@ -59,7 +51,9 @@ const buttonClass =
 const socialButtonClass =
   'flex items-center justify-center rounded-xl bg-slate-100 py-3 transition hover:bg-slate-200 disabled:opacity-50 dark:bg-surf2 dark:hover:bg-surf2/70';
 
-function legacyAuthCapabilities(): CapabilitiesDto['auth'] {
+function legacyAuthCapabilities(
+  t: ReturnType<typeof useTranslation>,
+): CapabilitiesDto['auth'] {
   const state = (enabled: boolean, message: string) => ({
     status: enabled ? ('enabled' as const) : ('disabled' as const),
     message,
@@ -69,28 +63,31 @@ function legacyAuthCapabilities(): CapabilitiesDto['auth'] {
   const facebookAppId = env.NEXT_PUBLIC_AUTH_FACEBOOK_APP_ID ?? null;
   return {
     phoneOtp: {
-      ...state(
-        env.NEXT_PUBLIC_PHONE_OTP_ENABLED,
-        'Đăng nhập bằng số điện thoại chưa được bật.',
-      ),
+      ...state(env.NEXT_PUBLIC_PHONE_OTP_ENABLED, t('auth.phoneDisabled')),
       clientId: null,
     },
     google: {
-      ...state(googleClientId !== null, 'Đăng nhập Google chưa được cấu hình.'),
+      ...state(
+        googleClientId !== null,
+        t('auth.providerDisabled', { provider: 'Google' }),
+      ),
       clientId: googleClientId,
     },
     apple: {
-      ...state(appleClientId !== null, 'Đăng nhập Apple chưa được cấu hình.'),
+      ...state(
+        appleClientId !== null,
+        t('auth.providerDisabled', { provider: 'Apple' }),
+      ),
       clientId: appleClientId,
     },
     facebook: {
       ...state(
         facebookAppId !== null,
-        'Đăng nhập Facebook chưa được cấu hình.',
+        t('auth.providerDisabled', { provider: 'Facebook' }),
       ),
       clientId: facebookAppId,
     },
-    guest: state(true, 'Có thể dùng tài khoản khách.'),
+    guest: state(true, t('auth.guestAvailable')),
   };
 }
 
@@ -98,7 +95,13 @@ export function LoginForm() {
   const router = useRouter();
   const t = useTranslation();
   const capabilities = useCapabilities();
-  const authCapabilities = capabilities.data?.auth ?? legacyAuthCapabilities();
+  const authCapabilities = capabilities.data?.auth ?? legacyAuthCapabilities(t);
+  const phoneSchema = z.object({
+    phone: z.string().regex(VN_LOCAL_PHONE_PATTERN, t('auth.phoneInvalid')),
+  });
+  const codeSchema = z.object({
+    code: z.string().regex(/^[0-9]{6}$/u, t('auth.otpInvalid')),
+  });
   const [phase, setPhase] = useState<
     { step: 'phone' } | { step: 'code'; phone: string }
   >({
@@ -184,9 +187,7 @@ export function LoginForm() {
     });
     const otp = res.data?.data;
     if (otp === undefined || !/^\d{6}$/u.test(otp.code)) {
-      throw new Error(
-        'API chưa trả về mã OTP hợp lệ. Hãy restart/rebuild core-api rồi thử lại.',
-      );
+      throw new Error(t('auth.otpUnavailable'));
     }
     return otp;
   };
@@ -253,7 +254,7 @@ export function LoginForm() {
     mutationFn: async (provider: 'google' | 'apple' | 'facebook') => {
       const capability = authCapabilities[provider];
       if (!isCapabilityUsable(capability) || capability?.clientId === null) {
-        throw new Error(capability?.message ?? 'Provider chưa sẵn sàng.');
+        throw new Error(capability?.message ?? t('auth.providerUnavailable'));
       }
       const clientId = capability.clientId;
       const idToken =
@@ -281,7 +282,7 @@ export function LoginForm() {
           ? error.message
           : error instanceof Error
             ? error.message
-            : 'Có lỗi xảy ra, thử lại.',
+            : t('common.somethingWentWrong'),
         'warn',
       ),
   });
@@ -293,12 +294,12 @@ export function LoginForm() {
         ? error.message
         : error instanceof Error
           ? error.message
-          : 'Có lỗi xảy ra, thử lại.';
+          : t('common.somethingWentWrong');
 
   if (capabilities.isPending) {
     return (
       <p className="text-center text-sm text-slate-500 dark:text-slate-400">
-        Đang kiểm tra phương thức đăng nhập…
+        {t('auth.checkingProviders')}
       </p>
     );
   }
@@ -322,7 +323,7 @@ export function LoginForm() {
         }}
         className="block w-full text-center text-sm font-bold text-irisl disabled:opacity-50"
       >
-        {guestLogin.isPending ? 'Đang vào…' : 'Dùng thử với tài khoản khách →'}
+        {guestLogin.isPending ? t('auth.guestPending') : t('auth.guest')}
       </button>
       {errorOf(guestLogin.error) !== undefined && (
         <p role="alert" className="mt-3 text-center text-sm text-destructive">
@@ -352,7 +353,7 @@ export function LoginForm() {
           htmlFor="phone"
           className="mb-2 block text-xs font-bold uppercase text-slate-500 dark:text-slate-400"
         >
-          Số điện thoại
+          {t('auth.phoneLabel')}
         </label>
         <div className="mb-4 flex gap-2">
           <span
@@ -381,12 +382,16 @@ export function LoginForm() {
           className={`${buttonClass} mb-5`}
           disabled={requestOtp.isPending}
         >
-          {requestOtp.isPending ? 'Đang gửi…' : 'Gửi mã OTP'}
+          {requestOtp.isPending
+            ? t('auth.requestOtpPending')
+            : t('auth.requestOtp')}
         </button>
 
         <div className="mb-5 flex items-center gap-3">
           <div className="h-px flex-1 bg-black/10 dark:bg-white/10" />
-          <span className="text-xs text-slate-400">hoặc tiếp tục với</span>
+          <span className="text-xs text-slate-400">
+            {t('auth.continueWith')}
+          </span>
           <div className="h-px flex-1 bg-black/10 dark:bg-white/10" />
         </div>
         <div className="grid grid-cols-3 gap-3">
@@ -394,7 +399,7 @@ export function LoginForm() {
             type="button"
             disabled={socialLogin.isPending}
             onClick={() => socialLogin.mutate('google')}
-            aria-label="Đăng nhập với Google"
+            aria-label={t('auth.signInProvider', { provider: 'Google' })}
             className={socialButtonClass}
           >
             <svg width={18} height={18} viewBox="0 0 24 24" aria-hidden>
@@ -408,7 +413,7 @@ export function LoginForm() {
             type="button"
             disabled={socialLogin.isPending}
             onClick={() => socialLogin.mutate('apple')}
-            aria-label="Đăng nhập với Apple"
+            aria-label={t('auth.signInProvider', { provider: 'Apple' })}
             className={socialButtonClass}
           >
             <svg
@@ -425,7 +430,7 @@ export function LoginForm() {
             type="button"
             disabled={socialLogin.isPending}
             onClick={() => socialLogin.mutate('facebook')}
-            aria-label="Đăng nhập với Facebook"
+            aria-label={t('auth.signInProvider', { provider: 'Facebook' })}
             className={socialButtonClass}
           >
             <svg width={18} height={18} viewBox="0 0 24 24" aria-hidden>
@@ -452,7 +457,7 @@ export function LoginForm() {
       noValidate
     >
       <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-        Nhập mã gồm 6 số vừa gửi tới{' '}
+        {t('auth.otpInstruction', { phone: phase.phone })}{' '}
         <span className="font-semibold text-slate-700 dark:text-slate-200">
           {phase.phone}
         </span>
@@ -468,7 +473,10 @@ export function LoginForm() {
             inputMode="numeric"
             autoComplete={index === 0 ? 'one-time-code' : 'off'}
             maxLength={1}
-            aria-label={`Chữ số ${index + 1} trên 6 của mã OTP đã gửi tới ${phase.phone}`}
+            aria-label={t('auth.otpDigit', {
+              index: index + 1,
+              phone: phase.phone,
+            })}
             className="h-13 w-11 rounded-xl bg-slate-100 text-center text-lg font-bold outline-none focus:ring-2 focus:ring-iris dark:bg-surf2"
             value={digit}
             onChange={(e) => setOtpDigit(index, e.target.value)}
@@ -492,7 +500,7 @@ export function LoginForm() {
         className={`${buttonClass} mb-3`}
         disabled={verifyOtp.isPending}
       >
-        {verifyOtp.isPending ? 'Đang xác minh…' : 'Đăng nhập'}
+        {verifyOtp.isPending ? t('auth.verifyPending') : t('auth.verify')}
       </button>
       <div className="flex items-center justify-between">
         <button
@@ -502,17 +510,17 @@ export function LoginForm() {
           onClick={() => resendOtp.mutate(phase.phone)}
         >
           {resendCooldown > 0
-            ? `Gửi lại mã (${resendCooldown}s)`
+            ? t('auth.resendWithCooldown', { seconds: resendCooldown })
             : resendOtp.isPending
-              ? 'Đang gửi…'
-              : 'Gửi lại mã'}
+              ? t('auth.requestOtpPending')
+              : t('auth.resend')}
         </button>
         <button
           type="button"
           className="text-sm font-semibold text-slate-500 dark:text-slate-400"
           onClick={() => setPhase({ step: 'phone' })}
         >
-          ← Đổi số điện thoại
+          {t('auth.changePhone')}
         </button>
       </div>
       {guestCta}

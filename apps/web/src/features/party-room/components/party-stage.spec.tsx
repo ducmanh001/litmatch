@@ -34,7 +34,12 @@ function detailFixture(
       hostDisconnectedAt: null,
     },
     members: [
-      { userId: 'host-1', role: 'host', joinedAt: new Date().toISOString() },
+      {
+        userId: 'host-1',
+        role: 'host',
+        joinedAt: new Date().toISOString(),
+        speakerInvitePending: false,
+      },
     ],
     ...overrides,
   };
@@ -101,6 +106,7 @@ describe('PartyStage', () => {
             userId: 'host-1',
             role: 'host',
             joinedAt: new Date().toISOString(),
+            speakerInvitePending: false,
           },
         ],
       }),
@@ -126,7 +132,12 @@ describe('PartyStage', () => {
     mockGet(
       detailFixture({
         members: [
-          { userId: 'me-1', role: 'host', joinedAt: new Date().toISOString() },
+          {
+            userId: 'me-1',
+            role: 'host',
+            joinedAt: new Date().toISOString(),
+            speakerInvitePending: false,
+          },
         ],
       }),
       'me-1',
@@ -162,7 +173,12 @@ describe('PartyStage', () => {
           hostDisconnectedAt: new Date().toISOString(),
         },
         members: [
-          { userId: 'me-1', role: 'host', joinedAt: new Date().toISOString() },
+          {
+            userId: 'me-1',
+            role: 'host',
+            joinedAt: new Date().toISOString(),
+            speakerInvitePending: false,
+          },
         ],
       }),
       'me-1',
@@ -225,7 +241,12 @@ describe('PartyStage', () => {
     mockGet(
       detailFixture({
         members: [
-          { userId: 'me-1', role: 'host', joinedAt: new Date().toISOString() },
+          {
+            userId: 'me-1',
+            role: 'host',
+            joinedAt: new Date().toISOString(),
+            speakerInvitePending: false,
+          },
         ],
       }),
       'me-1',
@@ -264,7 +285,12 @@ describe('PartyStage', () => {
     mockGet(
       detailFixture({
         members: [
-          { userId: 'me-1', role: 'host', joinedAt: new Date().toISOString() },
+          {
+            userId: 'me-1',
+            role: 'host',
+            joinedAt: new Date().toISOString(),
+            speakerInvitePending: false,
+          },
         ],
       }),
       'me-1',

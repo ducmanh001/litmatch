@@ -1,15 +1,22 @@
 import { Languages } from 'lucide-react';
 
 import { setLocale, useLocale } from '../i18n/locale-store';
+import { useT } from '../i18n/catalog';
 
 /** Locale là preference UI; API client đọc cùng store để gửi Accept-Language. */
 export function LanguageToggle() {
   const locale = useLocale();
+  const t = useT();
   const nextLocale = locale === 'vi' ? 'en' : 'vi';
   return (
     <button
       type="button"
-      aria-label={`Switch language to ${nextLocale === 'vi' ? 'Vietnamese' : 'English'}`}
+      aria-label={t('language.switchTo', {
+        language:
+          nextLocale === 'vi'
+            ? t('language.vietnamese')
+            : t('language.english'),
+      })}
       onClick={() => setLocale(nextLocale)}
       className="flex h-[38px] items-center gap-1.5 rounded-[11px] border border-border bg-card px-2.5 text-xs font-bold text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
     >

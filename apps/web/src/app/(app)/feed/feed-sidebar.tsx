@@ -72,15 +72,15 @@ export function FeedSidebar() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-black/5 bg-white dark:border-white/5 dark:bg-surf">
-        <div className="bg-gradient-to-br from-iris1 to-aqual p-4 rounded-2xl">
+        <div className="rounded-2xl bg-gradient-to-br from-irisl to-aqual p-4 text-white shadow-lg shadow-iris/20">
           <p className="text-sm font-bold">Tìm một kết nối nghiêm túc?</p>
-          <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+          <p className="mt-1 text-xs leading-relaxed text-white/85">
             Xem những người ở gần có cùng mong muốn hẹn hò hoặc tìm bạn đồng
             hành lâu dài.
           </p>
           <Link
             href="/discovery"
-            className="mt-3 inline-flex items-center rounded-full bg-foreground px-3 py-1.5 text-xs font-bold text-background transition hover:opacity-85"
+            className="mt-3 inline-flex items-center rounded-full bg-white px-3 py-1.5 text-xs font-bold text-ink transition hover:bg-white/90"
           >
             Tìm quanh đây <span aria-hidden>→</span>
           </Link>

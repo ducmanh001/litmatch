@@ -5,6 +5,8 @@ import { useState } from 'react';
 
 import { BellIcon } from '../../../shared/ui/icons';
 import { formatRelativeTime } from '../../../shared/lib/format-relative-time';
+import { useLocale } from '../../../shared/i18n/locale-store';
+import { useTranslation } from '../../../shared/i18n/messages';
 import {
   useMarkNotificationRead,
   useNotifications,
@@ -22,6 +24,7 @@ function NotificationItem({
   onNavigate: (href: string | null) => void;
 }) {
   const markRead = useMarkNotificationRead();
+  const locale = useLocale();
   const { title, body, href } = presentNotification(notification);
   const unread = notification.readAt == null;
 
@@ -52,7 +55,7 @@ function NotificationItem({
             </span>
           )}
           <span className="mt-1 block text-[11px] text-slate-400 dark:text-white/45">
-            {formatRelativeTime(notification.createdAt)}
+            {formatRelativeTime(notification.createdAt, locale)}
           </span>
         </span>
       </button>
@@ -62,6 +65,7 @@ function NotificationItem({
 
 function NotificationPanel({ onClose }: { onClose: () => void }) {
   const router = useRouter();
+  const t = useTranslation();
   const {
     data,
     isPending,
@@ -82,11 +86,11 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
   return (
     <div
       role="dialog"
-      aria-label="Thông báo"
+      aria-label={t('notifications.title')}
       className="absolute right-0 top-12 z-50 w-80 max-w-[calc(100vw-2.5rem)] overflow-hidden rounded-2xl border border-black/10 bg-white shadow-2xl shadow-black/10 dark:border-white/10 dark:bg-surf"
     >
       <p className="border-b border-black/5 px-4 py-3 text-sm font-extrabold dark:border-white/5">
-        Thông báo
+        {t('notifications.title')}
       </p>
 
       {isPending && (
@@ -102,7 +106,9 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
 
       {isError && (
         <div className="p-4" role="alert">
-          <p className="text-sm font-semibold">Không tải được thông báo.</p>
+          <p className="text-sm font-semibold">
+            {t('notifications.loadingError')}
+          </p>
           <button
             type="button"
             onClick={() => void refetch()}
@@ -115,7 +121,7 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
 
       {!isPending && !isError && items.length === 0 && (
         <p className="p-4 text-sm text-muted-foreground dark:text-white/65">
-          Chưa có thông báo nào.
+          {t('notifications.empty')}
         </p>
       )}
 
@@ -138,7 +144,7 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
           onClick={() => void fetchNextPage()}
           className="w-full border-t border-black/5 px-4 py-2.5 text-xs font-bold text-irisl disabled:opacity-50 dark:border-white/5"
         >
-          {isFetchingNextPage ? 'Đang tải…' : 'Xem thêm'}
+          {isFetchingNextPage ? t('common.loading') : t('common.viewMore')}
         </button>
       )}
     </div>
@@ -148,6 +154,7 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
 /** Chuông thông báo (top bar home.html): badge chưa đọc + panel danh sách, mark-read khi bấm. */
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
+  const t = useTranslation();
   const { data: unread } = useUnreadNotificationCount();
   const unreadCount = unread?.count ?? 0;
 
@@ -157,7 +164,9 @@ export function NotificationBell() {
         type="button"
         aria-expanded={open}
         aria-label={
-          unreadCount > 0 ? `Thông báo, ${unreadCount} chưa đọc` : 'Thông báo'
+          unreadCount > 0
+            ? t('notifications.unread', { count: unreadCount })
+            : t('notifications.title')
         }
         onClick={() => setOpen((value) => !value)}
         className="relative flex h-10 w-10 items-center justify-center rounded-full border border-black/5 bg-white text-slate-600 transition hover:border-iris/30 dark:border-white/10 dark:bg-surf dark:text-white/80"
@@ -176,7 +185,7 @@ export function NotificationBell() {
           {/* Backdrop bắt click ra ngoài để đóng panel — không chặn scroll trang. */}
           <button
             type="button"
-            aria-label="Đóng thông báo"
+            aria-label={t('notifications.close')}
             tabIndex={-1}
             onClick={() => setOpen(false)}
             className="fixed inset-0 z-40 cursor-default"

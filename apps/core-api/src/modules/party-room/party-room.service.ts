@@ -52,6 +52,7 @@ import type {
   PartyMemberJoinedEventData,
   PartyMemberLeftEventData,
   PartyRoleChangedEventData,
+  PartySpeakerInviteReceivedEventData,
   PartyRoomClosedEventData,
   RealtimeEnvelope,
 } from '@litmatch/common-dtos';
@@ -59,6 +60,7 @@ import type Redis from 'ioredis';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import type { CoreApiEnv } from '../../config/env.validation';
 import type { PartyWebhookEvent } from './ports/livekit-party-room';
+import type { User } from '../user';
 
 export interface JoinPartyRoomResult {
   room: PartyRoom;
@@ -376,21 +378,16 @@ export class PartyRoomService {
     });
   }
 
-  /**
-   * Host cấp/thu quyền speaker (docs/06: CHỈ host). Cap speaker check DƯỚI lock phòng —
-   * 2 request promote song song thì bên sau thấy count đã tăng (docs/10 § Party Room).
-   * Đổi grant SFU TRONG transaction và đợi ACK: SFU fail → rollback DB, không bao giờ
-   * DB nói "audience" mà SFU vẫn cho publish.
-   */
+  /** Host chỉ thu quyền speaker; cấp quyền đi qua invite → target accept. */
   async changeRole(
     user: AuthenticatedUser,
     roomId: string,
     targetUserId: string,
-    newRole: PartyRole.Speaker | PartyRole.Audience,
+    newRole: PartyRole.Audience,
   ): Promise<PartyRoomMember> {
     const { member, changed } = await this.dataSource.transaction(
       async (manager) => {
-        const room = await this.lockActiveRoom(manager, roomId);
+        await this.lockActiveRoom(manager, roomId);
 
         const caller = await manager.findOneBy(PartyRoomMember, {
           roomId,
@@ -426,30 +423,15 @@ export class PartyRoomService {
         }
         if (target.role === newRole) return { member: target, changed: false };
 
-        if (newRole === PartyRole.Speaker) {
-          // speakerLimit đếm role=speaker (host là publisher mặc định, không chiếm slot)
-          const speakerCount = await manager.countBy(PartyRoomMember, {
-            roomId,
-            role: PartyRole.Speaker,
-            leftAt: IsNull(),
-          });
-          if (speakerCount >= room.speakerLimit) {
-            throw new DomainException(
-              PartyRoomErrors.SPEAKER_LIMIT_REACHED,
-              `Phòng đã đủ ${room.speakerLimit} speaker`,
-              HttpStatus.CONFLICT,
-            );
-          }
-        }
-
         target.role = newRole;
+        target.speakerInvitePending = false;
         const saved = await manager.save(target);
         // Đợi ACK SFU trong transaction: fail → rollback role DB (không lệch trạng thái);
         // 'not_connected' coi như xong — không nối thì không publish được, token sau theo DB
         await this.livekit.updateParticipantPublish(
           partyRoomName(roomId),
           targetUserId,
-          newRole === PartyRole.Speaker,
+          false,
         );
         return { member: saved, changed: true };
       },
@@ -468,10 +450,178 @@ export class PartyRoomService {
     return member;
   }
 
+  /**
+   * Host gửi lời mời nhưng target vẫn là audience và token vẫn canPublish=false. Chỉ target
+   * mới có thể chuyển role qua `acceptSpeakerInvite`, nên client tự gọi role API không bypass
+   * được consent.
+   */
+  async inviteSpeaker(
+    user: AuthenticatedUser,
+    roomId: string,
+    targetUserId: string,
+  ): Promise<PartyRoomMember> {
+    const { member, changed } = await this.dataSource.transaction(
+      async (manager) => {
+        await this.lockActiveRoom(manager, roomId);
+        const caller = await manager.findOneBy(PartyRoomMember, {
+          roomId,
+          userId: user.userId,
+          leftAt: IsNull(),
+        });
+        if (!caller || caller.role !== PartyRole.Host) {
+          throw new DomainException(
+            PartyRoomErrors.NOT_HOST,
+            'Chỉ host mới được mời speaker',
+            HttpStatus.FORBIDDEN,
+          );
+        }
+        const target = await manager.findOneBy(PartyRoomMember, {
+          roomId,
+          userId: targetUserId,
+          leftAt: IsNull(),
+        });
+        if (!target) {
+          throw new DomainException(
+            PartyRoomErrors.TARGET_NOT_A_MEMBER,
+            'User không ở trong phòng',
+            HttpStatus.NOT_FOUND,
+          );
+        }
+        if (target.role !== PartyRole.Audience) {
+          throw new DomainException(
+            PartyRoomErrors.SPEAKER_INVITE_TARGET_INVALID,
+            'Chỉ có thể mời khán giả đang ở trong phòng',
+            HttpStatus.CONFLICT,
+          );
+        }
+        if (target.speakerInvitePending)
+          return { member: target, changed: false };
+        target.speakerInvitePending = true;
+        return {
+          member: await manager.save(target),
+          changed: true,
+        };
+      },
+    );
+
+    if (changed) {
+      await publishRealtimeEvent(this.redis, this.logger, targetUserId, {
+        event: RealtimeEvents.PartySpeakerInviteReceived,
+        data: { roomId } satisfies PartySpeakerInviteReceivedEventData,
+      });
+    }
+    return member;
+  }
+
+  /** Target accept dưới cùng lock với speaker cap; role chỉ đổi sau consent thật. */
+  async acceptSpeakerInvite(
+    user: AuthenticatedUser,
+    roomId: string,
+  ): Promise<PartyRoomMember> {
+    const { member, changed } = await this.dataSource.transaction(
+      async (manager) => {
+        const room = await this.lockActiveRoom(manager, roomId);
+        const target = await manager.findOneBy(PartyRoomMember, {
+          roomId,
+          userId: user.userId,
+          leftAt: IsNull(),
+        });
+        if (!target) {
+          throw new DomainException(
+            PartyRoomErrors.NOT_A_MEMBER,
+            'Bạn không ở trong phòng',
+            HttpStatus.FORBIDDEN,
+          );
+        }
+        if (target.role === PartyRole.Speaker)
+          return { member: target, changed: false };
+        if (
+          target.role !== PartyRole.Audience ||
+          !target.speakerInvitePending
+        ) {
+          throw new DomainException(
+            PartyRoomErrors.SPEAKER_INVITE_NOT_PENDING,
+            'Không có lời mời speaker đang chờ',
+            HttpStatus.CONFLICT,
+          );
+        }
+        const speakerCount = await manager.countBy(PartyRoomMember, {
+          roomId,
+          role: PartyRole.Speaker,
+          leftAt: IsNull(),
+        });
+        if (speakerCount >= room.speakerLimit) {
+          throw new DomainException(
+            PartyRoomErrors.SPEAKER_LIMIT_REACHED,
+            `Phòng đã đủ ${room.speakerLimit} speaker`,
+            HttpStatus.CONFLICT,
+          );
+        }
+        target.role = PartyRole.Speaker;
+        target.speakerInvitePending = false;
+        const saved = await manager.save(target);
+        await this.livekit.updateParticipantPublish(
+          partyRoomName(roomId),
+          user.userId,
+          true,
+        );
+        return { member: saved, changed: true };
+      },
+    );
+    if (changed) await this.publishRoleChanged(roomId, member);
+    return member;
+  }
+
+  /** Từ chối là idempotent; không đổi role và không gọi lệnh publish lên SFU. */
+  async declineSpeakerInvite(
+    user: AuthenticatedUser,
+    roomId: string,
+  ): Promise<PartyRoomMember> {
+    return this.dataSource.transaction(async (manager) => {
+      await this.lockActiveRoom(manager, roomId);
+      const target = await manager.findOneBy(PartyRoomMember, {
+        roomId,
+        userId: user.userId,
+        leftAt: IsNull(),
+      });
+      if (!target) {
+        throw new DomainException(
+          PartyRoomErrors.NOT_A_MEMBER,
+          'Bạn không ở trong phòng',
+          HttpStatus.FORBIDDEN,
+        );
+      }
+      if (target.speakerInvitePending) {
+        target.speakerInvitePending = false;
+        return manager.save(target);
+      }
+      return target;
+    });
+  }
+
+  private async publishRoleChanged(
+    roomId: string,
+    member: PartyRoomMember,
+  ): Promise<void> {
+    await this.publishToRoomMembers(roomId, {
+      event: RealtimeEvents.PartyRoleChanged,
+      data: {
+        roomId,
+        userId: member.userId,
+        role: member.role,
+      } satisfies PartyRoleChangedEventData,
+    });
+  }
+
   /** Chi tiết phòng + member active — đọc công khai (phòng hiện trên list để join). */
   async getRoom(
     roomId: string,
-  ): Promise<{ room: PartyRoom; members: PartyRoomMember[] }> {
+    includeProfiles = true,
+  ): Promise<{
+    room: PartyRoom;
+    members: PartyRoomMember[];
+    profiles: User[];
+  }> {
     const room = await this.roomRepo.findOneBy({ id: roomId });
     if (!room) {
       throw new DomainException(
@@ -484,7 +634,10 @@ export class PartyRoomService {
       room.status === PartyRoomStatus.Active
         ? await this.memberRepo.findBy({ roomId, leftAt: IsNull() })
         : [];
-    return { room, members };
+    const profiles = includeProfiles
+      ? await this.userService.findByIds(members.map((member) => member.userId))
+      : [];
+    return { room, members, profiles };
   }
 
   /**
@@ -494,7 +647,7 @@ export class PartyRoomService {
   async getActiveRoomMembers(
     roomId: string,
   ): Promise<{ room: PartyRoom; members: PartyRoomMember[] }> {
-    const { room, members } = await this.getRoom(roomId);
+    const { room, members } = await this.getRoom(roomId, false);
     if (room.status !== PartyRoomStatus.Active) {
       throw new DomainException(
         PartyRoomErrors.ROOM_CLOSED,

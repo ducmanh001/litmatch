@@ -58,7 +58,7 @@ describe('useCallRoom', () => {
     expect(disconnectSpy).toHaveBeenCalledWith(room);
   });
 
-  it('mic bị từ chối quyền → error được set, room vẫn null (call thiếu mic thì vô dụng)', async () => {
+  it('mic bị từ chối quyền → vẫn giữ room để nghe và cho phép thử bật lại', async () => {
     const room = fakeRoom();
     const deniedError = new Error('Permission denied');
     room.localParticipant.setMicrophoneEnabled = vi
@@ -78,10 +78,9 @@ describe('useCallRoom', () => {
 
     act(() => result.current.connect());
     await waitFor(() => expect(result.current.error).toBe(deniedError));
-    expect(result.current.room).toBeNull();
-    // Room đã join nhưng không publish được mic phải được đóng ngay, nếu không webhook vẫn thấy
-    // participant và call bị treo ở pending tới ticker timeout.
-    expect(livekit.disconnectMediaRoom).toHaveBeenCalledWith(room);
+    expect(result.current.room).toBe(room);
+    expect(result.current.microphoneEnabled).toBe(false);
+    expect(livekit.disconnectMediaRoom).not.toHaveBeenCalledWith(room);
 
     unmount();
   });

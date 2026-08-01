@@ -21,10 +21,11 @@ export function useCallRoom(matchSessionId: string) {
   const [room, setRoom] = useState<Room | null>(null);
   const [callId, setCallId] = useState<string | null>(null);
   const [roomDisconnected, setRoomDisconnected] = useState(false);
+  const [microphoneEnabled, setMicrophoneEnabledState] = useState(false);
   // `joinCall.error` chỉ bắt lỗi REST join — kết nối LiveKit/publish mic chạy SAU khi mutation
   // đã resolve (trong onSuccess), nên lỗi ở đó (vd mic bị từ chối quyền) phải tự bắt và giữ ở
-  // đây, không thì rơi ra ngoài React Query thành unhandled rejection: `room` không bao giờ
-  // được set (đúng ý — call thiếu mic thì vô dụng) nhưng UI cũng không biết vì sao mà báo.
+  // đây, không thì rơi ra ngoài React Query thành unhandled rejection. Remote audio vẫn cần
+  // hoạt động khi chỉ publish mic thất bại, đồng thời UI phải cho phép retry bằng nút mic.
   const [mediaError, setMediaError] = useState<unknown>(null);
   const roomRef = useRef<Room | null>(null);
   // Mỗi lần connect/unmount tăng generation. REST join không thể bị hủy đáng tin cậy ở mọi
@@ -32,13 +33,40 @@ export function useCallRoom(matchSessionId: string) {
   // rời màn hoặc sau khi họ bấm kết nối lại lần nữa.
   const generationRef = useRef(0);
   const disposedRef = useRef(false);
+  const microphoneRequestRef = useRef(0);
 
   const { mutate: joinCallMutate } = joinCall;
+  const setMicrophoneEnabled = useCallback(async (enabled: boolean) => {
+    const current = roomRef.current;
+    if (current === null) return;
+    const request = ++microphoneRequestRef.current;
+    try {
+      await current.localParticipant.setMicrophoneEnabled(enabled);
+      if (
+        current !== roomRef.current ||
+        request !== microphoneRequestRef.current
+      ) {
+        return;
+      }
+      setMicrophoneEnabledState(enabled);
+      setMediaError(null);
+    } catch (err) {
+      if (
+        current === roomRef.current &&
+        request === microphoneRequestRef.current
+      ) {
+        setMicrophoneEnabledState(false);
+        setMediaError(err);
+      }
+      throw err;
+    }
+  }, []);
   const connect = useCallback(() => {
     disposedRef.current = false;
     const generation = ++generationRef.current;
     setRoomDisconnected(false);
     setMediaError(null);
+    setMicrophoneEnabledState(false);
     joinCallMutate(undefined, {
       onSuccess: (joined) => {
         if (joined === undefined) return;
@@ -66,8 +94,6 @@ export function useCallRoom(matchSessionId: string) {
             // Nhận ownership ngay khi socket đã join. Prompt xin quyền microphone có thể treo
             // vô hạn; nếu unmount/reconnect trong lúc đó thì cleanup phải nhìn thấy room này.
             roomRef.current = connected;
-            // connectMediaRoom chỉ join room — publish mic là bước riêng, thiếu thì call câm.
-            await connected.localParticipant.setMicrophoneEnabled(true);
             if (disposedRef.current || generation !== generationRef.current) {
               if (roomRef.current === connected) roomRef.current = null;
               await disconnectMediaRoom(connected);
@@ -85,9 +111,10 @@ export function useCallRoom(matchSessionId: string) {
             roomRef.current = connected;
             setCallId(joined.call.id);
             setRoom(connected);
+            void setMicrophoneEnabled(true).catch(() => undefined);
           } catch (err) {
-            // Nếu microphone bị từ chối thì `connected` đã vào LiveKit. Phải đóng CHÍNH room
-            // này, nếu không server vẫn thấy participant và phiên pending bị treo tới timeout.
+            // Chỉ lỗi connect/network mới đóng room. Lỗi microphone được xử lý ở promise riêng
+            // phía trên để remote audio vẫn hoạt động.
             if (connected !== null) {
               if (roomRef.current === connected) roomRef.current = null;
               await disconnectMediaRoom(connected).catch(() => undefined);
@@ -102,12 +129,14 @@ export function useCallRoom(matchSessionId: string) {
         })();
       },
     });
-  }, [joinCallMutate]);
+  }, [joinCallMutate, setMicrophoneEnabled]);
 
   useEffect(
     () => () => {
       disposedRef.current = true;
       generationRef.current += 1;
+      microphoneRequestRef.current += 1;
+      setMicrophoneEnabledState(false);
       const current = roomRef.current;
       roomRef.current = null;
       if (current !== null) void disconnectMediaRoom(current);
@@ -120,6 +149,8 @@ export function useCallRoom(matchSessionId: string) {
     room,
     callId,
     roomDisconnected,
+    microphoneEnabled,
+    setMicrophoneEnabled,
     isConnecting: joinCall.isPending,
     error: joinCall.error ?? mediaError,
   };

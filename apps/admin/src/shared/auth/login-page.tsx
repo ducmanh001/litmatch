@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { apiClient, tokenStore } from '../api/client';
 import { isCapabilityUsable, useCapabilities } from '../capabilities/api';
 import { env } from '../env';
+import { t, useT } from '../i18n/catalog';
 import { showToast } from '../lib/toast-store';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
@@ -27,10 +28,10 @@ import type { CapabilitiesDto } from '../capabilities/api';
 
 const phoneSchema = z.object({
   // Input là số nội địa (0xxx hoặc bỏ số 0) — chuẩn hoá sang E.164 lúc submit (normalizeVnPhone).
-  phone: z.string().regex(VN_LOCAL_PHONE_PATTERN, 'Số điện thoại không hợp lệ'),
+  phone: z.string().regex(VN_LOCAL_PHONE_PATTERN, t('auth.invalidPhone')),
 });
 const codeSchema = z.object({
-  code: z.string().regex(/^[0-9]{6}$/u, 'Mã OTP gồm 6 chữ số'),
+  code: z.string().regex(/^[0-9]{6}$/u, t('auth.invalidOtp')),
 });
 
 type PhoneForm = z.infer<typeof phoneSchema>;
@@ -44,32 +45,27 @@ function legacyAuthCapabilities(): CapabilitiesDto['auth'] {
   const googleClientId = env.VITE_AUTH_GOOGLE_CLIENT_ID ?? null;
   return {
     phoneOtp: {
-      ...state(
-        env.VITE_PHONE_OTP_ENABLED,
-        'Đăng nhập bằng số điện thoại hiện chưa khả dụng.',
-      ),
+      ...state(env.VITE_PHONE_OTP_ENABLED, t('auth.phoneUnavailable')),
       clientId: null,
     },
     google: {
-      ...state(
-        googleClientId !== null,
-        'Đăng nhập Google chưa hiện chưa khả dụng.',
-      ),
+      ...state(googleClientId !== null, t('auth.googleUnavailable')),
       clientId: googleClientId,
     },
     apple: {
-      ...state(false, 'Đăng nhập Apple hiện chưa khả dụng.'),
+      ...state(false, t('auth.appleUnavailable')),
       clientId: null,
     },
     facebook: {
-      ...state(false, 'Đăng nhập Facebook hiện chưa khả dụng.'),
+      ...state(false, t('auth.facebookUnavailable')),
       clientId: null,
     },
-    guest: state(true, 'Có thể trải nghiệm ngay không cần đăng nhập.'),
+    guest: state(true, t('auth.guestAvailable')),
   };
 }
 
 export function LoginPage() {
+  const t = useT();
   const isAuthenticated = useIsAuthenticated();
   const capabilities = useCapabilities();
   const authCapabilities = capabilities.data?.auth ?? legacyAuthCapabilities();
@@ -89,18 +85,14 @@ export function LoginPage() {
       const phone = normalizeVnPhone(localPhone);
       if (phone === null) {
         // Đã qua zodResolver(phoneSchema) nên luôn khớp VN_LOCAL_PHONE_PATTERN.
-        throw new Error(
-          'Số điện thoại không đúng định dạng. Vui lòng kiểm tra lại.',
-        );
+        throw new Error(t('auth.invalidPhoneFormat'));
       }
       const res = await apiClient.POST('/api/v1/auth/otp/request', {
         body: { phone },
       });
       const otp = res.data?.data;
       if (otp === undefined || !/^\d{6}$/u.test(otp.code)) {
-        throw new Error(
-          'Không thể khởi tạo mã xác thực lúc này. Vui lòng thử lại sau.',
-        );
+        throw new Error(t('auth.otpSetupFailed'));
       }
       return { phone, otp };
     },
@@ -110,7 +102,7 @@ export function LoginPage() {
         shouldValidate: true,
       });
       setPhase({ step: 'code', phone });
-      showToast(`Mã xác thực (OTP) của bạn là ${otp.code}`);
+      showToast(t('auth.otpCode', { code: otp.code }));
     },
   });
 
@@ -134,8 +126,7 @@ export function LoginPage() {
       const capability = authCapabilities.google;
       if (!isCapabilityUsable(capability) || capability?.clientId === null) {
         throw new Error(
-          capability?.message ??
-            'Đăng nhập bằng Google hiện chưa khả dụng. Vui lòng thử phương thức khác.',
+          capability?.message ?? t('auth.googleLoginUnavailable'),
         );
       }
       const clientId = capability.clientId;
@@ -157,7 +148,7 @@ export function LoginPage() {
           ? error.message
           : error instanceof Error
             ? error.message
-            : 'Có lỗi xảy ra, thử lại.',
+            : t('common.tryAgain'),
         'warn',
       ),
   });
@@ -171,13 +162,13 @@ export function LoginPage() {
         ? error.message
         : error instanceof Error
           ? error.message
-          : 'Có lỗi xảy ra, thử lại.';
+          : t('common.tryAgain');
 
   if (capabilities.isPending) {
     return (
       <main className="flex min-h-screen items-center justify-center p-4">
         <p className="text-sm text-muted-foreground">
-          Đang kiểm tra phương thức đăng nhập…
+          {t('auth.checkingMethods')}
         </p>
       </main>
     );
@@ -191,8 +182,8 @@ export function LoginPage() {
             <h1 className="text-xl font-semibold">Litmatch Admin</h1>
             <p className="text-sm text-muted-foreground">
               {phase.step === 'phone'
-                ? 'Đăng nhập bằng số điện thoại hoặc Google'
-                : `Nhập mã OTP đã gửi tới ${phase.phone}`}
+                ? t('auth.signInPhoneOrGoogle')
+                : t('auth.enterOtpSentTo', { phone: phase.phone })}
             </p>
           </div>
 
@@ -215,7 +206,7 @@ export function LoginPage() {
               >
                 <Field
                   htmlFor="phone"
-                  label="Số điện thoại"
+                  label={t('auth.phone')}
                   error={
                     phoneForm.formState.errors.phone?.message ??
                     mutationError(requestOtp.error)
@@ -232,7 +223,7 @@ export function LoginPage() {
                       id="phone"
                       type="tel"
                       autoComplete="tel"
-                      placeholder="912345678 hoặc 0912345678"
+                      placeholder={t('auth.phonePlaceholder')}
                       {...phoneForm.register('phone')}
                     />
                   </div>
@@ -242,12 +233,14 @@ export function LoginPage() {
                   type="submit"
                   disabled={requestOtp.isPending}
                 >
-                  {requestOtp.isPending ? 'Đang gửi…' : 'Gửi mã OTP'}
+                  {requestOtp.isPending ? t('auth.sending') : t('auth.sendOtp')}
                 </Button>
               </form>
               <div className="flex items-center gap-3" aria-hidden>
                 <div className="h-px flex-1 bg-border" />
-                <span className="text-xs text-muted-foreground">hoặc</span>
+                <span className="text-xs text-muted-foreground">
+                  {t('auth.or')}
+                </span>
                 <div className="h-px flex-1 bg-border" />
               </div>
               <Button
@@ -258,8 +251,8 @@ export function LoginPage() {
                 onClick={() => socialLogin.mutate()}
               >
                 {socialLogin.isPending
-                  ? 'Đang mở Google…'
-                  : 'Đăng nhập với Google'}
+                  ? t('auth.openingGoogle')
+                  : t('auth.signInGoogle')}
               </Button>
               {mutationError(socialLogin.error) !== undefined && (
                 <p role="alert" className="text-sm text-destructive">
@@ -278,7 +271,7 @@ export function LoginPage() {
             >
               <Field
                 htmlFor="code"
-                label="Mã OTP"
+                label={t('auth.otp')}
                 error={
                   codeForm.formState.errors.code?.message ??
                   mutationError(verifyOtp.error)
@@ -297,14 +290,14 @@ export function LoginPage() {
                 type="submit"
                 disabled={verifyOtp.isPending}
               >
-                {verifyOtp.isPending ? 'Đang xác minh…' : 'Đăng nhập'}
+                {verifyOtp.isPending ? t('auth.verifying') : t('auth.signIn')}
               </Button>
               <Button
                 variant="ghost"
                 className="w-full"
                 onClick={() => setPhase({ step: 'phone' })}
               >
-                Đổi số điện thoại
+                {t('auth.changePhone')}
               </Button>
             </form>
           )}

@@ -1,8 +1,8 @@
 import { canPublishRole, PARTY_ROOM_DETAIL_REFETCH_INTERVAL_MS } from './api';
 
 describe('canPublishRole', () => {
-  it('dùng fallback 15 giây cho room detail', () => {
-    expect(PARTY_ROOM_DETAIL_REFETCH_INTERVAL_MS).toBe(15_000);
+  it('dùng fallback 5 giây cho room detail', () => {
+    expect(PARTY_ROOM_DETAIL_REFETCH_INTERVAL_MS).toBe(5_000);
   });
 
   it('host và speaker publish được', () => {
