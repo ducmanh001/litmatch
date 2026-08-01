@@ -13,6 +13,7 @@ import { FriendChat1752600000000 } from '../../database/migrations/1752600000000
 import { SoulChatFriendHistory1756600000000 } from '../../database/migrations/1756600000000-soul-chat-friend-history';
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
 import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
+import { MessageAttachment1754400000000 } from '../../database/migrations/1754400000000-message-attachment';
 
 import { SoulMatchService } from './soul-match.service';
 import { SoulMatchErrors } from './soul-match.errors';
@@ -200,6 +201,7 @@ d('Soul Match integration (Postgres thật)', () => {
         SoulChatFriendHistory1756600000000,
         Safety1752800000000,
         ReportTargetVideo1754900000000,
+        MessageAttachment1754400000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,

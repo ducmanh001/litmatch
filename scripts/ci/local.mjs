@@ -146,7 +146,11 @@ function run(label, command, args, options = {}) {
     throw result.error;
   }
   if (result.status !== 0 && !options.allowFailure) {
-    throw new Error(`${label} failed with exit code ${result.status ?? 1}`);
+    const signal = result.signal ? `, signal ${result.signal}` : '';
+    throw new Error(
+      `${label} failed (exit code ${result.status ?? 1}${signal}). ` +
+        `Replay this exact stage with: pnpm ci:local:plan; then run the command above directly.`,
+    );
   }
 
   return result.status ?? 1;
@@ -721,6 +725,14 @@ try {
   console.log(`\n[ci-local] ${profile}: PASS`);
 } catch (error) {
   console.error(`\n[ci-local] ${profile}: FAIL`);
-  console.error(error instanceof Error ? error.message : error);
+  console.error(
+    error instanceof Error
+      ? `${error.name}: ${error.message}\n${error.stack ?? ''}`
+      : error,
+  );
+  console.error(
+    '[ci-local] Diagnosis: the first failing [ci-local] stage above is the root failure; ' +
+      'later stages are not executed. Re-run that stage after applying the fix.',
+  );
   process.exitCode = 1;
 }

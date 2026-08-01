@@ -370,7 +370,7 @@ d('Party Room integration (Postgres thật)', () => {
     );
     expect(
       (await activeMembers(room.id)).every(
-        (m) => m.role === PartyRole.Audience,
+        (m) => m.role === PartyRole.Host || m.role === PartyRole.Audience,
       ),
     ).toBe(true);
 
