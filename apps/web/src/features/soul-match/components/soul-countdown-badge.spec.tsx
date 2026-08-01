@@ -59,4 +59,19 @@ describe('SoulCountdownBadge', () => {
 
     expect(await screen.findByTestId('countdown-spacer')).toBeInTheDocument();
   });
+
+  it('đã mutual-like — phòng còn mở nhưng không đếm ngược', async () => {
+    mockGet({
+      sessionId: 'session-1',
+      phase: 'chatting',
+      chatEndsAt: new Date(Date.now() + 150_000).toISOString(),
+      ratingEndsAt: new Date(Date.now() + 300_000).toISOString(),
+      myVerdict: 'like',
+      matched: true,
+    });
+    renderBadge();
+
+    expect(await screen.findByTestId('countdown-spacer')).toBeInTheDocument();
+    expect(screen.queryByText(/2:/)).not.toBeInTheDocument();
+  });
 });

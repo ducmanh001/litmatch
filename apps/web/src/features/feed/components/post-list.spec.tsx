@@ -1,6 +1,6 @@
 import { ApiError } from '@litmatch/api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
@@ -31,7 +31,8 @@ function renderList(currentUserId?: string) {
 
 describe('PostList', () => {
   afterEach(() => {
-    tokenStore.setSession(null);
+    act(() => tokenStore.setSession(null));
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -100,6 +101,55 @@ describe('PostList', () => {
         name: 'Bình luận bài viết, 2 bình luận',
       }),
     ).toHaveAttribute('href', '/feed/post-1');
+  });
+
+  it('tự tải trang tiếp theo khi sentinel vào vùng nhìn thấy', async () => {
+    class TestIntersectionObserver implements IntersectionObserver {
+      readonly root = null;
+      readonly rootMargin = '0px';
+      readonly thresholds: number[] = [];
+      readonly takeRecords = () => [];
+      readonly disconnect = vi.fn();
+      readonly unobserve = vi.fn();
+
+      constructor(
+        private readonly callback: IntersectionObserverCallback,
+        _options?: IntersectionObserverInit,
+      ) {}
+
+      readonly observe = vi.fn((target: Element) => {
+        this.callback(
+          [{ isIntersecting: true, target } as IntersectionObserverEntry],
+          this,
+        );
+      });
+    }
+
+    vi.stubGlobal('IntersectionObserver', TestIntersectionObserver);
+    let requestCount = 0;
+    const getSpy = vi
+      .spyOn(apiClient, 'GET')
+      .mockImplementation(async (path: string) => {
+        if (path !== '/api/v1/feed/posts') {
+          throw new Error(`unexpected GET ${path}`);
+        }
+        requestCount += 1;
+        return {
+          data: {
+            data: {
+              items: [],
+              nextCursor: requestCount === 1 ? 'cursor-2' : null,
+            },
+          },
+        } as never;
+      });
+
+    renderList();
+
+    await waitFor(() => expect(getSpy).toHaveBeenCalledTimes(2));
+    expect(getSpy).toHaveBeenNthCalledWith(2, '/api/v1/feed/posts', {
+      params: { query: { limit: 10, cursor: 'cursor-2' } },
+    });
   });
 
   it('response API cũ chưa có author vẫn render được trong lúc core-api reload', async () => {

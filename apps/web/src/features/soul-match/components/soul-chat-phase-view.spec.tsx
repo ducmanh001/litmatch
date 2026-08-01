@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 
 import { SoulChatPhaseView } from './soul-chat-phase-view';
@@ -67,6 +67,21 @@ describe('SoulChatPhaseView', () => {
       await screen.findByLabelText('Nội dung tin nhắn'),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Thích' })).toBeInTheDocument();
+  });
+
+  it('pagehide — đóng Soul Match để đối phương không bị treo trong phòng', async () => {
+    mockGet(sessionFixture({}));
+    const post = vi.spyOn(apiClient, 'POST').mockResolvedValue({} as never);
+    renderView();
+
+    window.dispatchEvent(new Event('pagehide'));
+
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith(
+        '/api/v1/soul-match/sessions/{id}/end',
+        { params: { path: { id: 'session-1' } } },
+      ),
+    );
   });
 
   it('matched giữa lúc đang chat — hiện thẻ đối phương ngay, không đợi phase closed', async () => {

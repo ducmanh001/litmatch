@@ -86,7 +86,7 @@ Chi tiết về taxonomy, ownership và cách cập nhật nằm ở
 | [ADRs](./adr/README.md)            | Hiểu quyết định đã chốt, phương án loại và hệ quả           | Mô tả trạng thái runtime hiện tại một mình |
 | [Runbooks](./runbooks/README.md)   | Thực hiện local/release/observability/recovery theo profile | Tuyên bố SLA hoặc production PASS          |
 | [Plans/reviews](./plans/README.md) | Tra assumptions, review và kết quả tại một thời điểm        | Ghi đè rule hiện hành                      |
-| [Reference](./reference/README.md) | Tra registry, handoff và bài học có link về nguồn gốc       | Copy lại toàn bộ domain spec               |
+| [Reference](./reference/README.md) | Tra memory index, registry, handoff và bài học có nguồn gốc | Copy lại toàn bộ domain spec               |
 | [Templates](./templates/README.md) | Tạo record có cấu trúc                                      | Xem field trống là evidence                |
 
 Contract máy đọc được nằm ở [`openapi/`](../openapi/README.md) và

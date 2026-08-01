@@ -16,4 +16,6 @@ export interface SoulRoomView {
   chatEndsAt: Date;
   ratingEndsAt: Date;
   phase: SoulRoomPhase;
+  /** Friendship đã tồn tại — sau mutual-like chat không còn hết hạn theo đồng hồ. */
+  matched: boolean;
 }

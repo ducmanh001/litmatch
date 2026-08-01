@@ -13,8 +13,9 @@ export function SoulCountdownBadge({ sessionId }: { sessionId: string }) {
   const [now, setNow] = useState(() => Date.now());
 
   const s = session.data;
-  const deadline =
-    s?.phase === 'chatting'
+  const deadline = s?.matched
+    ? null
+    : s?.phase === 'chatting'
       ? s.chatEndsAt
       : s?.phase === 'rating'
         ? s.ratingEndsAt

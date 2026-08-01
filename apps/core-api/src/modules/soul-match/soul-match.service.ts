@@ -41,6 +41,7 @@ import type {
   CursorPage,
   RealtimeEnvelope,
   SoulMatchedEventData,
+  SoulEndedEventData,
   SoulMessageEventData,
 } from '@litmatch/common-dtos';
 import type Redis from 'ioredis';
@@ -88,11 +89,29 @@ export class SoulMatchService {
     matched: boolean;
   }> {
     const room = await this.getRoomForMember(user, sessionId);
-    const [myRating, matched] = await Promise.all([
-      this.ratingRepo.findOneBy({ sessionId, raterUserId: user.userId }),
-      this.friendService.areFriends(room.session.userAId, room.session.userBId),
-    ]);
-    return { room, myVerdict: myRating?.verdict ?? null, matched };
+    const myRating = await this.ratingRepo.findOneBy({
+      sessionId,
+      raterUserId: user.userId,
+    });
+    return {
+      room,
+      myVerdict: myRating?.verdict ?? null,
+      matched: room.matched,
+    };
+  }
+
+  /** Rời phòng là transition durable; realtime chỉ là tín hiệu để UI đóng ngay. */
+  async endSession(user: AuthenticatedUser, sessionId: string): Promise<void> {
+    const session = await this.matchingService.endSoulSession(user, sessionId);
+    const envelope: RealtimeEnvelope<SoulEndedEventData> = {
+      event: RealtimeEvents.SoulEnded,
+      data: { sessionId, reason: 'member_left' },
+    };
+    await Promise.all(
+      [session.userAId, session.userBId].map((uid) =>
+        publishRealtimeEvent(this.redis, this.logger, uid, envelope),
+      ),
+    );
   }
 
   /**
@@ -156,7 +175,7 @@ export class SoulMatchService {
             HttpStatus.NOT_FOUND,
           );
         }
-        if (Date.now() >= room.chatEndsAt.getTime()) {
+        if (!room.matched && Date.now() >= room.chatEndsAt.getTime()) {
           throw new DomainException(
             SoulMatchErrors.CHAT_NOT_OPEN,
             'Hết giờ chat — phòng đã chuyển sang đánh giá hoặc đã đóng',
@@ -425,7 +444,9 @@ export class SoulMatchService {
     }
     if (
       session.matchType !== MatchType.Soul ||
-      session.status !== MatchSessionStatus.Confirmed
+      ![MatchSessionStatus.Confirmed, MatchSessionStatus.Ended].includes(
+        session.status,
+      )
     ) {
       throw new DomainException(
         SoulMatchErrors.CHAT_NOT_OPEN,
@@ -450,14 +471,27 @@ export class SoulMatchService {
     });
     const chatEndsAt = new Date(confirmedAt.getTime() + chatSeconds * 1000);
     const ratingEndsAt = new Date(chatEndsAt.getTime() + ratingSeconds * 1000);
+    const matched = await this.friendService.areFriends(
+      session.userAId,
+      session.userBId,
+    );
+    if (session.status === MatchSessionStatus.Ended) {
+      return {
+        session,
+        chatEndsAt,
+        ratingEndsAt,
+        phase: SoulRoomPhase.Closed,
+        matched,
+      };
+    }
     const now = Date.now();
     const phase =
-      now < chatEndsAt.getTime()
+      matched || now < chatEndsAt.getTime()
         ? SoulRoomPhase.Chatting
         : now < ratingEndsAt.getTime()
           ? SoulRoomPhase.Rating
           : SoulRoomPhase.Closed;
-    return { session, chatEndsAt, ratingEndsAt, phase };
+    return { session, chatEndsAt, ratingEndsAt, phase, matched };
   }
 
   private partnerIdOf(session: MatchSession, userId: string): string {

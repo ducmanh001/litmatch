@@ -4,6 +4,100 @@ This document is the short transfer brief for a new human or coding agent joinin
 It preserves verified repository knowledge and the route to deeper evidence; it is not a transcript
 of an old chat and does not claim access to private external-model or agent sessions.
 
+For every-session startup, read the smaller [compact project memory](./project-memory.md) first.
+Use this document only when onboarding, transferring ownership, or updating the learning workflow.
+
+## 0. Project-from-zero durable snapshot
+
+This section records the verified shape and major milestones of the repository so a later agent can
+reconstruct the project without replaying chat history. It is a navigation layer; current behavior
+still belongs to the canonical owner linked in each row.
+
+### 0.1 Major milestones evidenced by Git
+
+The list is intentionally milestone-level, not a copy of the full commit log:
+
+| Date                    | Milestone                                                                             | Evidence                                   |
+| ----------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------ |
+| 2026-07-10              | Documentation/base skeleton, Nx + pnpm foundation, Core API/Auth/User and local infra | `7c04531`, `29ddbe7`                       |
+| 2026-07-10              | Economy double-entry ledger, IAP/VIP, outbox and reconciliation foundation            | `69d481d`, `cc22ddd`                       |
+| 2026-07-12              | Agent-neutral harness, canonical skills, guards and matching ticket/queue engine      | `8f18845`, `283e8df`, `a1d7854`            |
+| 2026-07-12              | Realtime fanout, LiveKit calling, Soul Match and durable Friend Chat                  | `2f4cfe9`, `92d86f6`, `95cce3c`, `999458c` |
+| 2026-07-12              | Party Room and Gift with role/cap and two-leg Economy settlement                      | `6760f9f`, `88cf2e8`                       |
+| 2026-07-13              | OpenAPI frontend contract, Admin/Web base and browser-auth hardening                  | `d128339`, `9e84486`                       |
+| 2026-07-13              | Social/Discovery/Safety, Content, Scale and Observability tracks                      | `d22fcd5`, `865772c`, `aa1bce1`            |
+| 2026-07-13              | Reliability/chaos evidence scaffolding and region-aware media/edge decisions          | `b1e482a`, `14f5a74`, `7ce0a91`            |
+| 2026-07-22 → 2026-07-30 | Production-readiness gates, hosted/release profiles, analytics consent and payOS      | `a29851f`, `68788fd`, `8c640d0`            |
+| 2026-08-01              | v1.0.0 baseline, display-information privacy flow and multi-stage CI/CD               | `86084db`, `6d8fd79`, `ce788b9`            |
+
+These commits are historical evidence only. They do not prove that external providers, production
+traffic, capacity, credentials, legal copy or operational SLOs are ready.
+
+### 0.2 Repository topology and ownership
+
+| Surface                  | Owner and boundary                                                                                                                                                                                                                                 |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/core-api`          | One NestJS modular monolith. Domains include Auth/User, Economy, Matching, Soul Match, Calling, Friend, Party Room, Gift, Discovery, Feed, Safety, Notification, Avatar, Mood, Movie Match, Palm Match, Mini Game, Short Video, Support and Admin. |
+| `apps/signaling-gateway` | WebSocket transport, per-user fanout, connection quota and ephemeral transport presence. No business decision ownership.                                                                                                                           |
+| `apps/media-server`      | LiveKit/media runtime boundary. Core depends on provider ports/config, not SDK types in domain logic.                                                                                                                                              |
+| `apps/web`               | Next.js end-user frontend; consumes generated API/realtime/media contracts.                                                                                                                                                                        |
+| `apps/admin`             | Vite/React operational frontend; permissions and actions are still enforced by Core API.                                                                                                                                                           |
+| `libs/*`                 | `api-client` generated from OpenAPI; `common-dtos`, `browser-auth`, `common-exceptions`, `config-validator`, `e2e-support`, `logger`, `observability` and other shared primitives.                                                                 |
+| Infrastructure           | Postgres durable state; Redis coordination/index/queue/ephemeral state; Kafka/outbox when enabled; LiveKit for media; provider ports for storage/transcode/push/payment/social auth.                                                               |
+
+New business capability starts as a Core API module. A fourth deployable needs an ADR and the
+criteria in `docs/03-architecture.md § 3.4`. Cross-module imports go through the owning module's
+public `index.ts`; schema changes use a new migration.
+
+### 0.3 Capability and readiness map
+
+The machine-readable registry at [`../feature-registry.json`](../feature-registry.json) is the
+status index. It currently has source/test evidence for all major product surfaces: Auth/Guest/User,
+Economy, Matching/Soul/Voice/Friend, Party/Gift, Feed/Stories, Discovery/Nearby, Safety,
+Avatar/Mood/Streak, Notification, Movie/Palm/Mini Game, Short Video, Support/Admin, runtime
+capabilities and realtime fanout.
+
+Use this distinction when handing work over:
+
+- `implemented` in the registry means the referenced source evidence exists in checkout.
+- A test source means a test is designed for the behavior; it is not proof that the test just ran.
+- A recorded local PASS belongs in a dated plan/handoff with command, SHA, environment and caveat.
+- Production readiness requires provider/runtime evidence, migration order, smoke checks,
+  rollback/forward path and owner. The unclosed triggers are maintained in [`../07-roadmap.md`](../07-roadmap.md).
+
+The main deferred categories are native IAP/provider credentials, push/video/social-auth provider
+readiness, representative LiveKit/capacity/chaos runs, second-region/failover evidence, legal
+owner review and any scale decision that lacks production traffic numbers.
+
+### 0.4 Current display-information/privacy baseline
+
+Commit `6d8fd79` added the server-backed display-information flow: privacy settings persistence and
+OpenAPI endpoints, phone-search gating, profile presence gating, Discovery/Nearby/Feed/Story guards,
+signaling presence leases and the Web privacy controls. The source contract is spread across:
+
+- `apps/core-api/src/modules/user` for settings, public presence and profile visibility;
+- `apps/core-api/src/modules/auth` for phone search;
+- `apps/core-api/src/modules/discovery` and `apps/core-api/src/modules/feed` for server-side filters;
+- `apps/signaling-gateway/src/app/connection-quota.service.ts` for lease-backed presence;
+- `apps/web/src/app/(public)/privacy` and `apps/web/src/features/privacy` for the UI;
+- `openapi/core-api.json` and `libs/api-client/src/generated/core-api.ts` for the contract.
+
+Defaults are online status/distance visible, phone search disabled and temporary profile hiding
+disabled. The separate product-analytics preference is not an opponent-visibility setting.
+
+### 0.5 Retrieval policy for future sessions
+
+1. Every scope loads only `docs/reference/project-memory.md` as the compact stable startup index.
+2. `pnpm agent:context <scope>` then adds the scope's Read first paths and prints shared-worktree
+   safety plus required checks.
+3. Read Read when applicable only when the task contract matches its condition. In particular,
+   load this full handoff for onboarding, ownership transfer, memory/learning workflow or project
+   reconstruction—not for an ordinary one-file feature fix.
+4. Keep startup context bounded. Do not inject the whole feature registry, roadmap, generated
+   reports, all ADRs or chat logs into every session.
+5. Before handoff, preserve the exact SHA and dirty-path ownership. Only committed, linked artifacts
+   transfer reliably to a later session.
+
 ## 1. How to use this handoff
 
 Start with the repository contract, then select only the scope being changed:

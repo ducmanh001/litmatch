@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 
+import { useSessionStatus } from '../../shared/auth/use-session';
 import { ConfirmSheet } from '../../shared/ui/confirm-sheet';
 import { LogoMark } from '../../shared/ui/icons';
 import { LanguageSelector } from '../../shared/ui/language-selector';
@@ -14,6 +15,8 @@ import type { ReactNode } from 'react';
 /** Layout vùng công khai (SSR/SEO — docs/12 § 12.5): header marketing + footer, đúng layouts/web/index.html. */
 export default function PublicLayout({ children }: { children: ReactNode }) {
   const t = useTranslation();
+  const sessionStatus = useSessionStatus();
+  const hasSession = sessionStatus !== 'unauthenticated';
   return (
     <div className="relative">
       <header className="sticky top-0 z-50 border-b border-black/5 bg-paper/85 backdrop-blur dark:border-white/5 dark:bg-ink/85">
@@ -46,18 +49,29 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
             </Link>
           </nav>
           <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className="hidden px-4 py-2 text-sm font-semibold text-slate-600 transition hover:text-iris sm:block dark:text-slate-300 dark:hover:text-irisl"
-            >
-              {t('public.signIn')}
-            </Link>
-            <Link
-              href="/login"
-              className="rounded-full bg-irisl px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-iris/30"
-            >
-              {t('public.signUp')}
-            </Link>
+            {hasSession ? (
+              <Link
+                href="/home"
+                className="rounded-full bg-irisl px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-iris/30"
+              >
+                {t('nav.home')}
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="hidden px-4 py-2 text-sm font-semibold text-slate-600 transition hover:text-iris sm:block dark:text-slate-300 dark:hover:text-irisl"
+                >
+                  {t('public.signIn')}
+                </Link>
+                <Link
+                  href="/login"
+                  className="hidden rounded-full bg-irisl px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-iris/30 sm:inline-flex"
+                >
+                  {t('public.signUp')}
+                </Link>
+              </>
+            )}
             <ThemeToggleButton />
             <LanguageSelector />
           </div>

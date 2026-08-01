@@ -102,12 +102,14 @@ export function HeaderEyebrow({
       style={{
         alignItems: 'center',
         gap: '9px',
-        background: 'var(--grad-soft)',
-        border: '1px solid rgba(240, 87, 127, .4)',
+        background: 'var(--eyebrow-bg)',
+        borderColor: 'var(--eyebrow-border)',
+        borderStyle: 'solid',
+        borderWidth: '1px',
         fontSize: '12.5px',
         fontWeight: 700,
         letterSpacing: '.04em',
-        color: '#ffc7d9',
+        color: 'var(--eyebrow-text)',
       }}
     >
       {/* display:none làm trình duyệt bỏ qua luôn gradient bên trong (mất icon) — phải để

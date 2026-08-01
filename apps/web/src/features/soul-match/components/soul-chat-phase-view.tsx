@@ -4,10 +4,11 @@ import { isApiError } from '@litmatch/api-client';
 import { RealtimeEvents } from '@litmatch/common-dtos/pure';
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
 
 import { useRealtimeEvent } from '../../../shared/realtime/use-realtime-event';
 import { ProfileIcon } from '../../../shared/ui/icons';
-import { soulMatchKeys, useSoulSession } from '../api';
+import { soulMatchKeys, useEndSoulSession, useSoulSession } from '../api';
 import { SoulMessageComposer } from './soul-message-composer';
 import { SoulMessageList } from './soul-message-list';
 import { SoulPartnerCard } from './soul-partner-card';
@@ -16,12 +17,55 @@ import { SoulResultScreen } from './soul-result-screen';
 
 import type {
   SoulMatchedEventData,
+  SoulEndedEventData,
   SoulMessageEventData,
 } from '@litmatch/common-dtos/pure';
 
 export function SoulChatPhaseView({ sessionId }: { sessionId: string }) {
   const queryClient = useQueryClient();
   const session = useSoulSession(sessionId);
+  const endSession = useEndSoulSession(sessionId);
+  const [endedReason, setEndedReason] = useState<string | null>(null);
+  const endSessionMutate = useRef(endSession.mutate);
+  endSessionMutate.current = endSession.mutate;
+
+  // Đóng session khi user thực sự rời màn. Không dùng cleanup React vì Strict Mode sẽ
+  // mount → cleanup → mount trong development và đóng nhầm phòng vừa mở.
+  useEffect(() => {
+    const end = (): void => endSessionMutate.current();
+    const onDocumentClick = (event: MouseEvent): void => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return;
+      }
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const link = target.closest<HTMLAnchorElement>('a[href]');
+      if (link === null) return;
+      const destination = new URL(link.href, window.location.href);
+      if (
+        destination.origin === window.location.origin &&
+        destination.pathname !== window.location.pathname
+      ) {
+        end();
+      }
+    };
+
+    window.addEventListener('pagehide', end);
+    window.addEventListener('popstate', end);
+    document.addEventListener('click', onDocumentClick, true);
+    return () => {
+      window.removeEventListener('pagehide', end);
+      window.removeEventListener('popstate', end);
+      document.removeEventListener('click', onDocumentClick, true);
+    };
+  }, []);
 
   // Realtime chỉ gợi ý refetch sớm — poll của useSoulSession vẫn là fallback thật.
   useRealtimeEvent<SoulMessageEventData>(RealtimeEvents.SoulMessage, (data) => {
@@ -33,6 +77,14 @@ export function SoulChatPhaseView({ sessionId }: { sessionId: string }) {
   });
   useRealtimeEvent<SoulMatchedEventData>(RealtimeEvents.SoulMatched, (data) => {
     if (data.sessionId === sessionId) {
+      void queryClient.invalidateQueries({
+        queryKey: soulMatchKeys.session(sessionId),
+      });
+    }
+  });
+  useRealtimeEvent<SoulEndedEventData>(RealtimeEvents.SoulEnded, (data) => {
+    if (data.sessionId === sessionId) {
+      setEndedReason(data.reason);
       void queryClient.invalidateQueries({
         queryKey: soulMatchKeys.session(sessionId),
       });
@@ -60,6 +112,22 @@ export function SoulChatPhaseView({ sessionId }: { sessionId: string }) {
 
   const s = session.data;
   if (s === undefined) return null;
+
+  if (endedReason !== null) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
+        <p className="mb-8 text-sm text-slate-500 dark:text-slate-400">
+          Đối phương đã rời phòng — phòng chat ẩn danh đã đóng.
+        </p>
+        <Link
+          href="/matching"
+          className="w-full rounded-full bg-gradient-to-br from-irisl to-irisl py-3 text-center text-sm font-bold text-white shadow-lg shadow-iris/30"
+        >
+          Tìm ghép đôi tiếp
+        </Link>
+      </div>
+    );
+  }
 
   // Đã gửi đánh giá (thích/bỏ qua) — chuyển thẳng sang màn kết quả toàn màn hình, không đợi
   // phase chuyển 'closed' (giống soul-match.html: rate() → showOnly('resultState') ngay lập tức).

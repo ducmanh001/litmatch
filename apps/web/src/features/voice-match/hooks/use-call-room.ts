@@ -144,8 +144,22 @@ export function useCallRoom(matchSessionId: string) {
     [],
   );
 
+  // Chốt media ngay khi server/realtime báo call ended. Giữ `callId` để component còn
+  // hiển thị kết quả và reaction sau khi room LiveKit đã bị ngắt.
+  const disconnect = useCallback(() => {
+    disposedRef.current = true;
+    generationRef.current += 1;
+    microphoneRequestRef.current += 1;
+    setMicrophoneEnabledState(false);
+    const current = roomRef.current;
+    roomRef.current = null;
+    if (current !== null) void disconnectMediaRoom(current);
+    setRoom(null);
+  }, []);
+
   return {
     connect,
+    disconnect,
     room,
     callId,
     roomDisconnected,

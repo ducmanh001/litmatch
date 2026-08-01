@@ -20,7 +20,7 @@ nguyên văn. Nhờ vậy slice này **không cần internal API** giữa gatewa
 - `AccessTokenPayload` (`auth-token.ts`): core-api ký, core-api guard + gateway handshake
   cùng verify bằng CÙNG `JWT_SECRET`. Gateway không bao giờ ký token.
 - `realtime-events.ts`: channel builder/parser, tên event, kiểu payload
-  (`RealtimeEnvelope<T>`). Event hiện có: `soul.message`, `soul.matched`, `match.matched`,
+  (`RealtimeEnvelope<T>`). Event hiện có: `soul.message`, `soul.matched`, `soul.ended`, `match.matched`,
   `match.confirmed`, `call.ended`, `friend.message`, `friend.streak.increased`,
   `friend.streak.at_risk`, `party.member.joined`, `party.member.left`, `party.role.changed`,
   `party.room.closed`, `party.host.disconnected`, `party.host.reconnected`, `gift.sent`,
@@ -47,6 +47,7 @@ nghiệp vụ như Notification — docs/10 § Distributed).
 | `confirmTicket` chốt session legacy (sau commit)     | `match.confirmed` | cả 2 user                    |
 | `soul-match` gửi message MỚI (sau persist)           | `soul.message`    | cả 2 (payload per-recipient) |
 | `soul-match` mutual like TẠO friendship (sau commit) | `soul.matched`    | cả 2                         |
+| `soul-match` một bên rời phòng (sau commit)          | `soul.ended`      | cả 2                         |
 | `calling` end call ở MỌI nhánh (sau commit)          | `call.ended`      | cả 2 user của call           |
 | `friend` gửi message chat 1-1 (sau persist)          | `friend.message`  | cả 2 bạn                     |
 | `party-room` join/leave/đổi role/đóng phòng          | `party.*`         | member active của phòng      |

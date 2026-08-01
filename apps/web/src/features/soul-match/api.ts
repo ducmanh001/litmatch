@@ -119,6 +119,22 @@ export function useRateSession(sessionId: string) {
   });
 }
 
+export function useEndSoulSession(sessionId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      await apiClient.POST('/api/v1/soul-match/sessions/{id}/end', {
+        params: { path: { id: sessionId } },
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: soulMatchKeys.session(sessionId),
+      });
+    },
+  });
+}
+
 export function useSoulPartner(sessionId: string, enabled: boolean) {
   return useQuery({
     queryKey: soulMatchKeys.partner(sessionId),

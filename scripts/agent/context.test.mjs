@@ -23,15 +23,50 @@ test('context map tách tài liệu bắt buộc khỏi tài liệu theo điều
   );
 });
 
+test('mọi scope đều nạp compact project memory ở startup', async () => {
+  const map = JSON.parse(await readFile('.agents/context-map.json', 'utf8'));
+
+  for (const [scope, entry] of Object.entries(map)) {
+    assert.ok(
+      entry.read.includes('docs/reference/project-memory.md'),
+      `${scope} thiếu compact project memory`,
+    );
+    assert.equal(
+      entry.read[1],
+      'docs/reference/project-memory.md',
+      `${scope} không đặt compact project memory ngay sau AGENTS.md`,
+    );
+  }
+});
+
+test('full project handoff chỉ nạp theo điều kiện, không phình startup context', async () => {
+  const map = JSON.parse(await readFile('.agents/context-map.json', 'utf8'));
+
+  for (const [scope, entry] of Object.entries(map)) {
+    assert.ok(
+      !entry.read.includes('docs/reference/project-handoff.md'),
+      `${scope} đang nạp full handoff ở startup`,
+    );
+  }
+  for (const scope of ['default', 'docs', 'agents']) {
+    assert.ok(
+      map[scope].readWhen.some(
+        (item) => item.path === 'docs/reference/project-handoff.md',
+      ),
+      `${scope} thiếu route tới full handoff`,
+    );
+  }
+});
+
 test('docs scope route onboarding, learning và checks riêng', async () => {
   const map = JSON.parse(await readFile('.agents/context-map.json', 'utf8'));
 
   assert.deepEqual(map.docs.read, [
     'AGENTS.md',
+    'docs/reference/project-memory.md',
     'docs/00-overview-and-index.md',
     'docs/18-documentation-automation.md',
     'docs/19-project-lifecycle-and-learning.md',
-    'docs/reference/project-handoff.md',
   ]);
   assert.ok(
     map.docs.readWhen.some(
@@ -64,6 +99,7 @@ test('agents scope route AI-native harness, eval và checks riêng', async () =>
 
   assert.deepEqual(map.agents.read, [
     'AGENTS.md',
+    'docs/reference/project-memory.md',
     'docs/20-ai-native-handbook.md',
     'docs/08-working-with-agents.md',
     'docs/14-rule-enforcement-matrix.md',
@@ -71,6 +107,11 @@ test('agents scope route AI-native harness, eval và checks riêng', async () =>
   assert.ok(
     map.agents.readWhen.some(
       (item) => item.path === 'docs/10-code-review-checklist.md',
+    ),
+  );
+  assert.ok(
+    map.agents.readWhen.some(
+      (item) => item.path === 'docs/reference/project-handoff.md',
     ),
   );
   assert.deepEqual(map.agents.checks, [

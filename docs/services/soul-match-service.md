@@ -9,7 +9,7 @@
 ## 1. Vòng đời phòng chat — derive-khi-đọc, không cột state riêng
 
 Phòng chat KHÔNG có entity riêng: nó là **view dẫn xuất** từ `MatchSession`
-(`matchType = soul`, `status = confirmed`) + 2 config thời lượng. Phase derive từ giờ server
+(`matchType = soul`, `status = confirmed|ended`) + 2 config thời lượng. Phase derive từ giờ server
 tại thời điểm đọc (cùng pattern "derive khi đọc, không phụ thuộc cron" của VIP; timer enforce
 ở server — docs/10 § Calling: không bao giờ tin timer client):
 
@@ -24,9 +24,16 @@ now ≥ ratingEndsAt            → phase = closed     (khoá hết — docs/02:
                                                     khoá khi session kết thúc)
 ```
 
+Khi cả hai cùng `like`, Friendship là nguồn sự thật và phase chat được giữ `chatting` vô thời
+hạn; deadline cũ chỉ còn là dữ liệu lịch sử, không còn chặn gửi/đọc message. `POST .../end` của
+một bên chuyển `MatchSession` sang `ended`, đóng phòng ẩn danh cho cả hai nhưng không xoá
+Friendship/Friend Chat đã tạo.
+
 Quyết định đã chốt (đổi được bằng config/slice sau, không phá schema):
 
-- Không có API "end chat sớm" — hết giờ tự đóng; muốn thoát thì ngừng chat và rate.
+- Thành viên có thể `POST /soul-match/sessions/:id/end` để rời sớm; endpoint idempotent và
+  đóng phòng cho cả hai. Client nhận thêm event `soul.ended` để ngắt UI ngay, REST poll là
+  fallback khi socket mất.
 - Rating mở **từ khi phòng mở** (rate sớm ngay trong lúc chat là hợp lệ) đến hết
   `ratingEndsAt`.
 - Sau `closed`, history không còn đọc qua API Soul ẩn danh. Nếu hai bên đã `like`,
@@ -83,10 +90,12 @@ Quyết định đã chốt (đổi được bằng config/slice sau, không ph�
 | `GET /soul-match/sessions/:id/messages`  | không           | List message, cursor, `senderRole` ẩn danh                                |
 | `POST /soul-match/sessions/:id/messages` | có              | Gửi message — chỉ phase `chatting`                                        |
 | `POST /soul-match/sessions/:id/rating`   | không (§ 3)     | Verdict `rude\|boring\|like` — cả 2 `like` → Friendship, cùng transaction |
+| `POST /soul-match/sessions/:id/end`      | không           | Rời phòng; đóng session cho cả hai, giữ Friendship nếu đã match           |
 | `GET /soul-match/sessions/:id/partner`   | không           | Profile đối phương — 403 khi chưa match                                   |
 
-Mọi endpoint: 404 nếu session không tồn tại **hoặc không phải thành viên** (không phân biệt
-— tránh oracle dò sessionId), 409 nếu phòng chưa mở/đã đóng theo phase.
+Mọi endpoint đọc/ghi phòng: 404 nếu session không tồn tại **hoặc không phải thành viên** (không
+phân biệt — tránh oracle dò sessionId), 409 nếu thao tác không hợp lệ theo phase. Endpoint `end`
+idempotent khi session đã `ended`.
 
 ## 6. Config (Joi + `.env.example`)
 
@@ -100,5 +109,5 @@ publish Redis pub/sub theo **channel người nhận** `realtime:user:{userId}` 
 per-recipient — `senderRole` đã là `me|partner`, không leak userId); gateway chỉ verify JWT và
 fanout, không business logic (docs/03 § 3.3). Best-effort: publish fail → client vẫn còn REST
 polling. Event: `soul.message` (message mới, không bắn lại khi replay idempotency) và
-`soul.matched` (mutual like MỚI tạo Friendship). Hợp đồng: `@litmatch/common-dtos`
+`soul.matched` (mutual like MỚI tạo Friendship) và `soul.ended` (một bên rời phòng). Hợp đồng: `@litmatch/common-dtos`
 `realtime-events.ts`.
