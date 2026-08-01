@@ -108,15 +108,26 @@ function makeWorker(task, complexity, maxWorkers) {
   if (maxWorkers < 1) return null;
   const readOnly = ['answer', 'inspect', 'review'].includes(task.action);
   const review = task.action === 'review';
+  const criticalReviewWorker = review && complexity === 'critical';
   const requestedWorkers =
     task.parallelizableWorkstreams > 1 ? task.parallelizableWorkstreams : 1;
   return {
-    role: review ? 'reviewer' : readOnly ? 'explorer' : 'worker',
-    promptType: review
-      ? 'counterexample-review'
-      : readOnly
-        ? 'evidence'
-        : 'owned-implementation',
+    // Critical review cần một góc nhìn thu thập bằng chứng riêng; review thường
+    // chỉ cần một reviewer, tránh gọi hai reviewer cùng một prompt.
+    role: criticalReviewWorker
+      ? 'explorer'
+      : review
+        ? 'reviewer'
+        : readOnly
+          ? 'explorer'
+          : 'worker',
+    promptType: criticalReviewWorker
+      ? 'evidence'
+      : review
+        ? 'counterexample-review'
+        : readOnly
+          ? 'evidence'
+          : 'owned-implementation',
     count: Math.min(requestedWorkers, maxWorkers),
     modelTier:
       readOnly && task.risk === 'low' && complexity !== 'critical'
@@ -146,11 +157,13 @@ export function routeTask(input) {
     task.verification === 'strict';
   const agentCeiling = ['critical', 'complex'].includes(complexity) ? 2 : 0;
   if (!direct) {
-    const worker = makeWorker(
-      task,
-      complexity,
-      agentCeiling - (independentReview ? 1 : 0),
-    );
+    // Với review high/strict nhưng chưa critical, independent reviewer chính là
+    // delegate cần thiết; không tạo thêm một reviewer trùng lặp.
+    const maxWorkers =
+      task.action === 'review' && independentReview && complexity !== 'critical'
+        ? 0
+        : agentCeiling - (independentReview ? 1 : 0);
+    const worker = makeWorker(task, complexity, maxWorkers);
     if (worker) delegates.push(worker);
   }
   if (independentReview) {

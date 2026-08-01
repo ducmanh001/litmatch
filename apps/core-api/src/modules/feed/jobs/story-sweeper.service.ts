@@ -45,6 +45,7 @@ export class StorySweeperService
       task: () => this.runOnce(),
       logger: this.logger,
       errorMessage: 'Story sweeper lỗi',
+      skipWhenIdle: true,
       clusterSingleton: { dataSource: this.dataSource },
     });
   }

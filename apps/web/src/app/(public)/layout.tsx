@@ -15,8 +15,7 @@ import type { ReactNode } from 'react';
 /** Layout vùng công khai (SSR/SEO — docs/12 § 12.5): header marketing + footer, đúng layouts/web/index.html. */
 export default function PublicLayout({ children }: { children: ReactNode }) {
   const t = useTranslation();
-  const sessionStatus = useSessionStatus();
-  const hasSession = sessionStatus !== 'unauthenticated';
+  const hasSession = useSessionStatus() !== 'unauthenticated';
   return (
     <div className="relative">
       <header className="sticky top-0 z-50 border-b border-black/5 bg-paper/85 backdrop-blur dark:border-white/5 dark:bg-ink/85">
@@ -49,29 +48,24 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
             </Link>
           </nav>
           <div className="flex items-center gap-3">
-            {hasSession ? (
-              <Link
-                href="/home"
-                className="rounded-full bg-irisl px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-iris/30"
-              >
-                {t('nav.home')}
-              </Link>
-            ) : (
-              <>
-                <Link
-                  href="/login"
-                  className="hidden px-4 py-2 text-sm font-semibold text-slate-600 transition hover:text-iris sm:block dark:text-slate-300 dark:hover:text-irisl"
-                >
-                  {t('public.signIn')}
-                </Link>
-                <Link
-                  href="/login"
-                  className="hidden rounded-full bg-irisl px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-iris/30 sm:inline-flex"
-                >
-                  {t('public.signUp')}
-                </Link>
-              </>
-            )}
+            <div className="hidden items-center gap-3 md:flex">
+              {!hasSession && (
+                <>
+                  <Link
+                    href="/login"
+                    className="px-4 py-2 text-sm font-semibold text-slate-600 transition hover:text-iris dark:text-slate-300 dark:hover:text-irisl"
+                  >
+                    {t('public.signIn')}
+                  </Link>
+                  <Link
+                    href="/login"
+                    className="rounded-full bg-irisl px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-iris/30"
+                  >
+                    {t('public.signUp')}
+                  </Link>
+                </>
+              )}
+            </div>
             <ThemeToggleButton />
             <LanguageSelector />
           </div>

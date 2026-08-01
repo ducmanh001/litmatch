@@ -1,7 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-
+import { LandingFinalCta, LandingPrimaryCta } from './landing-cta';
 import { useTranslation } from '../../shared/i18n/messages';
 import { FeedIcon, MatchIcon, MicIcon, PartyIcon } from '../../shared/ui/icons';
 
@@ -121,12 +120,7 @@ export default function LandingPage() {
             {t('landing.intro')}
           </p>
           <div className="mb-7 flex flex-wrap gap-4">
-            <Link
-              href="/login"
-              className="rounded-full bg-irisl px-7 py-3.5 font-bold text-white shadow-xl shadow-iris/30 transition hover:-translate-y-0.5"
-            >
-              {t('landing.start')}
-            </Link>
+            <LandingPrimaryCta />
             <a
               href="#how"
               className="rounded-full border border-black/10 px-7 py-3.5 font-bold transition hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
@@ -268,20 +262,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="relative z-10 mx-auto max-w-4xl px-6 py-16 text-center md:py-24">
-        <h2 className="font-display mb-5 text-3xl font-semibold md:text-4xl">
-          {t('landing.ctaTitle')}
-        </h2>
-        <p className="mb-8 text-slate-500 dark:text-slate-400">
-          {t('landing.ctaDescription')}
-        </p>
-        <Link
-          href="/login"
-          className="inline-block rounded-full bg-irisl px-8 py-4 font-bold text-white shadow-xl shadow-iris/30 transition hover:-translate-y-0.5"
-        >
-          {t('public.signUp')}
-        </Link>
-      </section>
+      <LandingFinalCta />
     </div>
   );
 }

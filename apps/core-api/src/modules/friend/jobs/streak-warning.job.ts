@@ -59,6 +59,7 @@ export class StreakWarningJob
       task: () => this.runOnce(),
       logger: this.logger,
       errorMessage: 'Streak warning job lỗi',
+      skipWhenIdle: true,
       clusterSingleton: { dataSource: this.dataSource },
     });
   }
