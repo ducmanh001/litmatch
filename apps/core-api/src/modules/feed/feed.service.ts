@@ -17,6 +17,7 @@ import { Reaction } from './entities/reaction.entity';
 import { FriendService } from '../friend';
 import { NotificationService, NotificationType } from '../notification';
 import { SafetyService } from '../safety';
+import { PrivacySettingsService } from '../user';
 
 import type { CursorPage, CursorPageQueryDto } from '@litmatch/common-dtos';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
@@ -39,6 +40,7 @@ export class FeedService {
     private readonly safetyService: SafetyService,
     private readonly friendService: FriendService,
     private readonly notificationService: NotificationService,
+    private readonly privacySettings: PrivacySettingsService,
   ) {}
 
   /**
@@ -103,7 +105,11 @@ export class FeedService {
     const qb = this.postRepo
       .createQueryBuilder('p')
       .where('p.deletedAt IS NULL')
-      .andWhere('p.audience = :audience', { audience: PostAudience.Public });
+      .andWhere('p.audience = :audience', { audience: PostAudience.Public })
+      .andWhere(
+        '(p.authorUserId = :viewerUserId OR NOT EXISTS (SELECT 1 FROM user_privacy_settings ups WHERE ups.user_id = p.author_user_id AND ups.hide_profile = true))',
+        { viewerUserId: user.userId },
+      );
 
     if (query.cursor) {
       const payload = decodeCursor<{ seq?: unknown }>(query.cursor);
@@ -144,6 +150,9 @@ export class FeedService {
         (await this.safetyService.isBlocked(viewer.userId, authorUserId)) ||
         (await this.safetyService.isBlocked(authorUserId, viewer.userId));
       if (blocked) return { items: [], meta: { nextCursor: null } };
+      if (await this.privacySettings.isHidden(authorUserId)) {
+        return { items: [], meta: { nextCursor: null } };
+      }
     }
     const audiences = isSelf
       ? [PostAudience.Public, PostAudience.Friends, PostAudience.OnlyMe]
@@ -203,7 +212,8 @@ export class FeedService {
             user.userId,
             post.authorUserId,
           )));
-      if (blocked || !audienceAllowed) {
+      const hidden = await this.privacySettings.isHidden(post.authorUserId);
+      if (blocked || hidden || !audienceAllowed) {
         throw new DomainException(
           FeedErrors.POST_NOT_FOUND,
           'Không tìm thấy bài viết',

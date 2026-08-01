@@ -206,7 +206,7 @@ The service catalog names every top-level Core API module and links module-speci
 - Status: `implemented`
 - Owner: core-api/user
 - Contracts: `openapi/core-api.json`, `docs/01-product-features.md`, `docs/06-domain-rules.md`
-- Implementation evidence: `apps/core-api/src/modules/user/user.service.ts:398` — contains `Ngày sinh là dữ liệu profile tự chọn`; `apps/core-api/src/modules/user/dto/update-profile.dto.ts:40` — contains `không cho ngày trong tương lai`
+- Implementation evidence: `apps/core-api/src/modules/user/user.service.ts:404` — contains `Ngày sinh là dữ liệu profile tự chọn`; `apps/core-api/src/modules/user/dto/update-profile.dto.ts:40` — contains `không cho ngày trong tương lai`
 - Verification evidence (automated-test-source): `apps/core-api/src/modules/user/user.service.spec.ts:64` — contains `birthDate không phải access gate`
 
 ### Hosted analytics with quota controls and an explicit privacy warning
@@ -222,7 +222,7 @@ The service catalog names every top-level Core API module and links module-speci
 - Status: `implemented`
 - Owner: signaling-gateway with core-api producers
 - Contracts: `libs/common-dtos/src/lib/realtime-events.ts`, `docs/services/realtime-gateway.md`, `specs/realtime.asyncapi.yaml`
-- Implementation evidence: `apps/signaling-gateway/src/app/signaling.gateway.ts:45` — contains `@WebSocketGateway`; `libs/common-dtos/src/lib/realtime-events.ts:34` — contains `export const RealtimeEvents`; `apps/signaling-gateway/src/app/connection-quota.service.ts:55` — contains `ConnectionQuotaService`
+- Implementation evidence: `apps/signaling-gateway/src/app/signaling.gateway.ts:45` — contains `@WebSocketGateway`; `libs/common-dtos/src/lib/realtime-events.ts:34` — contains `export const RealtimeEvents`; `apps/signaling-gateway/src/app/connection-quota.service.ts:66` — contains `ConnectionQuotaService`
 - Verification evidence (automated-test-source): `apps/signaling-gateway/src/app/signaling.integration.spec.ts:109` — contains `event chỉ tới ĐÚNG user`; `apps/signaling-gateway/src/app/signaling.horizontal-scale.integration.spec.ts:175` — contains `quota per-user atomic xuyên 2 instance`
 
 ## Recorded targeted checks

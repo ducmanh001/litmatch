@@ -51,16 +51,8 @@ const LEGACY_INTEGRATION_BOUNDARY_SNAPSHOTS = new Map([
     'c3c50f3bcc5733af0bb5b1f004765a274daa2f12c4fd5376332ccb5cb46d62cf',
   ],
   [
-    'discovery/discovery.integration.spec.ts',
-    '73fad3a989c37da6b54ec84cbb4fa0181bd967867e5a5b930686bd69a570a608',
-  ],
-  [
     'economy/economy.integration.spec.ts',
     '014df4344b3f90ba78220381aa29dfdef681b08a70c16a9105baf6ddb865a979',
-  ],
-  [
-    'feed/feed.integration.spec.ts',
-    '6b5da1fdb847cf05c9f59781fde92bd816888ed3a8f41bb040470e9c7607d397',
   ],
   [
     'friend/friend.integration.spec.ts',

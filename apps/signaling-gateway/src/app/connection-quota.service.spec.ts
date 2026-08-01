@@ -56,8 +56,9 @@ describe('ConnectionQuotaService', () => {
 
     expect(redis.eval).toHaveBeenCalledWith(
       expect.stringContaining("redis.call('ZCARD', KEYS[1])"),
-      1,
+      2,
       'signaling:connection-quota:user-1',
+      'realtime:presence:user-1',
       'lease-1',
       90_000,
       3,
@@ -80,15 +81,17 @@ describe('ConnectionQuotaService', () => {
 
     expect(redis.eval.mock.calls[0]).toEqual([
       expect.stringContaining("redis.call('ZREMRANGEBYSCORE'"),
-      1,
+      2,
       'signaling:connection-quota:user-1',
+      'realtime:presence:user-1',
       'lease-1',
       90_000,
     ]);
     expect(redis.eval.mock.calls[1]).toEqual([
       expect.stringContaining("redis.call('ZREM', KEYS[1], ARGV[1])"),
-      1,
+      2,
       'signaling:connection-quota:user-1',
+      'realtime:presence:user-1',
       'lease-1',
     ]);
   });

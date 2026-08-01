@@ -7,9 +7,11 @@ import type { ApiSchema } from '@litmatch/api-client';
 
 export type UpdateProfileDto = ApiSchema<'UpdateProfileDto'>;
 export type PublicProfileDto = ApiSchema<'PublicProfileDto'>;
+export type PublicPresenceDto = ApiSchema<'UserPresenceDto'>;
 
 export const profileKeys = {
   public: (id: string) => ['profile', 'public', id] as const,
+  presence: (id: string) => ['profile', 'presence', id] as const,
 };
 
 export function usePublicProfile(id: string) {
@@ -21,6 +23,19 @@ export function usePublicProfile(id: string) {
       });
       return response.data?.data;
     },
+  });
+}
+
+export function usePublicPresence(id: string) {
+  return useQuery({
+    queryKey: profileKeys.presence(id),
+    queryFn: async () => {
+      const response = await apiClient.GET('/api/v1/users/{id}/presence', {
+        params: { path: { id } },
+      });
+      return response.data?.data;
+    },
+    staleTime: 30_000,
   });
 }
 

@@ -46,3 +46,9 @@ export class SocialLoginDto {
   @IsNotEmpty()
   idToken!: string;
 }
+
+export class SearchByPhoneDto {
+  @ApiProperty({ example: '+84912345678' })
+  @Matches(PHONE_E164, { message: 'phone phải theo định dạng E.164 (+84...)' })
+  phone!: string;
+}

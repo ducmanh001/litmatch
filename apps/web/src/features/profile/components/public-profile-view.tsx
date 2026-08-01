@@ -5,13 +5,14 @@ import Link from 'next/link';
 
 import { PlaceholderAvatar } from '../../../shared/ui/placeholder-avatar';
 import { useCreateInvite } from '../../matching/invite-api';
-import { usePublicProfile } from '../api';
+import { usePublicPresence, usePublicProfile } from '../api';
 import { showToast } from '../../../shared/lib/toast-store';
 
 import type { PublicProfileDto } from '../api';
 
 export function PublicProfileView({ userId }: { userId: string }) {
   const profile = usePublicProfile(userId);
+  const presence = usePublicPresence(userId);
   const createInvite = useCreateInvite();
 
   if (profile.isPending) {
@@ -70,6 +71,12 @@ export function PublicProfileView({ userId }: { userId: string }) {
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
           {genderLabel(profileData.gender)}
         </p>
+        {presence.data?.isOnline === true && (
+          <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-emerald-500">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden />
+            Đang hoạt động
+          </p>
+        )}
         {(profileData.interests?.length ?? 0) > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
             {profileData.interests?.map((tag) => (

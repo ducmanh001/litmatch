@@ -10,6 +10,7 @@ import type { AuthenticatedUser } from '../../../common/decorators/current-user.
 import type { CoreApiEnv } from '../../../config/env.validation';
 import type { FriendService } from '../../friend';
 import type { SafetyService } from '../../safety';
+import type { PrivacySettingsService } from '../../user';
 import type { StoryView } from '../entities/story-view.entity';
 
 const me: AuthenticatedUser = {
@@ -55,6 +56,7 @@ describe('StoryService (unit — mock repo/FriendService/SafetyService)', () => 
   let viewRepo: jest.Mocked<
     Pick<Repository<StoryView>, 'save' | 'create' | 'find'>
   >;
+  let privacySettings: { findForUsers: jest.Mock; isHidden: jest.Mock };
   let friendService: {
     areFriends: jest.Mock;
     listFriendIds: jest.Mock;
@@ -86,12 +88,17 @@ describe('StoryService (unit — mock repo/FriendService/SafetyService)', () => 
       isBlocked: jest.fn(async () => false),
       getBlockedUserIds: jest.fn(async () => []),
     };
+    privacySettings = {
+      findForUsers: jest.fn(async () => new Map()),
+      isHidden: jest.fn(async () => false),
+    };
     service = new StoryService(
       storyRepo as unknown as Repository<Story>,
       viewRepo as unknown as Repository<StoryView>,
       friendService as unknown as FriendService,
       safetyService as unknown as SafetyService,
       configStub,
+      privacySettings as unknown as PrivacySettingsService,
     );
   });
 

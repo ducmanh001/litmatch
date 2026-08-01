@@ -70,9 +70,9 @@ export class NearbyQueryDto extends CursorPageQueryDto {
  */
 export class NearbyCardDto {
   @ApiProperty({ type: PublicProfileDto }) profile!: PublicProfileDto;
-  @ApiProperty() distanceBucket!: string;
+  @ApiProperty({ nullable: true, type: String }) distanceBucket!: string | null;
 
-  static from(user: User, distanceBucket: string): NearbyCardDto {
+  static from(user: User, distanceBucket: string | null): NearbyCardDto {
     const dto = new NearbyCardDto();
     dto.profile = PublicProfileDto.from(user);
     dto.distanceBucket = distanceBucket;
@@ -85,7 +85,7 @@ export class NearbyCardsPageDto {
   @ApiProperty({ nullable: true, type: String }) nextCursor!: string | null;
 
   static from(
-    page: CursorPage<{ user: User; distanceBucket: string }>,
+    page: CursorPage<{ user: User; distanceBucket: string | null }>,
   ): NearbyCardsPageDto {
     const dto = new NearbyCardsPageDto();
     dto.items = page.items.map((i) =>

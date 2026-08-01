@@ -12,16 +12,21 @@ import { ReportTargetVideo1754900000000 } from '../../database/migrations/175490
 import { ReportStatus1753800000000 } from '../../database/migrations/1753800000000-report-status';
 import { DiscoveryUsersIndex1754000000000 } from '../../database/migrations/1754000000000-discovery-users-index';
 import { DiscoveryNearby1754600000000 } from '../../database/migrations/1754600000000-discovery-nearby';
+import { UserPrivacySettings1756800000000 } from '../../database/migrations/1756800000000-user-privacy-settings';
 
 import { DiscoveryService } from './discovery.service';
 import { DiscoveryErrors } from './discovery.errors';
 import { NearbyService } from './nearby.service';
 import { DiscoverySetting } from './entities/discovery-setting.entity';
 import { UserLocation } from './entities/user-location.entity';
-import { SafetyService } from '../safety';
-import { Block } from '../safety/entities/block.entity';
-import { Report, ReportReason } from '../safety/entities/report.entity';
-import { Gender, User, UserService } from '../user';
+import { Block, Report, ReportReason, SafetyService } from '../safety';
+import {
+  Gender,
+  PrivacySetting,
+  PrivacySettingsService,
+  User,
+  UserService,
+} from '../user';
 
 import type { ConfigService } from '@nestjs/config';
 import type { CoreApiEnv } from '../../config/env.validation';
@@ -112,7 +117,14 @@ d('Discovery integration (Postgres thật)', () => {
     ds = new DataSource({
       type: 'postgres',
       url: url.toString(),
-      entities: [User, Report, Block, DiscoverySetting, UserLocation],
+      entities: [
+        User,
+        PrivacySetting,
+        Report,
+        Block,
+        DiscoverySetting,
+        UserLocation,
+      ],
       migrations: [
         InitAuthUser1751900000000,
         UserProfilePreferences1755800000000,
@@ -124,6 +136,7 @@ d('Discovery integration (Postgres thật)', () => {
         ReportStatus1753800000000,
         DiscoveryUsersIndex1754000000000,
         DiscoveryNearby1754600000000,
+        UserPrivacySettings1756800000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -152,6 +165,7 @@ d('Discovery integration (Postgres thật)', () => {
       ds,
       userService,
       safety,
+      new PrivacySettingsService(ds.getRepository(PrivacySetting)),
       redis,
       configStub,
     );

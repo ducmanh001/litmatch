@@ -22,7 +22,7 @@ import {
   nearbyQueryCountKey,
 } from './redis/discovery-redis.provider';
 import { SafetyService } from '../safety';
-import { UserService } from '../user';
+import { PrivacySettingsService, UserService } from '../user';
 
 import type Redis from 'ioredis';
 import type { CursorPage } from '@litmatch/common-dtos';
@@ -33,7 +33,7 @@ import type { NearbyQueryDto, SetLocationDto } from './dto/nearby.dtos';
 
 const RATE_LIMIT_WINDOW_SECONDS = 3600;
 
-export type NearbyCardRow = { user: User; distanceBucket: string };
+export type NearbyCardRow = { user: User; distanceBucket: string | null };
 
 /**
  * Nearby (docs/services/discovery-service.md § Nearby, W4). 3 lớp chống trilateration:
@@ -55,6 +55,7 @@ export class NearbyService {
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly userService: UserService,
     private readonly safetyService: SafetyService,
+    private readonly privacySettings: PrivacySettingsService,
     @Inject(DISCOVERY_REDIS) private readonly redis: Redis,
     private readonly config: ConfigService<CoreApiEnv, true>,
   ) {}
@@ -196,6 +197,9 @@ export class NearbyService {
       },
     );
     const userById = new Map(users.map((u) => [u.id, u]));
+    const privacyByUserId = await this.privacySettings.findForUsers(
+      users.map((u) => u.id),
+    );
 
     const forDate = todayUtc();
     const distanceBucketsCsv = this.config.getOrThrow(
@@ -220,10 +224,12 @@ export class NearbyService {
           jitterMaxKm,
         );
         const jitteredDistanceKm = Math.max(0, rawDistanceKm + jitter);
+        const targetPrivacy = privacyByUserId.get(c.userId);
         return {
           userId: c.userId,
           jitteredDistanceKm,
           user: userById.get(c.userId) as User,
+          showDistance: targetPrivacy?.showDistance ?? true,
         };
       })
       .sort(
@@ -240,10 +246,9 @@ export class NearbyService {
     return {
       items: page.items.map((r) => ({
         user: r.user,
-        distanceBucket: computeDistanceBucket(
-          r.jitteredDistanceKm,
-          distanceBucketsCsv,
-        ),
+        distanceBucket: r.showDistance
+          ? computeDistanceBucket(r.jitteredDistanceKm, distanceBucketsCsv)
+          : null,
       })),
       meta: page.meta,
     };
@@ -310,7 +315,9 @@ export class NearbyService {
       `SELECT ul.user_id, ul.lat_quantized, ul.lon_quantized, ul.updated_at
        FROM user_locations ul
        JOIN discovery_settings ds ON ds.user_id = ul.user_id
+       LEFT JOIN user_privacy_settings ups ON ups.user_id = ul.user_id
        WHERE ds.nearby_visible = true
+         AND COALESCE(ups.hide_profile, false) = false
          AND ul.updated_at > now() - make_interval(hours => $1::int)
          AND ul.lat_quantized BETWEEN $2 AND $3
          AND ul.lon_quantized BETWEEN $4 AND $5
