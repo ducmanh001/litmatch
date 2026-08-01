@@ -1,5 +1,7 @@
 import { useLocale } from './locale-store';
 
+import type { Locale } from './locale-store';
+
 const MESSAGES = {
   'language.choose': { vi: 'Chọn ngôn ngữ', en: 'Choose language' },
   'language.close': { vi: 'Đóng chọn ngôn ngữ', en: 'Close language selector' },
@@ -352,15 +354,350 @@ const MESSAGES = {
     vi: 'Tìm hiểu hồ sơ theo nhịp riêng, rồi chủ động kết nối khi cả hai có chung điều đang tìm kiếm.',
     en: 'Explore profiles at your own pace, then reach out when you are looking for the same thing.',
   },
+  'language.vietnamese': { vi: 'Tiếng Việt', en: 'Vietnamese' },
+  'language.english': { vi: 'English', en: 'English' },
+  'common.loading': { vi: 'Đang tải…', en: 'Loading…' },
+  'common.retry': { vi: 'Thử lại', en: 'Try again' },
+  'common.close': { vi: 'Đóng', en: 'Close' },
+  'common.cancel': { vi: 'Huỷ', en: 'Cancel' },
+  'common.confirm': { vi: 'Xác nhận', en: 'Confirm' },
+  'common.back': { vi: 'Quay lại', en: 'Go back' },
+  'common.send': { vi: 'Gửi', en: 'Send' },
+  'common.search': { vi: 'Tìm kiếm', en: 'Search' },
+  'common.viewMore': { vi: 'Xem thêm', en: 'View more' },
+  'common.noResults': {
+    vi: 'Không có kết quả phù hợp.',
+    en: 'No matching results.',
+  },
+  'common.somethingWentWrong': {
+    vi: 'Có lỗi xảy ra, vui lòng thử lại.',
+    en: 'Something went wrong. Please try again.',
+  },
+  'common.unknownError': {
+    vi: 'Sự cố không xác định. Vui lòng tải lại.',
+    en: 'An unknown issue occurred. Please reload and try again.',
+  },
+  'common.profileFor': {
+    vi: (params: { name: string }) => `Xem hồ sơ ${params.name}`,
+    en: (params: { name: string }) => `View ${params.name}'s profile`,
+  },
+  'common.walletBalance': {
+    vi: (params: { balance: number }) =>
+      `Mở ví, số dư ${params.balance} Diamond`,
+    en: (params: { balance: number }) =>
+      `Open wallet, ${params.balance} Diamonds`,
+  },
+  'common.relative.justNow': { vi: 'Vừa xong', en: 'Just now' },
+  'common.relative.minutes': {
+    vi: (params: { count: number }) => `${params.count} phút trước`,
+    en: (params: { count: number }) => `${params.count}m ago`,
+  },
+  'common.relative.hours': {
+    vi: (params: { count: number }) => `${params.count} giờ trước`,
+    en: (params: { count: number }) => `${params.count}h ago`,
+  },
+  'common.relative.yesterday': { vi: 'Hôm qua', en: 'Yesterday' },
+  'common.relative.days': {
+    vi: (params: { count: number }) => `${params.count} ngày trước`,
+    en: (params: { count: number }) => `${params.count}d ago`,
+  },
+  'auth.login': { vi: 'Đăng nhập', en: 'Sign in' },
+  'auth.welcome': { vi: 'Chào mừng đến Litmatch', en: 'Welcome to Litmatch' },
+  'auth.welcomeDescription': {
+    vi: 'Ẩn danh, an toàn, chỉ mất 30 giây',
+    en: 'Anonymous, safe, and takes only 30 seconds',
+  },
+  'auth.legalNotice': {
+    vi: 'Bằng việc tiếp tục, bạn xác nhận đã đủ 18 tuổi và đồng ý với Điều khoản dịch vụ & Chính sách riêng tư.',
+    en: 'By continuing, you confirm that you are 18 or older and agree to the Terms of Service & Privacy Policy.',
+  },
+  'auth.checkingProviders': {
+    vi: 'Đang kiểm tra phương thức đăng nhập…',
+    en: 'Checking available sign-in methods…',
+  },
+  'auth.guestPending': { vi: 'Đang vào…', en: 'Joining…' },
+  'auth.guest': {
+    vi: 'Dùng thử với tài khoản khách →',
+    en: 'Try with a guest account →',
+  },
+  'auth.phoneLabel': { vi: 'Số điện thoại', en: 'Phone number' },
+  'auth.phoneInvalid': {
+    vi: 'Số điện thoại không hợp lệ',
+    en: 'Invalid phone number',
+  },
+  'auth.otpInvalid': {
+    vi: 'Mã OTP gồm 6 chữ số',
+    en: 'The OTP must contain 6 digits',
+  },
+  'auth.requestOtpPending': { vi: 'Đang gửi…', en: 'Sending…' },
+  'auth.requestOtp': { vi: 'Gửi mã OTP', en: 'Send OTP' },
+  'auth.continueWith': { vi: 'hoặc tiếp tục với', en: 'or continue with' },
+  'auth.signInProvider': {
+    vi: (params: { provider: string }) => `Đăng nhập với ${params.provider}`,
+    en: (params: { provider: string }) => `Sign in with ${params.provider}`,
+  },
+  'auth.otpInstruction': {
+    vi: (params: { phone: string }) =>
+      `Nhập mã gồm 6 số vừa gửi tới ${params.phone}`,
+    en: (params: { phone: string }) =>
+      `Enter the 6-digit code sent to ${params.phone}`,
+  },
+  'auth.otpDigit': {
+    vi: (params: { index: number; phone: string }) =>
+      `Chữ số ${params.index} trên 6 của mã OTP đã gửi tới ${params.phone}`,
+    en: (params: { index: number; phone: string }) =>
+      `Digit ${params.index} of 6 from the OTP sent to ${params.phone}`,
+  },
+  'auth.verifyPending': { vi: 'Đang xác minh…', en: 'Verifying…' },
+  'auth.verify': { vi: 'Đăng nhập', en: 'Sign in' },
+  'auth.resend': { vi: 'Gửi lại mã', en: 'Resend code' },
+  'auth.resendWithCooldown': {
+    vi: (params: { seconds: number }) => `Gửi lại mã (${params.seconds}s)`,
+    en: (params: { seconds: number }) => `Resend code (${params.seconds}s)`,
+  },
+  'auth.changePhone': {
+    vi: '← Đổi số điện thoại',
+    en: '← Change phone number',
+  },
+  'auth.providerDisabled': {
+    vi: (params: { provider: string }) =>
+      `Đăng nhập ${params.provider} chưa được cấu hình.`,
+    en: (params: { provider: string }) =>
+      `${params.provider} sign-in is not configured yet.`,
+  },
+  'auth.phoneDisabled': {
+    vi: 'Đăng nhập bằng số điện thoại chưa được bật.',
+    en: 'Phone sign-in is not enabled yet.',
+  },
+  'auth.guestAvailable': {
+    vi: 'Có thể dùng tài khoản khách.',
+    en: 'Guest accounts are available.',
+  },
+  'auth.otpUnavailable': {
+    vi: 'API chưa trả về mã OTP hợp lệ. Hãy thử lại sau khi máy chủ sẵn sàng.',
+    en: 'The API did not return a valid OTP. Please try again when the server is ready.',
+  },
+  'auth.providerUnavailable': {
+    vi: 'Provider chưa sẵn sàng.',
+    en: 'This sign-in provider is not ready yet.',
+  },
+  'auth.sessionChecking': {
+    vi: 'Đang kiểm tra phiên đăng nhập…',
+    en: 'Checking your sign-in session…',
+  },
+  'comments.loading': { vi: 'Đang tải bình luận…', en: 'Loading comments…' },
+  'comments.empty': { vi: 'Chưa có bình luận nào.', en: 'No comments yet.' },
+  'comments.loadMore': { vi: 'Xem thêm bình luận', en: 'Load more comments' },
+  'comments.loadMorePending': { vi: 'Đang tải…', en: 'Loading…' },
+  'status.notFoundTitle': { vi: 'Không tìm thấy trang', en: 'Page not found' },
+  'status.notFoundDescription': {
+    vi: 'Đường dẫn không tồn tại hoặc đã bị gỡ.',
+    en: 'This page does not exist or has been removed.',
+  },
+  'status.goHome': { vi: 'Về trang chủ', en: 'Go home' },
+  'status.errorTitle': { vi: 'Có lỗi xảy ra', en: 'Something went wrong' },
+  'status.retry': { vi: 'Thử lại', en: 'Try again' },
+  'status.unknownError': {
+    vi: 'Sự cố không xác định. Thử tải lại.',
+    en: 'An unknown issue occurred. Try reloading.',
+  },
+  'privacy.title': {
+    vi: 'Quyền riêng tư, chặn & báo cáo',
+    en: 'Privacy, blocks & reports',
+  },
+  'help.title': { vi: 'Trợ giúp & phản hồi', en: 'Help & feedback' },
+  'app.back': { vi: 'Quay lại', en: 'Go back' },
+  'app.videoShort': { vi: 'Video ngắn', en: 'Short videos' },
+  'app.wallet': { vi: 'Ví & VIP', en: 'Wallet & VIP' },
+  'app.walletEyebrow': { vi: 'Số dư & gói VIP', en: 'Balance & VIP plans' },
+  'app.partyEyebrow': { vi: 'Trò chuyện nhóm', en: 'Group conversations' },
+  'app.room': { vi: 'Phòng nhóm', en: 'Group room' },
+  'app.feed': { vi: 'Bảng tin', en: 'Feed' },
+  'app.post': { vi: 'Bài viết', en: 'Post' },
+  'app.profile': { vi: 'Hồ sơ', en: 'Profile' },
+  'app.publicProfile': { vi: 'Hồ sơ người dùng', en: 'User profile' },
+  'app.messages': { vi: 'Tin nhắn', en: 'Messages' },
+  'app.more': { vi: 'Thêm', en: 'More' },
+  'app.matching': { vi: 'Ghép đôi', en: 'Matching' },
+  'app.conversation': { vi: 'Trò chuyện', en: 'Conversation' },
+  'app.conversationLoading': {
+    vi: 'Đang tải trò chuyện…',
+    en: 'Loading conversation…',
+  },
+  'app.conversationError': {
+    vi: 'Không tải được trò chuyện.',
+    en: 'Unable to load conversation.',
+  },
+  'app.watchTogether': { vi: 'Đang xem chung', en: 'Watching together' },
+  'friends.search': { vi: 'Tìm kiếm bạn bè', en: 'Search friends' },
+  'friends.searchPlaceholder': { vi: 'Tìm theo tên…', en: 'Search by name…' },
+  'friends.loading': {
+    vi: 'Đang tải danh sách bạn bè…',
+    en: 'Loading your friends…',
+  },
+  'friends.emptyTitle': {
+    vi: 'Bạn chưa có kết nối nào',
+    en: 'You have no connections yet',
+  },
+  'friends.emptyDescription': {
+    vi: 'Hãy bắt đầu từ Ghép đôi hoặc Quanh đây.',
+    en: 'Start with Matching or Nearby.',
+  },
+  'friends.matching': { vi: 'Ghép đôi', en: 'Matching' },
+  'friends.nearby': { vi: 'Quanh đây', en: 'Nearby' },
+  'friends.noResults': {
+    vi: 'Không tìm thấy người bạn nào.',
+    en: 'No friends found.',
+  },
+  'friends.sectionFriends': { vi: 'Bạn bè', en: 'Friends' },
+  'friends.sectionConversations': { vi: 'Hội thoại', en: 'Conversations' },
+  'friends.unread': {
+    vi: (params: { count: number }) => `${params.count} chưa đọc`,
+    en: (params: { count: number }) => `${params.count} unread`,
+  },
+  'friends.muted': { vi: 'Đã tắt thông báo', en: 'Notifications muted' },
+  'friends.photo': { vi: '📷 Ảnh', en: '📷 Photo' },
+  'friends.unreadMessages': {
+    vi: (params: { count: number }) => `${params.count} tin nhắn chưa đọc`,
+    en: (params: { count: number }) => `${params.count} unread messages`,
+  },
+  'notifications.title': { vi: 'Thông báo', en: 'Notifications' },
+  'notifications.unread': {
+    vi: (params: { count: number }) => `Thông báo, ${params.count} chưa đọc`,
+    en: (params: { count: number }) => `Notifications, ${params.count} unread`,
+  },
+  'notifications.loadingError': {
+    vi: 'Không tải được thông báo.',
+    en: 'Unable to load notifications.',
+  },
+  'notifications.empty': {
+    vi: 'Chưa có thông báo nào.',
+    en: 'No notifications yet.',
+  },
+  'notifications.close': { vi: 'Đóng thông báo', en: 'Close notifications' },
+  'wallet.loading': { vi: 'Đang tải ví…', en: 'Loading wallet…' },
+  'wallet.noData': {
+    vi: 'Không có dữ liệu ví.',
+    en: 'No wallet data is available.',
+  },
+  'wallet.balance': { vi: 'Số dư kim cương', en: 'Diamond balance' },
+  'wallet.expires': {
+    vi: (params: { tier: string; date: string }) =>
+      `VIP ${params.tier} — hết hạn ${params.date}`,
+    en: (params: { tier: string; date: string }) =>
+      `VIP ${params.tier} — expires ${params.date}`,
+  },
+  'wallet.topUp': { vi: 'Nạp Diamond', en: 'Top up Diamonds' },
+  'wallet.upgradeVip': { vi: 'Nâng cấp VIP', en: 'Upgrade to VIP' },
+  'wallet.paymentChecking': {
+    vi: 'Đang kiểm tra thanh toán…',
+    en: 'Checking payment…',
+  },
+  'wallet.paymentRetry': { vi: 'Kiểm tra lại', en: 'Check again' },
+  'wallet.vipTitle': {
+    vi: 'Ưu tiên mọi lúc',
+    en: 'Priority, whenever you need it',
+  },
+  'wallet.vipDescription': {
+    vi: 'Ghép nhanh hơn, thấy ai đã thích bạn, và nhiều đặc quyền chỉ dành cho VIP.',
+    en: 'Match faster, see who likes you, and unlock perks reserved for VIP members.',
+  },
+  'wallet.choosePlan': { vi: 'Chọn gói VIP', en: 'Choose a VIP plan' },
+  'wallet.loadingPlans': { vi: 'Đang tải bảng giá…', en: 'Loading plans…' },
+  'wallet.noPlans': {
+    vi: 'Chưa có gói VIP nào đang bán.',
+    en: 'No VIP plans are currently available.',
+  },
+  'wallet.confirmUpgrade': {
+    vi: (params: { tier: string }) => `Nâng cấp ${params.tier}?`,
+    en: (params: { tier: string }) => `Upgrade to ${params.tier}?`,
+  },
+  'wallet.confirmPlan': {
+    vi: (params: { days: number; price: number }) =>
+      `Gói ${params.days} ngày có giá ${params.price} Diamond. Thời hạn sẽ được cộng dồn nếu bạn đang có VIP.`,
+    en: (params: { days: number; price: number }) =>
+      `The ${params.days}-day plan costs ${params.price} Diamonds. Time will be added to your current VIP period.`,
+  },
+  'wallet.confirmPurchase': {
+    vi: (params: { price: number }) => `Mua với ${params.price} Diamond`,
+    en: (params: { price: number }) => `Buy for ${params.price} Diamonds`,
+  },
+  'wallet.upgradedUntil': {
+    vi: (params: { tier: string; date: string }) =>
+      `Đã nâng cấp ${params.tier} đến ${params.date}`,
+    en: (params: { tier: string; date: string }) =>
+      `Upgraded to ${params.tier} until ${params.date}`,
+  },
+  'wallet.benefit.fastTitle': {
+    vi: 'Ưu tiên ghép nhanh',
+    en: 'Priority matching',
+  },
+  'wallet.benefit.fastDescription': {
+    vi: 'Vào hàng chờ Soul & Voice Match trước tất cả',
+    en: 'Join Soul & Voice Match queues ahead of everyone else',
+  },
+  'wallet.benefit.likesTitle': {
+    vi: 'Xem ai đã thích bạn',
+    en: 'See who likes you',
+  },
+  'wallet.benefit.likesDescription': {
+    vi: 'Mở khoá danh sách lượt thích ở Khám phá',
+    en: 'Unlock your likes list in Nearby',
+  },
+  'wallet.benefit.voiceTitle': {
+    vi: 'Voice Match không giới hạn',
+    en: 'Unlimited Voice Match',
+  },
+  'wallet.benefit.voiceDescription': {
+    vi: 'Bỏ giới hạn thời lượng mỗi cuộc gọi',
+    en: 'Remove the time limit from every call',
+  },
+  'wallet.benefit.badgeTitle': {
+    vi: 'Huy hiệu VIP trên hồ sơ',
+    en: 'VIP profile badge',
+  },
+  'wallet.benefit.badgeDescription': {
+    vi: 'Nổi bật hơn ở Feed, Khám phá & Party Room',
+    en: 'Stand out in Feed, Nearby, and Party Rooms',
+  },
+  'wallet.planLabel': {
+    vi: (params: { tier: string; days: number }) =>
+      `${params.tier} · ${params.days} ngày`,
+    en: (params: { tier: string; days: number }) =>
+      `${params.tier} · ${params.days} days`,
+  },
+  'wallet.planPrice': {
+    vi: (params: { price: number }) => `${params.price} Diamond`,
+    en: (params: { price: number }) => `${params.price} Diamonds`,
+  },
+  'wallet.buyPlan': {
+    vi: (params: { tier: string; days: number; price: number }) =>
+      `Mua gói ${params.tier} ${params.days} ngày với ${params.price} Diamond`,
+    en: (params: { tier: string; days: number; price: number }) =>
+      `Buy ${params.tier} for ${params.days} days with ${params.price} Diamonds`,
+  },
 } as const;
 
 export type MessageKey = keyof typeof MESSAGES;
 
-export function translate(locale: 'vi' | 'en', key: MessageKey): string {
-  return MESSAGES[key][locale];
+export type TranslationParams = Record<string, string | number>;
+export type Translator = <K extends MessageKey>(
+  key: K,
+  params?: TranslationParams,
+) => string;
+
+export function translate<K extends MessageKey>(
+  locale: Locale,
+  key: K,
+  params?: TranslationParams,
+): string {
+  const message = MESSAGES[key][locale];
+  return typeof message === 'function'
+    ? (message as (params: TranslationParams) => string)(params ?? {})
+    : message;
 }
 
-export function useTranslation(): (key: MessageKey) => string {
+export function useTranslation(): Translator {
   const locale = useLocale();
-  return (key) => translate(locale, key);
+  return (key, params) => translate(locale, key, params);
 }

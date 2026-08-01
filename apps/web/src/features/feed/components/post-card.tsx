@@ -304,7 +304,7 @@ export function PostCard({
           </Link>
           <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
             <time dateTime={post.createdAt}>
-              {formatRelativeTime(post.createdAt)}
+              {formatRelativeTime(post.createdAt, locale)}
             </time>
             <span aria-hidden>·</span>
             <span className="inline-flex items-center gap-1">

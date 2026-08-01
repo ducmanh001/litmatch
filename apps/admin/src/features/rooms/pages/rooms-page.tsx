@@ -1,4 +1,5 @@
 import { showToast } from '../../../shared/lib/toast-store';
+import { t, useT } from '../../../shared/i18n/catalog';
 import { Button } from '../../../shared/ui/button';
 import { Pill } from '../../../shared/ui/pill';
 import {
@@ -15,26 +16,24 @@ function liveDurationLabel(createdAt: string): string {
     0,
     Math.round((Date.now() - new Date(createdAt).getTime()) / 60_000),
   );
-  if (minutes < 60) return `${minutes} phút`;
+  if (minutes < 60) return t('rooms.minutes', { count: minutes });
   const hours = Math.floor(minutes / 60);
-  return `${hours} giờ ${minutes % 60} phút`;
+  return t('rooms.hoursMinutes', { hours, minutes: minutes % 60 });
 }
 
 export function RoomsPage() {
+  const t = useT();
   const { data, isPending, error } = useAdminRooms();
   const closeRoom = useCloseRoom();
 
   return (
     <section className="space-y-4">
-      <p className="text-[11.5px] text-muted-foreground">
-        Số thành viên lấy từ membership active. Kết thúc phòng sẽ đóng phiên,
-        ngắt SFU và ghi audit log; thao tác không thể hoàn tác.
-      </p>
+      <p className="text-[11.5px] text-muted-foreground">{t('rooms.hint')}</p>
 
       {isPending && <LoadingState />}
       {error !== null && <ErrorState error={error} />}
       {data !== undefined && data.length === 0 && (
-        <EmptyState title="Không có phòng nào đang hoạt động" />
+        <EmptyState title={t('dashboard.noRooms')} />
       )}
 
       {data !== undefined && data.length > 0 && (
@@ -45,13 +44,18 @@ export function RoomsPage() {
               room={room}
               busy={closeRoom.isPending}
               onClose={() => {
-                if (!window.confirm(`Kết thúc phòng “${room.title}”?`)) return;
+                if (
+                  !window.confirm(
+                    t('rooms.confirmClose', { title: room.title }),
+                  )
+                )
+                  return;
                 closeRoom.mutate(room.id, {
                   onSuccess: (result) =>
                     showToast(
                       result?.closed === false
-                        ? 'Phòng đã được kết thúc trước đó'
-                        : 'Đã kết thúc phòng',
+                        ? t('rooms.alreadyClosed')
+                        : t('rooms.closed'),
                       result?.closed === false ? 'warn' : undefined,
                     ),
                 });
@@ -73,30 +77,31 @@ function RoomCard({
   busy: boolean;
   onClose: () => void;
 }) {
+  const t = useT();
   return (
     <div className="rounded-2xl border border-border bg-card p-4 transition-colors hover:border-primary">
       <div className="mb-2.5 flex items-center gap-2.5">
         <div className="min-w-0 flex-1 truncate text-[13.5px] font-extrabold">
           {room.title}
         </div>
-        <Pill variant="red">LIVE</Pill>
+        <Pill variant="red">{t('common.live')}</Pill>
       </div>
       <div className="mb-1.5 flex justify-between text-[11.5px] text-muted-foreground">
-        <span>Host</span>
+        <span>{t('rooms.host')}</span>
         <b className="truncate font-mono font-bold text-foreground">
           {room.hostUserId}
         </b>
       </div>
       <div className="mb-1.5 flex justify-between text-[11.5px] text-muted-foreground">
-        <span>Thành viên đang ở phòng</span>
+        <span>{t('rooms.members')}</span>
         <b className="font-bold text-foreground">{room.memberCount}</b>
       </div>
       <div className="mb-1.5 flex justify-between text-[11.5px] text-muted-foreground">
-        <span>Giới hạn người nói</span>
+        <span>{t('rooms.speakerLimit')}</span>
         <b className="font-bold text-foreground">{room.speakerLimit}</b>
       </div>
       <div className="flex justify-between text-[11.5px] text-muted-foreground">
-        <span>Đã live</span>
+        <span>{t('rooms.liveFor')}</span>
         <b className="font-bold text-foreground">
           {liveDurationLabel(room.createdAt)}
         </b>
@@ -108,7 +113,7 @@ function RoomCard({
         disabled={busy}
         onClick={onClose}
       >
-        Kết thúc phòng
+        {t('rooms.close')}
       </Button>
     </div>
   );

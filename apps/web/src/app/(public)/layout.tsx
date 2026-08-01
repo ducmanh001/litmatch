@@ -27,19 +27,19 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
           </Link>
           <nav className="hidden items-center gap-8 text-sm font-semibold text-slate-500 md:flex dark:text-slate-400">
             <a
-              href="#features"
+              href="/#features"
               className="transition hover:text-iris dark:hover:text-irisl"
             >
               {t('public.features')}
             </a>
             <a
-              href="#how"
+              href="/#how"
               className="transition hover:text-iris dark:hover:text-irisl"
             >
               {t('public.howItWorks')}
             </a>
             <Link
-              href="/login"
+              href="/community-guidelines"
               className="transition hover:text-iris dark:hover:text-irisl"
             >
               {t('public.community')}
@@ -79,7 +79,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
             <ul className="space-y-2.5 text-sm text-slate-500 dark:text-slate-400">
               <li>
                 <a
-                  href="#features"
+                  href="/#features"
                   className="transition hover:text-iris dark:hover:text-irisl"
                 >
                   {t('public.features')}
@@ -87,7 +87,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
               </li>
               <li>
                 <Link
-                  href="/login"
+                  href="/features"
                   className="transition hover:text-iris dark:hover:text-irisl"
                 >
                   {t('public.explore')}
@@ -95,10 +95,10 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
               </li>
               <li>
                 <Link
-                  href="/login"
+                  href="/how-it-works"
                   className="transition hover:text-iris dark:hover:text-irisl"
                 >
-                  {t('public.feed')}
+                  {t('public.howItWorks')}
                 </Link>
               </li>
             </ul>
@@ -107,28 +107,28 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
             <p className="mb-4 text-sm font-bold">{t('public.company')}</p>
             <ul className="space-y-2.5 text-sm text-slate-500 dark:text-slate-400">
               <li>
-                <a
-                  href="#"
+                <Link
+                  href="/about"
                   className="transition hover:text-iris dark:hover:text-irisl"
                 >
                   {t('public.about')}
-                </a>
+                </Link>
               </li>
               <li>
-                <a
-                  href="#"
+                <Link
+                  href="/contact"
                   className="transition hover:text-iris dark:hover:text-irisl"
                 >
                   {t('public.careers')}
-                </a>
+                </Link>
               </li>
               <li>
-                <a
-                  href="#"
+                <Link
+                  href="/contact"
                   className="transition hover:text-iris dark:hover:text-irisl"
                 >
                   {t('public.contact')}
-                </a>
+                </Link>
               </li>
             </ul>
           </div>
@@ -136,16 +136,16 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
             <p className="mb-4 text-sm font-bold">{t('public.legal')}</p>
             <ul className="space-y-2.5 text-sm text-slate-500 dark:text-slate-400">
               <li>
-                <a
-                  href="#"
+                <Link
+                  href="/terms"
                   className="transition hover:text-iris dark:hover:text-irisl"
                 >
                   {t('public.terms')}
-                </a>
+                </Link>
               </li>
               <li>
                 <Link
-                  href="/privacy"
+                  href="/privacy-policy"
                   className="transition hover:text-iris dark:hover:text-irisl"
                 >
                   {t('public.privacy')}
@@ -153,7 +153,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
               </li>
               <li>
                 <Link
-                  href="/help"
+                  href="/community-guidelines"
                   className="transition hover:text-iris dark:hover:text-irisl"
                 >
                   {t('public.safety')}

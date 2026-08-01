@@ -6,6 +6,8 @@ import { useState } from 'react';
 
 import { SearchIcon } from '../../../shared/ui/icons';
 import { formatRelativeTime } from '../../../shared/lib/format-relative-time';
+import { useLocale } from '../../../shared/i18n/locale-store';
+import { useTranslation } from '../../../shared/i18n/messages';
 import { useFriends } from '../api';
 import { FriendAvatar } from './friend-avatar';
 
@@ -13,24 +15,28 @@ import type { FriendDto } from '../api';
 
 export function FriendsList() {
   const friends = useFriends();
+  const locale = useLocale();
+  const t = useTranslation();
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
 
   const header = (
     <header className="flex items-center justify-between gap-4 mb-5">
-      <h1 className="font-display text-2xl font-semibold italic">Tin nhắn</h1>
+      <h1 className="font-display text-2xl font-semibold italic">
+        {t('app.messages')}
+      </h1>
       {searchOpen ? (
         <label className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full bg-slate-100 px-3 dark:bg-surf2">
           <SearchIcon width={16} height={16} className="shrink-0" />
           <input
             type="search"
-            aria-label="Tìm kiếm bạn bè"
+            aria-label={t('friends.search')}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             onBlur={() => {
               if (search === '') setSearchOpen(false);
             }}
-            placeholder="Tìm theo tên…"
+            placeholder={t('friends.searchPlaceholder')}
             autoFocus
             className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400"
           />
@@ -38,7 +44,7 @@ export function FriendsList() {
       ) : (
         <button
           type="button"
-          aria-label="Tìm kiếm bạn bè"
+          aria-label={t('friends.search')}
           onClick={() => setSearchOpen(true)}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-iris/15 hover:text-irisl dark:bg-surf2 dark:text-white"
         >
@@ -52,7 +58,7 @@ export function FriendsList() {
     return (
       <div className="space-y-5">
         {header}
-        <p className="text-sm text-slate-500">Đang tải danh sách bạn bè…</p>
+        <p className="text-sm text-slate-500">{t('friends.loading')}</p>
       </div>
     );
   }
@@ -63,7 +69,7 @@ export function FriendsList() {
         <p role="alert" className="text-sm text-destructive">
           {isApiError(friends.error)
             ? friends.error.message
-            : 'Có lỗi xảy ra, thử lại.'}
+            : t('common.somethingWentWrong')}
         </p>
       </div>
     );
@@ -91,22 +97,22 @@ export function FriendsList() {
 
       {allFriends.length === 0 && (
         <div className="rounded-2xl border border-dashed border-black/10 px-5 py-10 text-center dark:border-white/10">
-          <p className="font-bold">Bạn chưa có kết nối nào</p>
+          <p className="font-bold">{t('friends.emptyTitle')}</p>
           <p className="mt-1 text-sm text-slate-500">
-            Hãy bắt đầu từ Ghép đôi hoặc Quanh đây.
+            {t('friends.emptyDescription')}
           </p>
           <div className="mt-4 flex justify-center gap-2">
             <Link
               href="/matching"
               className="rounded-full bg-irisl px-4 py-2 text-xs font-bold text-white"
             >
-              Ghép đôi
+              {t('friends.matching')}
             </Link>
             <Link
               href="/discovery"
               className="rounded-full border border-black/10 px-4 py-2 text-xs font-bold dark:border-white/10"
             >
-              Quanh đây
+              {t('friends.nearby')}
             </Link>
           </div>
         </div>
@@ -114,15 +120,15 @@ export function FriendsList() {
 
       {allFriends.length > 0 && list.length === 0 && (
         <p className="rounded-2xl bg-slate-100 p-5 text-center text-sm text-slate-500 dark:bg-surf2">
-          Không tìm thấy người bạn nào.
+          {t('friends.noResults')}
         </p>
       )}
 
       {list.length > 0 && (
-        <section aria-label="Bạn bè">
+        <section aria-label={t('friends.sectionFriends')}>
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-xs font-bold uppercase tracking-wide text-slate-500">
-              Bạn bè
+              {t('friends.sectionFriends')}
             </h2>
           </div>
           <div className="no-scrollbar flex gap-4 overflow-x-auto">
@@ -150,14 +156,14 @@ export function FriendsList() {
       )}
 
       {conversations.length > 0 && (
-        <section aria-label="Hội thoại">
+        <section aria-label={t('friends.sectionConversations')}>
           <div className="mb-3 flex items-center gap-2">
             <h2 className="text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-              Hội thoại
+              {t('friends.sectionConversations')}
             </h2>
             {unreadCount > 0 && (
               <span className="rounded-full bg-iris/10 px-2 py-0.5 text-[10px] font-bold text-irisl">
-                {unreadCount} chưa đọc
+                {t('friends.unread', { count: unreadCount })}
               </span>
             )}
           </div>
@@ -178,8 +184,8 @@ export function FriendsList() {
                       {friend.profile.nickname}
                       {friend.muted && (
                         <span
-                          aria-label="Đã tắt thông báo"
-                          title="Đã tắt thông báo"
+                          aria-label={t('friends.muted')}
+                          title={t('friends.muted')}
                           className="text-xs opacity-60"
                         >
                           🔕
@@ -194,16 +200,18 @@ export function FriendsList() {
                       }`}
                     >
                       {/* preview '' = message chỉ có ảnh (content rỗng); null = chưa chat */}
-                      {friend.lastMessagePreview || '📷 Ảnh'}
+                      {friend.lastMessagePreview || t('friends.photo')}
                     </p>
                   </div>
                   <span className="flex shrink-0 flex-col items-end gap-1">
                     <span className="text-xs text-slate-400">
-                      {formatRelativeTime(friend.lastMessageAt)}
+                      {formatRelativeTime(friend.lastMessageAt, locale)}
                     </span>
                     {friend.unreadCount > 0 && (
                       <span
-                        aria-label={`${friend.unreadCount} tin nhắn chưa đọc`}
+                        aria-label={t('friends.unreadMessages', {
+                          count: friend.unreadCount,
+                        })}
                         className="flex h-5 min-w-5 items-center justify-center rounded-full bg-irisl px-1.5 text-[10px] font-extrabold text-white"
                       >
                         {friend.unreadCount > 99 ? '99+' : friend.unreadCount}

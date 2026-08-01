@@ -1,6 +1,7 @@
 import { useSearchParams } from 'react-router-dom';
 
 import { Tabs } from '../../../shared/ui/tabs';
+import { useT } from '../../../shared/i18n/catalog';
 import { ReportsPanel } from '../components/reports-panel';
 import { SupportTicketsPanel } from '../components/support-tickets-panel';
 import {
@@ -11,6 +12,7 @@ import {
 type ModTab = 'reports' | 'pending-videos' | 'published-videos' | 'support';
 
 export function ModerationPage() {
+  const t = useT();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get('tab');
   const tab: ModTab =
@@ -33,10 +35,10 @@ export function ModerationPage() {
       <Tabs
         id="moderation"
         tabs={[
-          { value: 'reports', label: 'Báo cáo người dùng' },
-          { value: 'pending-videos', label: 'Video chờ duyệt' },
-          { value: 'published-videos', label: 'Video đã đăng' },
-          { value: 'support', label: 'Hỗ trợ' },
+          { value: 'reports', label: t('moderation.reports') },
+          { value: 'pending-videos', label: t('moderation.pendingVideos') },
+          { value: 'published-videos', label: t('moderation.publishedVideos') },
+          { value: 'support', label: t('moderation.support') },
         ]}
         value={tab}
         onChange={setTab}
