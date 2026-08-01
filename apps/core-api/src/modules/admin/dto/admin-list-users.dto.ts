@@ -36,7 +36,7 @@ export class ListUsersQueryDto {
   @MaxLength(50)
   nickname?: string;
 
-  @ApiPropertyOptional({ default: 20 })
+  @ApiPropertyOptional({ type: Number, default: 20, minimum: 1, maximum: 100 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -44,7 +44,7 @@ export class ListUsersQueryDto {
   @Max(100)
   limit = 20;
 
-  @ApiPropertyOptional({ default: 0 })
+  @ApiPropertyOptional({ type: Number, default: 0, minimum: 0 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()

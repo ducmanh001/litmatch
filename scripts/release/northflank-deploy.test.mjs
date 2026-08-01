@@ -25,6 +25,7 @@ test('readConfig fail closed khi thiếu secret hoặc SHA không đầy đủ',
 test('deploy đúng commit cho hai service và chờ mỗi build thành công', async () => {
   const polls = new Map();
   const requests = [];
+  const delays = [];
   const fetchImpl = async (url, init) => {
     requests.push({ url, init });
     if (init.method === 'POST') {
@@ -45,7 +46,7 @@ test('deploy đúng commit cho hai service và chờ mỗi build thành công', 
   await deployNorthflank({
     env: validEnv,
     fetchImpl,
-    sleep: async () => {},
+    sleep: async (milliseconds) => delays.push(milliseconds),
     log: () => {},
   });
 
@@ -56,6 +57,7 @@ test('deploy đúng commit cho hai service và chờ mỗi build thành công', 
     assert.deepEqual(JSON.parse(init.body), { sha: validEnv.RELEASE_SHA });
   }
   assert.deepEqual([...polls.values()], [2, 2]);
+  assert.deepEqual(delays, [2_000, 2_000]);
 });
 
 test('deploy dừng khi Northflank kết luận build lỗi', async () => {

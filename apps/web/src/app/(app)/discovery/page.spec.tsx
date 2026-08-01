@@ -38,14 +38,11 @@ function renderPage() {
 describe('DiscoveryPage', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('rỗng — gợi ý chưa có ai phù hợp', async () => {
+  it('mở màn hình bằng Khám phá phù hợp — không cần quyền vị trí', async () => {
     vi.spyOn(apiClient, 'GET').mockResolvedValue({
       data: { data: { items: [], nextCursor: null } },
     } as never);
     renderPage();
-    await userEvent.click(
-      screen.getByRole('button', { name: 'Khám phá phù hợp' }),
-    );
 
     expect(await screen.findByText(/Chưa có ai phù hợp lúc này/)).toBeVisible();
   });
@@ -123,8 +120,12 @@ describe('DiscoveryPage', () => {
     );
     renderPage();
 
+    await userEvent.click(screen.getByRole('button', { name: 'Quanh đây' }));
     expect(
       await screen.findByRole('button', { name: 'Bật tìm quanh đây' }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Khám phá hồ sơ không cần vị trí' }),
     ).toBeVisible();
     expect(screen.getByText(/không thấy tọa độ/)).toBeVisible();
     expect(get).toHaveBeenCalledWith(
@@ -133,13 +134,40 @@ describe('DiscoveryPage', () => {
     );
   });
 
-  it('người đã bật Quanh đây không bị hỏi lại quyền vị trí khi quay lại', async () => {
-    vi.spyOn(apiClient, 'GET').mockResolvedValue({
-      data: { data: { items: [], nextCursor: null } },
-    } as never);
+  it('từ Nearby chưa bật có thể quay lại xem hồ sơ ngay không cần vị trí', async () => {
+    const card = cardFixture({
+      profile: {
+        id: 'user-2',
+        nickname: 'Lan',
+        gender: 'female',
+        avatarId: 'default',
+      },
+    });
+    vi.spyOn(apiClient, 'GET').mockImplementation(((path: string) => {
+      if (path === '/api/v1/discovery/nearby') {
+        return Promise.reject(
+          new ApiError(403, {
+            code: 'DISCOVERY_NEARBY_NOT_OPTED_IN',
+            message: 'Bạn cần bật Quanh đây',
+            traceId: 'trace-nearby',
+          }),
+        );
+      }
+      return Promise.resolve({
+        data: { data: { items: [card], nextCursor: null } },
+      });
+    }) as never);
     renderPage();
 
-    expect(await screen.findByText(/Chưa có ai phù hợp lúc này/)).toBeVisible();
+    await screen.findByText('Lan');
+    await userEvent.click(screen.getByRole('button', { name: 'Quanh đây' }));
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: 'Khám phá hồ sơ không cần vị trí',
+      }),
+    );
+
+    expect(screen.getByText('Lan')).toBeVisible();
     expect(
       screen.queryByRole('button', { name: 'Bật tìm quanh đây' }),
     ).not.toBeInTheDocument();
@@ -152,6 +180,7 @@ describe('DiscoveryPage', () => {
     const put = vi.spyOn(apiClient, 'PUT').mockResolvedValue({} as never);
     renderPage();
 
+    await userEvent.click(screen.getByRole('button', { name: 'Quanh đây' }));
     await userEvent.click(
       await screen.findByRole('button', {
         name: 'Tắt Quanh đây và xoá vị trí',

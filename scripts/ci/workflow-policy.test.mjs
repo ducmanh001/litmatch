@@ -42,8 +42,13 @@ jobs:
     steps:
       - uses: ${pinnedAction}
       - run: pnpm ci:local:quick
+  test:
+    needs: [quality]
+  docker:
+    needs: [quality]
   required:
     name: CI required
+    needs: [quality, test, docker]
 `,
     hostedReleaseWorkflow,
     securityWorkflow: `${triggers}
@@ -69,8 +74,13 @@ jobs:
     steps:
       - uses: ${pinnedAction}
       - run: pnpm ci:local:quick
+  test:
+    needs: [quality]
+  docker:
+    needs: [quality]
   required:
     name: CI required
+    needs: [quality, test, docker]
 `,
     hostedReleaseWorkflow,
     securityWorkflow: undefined,
@@ -119,8 +129,13 @@ jobs:
     steps:
       - uses: ${pinnedAction}
       - run: pnpm ci:local:quick
+  test:
+    needs: [quality]
+  docker:
+    needs: [quality]
   required:
     name: CI required
+    needs: [quality, test, docker]
 `,
     hostedReleaseWorkflow: `on:
   workflow_run:
@@ -152,12 +167,52 @@ jobs:
     steps:
       - uses: ${pinnedAction}
       - run: pnpm ci:local:quick --bypass
+  test:
+    needs: [quality]
+  docker:
+    needs: [quality]
   required:
     name: CI required
+    needs: [quality, test, docker]
 `,
     hostedReleaseWorkflow,
     securityWorkflow: undefined,
   });
 
   assert.ok(errors.some((error) => error.includes('bypass')));
+});
+
+test('rejects a serialized or incomplete CI dependency graph', () => {
+  const errors = workflowPolicyErrors({
+    ciWorkflow: `${triggers}${frontendBuildEnvironment}
+jobs:
+  quality:
+    needs: [bootstrap]
+    steps:
+      - uses: ${pinnedAction}
+      - run: pnpm ci:local:quick
+  test:
+    needs: [quality]
+  docker:
+    needs: [quality, test]
+  required:
+    name: CI required
+    needs: [test, docker]
+`,
+    hostedReleaseWorkflow,
+    securityWorkflow: undefined,
+  });
+
+  assert.ok(
+    errors.some((error) => error.includes('prerequisite đầu tiên')),
+    errors.join('\n'),
+  );
+  assert.ok(
+    errors.some((error) => error.includes('song song với test')),
+    errors.join('\n'),
+  );
+  assert.ok(
+    errors.some((error) => error.includes('phụ thuộc đầy đủ')),
+    errors.join('\n'),
+  );
 });

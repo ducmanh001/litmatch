@@ -46,7 +46,10 @@ chính xác `PUBLIC_WEB_URL,PUBLIC_ADMIN_URL`; profile khác site phải giữ
 
 Workflow `Hosted release` tự chạy sau khi workflow `CI` của `main` thành công:
 
-`migration PostgreSQL → build/deploy Core + Signaling đúng SHA → deploy Web + Admin → smoke 4 URL`.
+`migration PostgreSQL → build/deploy Core + Signaling đúng SHA → deploy Web + Admin song song → smoke 4 URL đồng thời`.
+
+Frontend deploy vẫn chỉ chạy sau khi hai backend build exact SHA thành công. Smoke public dùng
+retry bounded cho cả bốn URL đồng thời và fail-closed nếu bất kỳ endpoint nào không ready.
 
 Release lỗi dừng tại bước lỗi và không tự nâng plan. Khi Upstash free bị archive do không hoạt
 động, restore database trong console rồi cập nhật `REDIS_URL`; Redis không phải nguồn sự thật của

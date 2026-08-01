@@ -101,7 +101,9 @@ function LoadingCards() {
 
 /** /discovery — màn duyệt chủ động + Nearby, dữ liệu thật qua module `discovery` (W1+W4). */
 export default function DiscoveryPage() {
-  const [mode, setMode] = useState<'browse' | 'nearby'>('nearby');
+  // Browse không phụ thuộc quyền vị trí nên là điểm vào an toàn nhất: Nearby chỉ là
+  // lựa chọn nâng cao, không được biến thành điều kiện để Discovery có nội dung.
+  const [mode, setMode] = useState<'browse' | 'nearby'>('browse');
   const [gender, setGender] = useState<Gender | undefined>(undefined);
   const [ageRange, setAgeRange] = useState<DiscoveryAgeRange>('all');
   const [selected, setSelected] = useState<
@@ -216,6 +218,10 @@ export default function DiscoveryPage() {
             <NearbyOptIn
               needsLocationRefresh={nearbySetupCode === NEARBY_LOCATION_MISSING}
               onEnabled={() => void nearbyQuery.refetch()}
+              onExploreBrowse={() => {
+                setMode('browse');
+                setSelected(null);
+              }}
             />
           ) : (
             <section aria-labelledby="discovery-results-heading">

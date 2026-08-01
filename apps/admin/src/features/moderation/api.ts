@@ -24,11 +24,10 @@ export function useReportsList(
     queryFn: async () => {
       const res = await apiClient.GET('/api/v1/admin/reports', {
         params: {
-          // OpenAPI hiện generate Integer query thành Object; runtime contract vẫn là number.
           query: {
             status,
-            limit: PAGE_SIZE as unknown as Record<string, never>,
-            offset: offset as unknown as Record<string, never>,
+            limit: PAGE_SIZE,
+            offset,
           },
         },
       });

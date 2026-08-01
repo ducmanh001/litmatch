@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { parse as parseYaml } from 'yaml';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const script = 'scripts/ci/local.mjs';
@@ -63,6 +64,7 @@ test('aggregate gates own stage watchdogs instead of a blanket 45-second timeout
   assert.match(localCi, /run-stage\.mjs/u);
   assert.match(localCi, /LOCAL_CI_STAGE_TIMEOUT_MS/u);
   assert.match(localCi, /NX_TUI:\s*'false'/u);
+  assert.match(localCi, /NX_NATIVE_COMMAND_RUNNER:\s*'false'/u);
   assert.match(localCi, /NX_CACHE_DIRECTORY:/u);
   assert.match(localCi, /NX_WORKSPACE_DATA_DIRECTORY:/u);
   assert.match(localCi, /tmpdir\(\), 'litmatch-local-ci'/u);
@@ -74,6 +76,10 @@ test('aggregate gates own stage watchdogs instead of a blanket 45-second timeout
   assert.match(agentVerify, /NX_INTERACTIVE:\s*'false'/u);
   assert.match(agentVerify, /NX_NATIVE_COMMAND_RUNNER:\s*'false'/u);
   assert.match(agentVerify, /CI:\s*'true'/u);
+  assert.match(agentVerify, /NX_TASKS_RUNNER_DYNAMIC_OUTPUT:\s*'false'/u);
+  assert.match(agentVerify, /TERM:\s*'dumb'/u);
+  assert.match(agentVerify, /NO_COLOR:\s*'1'/u);
+  assert.match(agentVerify, /FORCE_COLOR:\s*'0'/u);
   assert.match(agentVerify, /--outputStyle=static/u);
   assert.match(
     packageJson,
@@ -102,10 +108,12 @@ test('commit owns formatting and staged guard checks; push owns the complete pre
 
   assert.match(commitHook, /lint-staged[\s\S]*agent:check -- --staged/u);
   assert.match(pushHook, /pnpm ci:preflight/u);
+  assert.match(pushHook, /NX_NATIVE_COMMAND_RUNNER=false/u);
   assert.match(pushHook, /export NX_TUI=false/u);
   assert.match(pushHook, /export NX_DAEMON=false/u);
   assert.match(pushHook, /export NX_TASKS_RUNNER_DYNAMIC_OUTPUT=false/u);
   assert.match(pushHook, /export TERM=dumb/u);
+  assert.match(pushHook, /export FORCE_COLOR=0/u);
   assert.doesNotMatch(pushHook, /ci:local:clean/u);
   assert.match(commitHook, /LITMATCH_CI_BYPASS/u);
   assert.match(pushHook, /LITMATCH_CI_BYPASS/u);
@@ -157,11 +165,19 @@ test('local CI rejects every bypass mechanism in a CI environment', () => {
 
 test('GitHub CI uses the same local profiles for quality, tests, and containers', () => {
   const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
+  const workflowConfig = parseYaml(workflow);
 
   assert.match(workflow, /run: pnpm ci:local:quick/u);
   assert.match(workflow, /run: pnpm ci:local\s*$/mu);
   assert.match(workflow, /run: pnpm ci:local:docker/u);
-  assert.match(workflow, /needs: \[quality, test\]/u);
+  assert.deepEqual(workflowConfig.jobs.quality.needs, undefined);
+  assert.deepEqual(workflowConfig.jobs.test.needs, ['quality']);
+  assert.deepEqual(workflowConfig.jobs.docker.needs, ['quality']);
+  assert.deepEqual(workflowConfig.jobs.required.needs, [
+    'quality',
+    'test',
+    'docker',
+  ]);
   assert.doesNotMatch(
     workflow,
     /bypass_ci:|LITMATCH_CI_BYPASS|CI_BYPASS|--bypass/u,

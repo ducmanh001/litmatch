@@ -33,6 +33,10 @@ pnpm agent:context <scope>
 | `pnpm ci:preflight` / `pnpm ci:local:all` | Clean quality + test/build/E2E + image smoke                               |
 | `pnpm ci:local:security`                  | Hiện disabled/non-blocking; không được mô tả như security PASS             |
 
+Trên GitHub Actions, `quality` là prerequisite fail-fast. Sau khi job này PASS,
+`test` (test/build/E2E) và `docker` (container smoke) chạy song song; check tổng hợp
+`CI required` chỉ PASS khi cả ba job `quality`, `test` và `docker` đều thành công.
+
 Local CI và `agent:verify` sở hữu watchdog theo từng stage (mặc định lần lượt 20 và 15 phút,
 có thể cấu hình bằng `LOCAL_CI_STAGE_TIMEOUT_MS` / `AGENT_VERIFY_STAGE_TIMEOUT_MS`). Không bọc cả
 profile bằng `timeout 45s`: aggregate gate hợp lệ thường dài hơn 45 giây. Stage quá hạn được ghi

@@ -3568,7 +3568,6 @@ export interface components {
       userTiers: components['schemas']['AdminUserTierDistributionDto'];
       recentActivities: components['schemas']['AdminActivityDto'][];
     };
-    Object: Record<string, never>;
     AdminUserDto: {
       id: string;
       nickname: string;
@@ -7400,8 +7399,8 @@ export interface operations {
         status?: 'active' | 'banned';
         role?: 'user' | 'moderator' | 'admin';
         nickname?: string;
-        limit?: components['schemas']['Object'];
-        offset?: components['schemas']['Object'];
+        limit?: number;
+        offset?: number;
       };
       header?: never;
       path?: never;
@@ -7506,8 +7505,8 @@ export interface operations {
     parameters: {
       query?: {
         status?: 'pending' | 'resolved' | 'dismissed';
-        limit?: components['schemas']['Object'];
-        offset?: components['schemas']['Object'];
+        limit?: number;
+        offset?: number;
       };
       header?: never;
       path?: never;

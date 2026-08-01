@@ -89,9 +89,11 @@ function RadarVisual() {
  * thái đã bật trong phiên này, KHÔNG suy đoán trạng thái server từ trước (docs/services/discovery-service.md § 8.2). */
 export function NearbyOptIn({
   onEnabled,
+  onExploreBrowse,
   needsLocationRefresh = false,
 }: {
   onEnabled: () => void;
+  onExploreBrowse: () => void;
   needsLocationRefresh?: boolean;
 }) {
   const setLocation = useSetLocation();
@@ -180,6 +182,13 @@ export function NearbyOptIn({
             <p className="mt-2 text-[11px] leading-4 text-muted-foreground dark:text-white/70">
               Trình duyệt sẽ hỏi quyền vị trí trước khi tiếp tục.
             </p>
+            <button
+              type="button"
+              onClick={onExploreBrowse}
+              className="mt-4 text-sm font-extrabold text-irisl underline decoration-irisl/35 underline-offset-4 transition hover:decoration-irisl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring dark:text-white dark:decoration-white/35 dark:hover:decoration-white"
+            >
+              Khám phá hồ sơ không cần vị trí
+            </button>
           </div>
         </div>
       </section>

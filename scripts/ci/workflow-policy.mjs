@@ -38,6 +38,20 @@ function parseWorkflow(name, source, errors) {
   }
 }
 
+function normalizedJobNeeds(job) {
+  if (typeof job?.needs === 'string') return [job.needs];
+  if (Array.isArray(job?.needs)) return job.needs;
+  return [];
+}
+
+function hasExactJobNeeds(job, expectedNeeds) {
+  const actualNeeds = normalizedJobNeeds(job);
+  return (
+    actualNeeds.length === expectedNeeds.length &&
+    expectedNeeds.every((need) => actualNeeds.includes(need))
+  );
+}
+
 export function workflowPolicyErrors({
   ciWorkflow,
   hostedReleaseWorkflow,
@@ -74,6 +88,26 @@ export function workflowPolicyErrors({
 
   if (ciConfig.jobs?.required?.name !== 'CI required') {
     errors.push('CI workflow thiếu check tổng hợp ổn định `CI required`.');
+  }
+  if (!hasExactJobNeeds(ciConfig.jobs?.quality, [])) {
+    errors.push(
+      'CI quality job phải là prerequisite đầu tiên, không có `needs`.',
+    );
+  }
+  if (!hasExactJobNeeds(ciConfig.jobs?.test, ['quality'])) {
+    errors.push('CI test job phải chỉ phụ thuộc `quality`.');
+  }
+  if (!hasExactJobNeeds(ciConfig.jobs?.docker, ['quality'])) {
+    errors.push(
+      'CI docker job phải chỉ phụ thuộc `quality` để chạy song song với test.',
+    );
+  }
+  if (
+    !hasExactJobNeeds(ciConfig.jobs?.required, ['quality', 'test', 'docker'])
+  ) {
+    errors.push(
+      'CI required job phải phụ thuộc đầy đủ `quality`, `test` và `docker`.',
+    );
   }
   if (
     /^\s*bypass_ci:/mu.test(ciWorkflow) ||
