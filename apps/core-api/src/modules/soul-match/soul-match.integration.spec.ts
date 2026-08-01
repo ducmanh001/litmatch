@@ -10,6 +10,7 @@ import { MatchingCore1752200000000 } from '../../database/migrations/17522000000
 import { MatchingGenderPreference1752300000000 } from '../../database/migrations/1752300000000-matching-gender-preference';
 import { SoulMatch1752400000000 } from '../../database/migrations/1752400000000-soul-match';
 import { FriendChat1752600000000 } from '../../database/migrations/1752600000000-friend-chat';
+import { SoulChatFriendHistory1756600000000 } from '../../database/migrations/1756600000000-soul-chat-friend-history';
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
 import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
 
@@ -196,6 +197,7 @@ d('Soul Match integration (Postgres thật)', () => {
         MatchingGenderPreference1752300000000,
         SoulMatch1752400000000,
         FriendChat1752600000000,
+        SoulChatFriendHistory1756600000000,
         Safety1752800000000,
         ReportTargetVideo1754900000000,
       ],
@@ -316,6 +318,71 @@ d('Soul Match integration (Postgres thật)', () => {
     const view = await service.getSessionView(auth(a.id), session.id);
     expect(view.matched).toBe(true);
     expect(view.myVerdict).toBe(SoulMatchVerdict.Like);
+  });
+
+  it('mutual like chuyển toàn bộ lịch sử Soul Chat vào Friend Chat, không nhân đôi và giữ source append-only', async () => {
+    const [a, b] = await Promise.all([
+      createUser('history-a'),
+      createUser('history-b'),
+    ]);
+    const session = await createSoulSession(a, b);
+
+    await service.sendMessage(
+      auth(a.id),
+      session.id,
+      { content: 'Tin nhắn đầu tiên' },
+      'history-k1',
+    );
+    await service.sendMessage(
+      auth(b.id),
+      session.id,
+      { content: 'Tin nhắn phản hồi' },
+      'history-k2',
+    );
+
+    await service.rate(auth(a.id), session.id, {
+      verdict: SoulMatchVerdict.Like,
+    });
+    await service.rate(auth(b.id), session.id, {
+      verdict: SoulMatchVerdict.Like,
+    });
+
+    const conversation = await friendService.getConversationWithFriend(
+      a.id,
+      b.id,
+    );
+    const messages = await ds.getRepository(Message).find({
+      where: { conversationId: conversation.id },
+      order: { seq: 'ASC' },
+    });
+    expect(messages.map((message) => message.content)).toEqual([
+      'Tin nhắn đầu tiên',
+      'Tin nhắn phản hồi',
+    ]);
+    expect(messages.map((message) => message.senderUserId)).toEqual([
+      a.id,
+      b.id,
+    ]);
+    expect(
+      await ds.getRepository(Message).countBy({
+        conversationId: conversation.id,
+      }),
+    ).toBe(2);
+    expect(
+      await ds.getRepository(SoulChatMessage).countBy({
+        sessionId: session.id,
+      }),
+    ).toBe(2);
+
+    // Replay rating không copy lại lịch sử.
+    await service.rate(auth(b.id), session.id, {
+      verdict: SoulMatchVerdict.Like,
+    });
+    expect(
+      await ds.getRepository(Message).countBy({
+        conversationId: conversation.id,
+      }),
+    ).toBe(2);
   });
 
   it('like + boring → KHÔNG friendship, profile vẫn khoá; verdict đối phương không leak qua view', async () => {

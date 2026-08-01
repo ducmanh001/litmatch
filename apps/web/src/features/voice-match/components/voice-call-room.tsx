@@ -121,6 +121,10 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
   const [now, setNow] = useState(() => Date.now());
   const endVoiceMatchMutate = useRef(endVoiceMatch.mutate);
   endVoiceMatchMutate.current = endVoiceMatch.mutate;
+  const liked =
+    hasLikedCall || likeCall.data?.liked === true || call.data?.liked === true;
+  const matched =
+    likeCall.data?.matched === true || call.data?.matched === true;
 
   // Vào đúng Voice Match là xin quyền mic/kết nối ngay; không bắt người dùng bấm thêm một
   // "Bắt đầu" dư thừa. Retry chỉ hiện khi browser/SFU trả lỗi thật.
@@ -252,7 +256,7 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
         await endCall.mutateAsync();
         // Người này đã bấm tim trong call: gọi lại reaction idempotent sau end để đọc kết quả
         // mutual mới nhất. Không tự gửi like cho người chưa đồng ý.
-        if (hasLikedCall || likeCall.data?.liked === true) {
+        if (liked) {
           if (await refreshLikeAndOpenChat()) return;
         }
         router.replace('/matching');
@@ -381,9 +385,9 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
             disabled={likeCall.isPending}
             onClick={handleEndedLikeCall}
           >
-            {likeCall.data?.matched
+            {matched
               ? 'Mở chat với Litfriend'
-              : hasLikedCall || likeCall.data?.liked
+              : liked
                 ? 'Đã gửi yêu thích — chờ đối phương'
                 : likeCall.isPending
                   ? 'Đang gửi yêu thích…'
@@ -460,9 +464,9 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
         </div>
       )}
 
-      {(hasLikedCall || likeCall.data?.liked) && (
+      {liked && (
         <p role="status" className="mb-4 text-sm font-semibold text-irisl">
-          {likeCall.data?.matched
+          {matched
             ? 'Cả hai đã yêu thích — kết thúc cuộc gọi để mở chat riêng.'
             : 'Đã gửi yêu thích — chờ đối phương.'}
         </p>
@@ -472,27 +476,20 @@ export function VoiceCallRoom({ matchSessionId }: { matchSessionId: string }) {
         <button
           type="button"
           className={`flex h-14 w-14 items-center justify-center rounded-full transition disabled:cursor-default ${
-            hasLikedCall || likeCall.data?.liked
+            liked
               ? 'bg-iris/15 text-irisl opacity-75'
               : 'bg-gradient-to-br from-irisl to-aqual text-white shadow-lg shadow-iris/30'
           }`}
           disabled={
-            likeCall.isPending ||
-            hasLikedCall ||
-            likeCall.data?.liked === true ||
-            call.data?.status !== 'active'
+            likeCall.isPending || liked || call.data?.status !== 'active'
           }
           onClick={handleLikeCall}
         >
-          <HeartIcon
-            className={
-              hasLikedCall || likeCall.data?.liked ? 'fill-current' : undefined
-            }
-          />
+          <HeartIcon className={liked ? 'fill-current' : undefined} />
           <span className="sr-only">
             {likeCall.isPending
               ? 'Đang gửi yêu thích…'
-              : hasLikedCall || likeCall.data?.liked
+              : liked
                 ? 'Đã yêu thích'
                 : 'Yêu thích để thành Litfriend'}
           </span>
