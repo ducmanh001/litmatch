@@ -1,8 +1,8 @@
 import { isActiveCallStatus, VOICE_CALL_REFETCH_INTERVAL_MS } from './api';
 
 describe('isActiveCallStatus', () => {
-  it('dùng fallback 10 giây vì realtime là kênh chính', () => {
-    expect(VOICE_CALL_REFETCH_INTERVAL_MS).toBe(10_000);
+  it('dùng fallback 1 giây để cập nhật trạng thái cuộc gọi', () => {
+    expect(VOICE_CALL_REFETCH_INTERVAL_MS).toBe(1_000);
   });
 
   it('poll tiếp khi pending hoặc active', () => {
