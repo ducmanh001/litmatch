@@ -6,12 +6,13 @@ import { useIdempotencyKey } from '../../../shared/idempotency/use-idempotency-k
 import { useLocale } from '../../../shared/i18n/locale-store';
 import { formatDate } from '../../../shared/i18n/formatters';
 import { useTranslation } from '../../../shared/i18n/messages';
+import type { MessageKey } from '../../../shared/i18n/messages';
 import { confirmAction } from '../../../shared/lib/confirm-store';
 import { showToast } from '../../../shared/lib/toast-store';
 import { DiamondIcon } from '../../../shared/ui/icons';
 import { usePurchaseVip, useVipPlans, useWallet } from '../api';
 
-import type { SVGProps } from 'react';
+import type { ReactNode, SVGProps } from 'react';
 
 function BenefitIcon({ children, ...props }: SVGProps<SVGSVGElement>) {
   return (
@@ -32,7 +33,12 @@ function BenefitIcon({ children, ...props }: SVGProps<SVGSVGElement>) {
   );
 }
 
-const BENEFITS = [
+const BENEFITS: Array<{
+  titleKey: MessageKey;
+  descriptionKey: MessageKey;
+  path: string;
+  extra?: ReactNode;
+}> = [
   {
     titleKey: 'wallet.benefit.fastTitle',
     descriptionKey: 'wallet.benefit.fastDescription',
@@ -129,7 +135,7 @@ export function VipPlans() {
       <div className="space-y-3">
         {BENEFITS.map((benefit) => (
           <div
-            key={benefit.title}
+            key={benefit.titleKey}
             className="flex items-center gap-3 rounded-2xl border border-black/5 bg-white px-4 py-3.5 dark:border-white/10 dark:bg-surf"
           >
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-iris/15 text-irisl">
