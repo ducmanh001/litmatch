@@ -71,6 +71,10 @@ Nếu Upstash vẫn tăng command khi không có user, kiểm tra theo thứ t�
 3. Nếu thấy `SMEMBERS` từ Core API, kiểm tra matcher interval và activity gate; không tắt Redis
    readiness bằng cách xoá health check vì `PING` là probe không đại diện cho user traffic.
 
+Core API cũng export `runtime_active`, `runtime_last_meaningful_request_age_seconds`,
+`runtime_meaningful_requests` và `runtime_background_skipped{job}`. Đây là bằng chứng để điều chỉnh mốc 5 phút hoặc cadence
+job sau khi có traffic thật; không đặt ngưỡng scale mới chỉ từ cảm giác hoặc vài tài khoản test.
+
 Profile hosted-free không tự nâng plan hoặc tự tăng số service ngoài quota. Khi release thật vượt
 ngưỡng, Kubernetes profile mới là đường autoscaling hiện hành qua HPA CPU/memory; custom metric
 như queue depth/Socket.IO connections chỉ bật sau khi có số liệu production và adapter đã được

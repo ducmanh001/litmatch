@@ -5,6 +5,10 @@ import { io } from 'socket.io-client';
 
 import { apiClient, tokenStore } from '../api/client';
 import { env } from '../env';
+import {
+  markSocketReconnect,
+  resetSocketReconnectState,
+} from './reconnect-state';
 
 import type {
   RealtimeEnvelope,
@@ -66,6 +70,7 @@ export function disconnectRealtime(): void {
   socket?.disconnect();
   socket = null;
   authRefreshInFlight = null;
+  resetSocketReconnectState();
 }
 
 /** Đăng ký listener theo event đã khai trong common-dtos — trả cleanup, hook PHẢI gọi khi unmount. */
@@ -82,7 +87,10 @@ export function subscribeRealtime<T>(
 export function onReconnected(handler: () => void): () => void {
   const s = getSocket();
   const wrapped = (attempt: number): void => {
-    if (attempt > 0) handler();
+    if (attempt > 0) {
+      markSocketReconnect();
+      handler();
+    }
   };
   s.io.on('reconnect', wrapped);
   return () => s.io.off('reconnect', wrapped);
