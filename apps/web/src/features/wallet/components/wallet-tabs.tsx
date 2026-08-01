@@ -22,6 +22,7 @@ export function WalletTabs() {
       <WalletBalance
         onTopUp={() => setTab('diamond')}
         onUpgradeVip={() => setTab('vip')}
+        activeAction={tab === 'diamond' ? 'topup' : 'vip'}
       />
       <PayosPaymentStatus />
 

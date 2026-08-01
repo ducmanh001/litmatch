@@ -76,6 +76,7 @@ describe('SoulMatchService (unit — mock repo/matching/friend)', () => {
   let userService: { getByIdOrThrow: jest.Mock };
   let manager: {
     findOne: jest.Mock;
+    find: jest.Mock;
     findOneBy: jest.Mock;
     save: jest.Mock;
     create: jest.Mock;
@@ -119,10 +120,23 @@ describe('SoulMatchService (unit — mock repo/matching/friend)', () => {
     };
     manager = {
       findOne: jest.fn(async () => makeSession(0)), // lock session row
+      find: jest.fn(async () => []),
       findOneBy: jest.fn(async () => null),
-      save: jest.fn(async (r) => r),
-      create: jest.fn((_e, input) =>
-        Object.assign(new SoulMatchRating(), input),
+      save: jest.fn(async (r) =>
+        Object.assign(
+          r,
+          r instanceof SoulChatMessage
+            ? { id: 'msg-new', createdAt: new Date() }
+            : {},
+        ),
+      ),
+      create: jest.fn((entity, input) =>
+        Object.assign(
+          entity === SoulChatMessage
+            ? new SoulChatMessage()
+            : new SoulMatchRating(),
+          input,
+        ),
       ),
     };
     dataSource = {
@@ -252,7 +266,7 @@ describe('SoulMatchService (unit — mock repo/matching/friend)', () => {
       expect(toPartner?.envelope.data.senderRole).toBe('partner');
 
       redis.publish.mockClear();
-      messageRepo.save.mockRejectedValue(uniqueViolation());
+      manager.save.mockRejectedValue(uniqueViolation());
       messageRepo.findOneBy.mockResolvedValue(
         Object.assign(new SoulChatMessage(), {
           id: 'msg-1',
@@ -274,14 +288,14 @@ describe('SoulMatchService (unit — mock repo/matching/friend)', () => {
         content: 'hello',
         idempotencyKey: 'soul:msg:user-me:k1',
       });
-      messageRepo.save.mockRejectedValue(uniqueViolation());
+      manager.save.mockRejectedValue(uniqueViolation());
       messageRepo.findOneBy.mockResolvedValue(existing);
       const result = await service.sendMessage(me, 'session-1', dto, 'k1');
       expect(result).toBe(existing);
     });
 
     it('cùng key nhưng nội dung khác → 409 MESSAGE_IDEMPOTENCY_CONFLICT', async () => {
-      messageRepo.save.mockRejectedValue(uniqueViolation());
+      manager.save.mockRejectedValue(uniqueViolation());
       messageRepo.findOneBy.mockResolvedValue(
         Object.assign(new SoulChatMessage(), {
           sessionId: 'session-1',
@@ -349,6 +363,60 @@ describe('SoulMatchService (unit — mock repo/matching/friend)', () => {
         me.userId,
         PARTNER_ID,
         'soul_match',
+        [],
+      );
+    });
+
+    it('mutual like → truyền toàn bộ message ẩn danh theo thứ tự sang Friend Chat', async () => {
+      const firstSentAt = new Date('2026-07-31T10:00:00.000Z');
+      const secondSentAt = new Date('2026-07-31T10:00:01.000Z');
+      manager.findOneBy.mockResolvedValueOnce(null).mockResolvedValueOnce(
+        Object.assign(new SoulMatchRating(), {
+          sessionId: 'session-1',
+          raterUserId: PARTNER_ID,
+          verdict: SoulMatchVerdict.Like,
+        }),
+      );
+      manager.find.mockResolvedValue([
+        Object.assign(new SoulChatMessage(), {
+          id: 'message-1',
+          seq: '1',
+          sessionId: 'session-1',
+          senderUserId: me.userId,
+          content: 'Xin chào',
+          createdAt: firstSentAt,
+        }),
+        Object.assign(new SoulChatMessage(), {
+          id: 'message-2',
+          seq: '2',
+          sessionId: 'session-1',
+          senderUserId: PARTNER_ID,
+          content: 'Chào bạn',
+          createdAt: secondSentAt,
+        }),
+      ]);
+
+      await service.rate(me, 'session-1', like);
+
+      expect(friendService.ensureFriendship).toHaveBeenCalledWith(
+        manager,
+        me.userId,
+        PARTNER_ID,
+        'soul_match',
+        [
+          {
+            senderUserId: me.userId,
+            content: 'Xin chào',
+            createdAt: firstSentAt,
+            idempotencyKey: 'friend:import:soul:session-1:message-1',
+          },
+          {
+            senderUserId: PARTNER_ID,
+            content: 'Chào bạn',
+            createdAt: secondSentAt,
+            idempotencyKey: 'friend:import:soul:session-1:message-2',
+          },
+        ],
       );
     });
 

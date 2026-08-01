@@ -10,9 +10,16 @@ vi.mock('livekit-client', () => ({
     connect = roomMocks.connect;
     disconnect = roomMocks.disconnect;
   },
+  RoomEvent: {
+    TrackSubscribed: 'trackSubscribed',
+    TrackUnsubscribed: 'trackUnsubscribed',
+  },
+  Track: { Kind: { Audio: 'audio' } },
 }));
 
-import { connectMediaRoom } from './livekit';
+import { attachRemoteAudio, connectMediaRoom } from './livekit';
+
+import type { Room } from 'livekit-client';
 
 describe('connectMediaRoom', () => {
   beforeEach(() => {
@@ -37,5 +44,38 @@ describe('connectMediaRoom', () => {
     await expect(connectMediaRoom('token', 'ws://livekit')).rejects.toBe(error);
 
     expect(roomMocks.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('gắn cả audio publication đã subscribe trước effect và dọn khi unmount', () => {
+    const audio = document.createElement('audio');
+    audio.play = vi.fn().mockResolvedValue(undefined);
+    const track = {
+      kind: 'audio',
+      attach: vi.fn(() => audio),
+      detach: vi.fn(() => [audio]),
+    };
+    const room = {
+      on: vi.fn(),
+      off: vi.fn(),
+      remoteParticipants: new Map([
+        [
+          'remote-user',
+          {
+            trackPublications: new Map([
+              ['publication', { isSubscribed: true, track }],
+            ]),
+          },
+        ],
+      ]),
+    } as unknown as Room;
+    const container = document.createElement('div');
+
+    const cleanup = attachRemoteAudio(room, container);
+
+    expect(track.attach).toHaveBeenCalledTimes(1);
+    expect(container).toContain(audio);
+    cleanup();
+    expect(track.detach).toHaveBeenCalledTimes(1);
+    expect(container).not.toContain(audio);
   });
 });

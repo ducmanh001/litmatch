@@ -53,6 +53,8 @@ export const RealtimeEvents = {
   PartyMemberLeft: 'party.member.left',
   /** Host cấp/thu quyền speaker — grant SFU đã đổi xong ở server trước khi publish. */
   PartyRoleChanged: 'party.role.changed',
+  /** Host gửi lời mời speaker — chỉ fanout tới audience được mời. */
+  PartySpeakerInviteReceived: 'party.speaker.invite.received',
   /** Phòng đóng (host rời, hết member, sweeper) — client phải rời UI phòng. */
   PartyRoomClosed: 'party.room.closed',
   /**
@@ -161,6 +163,10 @@ export interface PartyRoleChangedEventData {
   roomId: string;
   userId: string;
   role: string;
+}
+
+export interface PartySpeakerInviteReceivedEventData {
+  roomId: string;
 }
 
 export interface PartyRoomClosedEventData {

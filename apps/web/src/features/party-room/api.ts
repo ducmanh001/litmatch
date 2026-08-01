@@ -16,7 +16,7 @@ export type PartyRole = PartyRoomMemberDto['role'];
 
 const ROOM_LIST_PAGE_LIMIT = 20;
 
-export const PARTY_ROOM_DETAIL_REFETCH_INTERVAL_MS = 15_000;
+export const PARTY_ROOM_DETAIL_REFETCH_INTERVAL_MS = 5_000;
 
 /** Host và speaker publish được — audience bị chặn ở tầng SFU, client phản ánh lại cho nhất quán. */
 export function canPublishRole(role: PartyRole | undefined): boolean {
@@ -120,10 +120,7 @@ export function useLeaveRoom(roomId: string) {
 export function useChangeRole(roomId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: {
-      userId: string;
-      role: 'speaker' | 'audience';
-    }) => {
+    mutationFn: async (input: { userId: string; role: 'audience' }) => {
       const res = await apiClient.POST(
         '/api/v1/party/rooms/{id}/members/{userId}/role',
         {
@@ -141,10 +138,66 @@ export function useChangeRole(roomId: string) {
   });
 }
 
+/** Host chỉ gửi lời mời; role vẫn audience cho tới khi target accept. */
+export function useInviteSpeaker(roomId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await apiClient.POST(
+        '/api/v1/party/rooms/{id}/members/{userId}/speaker-invite',
+        { params: { path: { id: roomId, userId } } },
+      );
+      return res.data?.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: partyRoomKeys.detail(roomId),
+      });
+    },
+  });
+}
+
+export function useAcceptSpeakerInvite(roomId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.POST(
+        '/api/v1/party/rooms/{id}/speaker-invite/accept',
+        { params: { path: { id: roomId } } },
+      );
+      return res.data?.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: partyRoomKeys.detail(roomId),
+      });
+    },
+  });
+}
+
+export function useDeclineSpeakerInvite(roomId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.POST(
+        '/api/v1/party/rooms/{id}/speaker-invite/decline',
+        { params: { path: { id: roomId } } },
+      );
+      return res.data?.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: partyRoomKeys.detail(roomId),
+      });
+    },
+  });
+}
+
 /** Catalog quà công khai — dùng chung cho mọi phòng, không phụ thuộc roomId. */
-export function useGiftCatalog() {
+export function useGiftCatalog(enabled = true) {
   return useQuery({
     queryKey: ['gifts', 'catalog'] as const,
+    enabled,
     queryFn: async () => {
       const res = await apiClient.GET('/api/v1/gifts');
       return res.data?.data ?? [];

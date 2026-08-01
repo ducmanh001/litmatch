@@ -3,11 +3,11 @@
 import { isApiError } from '@litmatch/api-client';
 
 import { FriendAvatar } from '../../friend-chat/components/friend-avatar';
-import { useChangeRole, useUserProfiles } from '../api';
+import { useChangeRole, useInviteSpeaker } from '../api';
 
 import type { PartyRoomMemberDto } from '../api';
 
-/** Chặn fan-out profile query không giới hạn — audience không có cap ở backend như speaker. */
+/** Giới hạn số dòng roster để một phòng rất đông không làm UI quá dài. */
 const MAX_AUDIENCE_LISTED = 20;
 
 function EmptySeat() {
@@ -46,24 +46,19 @@ export function MemberList({
   const host = members.find((m) => m.role === 'host');
   const speakers = members.filter((m) => m.role === 'speaker');
   const audience = members.filter((m) => m.role === 'audience');
-  // Chỉ host mới cần thấy từng khán giả (để mời lên nói) — non-host chỉ thấy số lượng.
-  const listedAudience = isHost ? audience.slice(0, MAX_AUDIENCE_LISTED) : [];
+  // Roster audience là trạng thái phòng, mọi member đều cần thấy. Chỉ host mới có action mời.
+  const listedAudience = audience.slice(0, MAX_AUDIENCE_LISTED);
   const emptySeatCount =
     speakerLimit !== undefined
-      ? Math.max(0, speakerLimit - 1 - speakers.length)
+      ? Math.max(0, speakerLimit - speakers.length)
       : 0;
 
-  const profileIds = [
-    host?.userId,
-    ...speakers.map((s) => s.userId),
-    ...listedAudience.map((a) => a.userId),
-  ].filter((id): id is string => id !== undefined);
-  const profiles = useUserProfiles(profileIds);
   const nicknameById = new Map(
-    profileIds.map((id, index) => [id, profiles[index]?.data?.nickname]),
+    members.map((member) => [member.userId, member.nickname]),
   );
 
   const changeRole = useChangeRole(roomId);
+  const inviteSpeaker = useInviteSpeaker(roomId);
   const message = isApiError(changeRole.error)
     ? changeRole.error.message
     : changeRole.error != null
@@ -135,7 +130,7 @@ export function MemberList({
         </div>
       )}
 
-      {isHost && audience.length > 0 ? (
+      {audience.length > 0 ? (
         <div className="space-y-2 rounded-2xl border border-black/5 bg-white p-3 dark:border-white/5 dark:bg-surf">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">
             Khán giả ({audience.length})
@@ -146,20 +141,32 @@ export function MemberList({
                 key={member.userId}
                 className="flex items-center justify-between text-sm"
               >
-                <span>{nicknameById.get(member.userId) ?? '…'}</span>
-                <button
-                  type="button"
-                  className="text-xs font-semibold text-irisl disabled:opacity-50"
-                  disabled={changeRole.isPending}
-                  onClick={() =>
-                    changeRole.mutate({
-                      userId: member.userId,
-                      role: 'speaker',
-                    })
-                  }
-                >
-                  Mời lên nói
-                </button>
+                <span className="flex min-w-0 items-center gap-2">
+                  {nicknameById.get(member.userId) !== undefined ? (
+                    <FriendAvatar
+                      userId={member.userId}
+                      nickname={nicknameById.get(member.userId) ?? ''}
+                      size={32}
+                    />
+                  ) : (
+                    <span className="h-8 w-8 shrink-0 rounded-full bg-slate-100 dark:bg-surf2" />
+                  )}
+                  <span className="truncate">
+                    {nicknameById.get(member.userId) ?? '…'}
+                  </span>
+                </span>
+                {isHost && (
+                  <button
+                    type="button"
+                    className="shrink-0 text-xs font-semibold text-irisl disabled:opacity-50"
+                    disabled={
+                      inviteSpeaker.isPending || member.speakerInvitePending
+                    }
+                    onClick={() => inviteSpeaker.mutate(member.userId)}
+                  >
+                    {member.speakerInvitePending ? 'Đã mời' : 'Mời lên nói'}
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -171,7 +178,7 @@ export function MemberList({
         </div>
       ) : (
         <p className="text-center text-sm text-slate-500 dark:text-slate-400">
-          {audience.length} khán giả
+          Không có khán giả
         </p>
       )}
 

@@ -1,9 +1,10 @@
 'use client';
 
-import { RoomEvent, Track } from 'livekit-client';
 import { useEffect, useRef } from 'react';
 
-import type { RemoteTrack, Room } from 'livekit-client';
+import { attachRemoteAudio } from '../../../shared/media/livekit';
+
+import type { Room } from 'livekit-client';
 
 /**
  * Attach/detach audio track của MỌI remote participant (cùng pattern với
@@ -15,21 +16,9 @@ export function PartyAudio({ room }: { room: Room }) {
 
   useEffect(() => {
     const container = containerRef.current;
-    const attach = (track: RemoteTrack) => {
-      if (track.kind !== Track.Kind.Audio) return;
-      const el = track.attach();
-      container?.appendChild(el);
-    };
-    const detach = (track: RemoteTrack) => {
-      track.detach().forEach((el) => el.remove());
-    };
-    room.on(RoomEvent.TrackSubscribed, attach);
-    room.on(RoomEvent.TrackUnsubscribed, detach);
-    return () => {
-      room.off(RoomEvent.TrackSubscribed, attach);
-      room.off(RoomEvent.TrackUnsubscribed, detach);
-    };
+    if (container === null) return undefined;
+    return attachRemoteAudio(room, container);
   }, [room]);
 
-  return <div ref={containerRef} className="hidden" />;
+  return <div ref={containerRef} className="sr-only" aria-hidden="true" />;
 }

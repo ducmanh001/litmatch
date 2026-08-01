@@ -1,5 +1,6 @@
 import { showToast } from '../../../shared/lib/toast-store';
 import { useCurrentUserId } from '../../../shared/auth/use-current-user-id';
+import { useT } from '../../../shared/i18n/catalog';
 import { Button } from '../../../shared/ui/button';
 import { Card } from '../../../shared/ui/card';
 import {
@@ -18,6 +19,7 @@ import type { AdminRolePermissionDto, AdminStaffDto } from '../api';
 import type { ReactNode } from 'react';
 
 export function PermissionsPage() {
+  const t = useT();
   const currentUserId = useCurrentUserId();
   const matrix = usePermissionMatrix();
   const staff = useStaff();
@@ -36,7 +38,11 @@ export function PermissionsPage() {
       {
         onSuccess: () =>
           showToast(
-            `Đã ${enabled ? 'bật' : 'tắt'} quyền "${permission.label}" cho ${role}`,
+            t('permissions.updated', {
+              action: enabled ? t('common.enabled') : t('common.disabled'),
+              permission: permission.label,
+              role,
+            }),
           ),
       },
     );
@@ -52,8 +58,11 @@ export function PermissionsPage() {
         onSuccess: () =>
           showToast(
             role === 'user'
-              ? `Đã thu hồi quyền quản trị của ${staffMember.nickname}`
-              : `Đã đổi vai trò của ${staffMember.nickname} thành ${role}`,
+              ? t('permissions.revoked', { nickname: staffMember.nickname })
+              : t('permissions.roleChanged', {
+                  nickname: staffMember.nickname,
+                  role,
+                }),
             role === 'user' ? 'warn' : undefined,
           ),
       },
@@ -65,14 +74,15 @@ export function PermissionsPage() {
       <Card>
         <div className="mb-1 flex items-center gap-2.5">
           <h3 className="text-[14.5px] font-extrabold">
-            Ma trận quyền theo vai trò
+            {t('permissions.matrix')}
           </h3>
         </div>
         <p className="pb-3.5 text-[11.5px] text-muted-foreground">
-          Mỗi ô là policy backend đang enforce thật. Quyền “Phân quyền admin”
-          của role admin luôn bật để không tự khóa control plane.
+          {t('permissions.matrixHint')}
         </p>
-        {matrix.isPending && <LoadingState label="Đang tải policy…" />}
+        {matrix.isPending && (
+          <LoadingState label={t('permissions.loadingPolicy')} />
+        )}
         {matrix.error !== null && <ErrorState error={matrix.error} />}
         {setPermission.error !== null && (
           <ErrorState error={setPermission.error} />
@@ -81,7 +91,9 @@ export function PermissionsPage() {
           <table className="responsive-table w-full border-collapse text-[13px]">
             <thead>
               <tr>
-                <HeaderCell align="left">Quyền</HeaderCell>
+                <HeaderCell align="left">
+                  {t('permissions.permission')}
+                </HeaderCell>
                 <HeaderCell>Moderator</HeaderCell>
                 <HeaderCell>Admin</HeaderCell>
               </tr>
@@ -90,7 +102,7 @@ export function PermissionsPage() {
               {permissions.map((permission) => (
                 <tr key={permission.permission}>
                   <td
-                    data-label="Quyền"
+                    data-label={t('permissions.permission')}
                     className="border-b border-border px-4 py-3"
                   >
                     {permission.label}
@@ -126,24 +138,26 @@ export function PermissionsPage() {
       <Card className="overflow-hidden p-0">
         <div className="px-[18px] pt-[18px]">
           <h3 className="text-[14.5px] font-extrabold">
-            Danh sách quản trị viên
+            {t('permissions.staffList')}
           </h3>
         </div>
-        {staff.isPending && <LoadingState label="Đang tải staff…" />}
+        {staff.isPending && (
+          <LoadingState label={t('permissions.loadingStaff')} />
+        )}
         {staff.error !== null && <ErrorState error={staff.error} />}
         {setStaffRole.error !== null && (
           <ErrorState error={setStaffRole.error} />
         )}
         {staff.data !== undefined && staffItems.length === 0 && (
-          <EmptyState title="Chưa có staff" />
+          <EmptyState title={t('permissions.emptyStaff')} />
         )}
         {staffItems.length > 0 && (
           <div className="overflow-x-auto">
             <table className="responsive-table mt-3.5 w-full border-collapse text-[13px] md:min-w-[420px]">
               <thead className="border-b border-border">
                 <tr>
-                  <HeaderCell align="left">Nickname</HeaderCell>
-                  <HeaderCell align="left">Role</HeaderCell>
+                  <HeaderCell align="left">{t('users.nickname')}</HeaderCell>
+                  <HeaderCell align="left">{t('users.role')}</HeaderCell>
                   <th className="px-[18px] py-3" />
                 </tr>
               </thead>
@@ -155,11 +169,17 @@ export function PermissionsPage() {
                       key={staffMember.id}
                       className="border-b border-border last:border-0 hover:bg-muted"
                     >
-                      <td data-label="Nickname" className="px-[18px] py-[13px]">
+                      <td
+                        data-label={t('users.nickname')}
+                        className="px-[18px] py-[13px]"
+                      >
                         {staffMember.nickname}
-                        {isSelf ? ' (bạn)' : ''}
+                        {isSelf ? ` ${t('permissions.self')}` : ''}
                       </td>
-                      <td data-label="Role" className="px-[18px] py-[13px]">
+                      <td
+                        data-label={t('users.role')}
+                        className="px-[18px] py-[13px]"
+                      >
                         <select
                           value={staffMember.role}
                           disabled={isSelf || setStaffRole.isPending}
@@ -169,7 +189,9 @@ export function PermissionsPage() {
                               event.target.value as 'moderator' | 'admin',
                             )
                           }
-                          aria-label={`Vai trò của ${staffMember.nickname}`}
+                          aria-label={t('permissions.roleOf', {
+                            nickname: staffMember.nickname,
+                          })}
                           className="h-8 rounded-lg border border-border bg-muted px-2.5 text-[12.5px] focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50"
                         >
                           <option value="moderator">moderator</option>
@@ -186,7 +208,7 @@ export function PermissionsPage() {
                           disabled={isSelf || setStaffRole.isPending}
                           onClick={() => changeStaffRole(staffMember, 'user')}
                         >
-                          Thu hồi quyền
+                          {t('permissions.revoke')}
                         </Button>
                       </td>
                     </tr>

@@ -1,10 +1,12 @@
 import { ShieldOff } from 'lucide-react';
 
 import { apiClient, tokenStore } from '../api/client';
+import { useT } from '../i18n/catalog';
 import { Button } from '../ui/button';
 
 /** Tài khoản end-user (role `user`) đăng nhập nhầm vào admin — UX only, backend đã tự chặn thật. */
 export function NotStaffState() {
+  const t = useT();
   const logout = async (): Promise<void> => {
     const csrfToken = tokenStore.getCsrfToken();
     tokenStore.setSession(null);
@@ -24,12 +26,10 @@ export function NotStaffState() {
       className="flex min-h-screen flex-col items-center justify-center gap-3 text-center"
     >
       <ShieldOff className="size-8 text-destructive" aria-hidden />
-      <p className="font-medium">Tài khoản này không có quyền truy cập admin</p>
-      <p className="text-sm text-muted-foreground">
-        Đăng nhập bằng tài khoản moderator/admin để tiếp tục.
-      </p>
+      <p className="font-medium">{t('auth.notStaff')}</p>
+      <p className="text-sm text-muted-foreground">{t('auth.notStaffHint')}</p>
       <Button variant="ghost" onClick={() => void logout()}>
-        Đăng xuất
+        {t('auth.signOut')}
       </Button>
     </div>
   );

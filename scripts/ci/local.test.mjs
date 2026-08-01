@@ -71,6 +71,9 @@ test('aggregate gates own stage watchdogs instead of a blanket 45-second timeout
   assert.match(agentVerify, /run-stage\.mjs/u);
   assert.match(agentVerify, /AGENT_VERIFY_STAGE_TIMEOUT_MS/u);
   assert.match(agentVerify, /NX_TUI:\s*'false'/u);
+  assert.match(agentVerify, /NX_INTERACTIVE:\s*'false'/u);
+  assert.match(agentVerify, /NX_NATIVE_COMMAND_RUNNER:\s*'false'/u);
+  assert.match(agentVerify, /CI:\s*'true'/u);
   assert.match(agentVerify, /--outputStyle=static/u);
   assert.match(
     packageJson,
@@ -99,6 +102,10 @@ test('commit owns formatting and staged guard checks; push owns the complete pre
 
   assert.match(commitHook, /lint-staged[\s\S]*agent:check -- --staged/u);
   assert.match(pushHook, /pnpm ci:preflight/u);
+  assert.match(pushHook, /export NX_TUI=false/u);
+  assert.match(pushHook, /export NX_DAEMON=false/u);
+  assert.match(pushHook, /export NX_TASKS_RUNNER_DYNAMIC_OUTPUT=false/u);
+  assert.match(pushHook, /export TERM=dumb/u);
   assert.doesNotMatch(pushHook, /ci:local:clean/u);
   assert.match(commitHook, /LITMATCH_CI_BYPASS/u);
   assert.match(pushHook, /LITMATCH_CI_BYPASS/u);

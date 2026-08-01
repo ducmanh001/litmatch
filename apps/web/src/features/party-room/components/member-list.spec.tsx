@@ -8,10 +8,34 @@ import { apiClient } from '../../../shared/api/client';
 import type { PartyRoomMemberDto } from '../api';
 
 const members: PartyRoomMemberDto[] = [
-  { userId: 'host-1', role: 'host', joinedAt: new Date().toISOString() },
-  { userId: 'speaker-1', role: 'speaker', joinedAt: new Date().toISOString() },
-  { userId: 'aud-1', role: 'audience', joinedAt: new Date().toISOString() },
-  { userId: 'aud-2', role: 'audience', joinedAt: new Date().toISOString() },
+  {
+    userId: 'host-1',
+    role: 'host',
+    nickname: 'Nick-host-1',
+    joinedAt: new Date().toISOString(),
+    speakerInvitePending: false,
+  },
+  {
+    userId: 'speaker-1',
+    role: 'speaker',
+    nickname: 'Nick-speaker-1',
+    joinedAt: new Date().toISOString(),
+    speakerInvitePending: false,
+  },
+  {
+    userId: 'aud-1',
+    role: 'audience',
+    nickname: 'Nick-aud-1',
+    joinedAt: new Date().toISOString(),
+    speakerInvitePending: false,
+  },
+  {
+    userId: 'aud-2',
+    role: 'audience',
+    nickname: 'Nick-aud-2',
+    joinedAt: new Date().toISOString(),
+    speakerInvitePending: false,
+  },
 ];
 
 function renderMemberList(isHost: boolean) {
@@ -36,10 +60,11 @@ function renderMemberList(isHost: boolean) {
 describe('MemberList', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('hiển thị đếm khán giả, không liệt kê từng người', async () => {
+  it('mọi member đều thấy roster khán giả ở bên dưới', async () => {
     renderMemberList(false);
-    expect(await screen.findByText('2 khán giả')).toBeVisible();
-    expect(screen.queryByText('Nick-aud-1')).not.toBeInTheDocument();
+    expect(await screen.findByText('Khán giả (2)')).toBeVisible();
+    expect(await screen.findByText('Nick-aud-1')).toBeVisible();
+    expect(await screen.findByText('Nick-aud-2')).toBeVisible();
   });
 
   it('host thấy nút chuyển speaker xuống khán giả, non-host thì không', async () => {
@@ -68,7 +93,7 @@ describe('MemberList', () => {
 
   it('non-host không thấy nút mời lên nói dù nhìn thấy khán giả', async () => {
     renderMemberList(false);
-    await screen.findByText('2 khán giả');
+    await screen.findByText('Nick-aud-1');
     expect(
       screen.queryByRole('button', { name: 'Mời lên nói' }),
     ).not.toBeInTheDocument();

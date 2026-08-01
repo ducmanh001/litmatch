@@ -21,6 +21,7 @@ export function usePartyRoomMedia(roomId: string, canPublish: boolean) {
   const joinRoom = useJoinRoom(roomId);
   const [room, setRoom] = useState<Room | null>(null);
   const [roomDisconnected, setRoomDisconnected] = useState(false);
+  const [microphoneEnabled, setMicrophoneEnabledState] = useState(false);
   // `joinRoom.error` chỉ bắt lỗi REST join — kết nối LiveKit/publish mic chạy SAU khi mutation
   // đã resolve (trong onSuccess), nên lỗi ở đó (vd mic bị từ chối quyền) phải tự bắt và giữ ở
   // đây, không thì rơi ra ngoài React Query thành unhandled rejection và UI im lặng mãi mãi.
@@ -30,8 +31,36 @@ export function usePartyRoomMedia(roomId: string, canPublish: boolean) {
   // dựng lại room sau khi owner đã rời hoặc ghi đè một lần reconnect mới hơn.
   const generationRef = useRef(0);
   const disposedRef = useRef(false);
+  const microphoneRequestRef = useRef(0);
 
   const { mutate: joinRoomMutate } = joinRoom;
+
+  const setMicrophoneEnabled = useCallback(async (enabled: boolean) => {
+    const current = roomRef.current;
+    if (current === null) return;
+    const request = ++microphoneRequestRef.current;
+    try {
+      await current.localParticipant.setMicrophoneEnabled(enabled);
+      if (
+        current !== roomRef.current ||
+        request !== microphoneRequestRef.current
+      ) {
+        return;
+      }
+      setMicrophoneEnabledState(enabled);
+      setMediaError(null);
+    } catch (err) {
+      if (
+        current === roomRef.current &&
+        request === microphoneRequestRef.current
+      ) {
+        setMicrophoneEnabledState(false);
+        setMediaError(err);
+      }
+      throw err;
+    }
+  }, []);
+
   const connect = useCallback(() => {
     disposedRef.current = false;
     const generation = ++generationRef.current;
@@ -70,6 +99,7 @@ export function usePartyRoomMedia(roomId: string, canPublish: boolean) {
               }
             });
             roomRef.current = connected;
+            setMicrophoneEnabledState(false);
             setRoom(connected);
           } catch (err) {
             if (connected !== null) {
@@ -91,28 +121,28 @@ export function usePartyRoomMedia(roomId: string, canPublish: boolean) {
     // Audience (canPublish=false) chỉ tắt mic — không cần quyền, không lỗi. Speaker/host bật
     // mic thật sự cần quyền trình duyệt, có thể bị từ chối bất cứ lúc nào (đổi role giữa
     // chừng) — phải bắt lỗi ở đây, room vẫn sống (chỉ mic câm), không rớt kết nối cả phòng.
-    room.localParticipant
-      .setMicrophoneEnabled(canPublish)
-      .catch((err: unknown) => {
-        if (
-          !cancelled &&
-          !disposedRef.current &&
-          generation === generationRef.current &&
-          roomRef.current === room
-        ) {
-          setMediaError(err);
-        }
-      });
+    void setMicrophoneEnabled(canPublish).catch((err: unknown) => {
+      if (
+        !cancelled &&
+        !disposedRef.current &&
+        generation === generationRef.current &&
+        roomRef.current === room
+      ) {
+        setMediaError(err);
+      }
+    });
 
     return () => {
       cancelled = true;
     };
-  }, [room, canPublish]);
+  }, [room, canPublish, setMicrophoneEnabled]);
 
   useEffect(
     () => () => {
       disposedRef.current = true;
       generationRef.current += 1;
+      microphoneRequestRef.current += 1;
+      setMicrophoneEnabledState(false);
       const current = roomRef.current;
       roomRef.current = null;
       if (current !== null) void disconnectMediaRoom(current);
@@ -124,9 +154,11 @@ export function usePartyRoomMedia(roomId: string, canPublish: boolean) {
   // sang view đóng, nên cleanup-on-unmount ở trên không tự chạy trong trường hợp đó.
   const disconnect = useCallback(() => {
     generationRef.current += 1;
+    microphoneRequestRef.current += 1;
     const current = roomRef.current;
     roomRef.current = null;
     if (current !== null) void disconnectMediaRoom(current);
+    setMicrophoneEnabledState(false);
     setRoom(null);
   }, []);
 
@@ -135,6 +167,8 @@ export function usePartyRoomMedia(roomId: string, canPublish: boolean) {
     disconnect,
     room,
     roomDisconnected,
+    microphoneEnabled,
+    setMicrophoneEnabled,
     isConnecting: joinRoom.isPending,
     error: joinRoom.error ?? mediaError,
   };

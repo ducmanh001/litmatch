@@ -18,6 +18,10 @@ export const PartyRoomErrors = {
   CANNOT_CHANGE_HOST_ROLE: 'PARTY_MEMBER_CANNOT_CHANGE_HOST_ROLE',
   /** Đã chạm speaker_limit của phòng (giới hạn cứng — docs/03 § 3.8.A). */
   SPEAKER_LIMIT_REACHED: 'PARTY_SPEAKER_LIMIT_REACHED',
+  /** Target chưa đồng ý lời mời lên speaker. */
+  SPEAKER_INVITE_NOT_PENDING: 'PARTY_SPEAKER_INVITE_NOT_PENDING',
+  /** Target đã là speaker/host hoặc không thể nhận lời mời. */
+  SPEAKER_INVITE_TARGET_INVALID: 'PARTY_SPEAKER_INVITE_TARGET_INVALID',
   /** Title vượt PARTY_TITLE_MAX_LENGTH. */
   TITLE_TOO_LONG: 'PARTY_ROOM_TITLE_TOO_LONG',
   /** Webhook LiveKit không verify được chữ ký. */
