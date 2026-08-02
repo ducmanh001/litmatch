@@ -2,6 +2,7 @@ import { defineCloudflareConfig } from '@opennextjs/cloudflare';
 import cloudflareNode from '@opennextjs/aws/overrides/wrappers/cloudflare-node.js';
 import type { ResolveConfigFn } from '@microlabs/otel-cf-workers';
 import type { WrapperHandler } from '@opennextjs/aws/types/overrides.js';
+import type { Wrapper } from '@opennextjs/aws/types/overrides.js';
 
 interface WorkerEnv extends Record<string, unknown> {
   OTEL_EXPORTER_OTLP_ENDPOINT?: string;
@@ -56,6 +57,12 @@ const otelCloudflareWrapper: WrapperHandler = async (handler, converter) => {
   return instrumentedHandler.fetch;
 };
 
+const otelCloudflareWrapperOverride = (): Wrapper => ({
+  name: 'otel-cloudflare-node',
+  wrapper: otelCloudflareWrapper,
+  supportStreaming: true,
+});
+
 const cloudflareConfig = defineCloudflareConfig();
 
 export default {
@@ -76,7 +83,8 @@ export default {
     override: {
       ...cloudflareConfig.default.override,
       // Keep OpenNext's streaming/abort behavior and add OTel at the outer Worker boundary.
-      wrapper: otelCloudflareWrapper,
+      // OpenNext resolves this lazy override and expects the returned { name, wrapper } object.
+      wrapper: otelCloudflareWrapperOverride,
     },
   },
 };
