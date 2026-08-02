@@ -3,6 +3,8 @@ import {
   resolveMetricsHeaders,
   resolveLogsEndpoint,
   resolveLogsHeaders,
+  resolveTraceEndpoint,
+  resolveTraceHeaders,
   startTracing,
 } from './tracing';
 
@@ -16,6 +18,7 @@ describe('startTracing', () => {
     delete process.env['OTEL_EXPORTER_OTLP_METRICS_ENDPOINT'];
     delete process.env['GRAFANA_CLOUD_PROMETHEUS_URL'];
     delete process.env['GRAFANA_CLOUD_PROMETHEUS_USER'];
+    delete process.env['GRAFANA_CLOUD_TEMPO_USER'];
     delete process.env['GRAFANA_CLOUD_LOKI_URL'];
     delete process.env['GRAFANA_CLOUD_LOKI_USER'];
     delete process.env['GRAFANA_CLOUD_API_TOKEN'];
@@ -43,6 +46,35 @@ describe('startTracing', () => {
     const sdk = startTracing({ serviceName: 'signaling-gateway' });
     expect(sdk).not.toBeNull();
     await sdk?.shutdown();
+  });
+
+  it('chuẩn hoá trace endpoint về /v1/traces và ưu tiên endpoint riêng của trace', () => {
+    process.env['OTEL_EXPORTER_OTLP_ENDPOINT'] =
+      'https://otlp.example.net/otlp/v1/metrics';
+    process.env['OTEL_EXPORTER_OTLP_TRACES_ENDPOINT'] =
+      'https://tempo.example.net/otlp/';
+
+    expect(resolveTraceEndpoint()).toBe(
+      'https://tempo.example.net/otlp/v1/traces',
+    );
+  });
+
+  it('dựng trace Authorization Basic từ Tempo user, fallback sang Prometheus user', () => {
+    process.env['GRAFANA_CLOUD_PROMETHEUS_USER'] = 'prom-user';
+    process.env['GRAFANA_CLOUD_API_TOKEN'] = 'secret-token';
+    process.env['GRAFANA_CLOUD_TEMPO_USER'] = '';
+    expect(resolveTraceHeaders()).toEqual({
+      Authorization: `Basic ${Buffer.from('prom-user:secret-token').toString(
+        'base64',
+      )}`,
+    });
+
+    process.env['GRAFANA_CLOUD_TEMPO_USER'] = 'tempo-user';
+    expect(resolveTraceHeaders()).toEqual({
+      Authorization: `Basic ${Buffer.from('tempo-user:secret-token').toString(
+        'base64',
+      )}`,
+    });
   });
 
   it('GRAFANA_CLOUD_PROMETHEUS_URL dạng OTLP base được nối /v1/metrics', async () => {
@@ -104,9 +136,9 @@ describe('startTracing', () => {
   it('fail boot khi profile bắt buộc telemetry nhưng pipeline chưa đủ', () => {
     process.env['OBSERVABILITY_REQUIRED'] = 'true';
 
-    expect(() => startTracing({ serviceName: 'core-api' })).toThrow(
-      'Production telemetry is required but incomplete',
-    );
+    const boot = () => startTracing({ serviceName: 'core-api' });
+    expect(boot).toThrow('Production telemetry is required but incomplete');
+    expect(boot).toThrow('trace user');
   });
 
   it('profile bắt buộc telemetry chỉ boot khi có trace, metrics và credential', async () => {

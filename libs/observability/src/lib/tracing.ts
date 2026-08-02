@@ -8,6 +8,10 @@ import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { BatchLogRecordProcessor } from '@opentelemetry/sdk-logs';
+import {
+  AlwaysOnSampler,
+  ParentBasedSampler,
+} from '@opentelemetry/sdk-trace-base';
 
 import type {
   PushMetricExporter,
@@ -39,9 +43,7 @@ export interface StartTracingInput {
  * `GRAFANA_CLOUD_PROMETHEUS_URL`.
  */
 export function startTracing(input: StartTracingInput): NodeSDK | null {
-  const traceEndpoint =
-    process.env['OTEL_EXPORTER_OTLP_ENDPOINT'] ??
-    process.env['OTEL_EXPORTER_OTLP_TRACES_ENDPOINT'];
+  const traceEndpoint = resolveTraceEndpoint();
   const metricsEndpoint = resolveMetricsEndpoint();
   const logsEndpoint = resolveLogsEndpoint();
   assertRequiredTelemetry(traceEndpoint, metricsEndpoint, logsEndpoint);
@@ -89,7 +91,15 @@ export function startTracing(input: StartTracingInput): NodeSDK | null {
     resource: resourceFromAttributes({
       [ATTR_SERVICE_NAME]: input.serviceName,
     }),
-    ...(traceEndpoint ? { traceExporter: new OTLPTraceExporter() } : {}),
+    ...(traceEndpoint
+      ? {
+          traceExporter: new OTLPTraceExporter({
+            url: traceEndpoint,
+            headers: resolveTraceHeaders(),
+          }),
+        }
+      : {}),
+    sampler: new ParentBasedSampler({ root: new AlwaysOnSampler() }),
     metricReaders: metricReader ? [metricReader] : [],
     logRecordProcessors: logRecordProcessor ? [logRecordProcessor] : [],
     instrumentations: [
@@ -101,17 +111,53 @@ export function startTracing(input: StartTracingInput): NodeSDK | null {
   });
   sdk.start();
 
-  const shutdown = (): void => {
-    sdk
-      .shutdown()
-      .catch((err: unknown) =>
-        console.error(`OpenTelemetry shutdown lỗi: ${String(err)}`),
-      );
+  let shutdownPromise: Promise<void> | undefined;
+  const shutdown = async (): Promise<void> => {
+    shutdownPromise ??= sdk.shutdown().catch((err: unknown) => {
+      console.error(`OpenTelemetry shutdown lỗi: ${String(err)}`);
+    });
+    await shutdownPromise;
   };
   process.once('SIGTERM', shutdown);
   process.once('SIGINT', shutdown);
 
   return sdk;
+}
+
+/** Resolve the OTLP HTTP traces endpoint and ensure it ends with `/v1/traces`. */
+export function resolveTraceEndpoint(): string | undefined {
+  const configured =
+    process.env['OTEL_EXPORTER_OTLP_TRACES_ENDPOINT'] ||
+    process.env['OTEL_EXPORTER_OTLP_ENDPOINT'];
+  if (!configured) return undefined;
+
+  try {
+    const url = new URL(configured);
+    const pathname = url.pathname
+      .replace(/\/+$/u, '')
+      .replace(/\/v1\/(?:traces|metrics|logs)$/u, '');
+    url.pathname = `${pathname}/v1/traces`;
+    return url.toString();
+  } catch (err) {
+    console.error(
+      `[traces] OTLP exporter disabled: URL không hợp lệ (${String(err)})`,
+    );
+    return undefined;
+  }
+}
+
+export function resolveTraceHeaders(): Record<string, string> {
+  const username =
+    process.env['GRAFANA_CLOUD_TEMPO_USER'] ||
+    process.env['GRAFANA_CLOUD_PROMETHEUS_USER'];
+  const token = process.env['GRAFANA_CLOUD_API_TOKEN'];
+  if (!username || !token) return {};
+
+  return {
+    Authorization: `Basic ${Buffer.from(`${username}:${token}`).toString(
+      'base64',
+    )}`,
+  };
 }
 
 const DEFAULT_METRICS_EXPORT_INTERVAL_MS = 15_000;
@@ -134,6 +180,11 @@ function assertRequiredTelemetry(
   if (!logsEndpoint) missing.push('Loki OTLP logs endpoint');
   if (!process.env['GRAFANA_CLOUD_PROMETHEUS_USER'])
     missing.push('metrics user');
+  if (
+    !process.env['GRAFANA_CLOUD_TEMPO_USER'] &&
+    !process.env['GRAFANA_CLOUD_PROMETHEUS_USER']
+  )
+    missing.push('trace user');
   if (!process.env['GRAFANA_CLOUD_LOKI_USER']) missing.push('logs user');
   if (!process.env['GRAFANA_CLOUD_API_TOKEN']) missing.push('metrics token');
 
