@@ -1,3 +1,5 @@
+import { trace } from '@opentelemetry/api';
+
 import { buildPinoHttpOptions } from './build-logger-options';
 import { REDACT_PATHS } from './redact';
 
@@ -35,5 +37,25 @@ describe('buildPinoHttpOptions', () => {
     const generated = opts.genReqId({ headers: {} } as never, res as never);
     expect(generated).toMatch(/[0-9a-f-]{36}/);
     expect(resHeaders['x-request-id']).toBe(generated);
+  });
+
+  it('gắn trace_id và span_id của active OpenTelemetry span vào log fields', () => {
+    const spanContext = {
+      traceId: '1234567890abcdef1234567890abcdef',
+      spanId: '1234567890abcdef',
+      traceFlags: 1,
+      isRemote: false,
+    };
+    const activeSpan = jest
+      .spyOn(trace, 'getActiveSpan')
+      .mockReturnValue({ spanContext: () => spanContext } as never);
+
+    const opts = buildPinoHttpOptions({ level: 'info' });
+
+    expect(opts.mixin()).toEqual({
+      trace_id: spanContext.traceId,
+      span_id: spanContext.spanId,
+    });
+    activeSpan.mockRestore();
   });
 });

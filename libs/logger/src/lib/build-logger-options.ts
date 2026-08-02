@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+import { isSpanContextValid, trace } from '@opentelemetry/api';
+
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import { REDACT_PATHS } from './redact';
@@ -24,6 +26,12 @@ export function buildPinoHttpOptions(input: BuildLoggerOptionsInput) {
     redact: {
       paths: [...REDACT_PATHS, ...(input.extraRedactPaths ?? [])],
       censor: '[REDACTED]',
+    },
+    mixin: () => {
+      const spanContext = trace.getActiveSpan()?.spanContext();
+      return spanContext && isSpanContextValid(spanContext)
+        ? { trace_id: spanContext.traceId, span_id: spanContext.spanId }
+        : {};
     },
     genReqId: (req: IncomingMessage, res: ServerResponse) => {
       const fromHeader = req.headers['x-request-id'];
