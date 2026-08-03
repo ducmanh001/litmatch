@@ -11,18 +11,27 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle, minutes } from '@nestjs/throttler';
+import {
+  ApiIdempotencyKeyHeader,
+  IdempotencyKey,
+} from '../../common/decorators/idempotency-key.decorator';
 
 import { PartyRoomService } from './party-room.service';
 import {
   ChangePartyRoleDto,
+  CreatePartyRoomCommentDto,
   CreatePartyRoomDto,
   JoinPartyRoomDto,
+  ListPartyRoomCommentsQueryDto,
   ListPartyRoomsQueryDto,
+  PartyRoomCommentDto,
+  PartyRoomCommentsPageDto,
   PartyRoomDetailDto,
   PartyRoomListDto,
   PartyRoomMemberDto,
@@ -82,6 +91,40 @@ export class PartyRoomController {
       members,
       user.userId,
       new Map(profiles.map((profile) => [profile.id, profile.nickname])),
+    );
+  }
+
+  @Get(':id/comments')
+  @ApiOperation({ summary: 'Lấy comment gần nhất trong Party Room' })
+  @ApiOkResponse({ type: PartyRoomCommentsPageDto })
+  async listComments(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: ListPartyRoomCommentsQueryDto,
+  ): Promise<PartyRoomCommentsPageDto> {
+    return PartyRoomCommentsPageDto.from(
+      await this.partyRoomService.listComments(
+        user,
+        id,
+        query.limit,
+        query.cursor,
+      ),
+    );
+  }
+
+  @Post(':id/comments')
+  @Throttle({ default: { limit: 60, ttl: minutes(1) } })
+  @ApiIdempotencyKeyHeader()
+  @ApiOperation({ summary: 'Gửi comment realtime trong Party Room' })
+  @ApiCreatedResponse({ type: PartyRoomCommentDto })
+  async createComment(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: CreatePartyRoomCommentDto,
+    @IdempotencyKey() idempotencyKey: string,
+  ): Promise<PartyRoomCommentDto> {
+    return PartyRoomCommentDto.from(
+      await this.partyRoomService.sendComment(user, id, body, idempotencyKey),
     );
   }
 

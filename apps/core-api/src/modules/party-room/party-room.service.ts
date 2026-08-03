@@ -11,6 +11,7 @@ import {
   RealtimeEvents,
   buildCursorPage,
   decodeCursor,
+  isValidSeqCursor,
 } from '@litmatch/common-dtos';
 import { DomainException } from '@litmatch/common-exceptions';
 import { isUUID } from 'class-validator';
@@ -28,7 +29,9 @@ import { publishRealtimeEvent } from '../../common/realtime/publish-realtime';
 import { UserService } from '../user';
 import {
   PARTY_ROOM_NAME_PREFIX,
+  UQ_PARTY_ROOM_COMMENTS_IDEMPOTENCY,
   UQ_PARTY_MEMBERS_ACTIVE_USER,
+  partyCommentIdempotencyKey,
   partyRoomName,
 } from './party-room.constants';
 import { PartyRoomErrors } from './party-room.errors';
@@ -42,20 +45,26 @@ import {
   PartyRole,
   PartyRoomMember,
 } from './entities/party-room-member.entity';
+import { PartyRoomComment } from './entities/party-room-comment.entity';
 import { PartyLivekitRoomPort } from './ports/livekit-party-room';
 import { PARTY_REDIS } from './redis/party-redis.provider';
 
 import type {
+  CursorPage,
   CursorPageMeta,
+  PartyCommentCreatedEventData,
   PartyHostDisconnectedEventData,
   PartyHostReconnectedEventData,
+  PartyMemberDisconnectedEventData,
   PartyMemberJoinedEventData,
   PartyMemberLeftEventData,
+  PartyMemberReconnectedEventData,
   PartyRoleChangedEventData,
   PartySpeakerInviteReceivedEventData,
   PartyRoomClosedEventData,
   RealtimeEnvelope,
 } from '@litmatch/common-dtos';
+import type { CreatePartyRoomCommentDto } from './dto/party-room.dtos';
 import type Redis from 'ioredis';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import type { CoreApiEnv } from '../../config/env.validation';
@@ -107,6 +116,10 @@ export class PartyRoomService {
     private readonly userService: UserService,
     @Inject(PARTY_REDIS) private readonly redis: Redis,
   ) {}
+
+  private get commentRepo(): Repository<PartyRoomComment> {
+    return this.dataSource.getRepository(PartyRoomComment);
+  }
 
   /**
    * Tạo phòng + membership host ATOMIC (không có phòng vô chủ ngay từ lúc sinh), rồi tạo
@@ -217,7 +230,7 @@ export class PartyRoomService {
     user: AuthenticatedUser,
     roomId: string,
   ): Promise<JoinPartyRoomResult> {
-    const { room, membership, isNewJoin, hostReconnected } =
+    const { room, membership, isNewJoin, hostReconnected, memberReconnected } =
       await this.dataSource.transaction(async (manager) => {
         const lockedRoom = await this.lockActiveRoom(manager, roomId);
 
@@ -233,15 +246,23 @@ export class PartyRoomService {
           const hostReconnected =
             existing.role === PartyRole.Host &&
             lockedRoom.hostDisconnectedAt !== null;
+          const memberReconnected =
+            existing.role !== PartyRole.Host &&
+            existing.disconnectedAt !== null;
           if (hostReconnected) {
             lockedRoom.hostDisconnectedAt = null;
             await manager.save(lockedRoom);
+          }
+          if (memberReconnected) {
+            existing.disconnectedAt = null;
+            await manager.save(existing);
           }
           return {
             room: lockedRoom,
             membership: existing,
             isNewJoin: false,
             hostReconnected,
+            memberReconnected,
           };
         }
 
@@ -274,6 +295,7 @@ export class PartyRoomService {
             membership: member,
             isNewJoin: true,
             hostReconnected: false,
+            memberReconnected: false,
           };
         } catch (err) {
           if (
@@ -308,6 +330,15 @@ export class PartyRoomService {
       await this.publishToRoomMembers(roomId, {
         event: RealtimeEvents.PartyHostReconnected,
         data: { roomId } satisfies PartyHostReconnectedEventData,
+      });
+    }
+    if (memberReconnected) {
+      await this.publishToRoomMembers(roomId, {
+        event: RealtimeEvents.PartyMemberReconnected,
+        data: {
+          roomId,
+          userId: user.userId,
+        } satisfies PartyMemberReconnectedEventData,
       });
     }
 
@@ -354,6 +385,7 @@ export class PartyRoomService {
         return { wasMember: true, isHost: true };
       }
       membership.leftAt = new Date();
+      membership.disconnectedAt = null;
       await manager.save(membership);
       return { wasMember: true, isHost: false };
     });
@@ -364,6 +396,13 @@ export class PartyRoomService {
     }
     if (!left.wasMember) return;
 
+    // Fanout ngay sau commit để roster của các member còn lại cập nhật tức thì; lệnh kick SFU
+    // là cleanup best-effort và không được phép giữ event realtime phía sau một media timeout.
+    await this.publishToRoomMembers(roomId, {
+      event: RealtimeEvents.PartyMemberLeft,
+      data: { roomId, userId: user.userId } satisfies PartyMemberLeftEventData,
+    });
+
     // DB đã rời mà SFU còn nối là lệch state (docs/10 § Party Room) — kick best-effort
     await this.livekit
       .removeParticipant(partyRoomName(roomId), user.userId)
@@ -372,10 +411,6 @@ export class PartyRoomService {
           `removeParticipant ${user.userId} bỏ qua: ${err instanceof Error ? err.message : String(err)}`,
         ),
       );
-    await this.publishToRoomMembers(roomId, {
-      event: RealtimeEvents.PartyMemberLeft,
-      data: { roomId, userId: user.userId } satisfies PartyMemberLeftEventData,
-    });
   }
 
   /** Host chỉ thu quyền speaker; cấp quyền đi qua invite → target accept. */
@@ -706,6 +741,176 @@ export class PartyRoomService {
     return this.roomRepo.countBy({ status: PartyRoomStatus.Active });
   }
 
+  /**
+   * Gửi comment trong phòng — membership được kiểm tra dưới lock phòng để REST leave và send
+   * đồng thời có thứ tự xác định. Insert append-only + unique idempotency ở DB; event chỉ bắn sau
+   * transaction commit và replay không bắn lại.
+   */
+  async sendComment(
+    user: AuthenticatedUser,
+    roomId: string,
+    dto: CreatePartyRoomCommentDto,
+    idempotencyKey: string,
+  ): Promise<PartyRoomComment> {
+    const content = dto.content.trim();
+    const maxLength = this.config.getOrThrow('PARTY_COMMENT_MAX_LENGTH', {
+      infer: true,
+    });
+    if (content.length === 0 || content.length > maxLength) {
+      throw new DomainException(
+        PartyRoomErrors.COMMENT_INVALID,
+        `Bình luận phải từ 1 tới ${maxLength} ký tự`,
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        { maxLength },
+      );
+    }
+
+    const prefixedKey = partyCommentIdempotencyKey(
+      user.userId,
+      roomId,
+      idempotencyKey,
+    );
+    try {
+      const comment = await this.dataSource.transaction(async (manager) => {
+        await this.lockActiveRoom(manager, roomId);
+        const membership = await manager.findOneBy(PartyRoomMember, {
+          roomId,
+          userId: user.userId,
+          leftAt: IsNull(),
+          disconnectedAt: IsNull(),
+        });
+        if (!membership) {
+          throw new DomainException(
+            PartyRoomErrors.NOT_A_MEMBER,
+            'Bạn không ở trong phòng',
+            HttpStatus.FORBIDDEN,
+          );
+        }
+        return manager.save(
+          manager.create(PartyRoomComment, {
+            roomId,
+            senderUserId: user.userId,
+            content,
+            idempotencyKey: prefixedKey,
+          }),
+        );
+      });
+
+      await this.publishToRoomMembers(roomId, {
+        event: RealtimeEvents.PartyCommentCreated,
+        data: {
+          roomId,
+          commentId: comment.id,
+          senderUserId: comment.senderUserId,
+          content: comment.content,
+          sentAt: comment.createdAt.toISOString(),
+        } satisfies PartyCommentCreatedEventData,
+      });
+      return comment;
+    } catch (err) {
+      if (
+        !isUniqueViolation(err) ||
+        !violatedConstraint(err, UQ_PARTY_ROOM_COMMENTS_IDEMPOTENCY)
+      ) {
+        throw err;
+      }
+      const existing = await this.commentRepo.findOneBy({
+        idempotencyKey: prefixedKey,
+      });
+      if (
+        existing &&
+        existing.roomId === roomId &&
+        existing.senderUserId === user.userId &&
+        existing.content === content
+      ) {
+        return existing;
+      }
+      throw new DomainException(
+        PartyRoomErrors.COMMENT_IDEMPOTENCY_CONFLICT,
+        'Idempotency-Key đã dùng cho một bình luận khác',
+        HttpStatus.CONFLICT,
+      );
+    }
+  }
+
+  /** List comment mới nhất trước; cursor trỏ tới seq cũ nhất của trang trước. */
+  async listComments(
+    user: AuthenticatedUser,
+    roomId: string,
+    limit: number,
+    cursor?: string,
+  ): Promise<CursorPage<PartyRoomComment>> {
+    await this.assertActiveCommentMember(user.userId, roomId);
+
+    let beforeSeq: string | undefined;
+    if (cursor) {
+      const payload = decodeCursor<{ seq?: unknown }>(cursor);
+      if (!isValidSeqCursor(payload)) {
+        throw new DomainException(
+          PartyRoomErrors.CURSOR_INVALID,
+          'Cursor không hợp lệ',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      beforeSeq = payload.seq;
+    }
+
+    const qb = this.commentRepo
+      .createQueryBuilder('comment')
+      .where('comment.roomId = :roomId', { roomId })
+      .orderBy('comment.seq', 'DESC')
+      .take(limit + 1);
+    if (beforeSeq !== undefined) {
+      qb.andWhere('comment.seq < :beforeSeq', { beforeSeq });
+    }
+    return buildCursorPage(await qb.getMany(), limit, (last) => ({
+      seq: last.seq,
+    }));
+  }
+
+  /** Sweeper chốt member đã rớt quá grace; lock lại để không đá nhầm người vừa reconnect. */
+  async finalizeDisconnectedMember(
+    roomId: string,
+    memberId: string,
+    cutoff: Date,
+  ): Promise<boolean> {
+    const finalized = await this.dataSource.transaction(async (manager) => {
+      const room = await manager.findOne(PartyRoom, {
+        where: { id: roomId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!room || room.status !== PartyRoomStatus.Active) return false;
+      const member = await manager.findOneBy(PartyRoomMember, {
+        id: memberId,
+        roomId,
+        leftAt: IsNull(),
+      });
+      if (
+        !member?.disconnectedAt ||
+        member.disconnectedAt.getTime() >= cutoff.getTime()
+      ) {
+        return false;
+      }
+      member.leftAt = new Date();
+      member.disconnectedAt = null;
+      await manager.save(member);
+      return true;
+    });
+    if (finalized) {
+      const member = await this.memberRepo.findOneBy({ id: memberId });
+      if (member) {
+        await this.publishToRoomMembers(roomId, {
+          event: RealtimeEvents.PartyMemberLeft,
+          data: {
+            roomId,
+            userId: member.userId,
+          } satisfies PartyMemberLeftEventData,
+        });
+      }
+    }
+    return finalized;
+  }
+
   /** Read model vận hành: list room + member active bằng 2 query, tránh N+1. */
   async listRoomsWithMemberCounts(
     limit: number,
@@ -806,7 +1011,7 @@ export class PartyRoomService {
         await manager.update(
           PartyRoomMember,
           { roomId, leftAt: IsNull() },
-          { leftAt: now },
+          { leftAt: now, disconnectedAt: null },
         );
       }
       return { closed: true, memberIds: activeMembers.map((m) => m.userId) };
@@ -885,7 +1090,7 @@ export class PartyRoomService {
   /**
    * participant_left từ SFU: host rớt NGOÀI Ý MUỐN → chờ grace host tự kết nối lại (spec § 4,
    * KHÁC với host chủ động rời qua REST `leaveRoom` — nhánh đó vẫn đóng ngay); member thường →
-   * mark rời.
+   * mark disconnected, chờ grace rồi mới mark rời.
    */
   private async handleParticipantLeft(
     roomId: string,
@@ -902,25 +1107,66 @@ export class PartyRoomService {
       await this.markHostDisconnected(roomId);
       return;
     }
-    const marked = await this.dataSource.transaction(async (manager) => {
+    const markedAt = await this.dataSource.transaction(async (manager) => {
       const room = await manager.findOne(PartyRoom, {
         where: { id: roomId },
         lock: { mode: 'pessimistic_write' },
       });
-      if (!room || room.status !== PartyRoomStatus.Active) return false;
-      // UPDATE có điều kiện left_at IS NULL — webhook trùng không mark 2 lần
-      const updated = await manager.update(
-        PartyRoomMember,
-        { id: membership.id, leftAt: IsNull() },
-        { leftAt: new Date() },
-      );
-      return (updated.affected ?? 0) > 0;
-    });
-    if (marked) {
-      await this.publishToRoomMembers(roomId, {
-        event: RealtimeEvents.PartyMemberLeft,
-        data: { roomId, userId: identity } satisfies PartyMemberLeftEventData,
+      if (!room || room.status !== PartyRoomStatus.Active) return null;
+      const lockedMember = await manager.findOneBy(PartyRoomMember, {
+        id: membership.id,
+        roomId,
+        leftAt: IsNull(),
       });
+      // Webhook retry hoặc REST leave đã xử lý trước đó thì không dời mốc/không bắn event đôi.
+      if (!lockedMember || lockedMember.disconnectedAt !== null) return null;
+      lockedMember.disconnectedAt = new Date();
+      await manager.save(lockedMember);
+      return lockedMember.disconnectedAt;
+    });
+    if (markedAt) {
+      await this.publishToRoomMembers(roomId, {
+        event: RealtimeEvents.PartyMemberDisconnected,
+        data: {
+          roomId,
+          userId: identity,
+          disconnectedAt: markedAt.toISOString(),
+        } satisfies PartyMemberDisconnectedEventData,
+      });
+    }
+  }
+
+  private async assertActiveCommentMember(
+    userId: string,
+    roomId: string,
+  ): Promise<void> {
+    const room = await this.roomRepo.findOneBy({ id: roomId });
+    if (!room) {
+      throw new DomainException(
+        PartyRoomErrors.ROOM_NOT_FOUND,
+        'Không tìm thấy phòng',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    if (room.status !== PartyRoomStatus.Active) {
+      throw new DomainException(
+        PartyRoomErrors.ROOM_CLOSED,
+        'Phòng đã đóng',
+        HttpStatus.CONFLICT,
+      );
+    }
+    const member = await this.memberRepo.findOneBy({
+      roomId,
+      userId,
+      leftAt: IsNull(),
+      disconnectedAt: IsNull(),
+    });
+    if (!member) {
+      throw new DomainException(
+        PartyRoomErrors.NOT_A_MEMBER,
+        'Bạn không ở trong phòng',
+        HttpStatus.FORBIDDEN,
+      );
     }
   }
 

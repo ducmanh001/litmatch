@@ -22,6 +22,7 @@ import { PartyRoomCategory1755200000000 } from '../../database/migrations/175520
 import { GiftEventVideo1755700000000 } from '../../database/migrations/1755700000000-gift-event-video';
 import { MessageAttachment1754400000000 } from '../../database/migrations/1754400000000-message-attachment';
 import { PartyRoomSpeakerInvite1756500000000 } from '../../database/migrations/1756500000000-party-room-speaker-invite';
+import { PartyRoomPresenceChat1756800000000 } from '../../database/migrations/1756800000000-party-room-presence-chat';
 
 import { GiftService } from './gift.service';
 import { Gift } from './entities/gift.entity';
@@ -234,6 +235,7 @@ d('Gift integration (Postgres thật)', () => {
         GiftEventVideo1755700000000,
         MessageAttachment1754400000000,
         PartyRoomSpeakerInvite1756500000000,
+        PartyRoomPresenceChat1756800000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,

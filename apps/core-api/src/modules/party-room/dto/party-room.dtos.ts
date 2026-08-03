@@ -5,11 +5,13 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Length,
   MaxLength,
 } from 'class-validator';
 import { CursorPageQueryDto } from '@litmatch/common-dtos';
 
 import { ApiCursorPageMeta } from '../../../common/decorators/cursor-page-query.decorator';
+import { PARTY_COMMENT_CONTENT_HARD_CAP } from '../party-room.constants';
 import {
   PartyRoom,
   PartyRoomCategory,
@@ -20,6 +22,7 @@ import {
   PartyRole,
   PartyRoomMember,
 } from '../entities/party-room-member.entity';
+import { PartyRoomComment } from '../entities/party-room-comment.entity';
 
 import type { CursorPageMeta } from '@litmatch/common-dtos';
 import type { PartyRoomSummary } from '../party-room.service';
@@ -64,6 +67,8 @@ export class PartyRoomMemberDto {
   @ApiProperty() userId!: string;
   @ApiProperty({ enum: PartyRole }) role!: PartyRole;
   @ApiProperty() joinedAt!: Date;
+  @ApiProperty({ type: String, format: 'date-time', nullable: true })
+  disconnectedAt!: Date | null;
   @ApiPropertyOptional() nickname?: string;
   /** Chỉ true cho chính viewer đang có lời mời; không leak lời mời của người khác. */
   @ApiProperty() speakerInvitePending!: boolean;
@@ -78,10 +83,53 @@ export class PartyRoomMemberDto {
     dto.userId = member.userId;
     dto.role = member.role;
     dto.joinedAt = member.joinedAt;
+    dto.disconnectedAt = member.disconnectedAt;
     dto.nickname = nicknameById?.get(member.userId);
     dto.speakerInvitePending =
       member.speakerInvitePending &&
       (member.userId === viewerUserId || viewerUserId === hostUserId);
+    return dto;
+  }
+}
+
+export class ListPartyRoomCommentsQueryDto extends CursorPageQueryDto {}
+
+export class CreatePartyRoomCommentDto {
+  @ApiProperty({ maxLength: PARTY_COMMENT_CONTENT_HARD_CAP })
+  @IsString()
+  @Length(1, PARTY_COMMENT_CONTENT_HARD_CAP)
+  content!: string;
+}
+
+export class PartyRoomCommentDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() roomId!: string;
+  @ApiProperty() senderUserId!: string;
+  @ApiProperty() content!: string;
+  @ApiProperty() sentAt!: Date;
+
+  static from(comment: PartyRoomComment): PartyRoomCommentDto {
+    const dto = new PartyRoomCommentDto();
+    dto.id = comment.id;
+    dto.roomId = comment.roomId;
+    dto.senderUserId = comment.senderUserId;
+    dto.content = comment.content;
+    dto.sentAt = comment.createdAt;
+    return dto;
+  }
+}
+
+export class PartyRoomCommentsPageDto {
+  @ApiProperty({ type: [PartyRoomCommentDto] }) items!: PartyRoomCommentDto[];
+  @ApiCursorPageMeta() meta!: CursorPageMeta;
+
+  static from(page: {
+    items: PartyRoomComment[];
+    meta: CursorPageMeta;
+  }): PartyRoomCommentsPageDto {
+    const dto = new PartyRoomCommentsPageDto();
+    dto.items = page.items.map((comment) => PartyRoomCommentDto.from(comment));
+    dto.meta = page.meta;
     return dto;
   }
 }

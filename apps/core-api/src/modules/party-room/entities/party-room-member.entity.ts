@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
@@ -18,6 +19,9 @@ export enum PartyRole {
  * 1752700000000): 1 membership active/(room,user) + 1 phòng active/user toàn hệ thống.
  */
 @Entity({ name: 'party_room_members' })
+@Index('idx_party_members_disconnect_grace', ['disconnectedAt', 'id'], {
+  where: '"left_at" IS NULL AND "disconnected_at" IS NOT NULL',
+})
 export class PartyRoomMember {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -40,6 +44,13 @@ export class PartyRoomMember {
 
   @Column({ type: 'timestamptz', nullable: true })
   leftAt!: Date | null;
+
+  /**
+   * Rớt LiveKit ngoài ý muốn nhưng vẫn còn trong grace period. REST leave chủ động đặt
+   * `leftAt` ngay; reconnect trước khi hết grace xoá mốc này và giữ nguyên membership.
+   */
+  @Column({ type: 'timestamptz', nullable: true })
+  disconnectedAt!: Date | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;

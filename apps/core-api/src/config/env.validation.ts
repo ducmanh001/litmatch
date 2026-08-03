@@ -116,7 +116,9 @@ export interface CoreApiEnv {
   PARTY_STALE_ROOM_SECONDS: number;
   PARTY_TITLE_MAX_LENGTH: number;
   PARTY_HOST_DISCONNECT_GRACE_SECONDS: number;
+  PARTY_MEMBER_DISCONNECT_GRACE_SECONDS: number;
   PARTY_HOST_GRACE_CHECK_INTERVAL_MS: number;
+  PARTY_COMMENT_MAX_LENGTH: number;
   GIFT_POINTS_RATE_PERCENT: number;
   SAFETY_REMATCH_COOLDOWN_DAYS: number;
   SAFETY_REPORT_COOLDOWN_DAYS: number;
@@ -406,12 +408,23 @@ export const coreApiEnvSchema = Joi.object({
     .integer()
     .min(5)
     .default(15),
+  // Member rớt mạng ngoài ý muốn còn hiển thị trong roster trong thời gian ngắn để reconnect;
+  // REST leave chủ động không qua grace.
+  PARTY_MEMBER_DISCONNECT_GRACE_SECONDS: Joi.number()
+    .integer()
+    .min(5)
+    .default(15),
   // Tần suất quét phòng hết grace — tách riêng PARTY_SWEEPER_INTERVAL_MS (30s, backstop khác
   // hẳn: phòng vô chủ hoàn toàn) vì grace ngắn hơn nhiều, cần phát hiện sát giờ hơn
   PARTY_HOST_GRACE_CHECK_INTERVAL_MS: Joi.number()
     .integer()
     .min(1000)
     .default(5000),
+  PARTY_COMMENT_MAX_LENGTH: Joi.number()
+    .integer()
+    .min(1)
+    .max(1000)
+    .default(300),
 
   // Gift — Giai đoạn 3 (docs/services/gift-service.md); tỉ lệ quy đổi DIA→PTS cho người nhận,
   // PHẢI < 100 (docs/06 § Gift: nhận 1:1 biến gift thành kênh chuyển tiền ngang hàng)

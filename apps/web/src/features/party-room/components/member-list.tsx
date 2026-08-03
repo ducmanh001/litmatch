@@ -85,6 +85,11 @@ export function MemberList({
           </div>
           <p className="text-xs font-bold">
             {nicknameById.get(host.userId) ?? '…'}
+            {host.disconnectedAt !== null && (
+              <span className="ml-1 text-[10px] font-normal text-slate-400">
+                đang kết nối lại
+              </span>
+            )}
           </p>
         </div>
       )}
@@ -104,9 +109,12 @@ export function MemberList({
                   <div className="h-14 w-14 rounded-full bg-slate-100 dark:bg-surf2" />
                 )}
               </div>
-              <p className="w-16 truncate text-center text-[11px] font-semibold">
+              <p className="w-20 truncate text-center text-[11px] font-semibold">
                 {nicknameById.get(speaker.userId) ?? '…'}
               </p>
+              {speaker.disconnectedAt !== null && (
+                <span className="text-[10px] text-slate-400">đang vào lại</span>
+              )}
               {isHost && (
                 <button
                   type="button"
@@ -155,6 +163,11 @@ export function MemberList({
                     {nicknameById.get(member.userId) ?? '…'}
                   </span>
                 </span>
+                {member.disconnectedAt !== null && (
+                  <span className="shrink-0 text-[10px] text-slate-400">
+                    đang vào lại
+                  </span>
+                )}
                 {isHost && (
                   <button
                     type="button"
