@@ -13,6 +13,9 @@
   - `uq_party_members_active_room_user`: 1 membership active/(room, user).
   - `uq_party_members_active_user`: **1 user chỉ ở 1 phòng active** toàn hệ thống (cùng tinh thần
     "1 user 1 queue matching" của [06-domain-rules.md](../06-domain-rules.md)).
+- `disconnected_at` là trạng thái rớt LiveKit ngoài ý muốn đang chờ reconnect; REST leave chủ động
+  vẫn ghi `left_at` ngay. Member thường hết `PARTY_MEMBER_DISCONNECT_GRACE_SECONDS` mà chưa vào
+  lại mới được chốt rời và fanout `party.member.left`.
 
 ## 2. Role & quyền media — enforce ở SFU, không tin client
 
@@ -59,8 +62,9 @@
   (best-effort, chỉ gợi ý refetch — REST poll field `hostDisconnectedAt` vẫn là nguồn sự thật) cho
   member khác hiện banner "Host đang mất kết nối".
 - Member thường rời qua REST: nhả membership + `removeParticipant` khỏi SFU (DB rời mà SFU còn nối
-  là lệch state); rớt kết nối: webhook `participant_left` nhả membership (UPDATE có điều kiện
-  `left_at IS NULL` — retry idempotent), vào lại = join lại.
+  là lệch state); rớt kết nối: webhook `participant_left` set `disconnected_at`, fanout trạng thái
+  reconnect và chờ grace. Vào lại trong grace = join lại, clear mốc và giữ nguyên membership; hết
+  grace = `left_at` + `party.member.left`. Mọi transition đều lock phòng và retry idempotent.
 - Đóng phòng idempotent (`closeRoomById` — endpoint/webhook/sweeper cùng đi qua): chỉ lời gọi thực
   hiện transition mới dọn SFU + publish realtime (retry không bắn đôi). Tham số `guard` tuỳ chọn
   đánh giá trên row đã lock TRONG CÙNG transaction — dùng cho grace-check host disconnect ở trên.
@@ -83,6 +87,8 @@ Webhook KHÔNG được là đường duy nhất đóng phòng. `PartyRoomSweepe
    webhook rớt). SFU API lỗi → bỏ qua phòng đó, tick sau thử lại (không đóng oan).
 
 - LiveKit `emptyTimeout` (`PARTY_EMPTY_ROOM_TIMEOUT_SECONDS`) là backstop thứ 3 ở tầng SFU.
+- Cùng interval grace check, sweeper chốt `party_room_members.disconnected_at` quá hạn thành
+  `left_at`; transaction lock lại phòng/member để không đá nhầm người vừa reconnect.
 - Stateless — chạy nhiều instance an toàn (closeRoomById idempotent dưới lock).
 
 ## 7. Config (env — [.env.example](../../.env.example))
@@ -92,7 +98,8 @@ Webhook KHÔNG được là đường duy nhất đóng phòng. `PartyRoomSweepe
 `PARTY_TOKEN_TTL_SECONDS`, `PARTY_EMPTY_ROOM_TIMEOUT_SECONDS`, `PARTY_SWEEPER_INTERVAL_MS`,
 `PARTY_STALE_ROOM_SECONDS`, `PARTY_TITLE_MAX_LENGTH`,
 `PARTY_HOST_DISCONNECT_GRACE_SECONDS` (mặc định 15 — § 4), `PARTY_HOST_GRACE_CHECK_INTERVAL_MS`
-(mặc định 5000). LiveKit dùng chung `LIVEKIT_URL/API_KEY/API_SECRET`
+(mặc định 5000), `PARTY_MEMBER_DISCONNECT_GRACE_SECONDS` (mặc định 15),
+`PARTY_COMMENT_MAX_LENGTH` (mặc định 300). LiveKit dùng chung `LIVEKIT_URL/API_KEY/API_SECRET`
 với calling (1 cụm LiveKit — đổi tên từ `CALLING_LIVEKIT_*` ở GĐ3).
 
 ## 8. Realtime
@@ -100,8 +107,12 @@ với calling (1 cụm LiveKit — đổi tên từ `CALLING_LIVEKIT_*` ở GĐ3
 Fanout per-user channel hiện có `realtime:user:{userId}` cho từng member active — gateway giữ
 zero-logic, KHÔNG thêm room channel ([realtime-gateway.md](./realtime-gateway.md)); chuyển sang room
 channel chỉ khi số liệu fanout ép (GĐ6/7). Event: `party.member.joined`, `party.member.left`,
-`party.role.changed`, `party.speaker.invite.received`, `party.room.closed` (+ `gift.sent` từ Gift).
-Publish luôn SAU commit, best-effort (client còn REST polling: `GET /party/rooms/:id`).
+`party.member.disconnected`, `party.member.reconnected`, `party.role.changed`,
+`party.speaker.invite.received`, `party.room.closed`, `party.comment.created`
+(+ `gift.sent` từ Gift). Comment được lưu append-only trong `party_room_comments`, POST yêu cầu
+member active + `Idempotency-Key`, GET trả các comment mới nhất theo cursor. Publish luôn SAU commit,
+best-effort. Client reconciliation thích nghi: socket khỏe poll thưa 30s, socket mất poll sát 5s;
+realtime event vẫn invalidate sớm và reconnect sẽ refetch lại state (`GET /party/rooms/:id` và comments).
 
 ## 9. Public API cho module khác
 

@@ -12,3 +12,17 @@ export function partyRoomName(roomId: string): string {
 export const UQ_PARTY_MEMBERS_ACTIVE_ROOM_USER =
   'uq_party_members_active_room_user';
 export const UQ_PARTY_MEMBERS_ACTIVE_USER = 'uq_party_members_active_user';
+
+export const UQ_PARTY_ROOM_COMMENTS_IDEMPOTENCY =
+  'uq_party_room_comments_idempotency_key';
+
+/** Sanity cap ở DTO; giới hạn nghiệp vụ thật lấy từ PARTY_COMMENT_MAX_LENGTH trong service. */
+export const PARTY_COMMENT_CONTENT_HARD_CAP = 1000;
+
+export function partyCommentIdempotencyKey(
+  userId: string,
+  roomId: string,
+  key: string,
+): string {
+  return `party:comment:${userId}:${roomId}:${key}`;
+}

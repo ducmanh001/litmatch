@@ -2154,6 +2154,105 @@
         "tags": ["party-room"]
       }
     },
+    "/api/v1/party/rooms/{id}/comments": {
+      "get": {
+        "operationId": "PartyRoomController_listComments",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PartyRoomCommentsPageDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Lấy comment gần nhất trong Party Room",
+        "tags": ["party-room"]
+      },
+      "post": {
+        "operationId": "PartyRoomController_createComment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePartyRoomCommentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PartyRoomCommentDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Gửi comment realtime trong Party Room",
+        "tags": ["party-room"]
+      }
+    },
     "/api/v1/party/rooms/{id}/join": {
       "post": {
         "operationId": "PartyRoomController_join",
@@ -7090,10 +7189,21 @@
           "userId": { "type": "string" },
           "role": { "type": "string", "enum": ["host", "speaker", "audience"] },
           "joinedAt": { "format": "date-time", "type": "string" },
+          "disconnectedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
           "nickname": { "type": "string" },
           "speakerInvitePending": { "type": "boolean" }
         },
-        "required": ["userId", "role", "joinedAt", "speakerInvitePending"]
+        "required": [
+          "userId",
+          "role",
+          "joinedAt",
+          "disconnectedAt",
+          "speakerInvitePending"
+        ]
       },
       "JoinPartyRoomDto": {
         "type": "object",
@@ -7131,6 +7241,38 @@
           }
         },
         "required": ["room", "members"]
+      },
+      "PartyRoomCommentDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "roomId": { "type": "string" },
+          "senderUserId": { "type": "string" },
+          "content": { "type": "string" },
+          "sentAt": { "format": "date-time", "type": "string" }
+        },
+        "required": ["id", "roomId", "senderUserId", "content", "sentAt"]
+      },
+      "PartyRoomCommentsPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/PartyRoomCommentDto" }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "nextCursor": { "type": "string", "nullable": true }
+            }
+          }
+        },
+        "required": ["items", "meta"]
+      },
+      "CreatePartyRoomCommentDto": {
+        "type": "object",
+        "properties": { "content": { "type": "string", "maxLength": 1000 } },
+        "required": ["content"]
       },
       "ChangePartyRoleDto": {
         "type": "object",
