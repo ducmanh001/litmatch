@@ -2,12 +2,10 @@
 
 import { isApiError } from '@litmatch/api-client';
 import { RealtimeEvents } from '@litmatch/common-dtos/pure';
-import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
-import { onReconnected } from '../../../shared/realtime/socket';
 import { useRealtimeEvent } from '../../../shared/realtime/use-realtime-event';
-import { partyRoomKeys, useRoomComments, useSendRoomComment } from '../api';
+import { useRoomComments, useSendRoomComment } from '../api';
 
 import type { FormEvent } from 'react';
 import type { PartyCommentCreatedEventData } from '@litmatch/common-dtos/pure';
@@ -24,11 +22,17 @@ export function PartyChat({
   members: PartyRoomMemberDto[];
   currentUserId?: string;
 }) {
-  const queryClient = useQueryClient();
   const comments = useRoomComments(roomId);
   const sendComment = useSendRoomComment(roomId);
   const [content, setContent] = useState('');
   const [liveComments, setLiveComments] = useState<PartyComment[]>([]);
+  const appendLiveComment = useCallback((comment: PartyComment): void => {
+    setLiveComments((current) =>
+      current.some((item) => item.id === comment.id)
+        ? current
+        : [...current, comment],
+    );
+  }, []);
   const nicknameById = useMemo(
     () => new Map(members.map((member) => [member.userId, member.nickname])),
     [members],
@@ -37,37 +41,19 @@ export function PartyChat({
   const onCommentCreated = useCallback(
     (data: PartyCommentCreatedEventData) => {
       if (data.roomId !== roomId) return;
-      setLiveComments((current) =>
-        current.some((comment) => comment.id === data.commentId)
-          ? current
-          : [
-              ...current,
-              {
-                id: data.commentId,
-                roomId: data.roomId,
-                senderUserId: data.senderUserId,
-                content: data.content,
-                sentAt: data.sentAt,
-              },
-            ],
-      );
+      appendLiveComment({
+        id: data.commentId,
+        roomId: data.roomId,
+        senderUserId: data.senderUserId,
+        content: data.content,
+        sentAt: data.sentAt,
+      });
     },
-    [roomId],
+    [appendLiveComment, roomId],
   );
   useRealtimeEvent<PartyCommentCreatedEventData>(
     RealtimeEvents.PartyCommentCreated,
     onCommentCreated,
-  );
-
-  // Socket là delta; reconnect phải đọc lại lịch sử để không mất comment trong lúc offline.
-  useEffect(
-    () =>
-      onReconnected(() => {
-        void queryClient.invalidateQueries({
-          queryKey: partyRoomKeys.comments(roomId),
-        });
-      }),
-    [queryClient, roomId],
   );
 
   const visibleComments = useMemo(() => {
@@ -90,7 +76,14 @@ export function PartyChat({
     if (trimmed.length === 0 || sendComment.isPending) return;
     sendComment.mutate(
       { content: trimmed, idempotencyKey: crypto.randomUUID() },
-      { onSuccess: () => setContent('') },
+      {
+        // Event realtime sẽ dedupe theo comment id; response giúp sender hiển thị ngay cả khi
+        // publish WebSocket best-effort thất bại. Reconnect/global fallback sẽ pull lại history.
+        onSuccess: (comment) => {
+          if (comment !== undefined) appendLiveComment(comment);
+          setContent('');
+        },
+      },
     );
   };
 

@@ -111,7 +111,8 @@ channel chỉ khi số liệu fanout ép (GĐ6/7). Event: `party.member.joined`,
 `party.speaker.invite.received`, `party.room.closed`, `party.comment.created`
 (+ `gift.sent` từ Gift). Comment được lưu append-only trong `party_room_comments`, POST yêu cầu
 member active + `Idempotency-Key`, GET trả các comment mới nhất theo cursor. Publish luôn SAU commit,
-best-effort (client còn REST polling: `GET /party/rooms/:id` và comments).
+best-effort. Client reconciliation thích nghi: socket khỏe poll thưa 30s, socket mất poll sát 5s;
+realtime event vẫn invalidate sớm và reconnect sẽ refetch lại state (`GET /party/rooms/:id` và comments).
 
 ## 9. Public API cho module khác
 

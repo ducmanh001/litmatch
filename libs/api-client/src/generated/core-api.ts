@@ -5678,7 +5678,12 @@ export interface operations {
   };
   PartyRoomController_listComments: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
       header?: never;
       path: {
         id: string;

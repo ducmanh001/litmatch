@@ -96,6 +96,7 @@ export class PartyRoomController {
 
   @Get(':id/comments')
   @ApiOperation({ summary: 'Lấy comment gần nhất trong Party Room' })
+  @ApiCursorPageQuery()
   @ApiOkResponse({ type: PartyRoomCommentsPageDto })
   async listComments(
     @CurrentUser() user: AuthenticatedUser,

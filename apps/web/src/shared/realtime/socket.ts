@@ -23,6 +23,14 @@ import type { Socket } from 'socket.io-client';
  */
 let socket: Socket | null = null;
 let authRefreshInFlight: Promise<void> | null = null;
+let realtimeConnected = false;
+const realtimeConnectionListeners = new Set<() => void>();
+
+function setRealtimeConnected(next: boolean): void {
+  if (realtimeConnected === next) return;
+  realtimeConnected = next;
+  for (const listener of realtimeConnectionListeners) listener();
+}
 
 function getSocket(): Socket {
   if (socket === null) {
@@ -44,7 +52,10 @@ function getSocket(): Socket {
       timeout: 10_000,
     });
     const current = socket;
+    current.on('connect', () => setRealtimeConnected(true));
+    current.on('disconnect', () => setRealtimeConnected(false));
     current.on('connect_error', (error: Error) => {
+      setRealtimeConnected(false);
       if (error.message !== RealtimeConnectionErrors.Unauthorized) return;
       authRefreshInFlight ??= apiClient
         .refreshSession()
@@ -70,7 +81,19 @@ export function disconnectRealtime(): void {
   socket?.disconnect();
   socket = null;
   authRefreshInFlight = null;
+  setRealtimeConnected(false);
   resetSocketReconnectState();
+}
+
+/** Snapshot cho query fallback — realtime là delta, còn REST vẫn là reconciliation backstop. */
+export function isRealtimeConnected(): boolean {
+  return realtimeConnected;
+}
+
+/** Subscribe trạng thái transport để các query đổi tần suất fallback mà không polling mù. */
+export function subscribeRealtimeConnection(listener: () => void): () => void {
+  realtimeConnectionListeners.add(listener);
+  return () => realtimeConnectionListeners.delete(listener);
 }
 
 /** Đăng ký listener theo event đã khai trong common-dtos — trả cleanup, hook PHẢI gọi khi unmount. */

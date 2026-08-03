@@ -5,7 +5,7 @@ import { RealtimeEvents } from '@litmatch/common-dtos/pure';
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useCurrentUser } from '../../../shared/auth/use-current-user';
 import { confirmAction } from '../../../shared/lib/confirm-store';
@@ -77,13 +77,28 @@ export function PartyStage({ roomId }: { roomId: string }) {
       ? 'Có lỗi xảy ra, thử lại.'
       : undefined;
 
-  const invalidateDetail = (): void => {
-    void queryClient.invalidateQueries({
-      queryKey: partyRoomKeys.detail(roomId),
-    });
-  };
+  const detailRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const invalidateDetail = useCallback((): void => {
+    if (detailRefreshTimer.current !== null) return;
+    // Nhiều member join/leave cùng lúc chỉ cần 1 lần reconciliation REST.
+    detailRefreshTimer.current = setTimeout(() => {
+      detailRefreshTimer.current = null;
+      void queryClient.invalidateQueries({
+        queryKey: partyRoomKeys.detail(roomId),
+      });
+    }, 150);
+  }, [queryClient, roomId]);
 
-  // Realtime chỉ gợi ý refetch sớm — poll 5s của useRoomDetail vẫn là fallback thật.
+  useEffect(
+    () => () => {
+      if (detailRefreshTimer.current !== null) {
+        clearTimeout(detailRefreshTimer.current);
+      }
+    },
+    [],
+  );
+
+  // Realtime gợi ý refetch sớm; REST reconciliation poll 30s khi socket khỏe và 5s khi socket mất.
   useRealtimeEvent<PartyMemberJoinedEventData>(
     RealtimeEvents.PartyMemberJoined,
     (data) => {
