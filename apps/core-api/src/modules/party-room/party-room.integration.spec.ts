@@ -1,4 +1,4 @@
-import { DataSource } from 'typeorm';
+import { DataSource, IsNull } from 'typeorm';
 
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
 import { InitAuthUser1751900000000 } from '../../database/migrations/1751900000000-init-auth-user';
@@ -18,6 +18,7 @@ import { PartyRoomLivekitUrl1753500000000 } from '../../database/migrations/1753
 import { PartyRoomHostDisconnectGrace1753900000000 } from '../../database/migrations/1753900000000-party-room-host-disconnect-grace';
 import { PartyRoomCategory1755200000000 } from '../../database/migrations/1755200000000-party-room-category';
 import { PartyRoomSpeakerInvite1756500000000 } from '../../database/migrations/1756500000000-party-room-speaker-invite';
+import { PartyRoomPresenceChat1756800000000 } from '../../database/migrations/1756800000000-party-room-presence-chat';
 
 import { PartyRoomService } from './party-room.service';
 import { PartyRoomSweeperService } from './jobs/party-room-sweeper.service';
@@ -31,6 +32,7 @@ import {
   PartyRole,
   PartyRoomMember,
 } from './entities/party-room-member.entity';
+import { PartyRoomComment } from './entities/party-room-comment.entity';
 import { Gender, User } from '../user';
 
 import type { ConfigService } from '@nestjs/config';
@@ -69,7 +71,9 @@ const CONFIG: Record<string, unknown> = {
   PARTY_STALE_ROOM_SECONDS: 60,
   PARTY_TITLE_MAX_LENGTH: 100,
   PARTY_HOST_DISCONNECT_GRACE_SECONDS: 15,
+  PARTY_MEMBER_DISCONNECT_GRACE_SECONDS: 15,
   PARTY_HOST_GRACE_CHECK_INTERVAL_MS: 5000,
+  PARTY_COMMENT_MAX_LENGTH: 300,
 };
 const configStub = {
   getOrThrow: (key: string) => {
@@ -188,7 +192,7 @@ d('Party Room integration (Postgres thật)', () => {
     ds = new DataSource({
       type: 'postgres',
       url: url.toString(),
-      entities: [User, PartyRoom, PartyRoomMember],
+      entities: [User, PartyRoom, PartyRoomMember, PartyRoomComment],
       migrations: [
         InitAuthUser1751900000000,
         UserProfilePreferences1755800000000,
@@ -207,6 +211,7 @@ d('Party Room integration (Postgres thật)', () => {
         PartyRoomHostDisconnectGrace1753900000000,
         PartyRoomCategory1755200000000,
         PartyRoomSpeakerInvite1756500000000,
+        PartyRoomPresenceChat1756800000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -499,7 +504,7 @@ d('Party Room integration (Postgres thật)', () => {
     expect(await activeMembers(room.id)).toHaveLength(2);
   });
 
-  it('webhook: participant_left member → nhả (retry idempotent); room lạ (prefix khác) → bỏ qua', async () => {
+  it('webhook: participant_left member → giữ grace để reconnect, hết grace mới nhả; room lạ bỏ qua', async () => {
     const host = await createUser('w-host');
     const member = await createUser('w-member');
     const { room } = await party.createRoom(auth(host.id), 'Phòng webhook');
@@ -511,14 +516,51 @@ d('Party Room integration (Postgres thật)', () => {
       roomName,
       participantIdentity: member.id,
     });
-    expect(await activeMembers(room.id)).toHaveLength(1);
+    const disconnected = await ds
+      .getRepository(PartyRoomMember)
+      .findOneByOrFail({
+        roomId: room.id,
+        userId: member.id,
+        leftAt: IsNull(),
+      });
+    expect(disconnected.disconnectedAt).not.toBeNull();
+    expect(await activeMembers(room.id)).toHaveLength(2);
     // retry webhook — không đổi gì thêm
     await party.handleWebhookEvent({
       event: 'participant_left',
       roomName,
       participantIdentity: member.id,
     });
+    expect(await activeMembers(room.id)).toHaveLength(2);
+
+    await party.joinRoom(auth(member.id), room.id);
+    const reconnected = await ds
+      .getRepository(PartyRoomMember)
+      .findOneByOrFail({
+        roomId: room.id,
+        userId: member.id,
+        leftAt: IsNull(),
+      });
+    expect(reconnected.disconnectedAt).toBeNull();
+
+    await party.handleWebhookEvent({
+      event: 'participant_left',
+      roomName,
+      participantIdentity: member.id,
+    });
+    await ds.query(
+      `UPDATE party_room_members SET disconnected_at = now() - interval '1 minute' WHERE id = $1`,
+      [reconnected.id],
+    );
+    await sweeper.runHostGraceCheckOnce();
     expect(await activeMembers(room.id)).toHaveLength(1);
+    expect(
+      (
+        await ds
+          .getRepository(PartyRoomMember)
+          .findOneByOrFail({ id: reconnected.id })
+      ).leftAt,
+    ).not.toBeNull();
 
     // room không phải party-* → bỏ qua không nổ
     await party.handleWebhookEvent({
@@ -530,6 +572,42 @@ d('Party Room integration (Postgres thật)', () => {
       .getRepository(PartyRoom)
       .findOneByOrFail({ id: room.id });
     expect(fresh.status).toBe(PartyRoomStatus.Active);
+  });
+
+  it('comment Party Room: chỉ member active được gửi/đọc, retry không nhân đôi, cursor trả comment mới nhất', async () => {
+    const host = await createUser('c-host');
+    const member = await createUser('c-member');
+    const outsider = await createUser('c-outsider');
+    const { room } = await party.createRoom(auth(host.id), 'Phòng comment');
+    await party.joinRoom(auth(member.id), room.id);
+
+    const first = await party.sendComment(
+      auth(member.id),
+      room.id,
+      { content: '  Xin chào phòng  ' },
+      'comment-1',
+    );
+    const replay = await party.sendComment(
+      auth(member.id),
+      room.id,
+      { content: 'Xin chào phòng' },
+      'comment-1',
+    );
+    expect(replay.id).toBe(first.id);
+    expect(
+      await ds.getRepository(PartyRoomComment).countBy({ roomId: room.id }),
+    ).toBe(1);
+
+    const page = await party.listComments(auth(member.id), room.id, 30);
+    expect(page.items.map((comment) => comment.id)).toEqual([first.id]);
+    await expect(
+      party.sendComment(
+        auth(outsider.id),
+        room.id,
+        { content: 'Không được gửi' },
+        'outsider-1',
+      ),
+    ).rejects.toMatchObject({ code: 'PARTY_MEMBER_NOT_A_MEMBER' });
   });
 
   it('webhook: host rớt NGOÀI Ý MUỐN → set hostDisconnectedAt (KHÔNG đóng ngay), webhook lặp lại không dời mốc', async () => {

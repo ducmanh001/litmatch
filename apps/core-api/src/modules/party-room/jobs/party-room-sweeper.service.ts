@@ -98,6 +98,7 @@ export class PartyRoomSweeperService
   async runHostGraceCheckOnce(): Promise<void> {
     await this.hostGraceJob.runExclusive(async () => {
       await this.sweepExpiredHostGrace();
+      await this.sweepExpiredMemberDisconnects();
     }, undefined);
   }
 
@@ -136,6 +137,40 @@ export class PartyRoomSweeperService
         this.logger.error(
           { err: `${err}` },
           `Đóng phòng ${room.id} do hết grace host lỗi — thử lại ở tick sau`,
+        );
+      }
+    }
+  }
+
+  /** Member thường cũng được giữ ngắn để reconnect; hết hạn mới rời roster và bắn member.left. */
+  private async sweepExpiredMemberDisconnects(): Promise<void> {
+    const graceSeconds = this.config.getOrThrow(
+      'PARTY_MEMBER_DISCONNECT_GRACE_SECONDS',
+      { infer: true },
+    );
+    const cutoff = new Date(Date.now() - graceSeconds * 1000);
+    const candidates = await this.dataSource
+      .getRepository(PartyRoomMember)
+      .find({
+        where: {
+          leftAt: IsNull(),
+          disconnectedAt: LessThan(cutoff),
+        },
+        order: { disconnectedAt: 'ASC', id: 'ASC' },
+        take: ROOM_SWEEP_BATCH_SIZE,
+      });
+
+    for (const member of candidates) {
+      try {
+        await this.partyRoomService.finalizeDisconnectedMember(
+          member.roomId,
+          member.id,
+          cutoff,
+        );
+      } catch (err) {
+        this.logger.error(
+          { err: `${err}` },
+          `Chốt member ${member.id} hết grace lỗi — thử lại ở tick sau`,
         );
       }
     }

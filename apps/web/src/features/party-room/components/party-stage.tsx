@@ -5,7 +5,7 @@ import { RealtimeEvents } from '@litmatch/common-dtos/pure';
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useCurrentUser } from '../../../shared/auth/use-current-user';
 import { confirmAction } from '../../../shared/lib/confirm-store';
@@ -25,13 +25,16 @@ import { usePartyRoomMedia } from '../hooks/use-party-room-media';
 import { GiftIcon, GiftPanel } from './gift-panel';
 import { MemberList } from './member-list';
 import { PartyAudio } from './party-audio';
+import { PartyChat } from './party-chat';
 
 import type {
   GiftSentEventData,
   PartyHostDisconnectedEventData,
   PartyHostReconnectedEventData,
+  PartyMemberDisconnectedEventData,
   PartyMemberJoinedEventData,
   PartyMemberLeftEventData,
+  PartyMemberReconnectedEventData,
   PartyRoleChangedEventData,
   PartyRoomClosedEventData,
   PartySpeakerInviteReceivedEventData,
@@ -74,13 +77,28 @@ export function PartyStage({ roomId }: { roomId: string }) {
       ? 'Có lỗi xảy ra, thử lại.'
       : undefined;
 
-  const invalidateDetail = (): void => {
-    void queryClient.invalidateQueries({
-      queryKey: partyRoomKeys.detail(roomId),
-    });
-  };
+  const detailRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const invalidateDetail = useCallback((): void => {
+    if (detailRefreshTimer.current !== null) return;
+    // Nhiều member join/leave cùng lúc chỉ cần 1 lần reconciliation REST.
+    detailRefreshTimer.current = setTimeout(() => {
+      detailRefreshTimer.current = null;
+      void queryClient.invalidateQueries({
+        queryKey: partyRoomKeys.detail(roomId),
+      });
+    }, 150);
+  }, [queryClient, roomId]);
 
-  // Realtime chỉ gợi ý refetch sớm — poll 5s của useRoomDetail vẫn là fallback thật.
+  useEffect(
+    () => () => {
+      if (detailRefreshTimer.current !== null) {
+        clearTimeout(detailRefreshTimer.current);
+      }
+    },
+    [],
+  );
+
+  // Realtime gợi ý refetch sớm; REST reconciliation poll 30s khi socket khỏe và 5s khi socket mất.
   useRealtimeEvent<PartyMemberJoinedEventData>(
     RealtimeEvents.PartyMemberJoined,
     (data) => {
@@ -89,6 +107,18 @@ export function PartyStage({ roomId }: { roomId: string }) {
   );
   useRealtimeEvent<PartyMemberLeftEventData>(
     RealtimeEvents.PartyMemberLeft,
+    (data) => {
+      if (data.roomId === roomId) invalidateDetail();
+    },
+  );
+  useRealtimeEvent<PartyMemberDisconnectedEventData>(
+    RealtimeEvents.PartyMemberDisconnected,
+    (data) => {
+      if (data.roomId === roomId) invalidateDetail();
+    },
+  );
+  useRealtimeEvent<PartyMemberReconnectedEventData>(
+    RealtimeEvents.PartyMemberReconnected,
     (data) => {
       if (data.roomId === roomId) invalidateDetail();
     },
@@ -148,8 +178,7 @@ export function PartyStage({ roomId }: { roomId: string }) {
     if (data.roomId === roomId) setLastGift(data);
   });
 
-  // Refresh-safe: REST đã xác nhận mình là member (vd reload trang) thì tự kết nối lại
-  // media — nhưng KHÔNG tự join khi chưa từng là member (opt-in, tránh bật mic bất ngờ).
+  // Khi mở phòng active, tự join + kết nối media một lần; user không phải qua bước xác nhận.
   // Chỉ tự thử ĐÚNG 1 LẦN (autoConnectAttempted) cho vòng đời component — không dựa vào
   // isConnecting/mediaError để quyết định retry, vì cả hai đều có khoảng hở bất đồng bộ so
   // với thời điểm LiveKit room.connect() thật sự xong: join REST xong (thành công hay lỗi)
@@ -159,12 +188,13 @@ export function PartyStage({ roomId }: { roomId: string }) {
   // join trong ~6 giây). Mọi lần thử lại SAU lần đầu là thao tác thủ công qua nút "Kết nối lại".
   const autoConnectAttempted = useRef(false);
   const { connect, room: mediaRoom } = media;
+  const roomIsActive = detail.data?.room.status === 'active';
   useEffect(() => {
-    if (isMember && mediaRoom === null && !autoConnectAttempted.current) {
+    if (roomIsActive && mediaRoom === null && !autoConnectAttempted.current) {
       autoConnectAttempted.current = true;
       connect();
     }
-  }, [isMember, mediaRoom, connect]);
+  }, [roomIsActive, mediaRoom, connect]);
 
   const toggleMic = (): void => {
     if (media.room === null) return;
@@ -273,19 +303,23 @@ export function PartyStage({ roomId }: { roomId: string }) {
         <p className="text-sm text-slate-500 dark:text-slate-400">
           Tối đa {room.speakerLimit} người nói
         </p>
-        {mediaErrorMessage !== undefined && (
-          <p role="alert" className="text-sm text-destructive">
-            {mediaErrorMessage}
-          </p>
+        {mediaErrorMessage === undefined ? (
+          <p className="text-sm font-semibold text-irisl">Đang vào phòng…</p>
+        ) : (
+          <>
+            <p role="alert" className="text-sm text-destructive">
+              {mediaErrorMessage}
+            </p>
+            <button
+              type="button"
+              className="w-full rounded-full bg-gradient-to-br from-irisl to-irisl py-3 font-bold text-white shadow-lg shadow-iris/30 disabled:opacity-50"
+              disabled={media.isConnecting}
+              onClick={media.connect}
+            >
+              {media.isConnecting ? 'Đang kết nối…' : 'Kết nối lại'}
+            </button>
+          </>
         )}
-        <button
-          type="button"
-          className="w-full rounded-full bg-gradient-to-br from-irisl to-irisl py-3 font-bold text-white shadow-lg shadow-iris/30 disabled:opacity-50"
-          disabled={media.isConnecting}
-          onClick={media.connect}
-        >
-          {media.isConnecting ? 'Đang tham gia…' : 'Tham gia phòng'}
-        </button>
       </div>
     );
   }
@@ -374,10 +408,12 @@ export function PartyStage({ roomId }: { roomId: string }) {
         speakerLimit={room.speakerLimit}
       />
 
-      {/* Chưa có kênh chat realtime nào cho Party Room (chỉ có party.member.*,
-          party.role.changed, party.room.closed, party.host.* và gift.sent — không có event
-          tin nhắn) — không dựng UI chat giả không có transport thật, cần quyết định sản phẩm/
-          backend trước. Thông báo quà tặng dưới đây dùng đúng event gift.sent có thật. */}
+      <PartyChat
+        roomId={roomId}
+        members={detail.data.members}
+        currentUserId={me.data?.id}
+      />
+
       {lastGiftLabel !== null && (
         <p className="mx-5 inline-block rounded-lg bg-diamond/10 px-2 py-1 text-xs text-sky-700 dark:text-diamond">
           {lastGiftLabel}

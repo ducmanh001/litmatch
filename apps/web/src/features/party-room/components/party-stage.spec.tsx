@@ -55,6 +55,11 @@ function mockGet(detail: PartyRoomDetailDto, meId: string) {
     if (path === '/api/v1/party/rooms/{id}') {
       return { data: { data: detail } } as never;
     }
+    if (path === '/api/v1/party/rooms/{id}/comments') {
+      return {
+        data: { data: { items: [], meta: { nextCursor: null } } },
+      } as never;
+    }
     if (path === '/api/v1/users/{id}') {
       const id = (opts as { params: { path: { id: string } } }).params.path.id;
       return {
@@ -90,9 +95,10 @@ describe('PartyStage', () => {
     vi.restoreAllMocks();
   });
 
-  it('chưa là member — hiển thị preview + nút tham gia', async () => {
+  it('chưa là member — tự join khi mở phòng, không cần bước xác nhận', async () => {
+    const connect = vi.fn();
     mockedUsePartyRoomMedia.mockReturnValue({
-      connect: vi.fn(),
+      connect,
       disconnect: vi.fn(),
       room: null,
       roomDisconnected: false,
@@ -115,9 +121,8 @@ describe('PartyStage', () => {
 
     renderStage();
 
-    expect(
-      await screen.findByRole('button', { name: 'Tham gia phòng' }),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Đang vào phòng…')).toBeVisible();
+    await waitFor(() => expect(connect).toHaveBeenCalledTimes(1));
   });
 
   it('đã là member — hiển thị stage với danh sách thành viên', async () => {

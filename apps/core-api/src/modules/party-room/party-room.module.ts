@@ -6,6 +6,7 @@ import { PartyRoomController } from './party-room.controller';
 import { PartyRoomService } from './party-room.service';
 import { PartyRoom } from './entities/party-room.entity';
 import { PartyRoomMember } from './entities/party-room-member.entity';
+import { PartyRoomComment } from './entities/party-room-comment.entity';
 import { PartyRoomSweeperService } from './jobs/party-room-sweeper.service';
 import {
   PartyLivekitRoomPort,
@@ -19,7 +20,7 @@ import type Redis from 'ioredis';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([PartyRoom, PartyRoomMember]),
+    TypeOrmModule.forFeature([PartyRoom, PartyRoomMember, PartyRoomComment]),
     // đọc User.region của host để chốt LiveKit URL theo region lúc tạo phòng (GĐ7 — ADR 0005)
     UserModule,
   ],

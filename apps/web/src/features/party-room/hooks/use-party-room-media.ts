@@ -98,6 +98,19 @@ export function usePartyRoomMedia(roomId: string, canPublish: boolean) {
                 setRoomDisconnected(true);
               }
             });
+            connected.on(RoomEvent.Reconnected, () => {
+              if (
+                disposedRef.current ||
+                generation !== generationRef.current ||
+                roomRef.current !== connected
+              ) {
+                return;
+              }
+              // LiveKit có thể tự hồi phục mà không đi qua nút "Kết nối lại"; gọi join idempotent
+              // để backend clear disconnected_at và fanout roster ngay khi media đã trở lại.
+              setRoomDisconnected(false);
+              joinRoomMutate(undefined);
+            });
             roomRef.current = connected;
             setMicrophoneEnabledState(false);
             setRoom(connected);

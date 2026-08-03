@@ -7,16 +7,31 @@ import {
 } from '@tanstack/react-query';
 
 import { apiClient } from '../../shared/api/client';
+import { useRealtimeConnection } from '../../shared/realtime/use-realtime-connection';
 
 import type { ApiSchema } from '@litmatch/api-client';
 
 export type PartyRoomDto = ApiSchema<'PartyRoomDto'>;
 export type PartyRoomMemberDto = ApiSchema<'PartyRoomMemberDto'>;
+export type PartyRoomCommentDto = ApiSchema<'PartyRoomCommentDto'>;
+export type PartyRoomCommentsPageDto = ApiSchema<'PartyRoomCommentsPageDto'>;
 export type PartyRole = PartyRoomMemberDto['role'];
 
 const ROOM_LIST_PAGE_LIMIT = 20;
+const ROOM_COMMENT_PAGE_LIMIT = 30;
 
 export const PARTY_ROOM_DETAIL_REFETCH_INTERVAL_MS = 5_000;
+export const PARTY_ROOM_HEALTHY_REFETCH_INTERVAL_MS = 30_000;
+
+export function partyRoomRefetchInterval(
+  status: PartyRoomDto['status'] | undefined,
+  realtimeConnected: boolean,
+): number | false {
+  if (!isActiveRoomStatus(status)) return false;
+  return realtimeConnected
+    ? PARTY_ROOM_HEALTHY_REFETCH_INTERVAL_MS
+    : PARTY_ROOM_DETAIL_REFETCH_INTERVAL_MS;
+}
 
 /** Host và speaker publish được — audience bị chặn ở tầng SFU, client phản ánh lại cho nhất quán. */
 export function canPublishRole(role: PartyRole | undefined): boolean {
@@ -26,6 +41,7 @@ export function canPublishRole(role: PartyRole | undefined): boolean {
 export const partyRoomKeys = {
   list: ['party-room', 'list'] as const,
   detail: (roomId: string) => ['party-room', 'detail', roomId] as const,
+  comments: (roomId: string) => ['party-room', 'comments', roomId] as const,
   profile: (userId: string) => ['party-room', 'profile', userId] as const,
 };
 
@@ -84,6 +100,7 @@ export function useCreateRoom() {
 
 /** Poll fallback khi phòng còn mở — realtime chỉ là gợi ý refetch sớm. */
 export function useRoomDetail(roomId: string) {
+  const realtimeConnected = useRealtimeConnection();
   return useQuery({
     queryKey: partyRoomKeys.detail(roomId),
     queryFn: async () => {
@@ -93,17 +110,75 @@ export function useRoomDetail(roomId: string) {
       return res.data?.data;
     },
     refetchInterval: (query) =>
-      isActiveRoomStatus(query.state.data?.room.status)
-        ? PARTY_ROOM_DETAIL_REFETCH_INTERVAL_MS
-        : false,
+      partyRoomRefetchInterval(
+        query.state.data?.room.status,
+        realtimeConnected,
+      ),
   });
 }
 
 export function useJoinRoom(roomId: string) {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async () => {
       const res = await apiClient.POST('/api/v1/party/rooms/{id}/join', {
         params: { path: { id: roomId } },
+      });
+      return res.data?.data;
+    },
+    onSuccess: (joined) => {
+      if (joined === undefined) return;
+      queryClient.setQueryData<
+        { room: PartyRoomDto; members: PartyRoomMemberDto[] } | undefined
+      >(partyRoomKeys.detail(roomId), (current) => {
+        if (current === undefined) return current;
+        const members = current.members.some(
+          (member) => member.userId === joined.membership.userId,
+        )
+          ? current.members.map((member) =>
+              member.userId === joined.membership.userId
+                ? { ...member, ...joined.membership }
+                : member,
+            )
+          : [...current.members, joined.membership];
+        return { room: joined.room, members };
+      });
+      void queryClient.invalidateQueries({ queryKey: partyRoomKeys.list });
+    },
+  });
+}
+
+/** Lấy các comment mới nhất; cursor trang sau đi lùi về comment cũ hơn. */
+export function useRoomComments(roomId: string) {
+  const realtimeConnected = useRealtimeConnection();
+  return useInfiniteQuery({
+    queryKey: partyRoomKeys.comments(roomId),
+    queryFn: async ({ pageParam }) => {
+      const res = await apiClient.GET('/api/v1/party/rooms/{id}/comments', {
+        params: {
+          path: { id: roomId },
+          query: { limit: ROOM_COMMENT_PAGE_LIMIT, cursor: pageParam },
+        },
+      });
+      return res.data?.data;
+    },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage?.meta.nextCursor ?? undefined,
+    refetchInterval: realtimeConnected
+      ? PARTY_ROOM_HEALTHY_REFETCH_INTERVAL_MS
+      : PARTY_ROOM_DETAIL_REFETCH_INTERVAL_MS,
+  });
+}
+
+export function useSendRoomComment(roomId: string) {
+  return useMutation({
+    mutationFn: async (input: { content: string; idempotencyKey: string }) => {
+      const res = await apiClient.POST('/api/v1/party/rooms/{id}/comments', {
+        params: {
+          path: { id: roomId },
+          header: { 'Idempotency-Key': input.idempotencyKey },
+        },
+        body: { content: input.content },
       });
       return res.data?.data;
     },

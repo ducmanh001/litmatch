@@ -1019,6 +1019,24 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/party/rooms/{id}/comments': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Lấy comment gần nhất trong Party Room */
+    get: operations['PartyRoomController_listComments'];
+    put?: never;
+    /** Gửi comment realtime trong Party Room */
+    post: operations['PartyRoomController_createComment'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/party/rooms/{id}/join': {
     parameters: {
       query?: never;
@@ -3218,6 +3236,8 @@ export interface components {
       role: 'host' | 'speaker' | 'audience';
       /** Format: date-time */
       joinedAt: string;
+      /** Format: date-time */
+      disconnectedAt: string | null;
       nickname?: string;
       speakerInvitePending: boolean;
     };
@@ -3236,6 +3256,23 @@ export interface components {
     PartyRoomDetailDto: {
       room: components['schemas']['PartyRoomDto'];
       members: components['schemas']['PartyRoomMemberDto'][];
+    };
+    PartyRoomCommentDto: {
+      id: string;
+      roomId: string;
+      senderUserId: string;
+      content: string;
+      /** Format: date-time */
+      sentAt: string;
+    };
+    PartyRoomCommentsPageDto: {
+      items: components['schemas']['PartyRoomCommentDto'][];
+      meta: {
+        nextCursor?: string | null;
+      };
+    };
+    CreatePartyRoomCommentDto: {
+      content: string;
     };
     ChangePartyRoleDto: {
       /** @enum {string} */
@@ -5631,6 +5668,70 @@ export interface operations {
         content: {
           'application/json': {
             data: components['schemas']['PartyRoomDetailDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  PartyRoomController_listComments: {
+    parameters: {
+      query?: {
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['PartyRoomCommentsPageDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  PartyRoomController_createComment: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10) */
+        'Idempotency-Key': string;
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreatePartyRoomCommentDto'];
+      };
+    };
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['PartyRoomCommentDto'];
             meta?: {
               [key: string]: unknown;
             };

@@ -1,6 +1,8 @@
 import {
   canPublishRole,
   isActiveRoomStatus,
+  partyRoomRefetchInterval,
+  PARTY_ROOM_HEALTHY_REFETCH_INTERVAL_MS,
   PARTY_ROOM_DETAIL_REFETCH_INTERVAL_MS,
 } from './api';
 
@@ -23,5 +25,15 @@ describe('canPublishRole', () => {
     expect(isActiveRoomStatus('active')).toBe(true);
     expect(isActiveRoomStatus('closed')).toBe(false);
     expect(isActiveRoomStatus(undefined)).toBe(false);
+  });
+
+  it('poll chậm khi realtime khỏe, poll sát khi socket mất', () => {
+    expect(partyRoomRefetchInterval('active', true)).toBe(
+      PARTY_ROOM_HEALTHY_REFETCH_INTERVAL_MS,
+    );
+    expect(partyRoomRefetchInterval('active', false)).toBe(
+      PARTY_ROOM_DETAIL_REFETCH_INTERVAL_MS,
+    );
+    expect(partyRoomRefetchInterval('closed', false)).toBe(false);
   });
 });

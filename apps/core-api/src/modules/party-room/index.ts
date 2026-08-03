@@ -20,4 +20,5 @@ export {
   PartyRole,
   PartyRoomMember,
 } from './entities/party-room-member.entity';
+export { PartyRoomComment } from './entities/party-room-comment.entity';
 export { PartyRoomErrors } from './party-room.errors';

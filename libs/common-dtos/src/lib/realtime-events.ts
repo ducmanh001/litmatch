@@ -53,6 +53,10 @@ export const RealtimeEvents = {
   /** Member vào/ra Party Room (fanout cho member active còn lại trong phòng). */
   PartyMemberJoined: 'party.member.joined',
   PartyMemberLeft: 'party.member.left',
+  /** Member rớt mạng ngoài ý muốn; vẫn active trong grace period để reconnect. */
+  PartyMemberDisconnected: 'party.member.disconnected',
+  /** Member reconnect trước khi grace hết. */
+  PartyMemberReconnected: 'party.member.reconnected',
   /** Host cấp/thu quyền speaker — grant SFU đã đổi xong ở server trước khi publish. */
   PartyRoleChanged: 'party.role.changed',
   /** Host gửi lời mời speaker — chỉ fanout tới audience được mời. */
@@ -67,6 +71,8 @@ export const RealtimeEvents = {
   PartyHostDisconnected: 'party.host.disconnected',
   /** Host đã kết nối lại trong lúc grace — huỷ lịch đóng phòng. */
   PartyHostReconnected: 'party.host.reconnected',
+  /** Comment mới trong Party Room — publish sau khi comment commit. */
+  PartyCommentCreated: 'party.comment.created',
   /** Quà tặng trong Party Room — publish SAU khi transaction tiền commit (docs/10 § Gift). */
   GiftSent: 'gift.sent',
   /** Movie Match: phiên xem chung mới được tạo (docs/services/movie-match-service.md § 5). */
@@ -167,6 +173,17 @@ export interface PartyMemberLeftEventData {
   userId: string;
 }
 
+export interface PartyMemberDisconnectedEventData {
+  roomId: string;
+  userId: string;
+  disconnectedAt: string;
+}
+
+export interface PartyMemberReconnectedEventData {
+  roomId: string;
+  userId: string;
+}
+
 export interface PartyRoleChangedEventData {
   roomId: string;
   userId: string;
@@ -189,6 +206,14 @@ export interface PartyHostDisconnectedEventData {
 
 export interface PartyHostReconnectedEventData {
   roomId: string;
+}
+
+export interface PartyCommentCreatedEventData {
+  roomId: string;
+  commentId: string;
+  senderUserId: string;
+  content: string;
+  sentAt: string;
 }
 
 export interface GiftSentEventData {
