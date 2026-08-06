@@ -29,5 +29,6 @@ export abstract class RefreshSessionPort {
     input: RefreshSessionRotationInput,
   ): Promise<'rotated' | 'invalid' | 'reused'>;
   abstract revoke(tokenHash: string): Promise<void>;
+  abstract revokeForUser(userId: string): Promise<void>;
   abstract revokeFamily(familyId: string): Promise<void>;
 }

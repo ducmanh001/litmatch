@@ -11,6 +11,7 @@ import { OtpService } from './services/otp.service';
 import { SocialVerifierService } from './services/social-verifier';
 import { TokenService } from './services/token.service';
 import { GuestDeviceTokenService } from './services/guest-device-token.service';
+import { RefreshSessionPort } from './ports/refresh-session.port';
 
 describe('AuthService', () => {
   const identityRepo = { findOneBy: jest.fn(), findOneByOrFail: jest.fn() };
@@ -41,6 +42,7 @@ describe('AuthService', () => {
     rotate: jest.fn(),
     revoke: jest.fn(),
   };
+  const refreshSessions = { revokeForUser: jest.fn() };
   const otpService = { requestOtp: jest.fn(), verifyOtp: jest.fn() };
   const socialVerifier = { verify: jest.fn() };
   const guestDeviceTokens = {
@@ -78,6 +80,7 @@ describe('AuthService', () => {
         { provide: OtpService, useValue: otpService },
         { provide: SocialVerifierService, useValue: socialVerifier },
         { provide: GuestDeviceTokenService, useValue: guestDeviceTokens },
+        { provide: RefreshSessionPort, useValue: refreshSessions },
         { provide: ConfigService, useValue: config },
       ],
     }).compile();
@@ -189,7 +192,7 @@ describe('AuthService', () => {
       userId: 'u1',
       provider: AuthProvider.Guest,
     });
-    expect(manager.update).toHaveBeenCalled();
+    expect(refreshSessions.revokeForUser).toHaveBeenCalledWith('u1');
   });
 
   it('social upgrade retry đúng identity idempotent; identity user khác trả conflict', async () => {

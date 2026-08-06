@@ -169,4 +169,13 @@ describe('TypeOrmRefreshSessionAdapter', () => {
       { revokedAt: expect.any(Date) },
     );
   });
+
+  it('revokeForUser thu hồi toàn bộ refresh session của user, không đụng session khác', async () => {
+    await adapter.revokeForUser('u1');
+
+    expect(repository.update).toHaveBeenCalledWith(
+      { userId: 'u1', revokedAt: expect.anything() },
+      { revokedAt: expect.any(Date) },
+    );
+  });
 });

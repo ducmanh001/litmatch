@@ -83,6 +83,12 @@ export class TypeOrmRefreshSessionAdapter implements RefreshSessionPort {
       .update({ tokenHash, revokedAt: IsNull() }, { revokedAt: new Date() });
   }
 
+  async revokeForUser(userId: string): Promise<void> {
+    await this.dataSource
+      .getRepository(RefreshToken)
+      .update({ userId, revokedAt: IsNull() }, { revokedAt: new Date() });
+  }
+
   async revokeFamily(familyId: string): Promise<void> {
     await this.dataSource
       .getRepository(RefreshToken)

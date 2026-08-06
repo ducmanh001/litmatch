@@ -20,6 +20,7 @@ describe('TokenService', () => {
     findByTokenHash: jest.fn(),
     rotate: jest.fn(),
     revoke: jest.fn(),
+    revokeForUser: jest.fn(),
     revokeFamily: jest.fn(),
   };
   const jwt = { signAsync: jest.fn().mockResolvedValue('access.jwt') };

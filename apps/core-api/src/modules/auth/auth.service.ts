@@ -1,10 +1,10 @@
 import { randomInt } from 'node:crypto';
 
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@litmatch/common-exceptions';
-import { DataSource, IsNull, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 
 import { isUniqueViolation } from '../../database/postgres-errors';
 import { User, UserService, UserStatus } from '../user';
@@ -13,11 +13,11 @@ import { generateCsrfToken } from '../../common/csrf/csrf-token';
 
 import { AuthErrors } from './auth.errors';
 import { AuthIdentity, AuthProvider } from './entities/auth-identity.entity';
-import { RefreshToken } from './entities/refresh-token.entity';
 import { OtpService } from './services/otp.service';
 import { SocialVerifierService } from './services/social-verifier';
 import { TokenService } from './services/token.service';
 import { GuestDeviceTokenService } from './services/guest-device-token.service';
+import { RefreshSessionPort } from './ports/refresh-session.port';
 
 import type { CoreApiEnv } from '../../config/env.validation';
 
@@ -47,6 +47,8 @@ export class AuthService {
     private readonly otpService: OtpService,
     private readonly socialVerifier: SocialVerifierService,
     private readonly guestDeviceTokens: GuestDeviceTokenService,
+    @Inject(RefreshSessionPort)
+    private readonly refreshSessions: RefreshSessionPort,
     private readonly config: ConfigService<CoreApiEnv, true>,
   ) {}
 
@@ -218,8 +220,9 @@ export class AuthService {
     provider: AuthProvider,
     providerUid: string,
   ): Promise<User> {
+    let shouldRevokeRefreshSessions = false;
     try {
-      return await this.dataSource.transaction(async (manager) => {
+      const user = await this.dataSource.transaction(async (manager) => {
         const user = await manager.findOne(User, {
           where: { id: userId },
           lock: { mode: 'pessimistic_write' },
@@ -254,12 +257,8 @@ export class AuthService {
         }
         if (user.isGuest) {
           // Credential guest và mọi refresh session cũ không được “đi theo” thành quyền account
-          // thật. Access token cũ chỉ còn hiệu lực tới TTL ngắn hiện tại của JWT.
-          await manager.update(
-            RefreshToken,
-            { userId, revokedAt: IsNull() },
-            { revokedAt: new Date() },
-          );
+          // thật. Port revoke được gọi sau khi transaction user/identity commit.
+          shouldRevokeRefreshSessions = true;
           await manager.delete(AuthIdentity, {
             userId,
             provider: AuthProvider.Guest,
@@ -269,6 +268,10 @@ export class AuthService {
         }
         return user;
       });
+      if (shouldRevokeRefreshSessions) {
+        await this.refreshSessions.revokeForUser(userId);
+      }
+      return user;
     } catch (err) {
       if (!isUniqueViolation(err)) throw err;
       // Request song song cùng identity: transaction thua đọc winner rồi phân loại replay/conflict.
@@ -283,9 +286,12 @@ export class AuthService {
           HttpStatus.CONFLICT,
         );
       }
-      await this.dataSource
+      const updated = await this.dataSource
         .getRepository(User)
         .update({ id: userId, isGuest: true }, { isGuest: false });
+      if (updated.affected) {
+        await this.refreshSessions.revokeForUser(userId);
+      }
       return this.assertActive(await this.userService.getByIdOrThrow(userId));
     }
   }
