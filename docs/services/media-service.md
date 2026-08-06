@@ -17,14 +17,18 @@ field, không phải input tin cậy từ client.
 ## 2. Storage provider
 
 - Local/test dùng `MEDIA_STORAGE_PROVIDER=dev`, không upload binary thật.
-- Hosted/production dùng `MEDIA_STORAGE_PROVIDER=r2` với Cloudflare R2 S3-compatible và public
-  base URL của bucket. Credential chỉ nằm ở core-api.
+- Hosted/production dùng một profile S3-compatible với public base URL của bucket. R2 vẫn được
+  giữ qua `MEDIA_STORAGE_PROVIDER=r2`; AWS S3 dùng `MEDIA_STORAGE_PROVIDER=s3` cùng
+  `AWS_REGION`, `AWS_S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`; MinIO dùng
+  `MEDIA_STORAGE_PROVIDER=minio`, thêm `AWS_S3_ENDPOINT` và thường đặt
+  `AWS_S3_FORCE_PATH_STYLE=true`. Credential chỉ nằm ở core-api.
 - Browser upload dùng presigned PUT; bucket phải cấu hình CORS cho các origin web hợp lệ và public
-  read qua custom domain hoặc public URL phù hợp môi trường. Copy
+  read qua custom domain hoặc public URL phù hợp môi trường. Với R2, copy
   `deploy/hosted/r2-cors.json`, thay `app.example.com`/`admin.example.com` bằng domain thật, rồi
-  chạy `wrangler r2 bucket cors set <bucket-name> --file deploy/hosted/r2-cors.json`.
+  chạy `wrangler r2 bucket cors set <bucket-name> --file deploy/hosted/r2-cors.json`; AWS S3 và
+  MinIO dùng CORS configuration tương ứng của provider.
 - Môi trường dev mặc định không lưu binary; muốn test upload thật phải đặt `MEDIA_STORAGE_PROVIDER=r2`
-  và điền credential R2 vào `.env`.
+  (hoặc `s3`/`minio`) và điền credential tương ứng vào `.env`.
 
 ## 3. Guard
 

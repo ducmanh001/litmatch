@@ -45,7 +45,13 @@ export interface CoreApiEnv {
   SENTRY_DSN: string;
   SENTRY_RELEASE: string;
   USER_DEFAULT_AVATAR_ID: string;
-  MEDIA_STORAGE_PROVIDER: 'dev' | 'r2';
+  MEDIA_STORAGE_PROVIDER: 'dev' | 'r2' | 's3' | 'minio';
+  AWS_REGION: string;
+  AWS_S3_ENDPOINT: string;
+  AWS_S3_BUCKET: string;
+  AWS_ACCESS_KEY_ID: string;
+  AWS_SECRET_ACCESS_KEY: string;
+  AWS_S3_FORCE_PATH_STYLE: boolean;
   MEDIA_R2_ACCOUNT_ID: string;
   MEDIA_R2_BUCKET: string;
   MEDIA_R2_ACCESS_KEY_ID: string;
@@ -236,7 +242,18 @@ export const coreApiEnvSchema = Joi.object({
   USER_DEFAULT_AVATAR_ID: Joi.string().default('default-01'),
 
   // Image uploads — dev adapter mặc định; production phải dùng storage cloud thật.
-  MEDIA_STORAGE_PROVIDER: Joi.string().valid('dev', 'r2').default('dev'),
+  MEDIA_STORAGE_PROVIDER: Joi.string()
+    .valid('dev', 'r2', 's3', 'minio')
+    .default('dev'),
+  AWS_REGION: Joi.string().default('us-east-1'),
+  AWS_S3_ENDPOINT: Joi.string()
+    .uri({ scheme: ['http', 'https'] })
+    .allow('')
+    .default(''),
+  AWS_S3_BUCKET: Joi.string().allow('').default(''),
+  AWS_ACCESS_KEY_ID: Joi.string().allow('').default(''),
+  AWS_SECRET_ACCESS_KEY: Joi.string().allow('').default(''),
+  AWS_S3_FORCE_PATH_STYLE: Joi.boolean().default(false),
   MEDIA_R2_ACCOUNT_ID: Joi.string().allow('').default(''),
   MEDIA_R2_BUCKET: Joi.string().allow('').default(''),
   MEDIA_R2_ACCESS_KEY_ID: Joi.string().allow('').default(''),

@@ -15,7 +15,7 @@ export class DevImageStorageProvider extends ImageStoragePort {
     super();
     if (this.config.get('NODE_ENV', { infer: true }) === 'production') {
       throw new Error(
-        'DevImageStorageProvider không được dùng ở production — đặt MEDIA_STORAGE_PROVIDER=r2',
+        'DevImageStorageProvider không được dùng ở production — đặt MEDIA_STORAGE_PROVIDER=r2, s3 hoặc minio',
       );
     }
   }
