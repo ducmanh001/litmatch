@@ -19,8 +19,20 @@ import {
   DisabledIapVerifier,
   DevIapVerifier,
   IapVerifier,
-  StoreIapVerifier,
 } from './ports/iap-verifier';
+import { StoreIapVerifierAdapter } from './clients/store-iap-verifier.adapter';
+import { AppleReceiptApiAdapter } from './clients/apple-receipt-api.adapter';
+import { GooglePlayReceiptApiAdapter } from './clients/google-play-receipt-api.adapter';
+import { AppleRefundApiAdapter } from './clients/apple-refund-api.adapter';
+import { GoogleRefundApiAdapter } from './clients/google-refund-api.adapter';
+import {
+  AppleReceiptGateway,
+  GooglePlayReceiptGateway,
+} from './ports/store-payment-gateways';
+import {
+  AppleRefundGateway,
+  GoogleVoidedPurchasesGateway,
+} from './ports/refund-gateways';
 import {
   AppleNotificationVerifier,
   DevAppleNotificationVerifier,
@@ -34,7 +46,7 @@ import { OutboxRelayService } from './jobs/outbox-relay.service';
 import { ReconciliationService } from './jobs/reconciliation.service';
 import { RefundService } from './services/refund.service';
 import { PayosService } from './services/payos.service';
-import { PayosClient } from './ports/payos-client';
+import { PayosClient, PayosHttpClientAdapter } from './ports/payos-client';
 import { EconomyWebhooksController } from './webhooks/economy-webhooks.controller';
 
 @Module({
@@ -59,25 +71,40 @@ import { EconomyWebhooksController } from './webhooks/economy-webhooks.controlle
     LedgerService, // writer duy nhất của ledger — KHÔNG export ra ngoài module
     RefundService,
     PayosService,
-    PayosClient,
+    PayosHttpClientAdapter,
+    { provide: PayosClient, useExisting: PayosHttpClientAdapter },
     OutboxRelayService,
     ReconciliationService,
     IapRefundPollService,
     DevIapVerifier,
     DisabledIapVerifier,
-    StoreIapVerifier,
+    StoreIapVerifierAdapter,
+    AppleReceiptApiAdapter,
+    GooglePlayReceiptApiAdapter,
+    { provide: AppleReceiptGateway, useExisting: AppleReceiptApiAdapter },
+    {
+      provide: GooglePlayReceiptGateway,
+      useExisting: GooglePlayReceiptApiAdapter,
+    },
+    AppleRefundApiAdapter,
+    GoogleRefundApiAdapter,
+    { provide: AppleRefundGateway, useExisting: AppleRefundApiAdapter },
+    {
+      provide: GoogleVoidedPurchasesGateway,
+      useExisting: GoogleRefundApiAdapter,
+    },
     {
       provide: IapVerifier,
       inject: [
         ConfigService,
         DevIapVerifier,
-        StoreIapVerifier,
+        StoreIapVerifierAdapter,
         DisabledIapVerifier,
       ],
       useFactory: (
         config: ConfigService<CoreApiEnv, true>,
         dev: DevIapVerifier,
-        store: StoreIapVerifier,
+        store: StoreIapVerifierAdapter,
         disabled: DisabledIapVerifier,
       ) => {
         const provider = config.getOrThrow('ECONOMY_IAP_VERIFIER', {

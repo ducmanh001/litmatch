@@ -25,7 +25,7 @@ export class VerifyIapDto {
     type: 'object',
     additionalProperties: true,
     description:
-      'Payload theo provider: apple {receiptData}, google {purchaseToken}; dev verifier nhận {devTransactionId}',
+      'Payload theo provider: apple {receiptData, transactionId?}, google {purchaseToken}; dev verifier nhận {devTransactionId}',
   })
   @IsObject()
   payload!: Record<string, unknown>;

@@ -1,6 +1,10 @@
 import { createHash } from 'node:crypto';
 
-import { HttpStatus, Injectable } from '@nestjs/common';
+import {
+  HttpStatus,
+  Injectable,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@litmatch/common-exceptions';
@@ -263,10 +267,8 @@ export class PayosService {
       configured ||
       this.config.getOrThrow('PAYOS_WEB_WALLET_URL', { infer: true });
     if (!base) {
-      throw new DomainException(
-        EconomyErrors.PAYOS_DISABLED,
-        'Thiếu URL quay lại ví web cho payOS',
-        HttpStatus.SERVICE_UNAVAILABLE,
+      throw new ServiceUnavailableException(
+        `${EconomyErrors.PAYOS_DISABLED}: Thiếu URL quay lại ví web cho payOS`,
       );
     }
     const url = new URL(base);

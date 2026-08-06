@@ -2969,7 +2969,7 @@ export interface components {
       provider: 'apple' | 'google';
       /** @example com.litmatch.diamond.100 */
       productId: string;
-      /** @description Payload theo provider: apple {receiptData}, google {purchaseToken}; dev verifier nhận {devTransactionId} */
+      /** @description Payload theo provider: apple {receiptData, transactionId?}, google {purchaseToken}; dev verifier nhận {devTransactionId} */
       payload: {
         [key: string]: unknown;
       };
