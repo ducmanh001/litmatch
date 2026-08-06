@@ -19,6 +19,7 @@ import { StreakService } from './services/streak.service';
 import { NotificationModule } from '../notification';
 import { SafetyModule } from '../safety';
 import { UserModule } from '../user';
+import { MediaModule } from '../media';
 
 import type Redis from 'ioredis';
 
@@ -40,6 +41,7 @@ import type Redis from 'ioredis';
     UserModule,
     SafetyModule,
     NotificationModule,
+    MediaModule,
   ],
   controllers: [FriendController],
   providers: [

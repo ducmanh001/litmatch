@@ -4,6 +4,7 @@
  * Type sinh từ `openapi/core-api.json` (`pnpm openapi:emit` → `pnpm openapi:gen`).
  */
 export { createApiClient } from './lib/client';
+export { putPresignedFile } from './lib/presigned-upload';
 export type { ApiClientOptions, CoreApiClient } from './lib/client';
 export {
   ApiError,

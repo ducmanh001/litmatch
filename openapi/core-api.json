@@ -242,6 +242,44 @@
         "tags": ["users"]
       }
     },
+    "/api/v1/media/images/upload-intent": {
+      "post": {
+        "operationId": "MediaController_createImageUploadIntent",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateImageUploadIntentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ImageUploadIntentDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Xin presigned URL upload ảnh — body binary không đi qua core-api",
+        "tags": ["media"]
+      }
+    },
     "/api/v1/auth/guest": {
       "post": {
         "operationId": "AuthController_guest",
@@ -6388,6 +6426,25 @@
         },
         "required": ["id", "nickname", "gender", "avatarId", "interests"]
       },
+      "CreateImageUploadIntentDto": {
+        "type": "object",
+        "properties": {
+          "purpose": { "type": "string", "enum": ["post", "message", "story"] },
+          "contentType": { "type": "string", "example": "image/jpeg" },
+          "sizeBytes": { "type": "number", "minimum": 1, "maximum": 25000000 }
+        },
+        "required": ["purpose", "contentType", "sizeBytes"]
+      },
+      "ImageUploadIntentDto": {
+        "type": "object",
+        "properties": {
+          "assetId": { "type": "string" },
+          "uploadUrl": { "type": "string" },
+          "publicUrl": { "type": "string" },
+          "expiresAt": { "format": "date-time", "type": "string" }
+        },
+        "required": ["assetId", "uploadUrl", "publicUrl", "expiresAt"]
+      },
       "GuestLoginDto": {
         "type": "object",
         "properties": {
@@ -6983,7 +7040,7 @@
         "type": "object",
         "properties": {
           "content": { "type": "string", "maxLength": 4000 },
-          "imageUrl": { "type": "string", "maxLength": 2048 }
+          "imageAssetId": { "type": "string" }
         }
       },
       "SoulSessionViewDto": {
@@ -7466,7 +7523,7 @@
         "type": "object",
         "properties": {
           "content": { "type": "string" },
-          "imageUrl": { "type": "string" },
+          "imageAssetId": { "type": "string" },
           "audience": {
             "type": "string",
             "enum": ["public", "friends", "only_me"],
@@ -7551,7 +7608,7 @@
       "CreateStoryDto": {
         "type": "object",
         "properties": {
-          "mediaUrl": { "type": "string" },
+          "mediaAssetId": { "type": "string" },
           "caption": { "type": "string" },
           "audience": {
             "type": "string",
@@ -7559,7 +7616,7 @@
             "default": "friends"
           }
         },
-        "required": ["mediaUrl"]
+        "required": ["mediaAssetId"]
       },
       "StoryDto": {
         "type": "object",

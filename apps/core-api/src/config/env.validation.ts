@@ -7,6 +7,7 @@ import * as Joi from 'joi';
 import { parseCorsOrigins } from '../common/cors/cors-origins';
 import { parseLivekitRegionUrls } from '../common/livekit/livekit-url';
 import { parseMaintenanceCapabilities } from './capabilities';
+import { MAX_IMAGE_UPLOAD_BYTES } from '../modules/media/media.constants';
 
 /**
  * Khớp 1-1 với `coreApiEnvSchema` bên dưới — dùng làm type param cho `ConfigService<CoreApiEnv, true>`
@@ -44,6 +45,15 @@ export interface CoreApiEnv {
   SENTRY_DSN: string;
   SENTRY_RELEASE: string;
   USER_DEFAULT_AVATAR_ID: string;
+  MEDIA_STORAGE_PROVIDER: 'dev' | 'r2';
+  MEDIA_R2_ACCOUNT_ID: string;
+  MEDIA_R2_BUCKET: string;
+  MEDIA_R2_ACCESS_KEY_ID: string;
+  MEDIA_R2_SECRET_ACCESS_KEY: string;
+  MEDIA_PUBLIC_BASE_URL: string;
+  MEDIA_UPLOAD_URL_TTL_SECONDS: number;
+  MEDIA_IMAGE_MAX_BYTES: number;
+  MEDIA_ALLOWED_IMAGE_TYPES: string;
   ECONOMY_IAP_VERIFIER: 'dev' | 'store' | 'disabled';
   ECONOMY_APPLE_SHARED_SECRET: string;
   ECONOMY_GOOGLE_PACKAGE_NAME: string;
@@ -224,6 +234,30 @@ export const coreApiEnvSchema = Joi.object({
   SENTRY_RELEASE: Joi.string().max(200).allow('').default(''),
 
   USER_DEFAULT_AVATAR_ID: Joi.string().default('default-01'),
+
+  // Image uploads — dev adapter mặc định; production phải dùng storage cloud thật.
+  MEDIA_STORAGE_PROVIDER: Joi.string().valid('dev', 'r2').default('dev'),
+  MEDIA_R2_ACCOUNT_ID: Joi.string().allow('').default(''),
+  MEDIA_R2_BUCKET: Joi.string().allow('').default(''),
+  MEDIA_R2_ACCESS_KEY_ID: Joi.string().allow('').default(''),
+  MEDIA_R2_SECRET_ACCESS_KEY: Joi.string().allow('').default(''),
+  MEDIA_PUBLIC_BASE_URL: Joi.string()
+    .uri({ scheme: ['http', 'https'] })
+    .allow('')
+    .default(''),
+  MEDIA_UPLOAD_URL_TTL_SECONDS: Joi.number()
+    .integer()
+    .min(60)
+    .max(604_800)
+    .default(900),
+  MEDIA_IMAGE_MAX_BYTES: Joi.number()
+    .integer()
+    .min(1)
+    .max(MAX_IMAGE_UPLOAD_BYTES)
+    .default(10 * 1024 * 1024),
+  MEDIA_ALLOWED_IMAGE_TYPES: Joi.string()
+    .pattern(/^image\/(jpeg|png|webp|gif)(,image\/(jpeg|png|webp|gif))*$/u)
+    .default('image/jpeg,image/png,image/webp,image/gif'),
 
   ECONOMY_IAP_VERIFIER: Joi.string()
     .valid('dev', 'store', 'disabled')

@@ -3,9 +3,8 @@ import {
   IsBoolean,
   IsOptional,
   IsString,
-  IsUrl,
+  IsUUID,
   Length,
-  MaxLength,
 } from 'class-validator';
 
 import { ApiCursorPageMeta } from '../../../common/decorators/cursor-page-query.decorator';
@@ -25,12 +24,11 @@ export class SendFriendMessageDto {
   @Length(1, MESSAGE_CONTENT_HARD_CAP)
   content?: string;
 
-  /** Ảnh đính kèm theo URL (cùng pattern CreatePostDto.imageUrl) — phải có content HOẶC ảnh. */
-  @ApiPropertyOptional({ maxLength: 2048 })
+  /** Asset ảnh đã upload qua MediaModule — phải có content HOẶC ảnh. */
+  @ApiPropertyOptional()
   @IsOptional()
-  @IsUrl({ require_protocol: true })
-  @MaxLength(2048)
-  imageUrl?: string;
+  @IsUUID()
+  imageAssetId?: string;
 }
 
 export class MessageAttachmentDto {

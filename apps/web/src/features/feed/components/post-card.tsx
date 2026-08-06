@@ -341,9 +341,7 @@ export function PostCard({
         </div>
       )}
       {post.imageUrl !== null && (
-        // Ảnh từ URL người dùng tự nhập, domain bất kỳ — next/image cần remotePatterns cấu
-        // hình trước (docs/13 § 13.9), wildcard domain ở đây sẽ mở SSRF qua image proxy nên
-        // dùng <img> thuần cho luồng test này.
+        // Ảnh đã được core-api resolve từ asset cloud; dùng <img> để không mở Next image proxy.
         <img
           src={post.imageUrl}
           alt="Ảnh bài viết"
