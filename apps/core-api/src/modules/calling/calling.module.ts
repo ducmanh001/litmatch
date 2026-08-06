@@ -2,13 +2,15 @@ import { Inject, Module, OnApplicationShutdown } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { closeCoreRedisClient } from '../../common/redis/core-redis-client';
+import { LivekitSdkClient } from '../../common/livekit/livekit-sdk.client';
 import { CallingController } from './calling.controller';
 import { CallingMetrics } from './calling.metrics';
 import { CallingService } from './calling.service';
 import { CallSession } from './entities/call-session.entity';
 import { VoiceMatchReaction } from './entities/voice-match-reaction.entity';
 import { CallTickerService } from './jobs/call-ticker.service';
-import { LivekitRoomPort, SdkLivekitRoomPort } from './ports/livekit-room';
+import { LivekitRoomAdapter } from './clients/livekit-room.adapter';
+import { LivekitRoomPort } from './ports/livekit-room';
 import {
   CALLING_REDIS,
   callingRedisProvider,
@@ -34,8 +36,9 @@ import type Redis from 'ioredis';
     CallingService,
     CallingMetrics,
     CallTickerService,
+    LivekitSdkClient,
     callingRedisProvider,
-    { provide: LivekitRoomPort, useClass: SdkLivekitRoomPort },
+    { provide: LivekitRoomPort, useClass: LivekitRoomAdapter },
   ],
   exports: [], // chưa module nào cần gọi Calling — export tối thiểu (docs/05 § 5.3)
 })

@@ -2,16 +2,15 @@ import { Inject, Module, OnApplicationShutdown } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { closeCoreRedisClient } from '../../common/redis/core-redis-client';
+import { LivekitSdkClient } from '../../common/livekit/livekit-sdk.client';
 import { PartyRoomController } from './party-room.controller';
 import { PartyRoomService } from './party-room.service';
 import { PartyRoom } from './entities/party-room.entity';
 import { PartyRoomMember } from './entities/party-room-member.entity';
 import { PartyRoomComment } from './entities/party-room-comment.entity';
 import { PartyRoomSweeperService } from './jobs/party-room-sweeper.service';
-import {
-  PartyLivekitRoomPort,
-  SdkPartyLivekitRoomPort,
-} from './ports/livekit-party-room';
+import { PartyLivekitRoomPort } from './ports/livekit-party-room';
+import { LivekitPartyRoomAdapter } from './clients/livekit-party-room.adapter';
 import { PARTY_REDIS, partyRedisProvider } from './redis/party-redis.provider';
 import { PartyLivekitWebhookController } from './webhooks/party-livekit-webhook.controller';
 import { UserModule } from '../user';
@@ -28,8 +27,9 @@ import type Redis from 'ioredis';
   providers: [
     PartyRoomService,
     PartyRoomSweeperService,
+    LivekitSdkClient,
     partyRedisProvider,
-    { provide: PartyLivekitRoomPort, useClass: SdkPartyLivekitRoomPort },
+    { provide: PartyLivekitRoomPort, useClass: LivekitPartyRoomAdapter },
   ],
   // Gift validate membership + lấy danh sách fanout qua PartyRoomService (DI — docs/03 § 3.7)
   exports: [PartyRoomService],
