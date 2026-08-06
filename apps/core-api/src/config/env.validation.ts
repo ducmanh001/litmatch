@@ -586,7 +586,8 @@ export const coreApiEnvSchema = Joi.object({
 
   // Video ngắn — W5, hướng Momo (docs/services/short-video-service.md)
   VIDEO_CAPTION_MAX_LENGTH: Joi.number().integer().min(1).default(500),
-  VIDEO_UPLOAD_ENABLED: Joi.boolean().default(true),
+  // Fail-closed: upload chỉ mở khi môi trường chủ động bật và provider thật đã được tích hợp.
+  VIDEO_UPLOAD_ENABLED: Joi.boolean().default(false),
   // pre = duyệt trước khi public (dating app VN, mặc định an toàn); post = public ngay, duyệt sau
   VIDEO_MODERATION_MODE: Joi.string().valid('pre', 'post').default('pre'),
   // Watch-time tối thiểu để tính 1 view "qualified" — cộng Video.viewCount đúng 1 lần khi vượt ngưỡng

@@ -51,9 +51,9 @@ export class ShortVideoService {
   ) {}
 
   /**
-   * Idempotent theo Idempotency-Key (docs/05 § 5.10) — replay không issue upload URL mới,
-   * đọc lại video cũ. `storageKey` do storage port sinh TRƯỚC insert; nếu insert dính unique
-   * violation (race/replay), upload URL vừa issue bị bỏ phí (chấp nhận được, không có chi phí).
+   * Idempotent theo Idempotency-Key (docs/05 § 5.10) — replay không tạo video mới, đọc lại
+   * video cũ rồi phát lại URL cho cùng `storageKey`. Key do storage port sinh TRƯỚC insert; nếu
+   * insert dính unique violation (race/replay), key vừa sinh bị bỏ qua và không được dùng cho URL.
    */
   async createUploadIntent(
     user: AuthenticatedUser,

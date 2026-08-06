@@ -54,4 +54,11 @@ describe('coreApiEnvSchema invariants', () => {
       endpointSchema.validate('ftp://storage.example').error,
     ).toBeDefined();
   });
+
+  it('video upload mặc định tắt khi provider production chưa có', () => {
+    const schema = coreApiEnvSchema.extract('VIDEO_UPLOAD_ENABLED');
+
+    expect(schema.validate(undefined).value).toBe(false);
+    expect(schema.validate(true).error).toBeUndefined();
+  });
 });
