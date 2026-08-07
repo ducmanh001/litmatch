@@ -38,6 +38,7 @@ import { SoulMatchModule } from '../modules/soul-match';
 import { SupportModule } from '../modules/support';
 import { UserModule } from '../modules/user';
 import { MediaModule } from '../modules/media';
+import { PlatformModule } from '../common/platform';
 
 import { HealthController } from './health.controller';
 import { ReadinessService } from './readiness.service';
@@ -82,6 +83,7 @@ import { CapabilitiesService } from './capabilities.service';
     }),
     ScheduleModule.forRoot(),
     MetricsModule,
+    PlatformModule,
     UserModule,
     MediaModule,
     AuthModule,

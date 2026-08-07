@@ -8,3 +8,8 @@ export type {
   BroadcastNotificationInput,
 } from './notification.service';
 export { Notification, NotificationType } from './entities/notification.entity';
+export {
+  PushNotificationPort,
+  type PushDeliveryResult,
+  type PushNotificationMessage,
+} from '../../common/platform';

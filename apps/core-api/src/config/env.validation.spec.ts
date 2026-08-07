@@ -61,4 +61,16 @@ describe('coreApiEnvSchema invariants', () => {
     expect(schema.validate(undefined).value).toBe(false);
     expect(schema.validate(true).error).toBeUndefined();
   });
+
+  it('notification and analytics provider flags are explicit and fail closed by default', () => {
+    const push = coreApiEnvSchema.extract('NOTIFICATION_PUSH_PROVIDER');
+    const analytics = coreApiEnvSchema.extract('ANALYTICS_PROVIDER');
+    const enabled = coreApiEnvSchema.extract('ANALYTICS_ENABLED');
+
+    expect(push.validate(undefined).value).toBe('dev');
+    expect(push.validate('apns').error).toBeUndefined();
+    expect(push.validate('unknown').error).toBeDefined();
+    expect(analytics.validate(undefined).value).toBe('disabled');
+    expect(enabled.validate(undefined).value).toBe(false);
+  });
 });

@@ -44,6 +44,11 @@ export interface CoreApiEnv {
   AUTH_COOKIE_SAME_SITE: 'strict' | 'none';
   SENTRY_DSN: string;
   SENTRY_RELEASE: string;
+  ANALYTICS_ENABLED: boolean;
+  ANALYTICS_PROVIDER: 'posthog' | 'disabled';
+  POSTHOG_PROJECT_TOKEN: string;
+  POSTHOG_HOST: string;
+  ANALYTICS_HTTP_TIMEOUT_MS: number;
   USER_DEFAULT_AVATAR_ID: string;
   MEDIA_STORAGE_PROVIDER: 'dev' | 'r2' | 's3' | 'minio';
   AWS_REGION: string;
@@ -141,7 +146,16 @@ export interface CoreApiEnv {
   SAFETY_TRUST_PENALTY_PER_REPORT: number;
   SAFETY_TRUST_PENALTY_DAILY_CAP: number;
   SAFETY_TRUST_SCORE_FLOOR: number;
-  NOTIFICATION_PUSH_PROVIDER: 'dev' | 'fcm' | 'disabled';
+  NOTIFICATION_PUSH_PROVIDER: 'dev' | 'fcm' | 'apns' | 'disabled';
+  NOTIFICATION_PUSH_HTTP_TIMEOUT_MS: number;
+  NOTIFICATION_FCM_PROJECT_ID: string;
+  NOTIFICATION_FCM_CLIENT_EMAIL: string;
+  NOTIFICATION_FCM_PRIVATE_KEY: string;
+  NOTIFICATION_APNS_TEAM_ID: string;
+  NOTIFICATION_APNS_KEY_ID: string;
+  NOTIFICATION_APNS_PRIVATE_KEY: string;
+  NOTIFICATION_APNS_BUNDLE_ID: string;
+  NOTIFICATION_APNS_ENVIRONMENT: 'sandbox' | 'production';
   MOVIE_MATCH_URL_MAX_LENGTH: number;
   MOVIE_MATCH_ALLOWED_VIDEO_HOSTS: string;
   MOVIE_MATCH_ANON_VIDEO_URLS: string;
@@ -238,6 +252,18 @@ export const coreApiEnvSchema = Joi.object({
     .allow('')
     .default(''),
   SENTRY_RELEASE: Joi.string().max(200).allow('').default(''),
+
+  // Server analytics — disabled by default; provider credentials are only required when enabled.
+  ANALYTICS_ENABLED: Joi.boolean().default(false),
+  ANALYTICS_PROVIDER: Joi.string()
+    .valid('posthog', 'disabled')
+    .default('disabled'),
+  POSTHOG_PROJECT_TOKEN: Joi.string().allow('').default(''),
+  POSTHOG_HOST: Joi.string()
+    .uri({ scheme: ['http', 'https'] })
+    .allow('')
+    .default('https://us.i.posthog.com'),
+  ANALYTICS_HTTP_TIMEOUT_MS: Joi.number().integer().min(100).default(5000),
 
   USER_DEFAULT_AVATAR_ID: Joi.string().default('default-01'),
 
@@ -492,10 +518,24 @@ export const coreApiEnvSchema = Joi.object({
   SAFETY_TRUST_SCORE_FLOOR: Joi.number().integer().default(0),
 
   // Notification — Giai đoạn 4 (docs/services/notification-service.md § 4)
-  // 'dev' (no-op, chặn cứng ở production) — chưa có FCM/APNs thật, giống ECONOMY_IAP_VERIFIER
+  // 'dev' (no-op, chặn cứng ở production), 'fcm' hoặc 'apns' dùng adapter provider tương ứng.
   NOTIFICATION_PUSH_PROVIDER: Joi.string()
-    .valid('dev', 'fcm', 'disabled')
+    .valid('dev', 'fcm', 'apns', 'disabled')
     .default('dev'),
+  NOTIFICATION_PUSH_HTTP_TIMEOUT_MS: Joi.number()
+    .integer()
+    .min(100)
+    .default(5000),
+  NOTIFICATION_FCM_PROJECT_ID: Joi.string().allow('').default(''),
+  NOTIFICATION_FCM_CLIENT_EMAIL: Joi.string().allow('').default(''),
+  NOTIFICATION_FCM_PRIVATE_KEY: Joi.string().allow('').default(''),
+  NOTIFICATION_APNS_TEAM_ID: Joi.string().allow('').default(''),
+  NOTIFICATION_APNS_KEY_ID: Joi.string().allow('').default(''),
+  NOTIFICATION_APNS_PRIVATE_KEY: Joi.string().allow('').default(''),
+  NOTIFICATION_APNS_BUNDLE_ID: Joi.string().allow('').default(''),
+  NOTIFICATION_APNS_ENVIRONMENT: Joi.string()
+    .valid('sandbox', 'production')
+    .default('sandbox'),
 
   // Movie Match — Giai đoạn 5 (docs/services/movie-match-service.md § 8)
   MOVIE_MATCH_URL_MAX_LENGTH: Joi.number().integer().min(1).default(2048),
