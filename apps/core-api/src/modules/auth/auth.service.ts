@@ -220,7 +220,6 @@ export class AuthService {
     provider: AuthProvider,
     providerUid: string,
   ): Promise<User> {
-    let shouldRevokeRefreshSessions = false;
     try {
       const user = await this.dataSource.transaction(async (manager) => {
         const user = await manager.findOne(User, {
@@ -257,20 +256,17 @@ export class AuthService {
         }
         if (user.isGuest) {
           // Credential guest và mọi refresh session cũ không được “đi theo” thành quyền account
-          // thật. Port revoke được gọi sau khi transaction user/identity commit.
-          shouldRevokeRefreshSessions = true;
+          // thật; revoke cùng manager để không commit upgrade nửa chừng.
           await manager.delete(AuthIdentity, {
             userId,
             provider: AuthProvider.Guest,
           });
           user.isGuest = false;
           await manager.save(user);
+          await this.refreshSessions.revokeForUser(userId, manager);
         }
         return user;
       });
-      if (shouldRevokeRefreshSessions) {
-        await this.refreshSessions.revokeForUser(userId);
-      }
       return user;
     } catch (err) {
       if (!isUniqueViolation(err)) throw err;
@@ -286,12 +282,16 @@ export class AuthService {
           HttpStatus.CONFLICT,
         );
       }
-      const updated = await this.dataSource
-        .getRepository(User)
-        .update({ id: userId, isGuest: true }, { isGuest: false });
-      if (updated.affected) {
-        await this.refreshSessions.revokeForUser(userId);
-      }
+      await this.dataSource.transaction(async (manager) => {
+        const updated = await manager.update(
+          User,
+          { id: userId, isGuest: true },
+          { isGuest: false },
+        );
+        if (updated.affected) {
+          await this.refreshSessions.revokeForUser(userId, manager);
+        }
+      });
       return this.assertActive(await this.userService.getByIdOrThrow(userId));
     }
   }

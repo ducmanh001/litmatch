@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource, IsNull } from 'typeorm';
+import { DataSource, EntityManager, IsNull } from 'typeorm';
 
 import { RefreshToken } from '../entities/refresh-token.entity';
 import type {
@@ -83,10 +83,14 @@ export class TypeOrmRefreshSessionAdapter implements RefreshSessionPort {
       .update({ tokenHash, revokedAt: IsNull() }, { revokedAt: new Date() });
   }
 
-  async revokeForUser(userId: string): Promise<void> {
-    await this.dataSource
-      .getRepository(RefreshToken)
-      .update({ userId, revokedAt: IsNull() }, { revokedAt: new Date() });
+  async revokeForUser(userId: string, manager?: EntityManager): Promise<void> {
+    const criteria = { userId, revokedAt: IsNull() };
+    const update = { revokedAt: new Date() };
+    if (manager) {
+      await manager.update(RefreshToken, criteria, update);
+      return;
+    }
+    await this.dataSource.getRepository(RefreshToken).update(criteria, update);
   }
 
   async revokeFamily(familyId: string): Promise<void> {

@@ -33,7 +33,7 @@ import {
 import { LedgerDirection } from '../entities/ledger-entry.entity';
 import { TransactionType } from '../entities/transaction.entity';
 import { PayosClient, PayosWebhookEvent } from '../ports/payos-client';
-import { LedgerService } from './ledger.service';
+import { LedgerPersistencePort } from '../ports/ledger-persistence.port';
 
 export interface PayosOrderView {
   orderId: string;
@@ -60,7 +60,7 @@ export class PayosService {
     private readonly packageRepo: Repository<PayosPackage>,
     @InjectRepository(PayosPaymentOrder)
     private readonly orderRepo: Repository<PayosPaymentOrder>,
-    private readonly ledger: LedgerService,
+    private readonly ledger: LedgerPersistencePort,
     private readonly client: PayosClient,
     private readonly config: ConfigService<CoreApiEnv, true>,
   ) {}

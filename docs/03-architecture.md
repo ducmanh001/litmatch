@@ -175,6 +175,18 @@ vẫn được ghi atomic cùng nghiệp vụ; migration chạy trước deploy;
 SameSite=None + Secure + exact CORS allowlist + CSRF. Chi tiết provisioning và quota nằm tại
 [runbook hosted-free](./runbooks/hosted-free-release.md).
 
+## 3.10 Persistence boundary trong core-api
+
+[ADR 0012](./adr/0012-postgres-persistence-boundaries.md) phân loại invariant giữa PostgreSQL và
+application transaction. Schema constraints, append-only trigger và access-path indexes là
+migration-owned; `synchronize` luôn tắt. Auth refresh lifecycle đi qua `RefreshSessionPort`, còn
+Economy facade/refund/payOS đi qua `LedgerPersistencePort`.
+
+Ledger và Matching vẫn giữ TypeORM/raw SQL ở implementation có locking: ledger writer phải khóa
+wallet theo thứ tự và ghi ledger/wallet/outbox atomically; matcher phải khóa hai ticket sau Redis
+pop và verify state tươi trước khi tạo session. Không tạo generic repository hoặc đổi database
+engine khi chưa có contract transaction-specific và evidence vận hành.
+
 ---
 
 [← 02 · Domain Model](./02-domain-model.md) · [04 · Tech Stack →](./04-tech-stack.md)

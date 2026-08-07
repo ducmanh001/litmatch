@@ -1,3 +1,5 @@
+import type { EntityManager } from 'typeorm';
+
 export interface RefreshSessionIssue {
   tokenHash: string;
   userId: string;
@@ -19,7 +21,10 @@ export interface RefreshSessionRotationInput {
   replacement: Pick<RefreshSessionIssue, 'tokenHash' | 'expiresAt'>;
 }
 
-/** Persistence boundary cho refresh session; implementation cụ thể không leak ra TokenService. */
+/**
+ * Persistence boundary cho refresh session; implementation cụ thể không leak ra TokenService.
+ * `manager` chỉ dùng khi caller phải giữ atomicity với aggregate Auth khác trong cùng transaction.
+ */
 export abstract class RefreshSessionPort {
   abstract issue(input: RefreshSessionIssue): Promise<void>;
   abstract findByTokenHash(
@@ -29,6 +34,9 @@ export abstract class RefreshSessionPort {
     input: RefreshSessionRotationInput,
   ): Promise<'rotated' | 'invalid' | 'reused'>;
   abstract revoke(tokenHash: string): Promise<void>;
-  abstract revokeForUser(userId: string): Promise<void>;
+  abstract revokeForUser(
+    userId: string,
+    manager?: EntityManager,
+  ): Promise<void>;
   abstract revokeFamily(familyId: string): Promise<void>;
 }

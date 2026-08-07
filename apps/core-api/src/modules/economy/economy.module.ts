@@ -48,6 +48,7 @@ import { RefundService } from './services/refund.service';
 import { PayosService } from './services/payos.service';
 import { PayosClient, PayosHttpClientAdapter } from './ports/payos-client';
 import { EconomyWebhooksController } from './webhooks/economy-webhooks.controller';
+import { LedgerPersistencePort } from './ports/ledger-persistence.port';
 
 @Module({
   imports: [
@@ -69,6 +70,10 @@ import { EconomyWebhooksController } from './webhooks/economy-webhooks.controlle
     EconomyService,
     EconomyMetrics,
     LedgerService, // writer duy nhất của ledger — KHÔNG export ra ngoài module
+    {
+      provide: LedgerPersistencePort,
+      useExisting: LedgerService,
+    },
     RefundService,
     PayosService,
     PayosHttpClientAdapter,

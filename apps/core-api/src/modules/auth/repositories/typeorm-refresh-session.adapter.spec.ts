@@ -1,4 +1,5 @@
 import { DataSource } from 'typeorm';
+import type { EntityManager } from 'typeorm';
 
 import { RefreshToken } from '../entities/refresh-token.entity';
 
@@ -174,6 +175,13 @@ describe('TypeOrmRefreshSessionAdapter', () => {
     await adapter.revokeForUser('u1');
 
     expect(repository.update).toHaveBeenCalledWith(
+      { userId: 'u1', revokedAt: expect.anything() },
+      { revokedAt: expect.any(Date) },
+    );
+
+    await adapter.revokeForUser('u1', manager as unknown as EntityManager);
+    expect(manager.update).toHaveBeenCalledWith(
+      RefreshToken,
       { userId: 'u1', revokedAt: expect.anything() },
       { revokedAt: expect.any(Date) },
     );

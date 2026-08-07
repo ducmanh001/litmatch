@@ -192,7 +192,7 @@ describe('AuthService', () => {
       userId: 'u1',
       provider: AuthProvider.Guest,
     });
-    expect(refreshSessions.revokeForUser).toHaveBeenCalledWith('u1');
+    expect(refreshSessions.revokeForUser).toHaveBeenCalledWith('u1', manager);
   });
 
   it('social upgrade retry đúng identity idempotent; identity user khác trả conflict', async () => {
