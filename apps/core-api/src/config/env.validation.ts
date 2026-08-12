@@ -7,6 +7,7 @@ import * as Joi from 'joi';
 import { parseCorsOrigins } from '../common/cors/cors-origins';
 import { parseLivekitRegionUrls } from '../common/livekit/livekit-url';
 import { parseMaintenanceCapabilities } from './capabilities';
+import { MAX_IMAGE_UPLOAD_BYTES } from '../modules/media/media.constants';
 
 /**
  * Khớp 1-1 với `coreApiEnvSchema` bên dưới — dùng làm type param cho `ConfigService<CoreApiEnv, true>`
@@ -25,6 +26,10 @@ export interface CoreApiEnv {
   DATABASE_URL: string;
   REDIS_URL: string;
   KAFKA_BROKERS: string;
+  EVENT_BUS_KAFKA_REQUEST_TIMEOUT_MS: number;
+  EVENT_BUS_KAFKA_RETRIES: number;
+  EVENT_BUS_CONSUMER_MAX_ATTEMPTS: number;
+  EVENT_BUS_CONSUMER_RETRY_DELAY_MS: number;
   JWT_SECRET: string;
   JWT_ACCESS_TTL_SECONDS: number;
   AUTH_REFRESH_TTL_DAYS: number;
@@ -43,7 +48,27 @@ export interface CoreApiEnv {
   AUTH_COOKIE_SAME_SITE: 'strict' | 'none';
   SENTRY_DSN: string;
   SENTRY_RELEASE: string;
+  ANALYTICS_ENABLED: boolean;
+  ANALYTICS_PROVIDER: 'posthog' | 'disabled';
+  POSTHOG_PROJECT_TOKEN: string;
+  POSTHOG_HOST: string;
+  ANALYTICS_HTTP_TIMEOUT_MS: number;
   USER_DEFAULT_AVATAR_ID: string;
+  MEDIA_STORAGE_PROVIDER: 'dev' | 'r2' | 's3' | 'minio';
+  AWS_REGION: string;
+  AWS_S3_ENDPOINT: string;
+  AWS_S3_BUCKET: string;
+  AWS_ACCESS_KEY_ID: string;
+  AWS_SECRET_ACCESS_KEY: string;
+  AWS_S3_FORCE_PATH_STYLE: boolean;
+  MEDIA_R2_ACCOUNT_ID: string;
+  MEDIA_R2_BUCKET: string;
+  MEDIA_R2_ACCESS_KEY_ID: string;
+  MEDIA_R2_SECRET_ACCESS_KEY: string;
+  MEDIA_PUBLIC_BASE_URL: string;
+  MEDIA_UPLOAD_URL_TTL_SECONDS: number;
+  MEDIA_IMAGE_MAX_BYTES: number;
+  MEDIA_ALLOWED_IMAGE_TYPES: string;
   ECONOMY_IAP_VERIFIER: 'dev' | 'store' | 'disabled';
   ECONOMY_APPLE_SHARED_SECRET: string;
   ECONOMY_GOOGLE_PACKAGE_NAME: string;
@@ -52,6 +77,7 @@ export interface CoreApiEnv {
   ECONOMY_STORE_HTTP_TIMEOUT_MS: number;
   ECONOMY_OUTBOX_RELAY_ENABLED: boolean;
   ECONOMY_OUTBOX_RELAY_INTERVAL_MS: number;
+  ECONOMY_OUTBOX_MAX_ATTEMPTS: number;
   ECONOMY_RECONCILIATION_ENABLED: boolean;
   ECONOMY_RECONCILIATION_INTERVAL_MS: number;
   ECONOMY_RECONCILIATION_FAST_INTERVAL_MS: number;
@@ -125,7 +151,16 @@ export interface CoreApiEnv {
   SAFETY_TRUST_PENALTY_PER_REPORT: number;
   SAFETY_TRUST_PENALTY_DAILY_CAP: number;
   SAFETY_TRUST_SCORE_FLOOR: number;
-  NOTIFICATION_PUSH_PROVIDER: 'dev' | 'fcm' | 'disabled';
+  NOTIFICATION_PUSH_PROVIDER: 'dev' | 'fcm' | 'apns' | 'disabled';
+  NOTIFICATION_PUSH_HTTP_TIMEOUT_MS: number;
+  NOTIFICATION_FCM_PROJECT_ID: string;
+  NOTIFICATION_FCM_CLIENT_EMAIL: string;
+  NOTIFICATION_FCM_PRIVATE_KEY: string;
+  NOTIFICATION_APNS_TEAM_ID: string;
+  NOTIFICATION_APNS_KEY_ID: string;
+  NOTIFICATION_APNS_PRIVATE_KEY: string;
+  NOTIFICATION_APNS_BUNDLE_ID: string;
+  NOTIFICATION_APNS_ENVIRONMENT: 'sandbox' | 'production';
   MOVIE_MATCH_URL_MAX_LENGTH: number;
   MOVIE_MATCH_ALLOWED_VIDEO_HOSTS: string;
   MOVIE_MATCH_ANON_VIDEO_URLS: string;
@@ -199,6 +234,21 @@ export const coreApiEnvSchema = Joi.object({
     .uri({ scheme: ['redis', 'rediss'] })
     .default('redis://localhost:6379'),
   KAFKA_BROKERS: Joi.string().default('localhost:9092'),
+  EVENT_BUS_KAFKA_REQUEST_TIMEOUT_MS: Joi.number()
+    .integer()
+    .min(100)
+    .default(5000),
+  EVENT_BUS_KAFKA_RETRIES: Joi.number().integer().min(0).max(10).default(1),
+  EVENT_BUS_CONSUMER_MAX_ATTEMPTS: Joi.number()
+    .integer()
+    .min(1)
+    .max(10)
+    .default(3),
+  EVENT_BUS_CONSUMER_RETRY_DELAY_MS: Joi.number()
+    .integer()
+    .min(0)
+    .max(60_000)
+    .default(250),
 
   JWT_SECRET: Joi.string().min(32).required(),
   JWT_ACCESS_TTL_SECONDS: Joi.number().integer().min(60).default(900),
@@ -223,7 +273,54 @@ export const coreApiEnvSchema = Joi.object({
     .default(''),
   SENTRY_RELEASE: Joi.string().max(200).allow('').default(''),
 
+  // Server analytics — disabled by default; provider credentials are only required when enabled.
+  ANALYTICS_ENABLED: Joi.boolean().default(false),
+  ANALYTICS_PROVIDER: Joi.string()
+    .valid('posthog', 'disabled')
+    .default('disabled'),
+  POSTHOG_PROJECT_TOKEN: Joi.string().allow('').default(''),
+  POSTHOG_HOST: Joi.string()
+    .uri({ scheme: ['http', 'https'] })
+    .allow('')
+    .default('https://us.i.posthog.com'),
+  ANALYTICS_HTTP_TIMEOUT_MS: Joi.number().integer().min(100).default(5000),
+
   USER_DEFAULT_AVATAR_ID: Joi.string().default('default-01'),
+
+  // Image uploads — dev adapter mặc định; production phải dùng storage cloud thật.
+  MEDIA_STORAGE_PROVIDER: Joi.string()
+    .valid('dev', 'r2', 's3', 'minio')
+    .default('dev'),
+  AWS_REGION: Joi.string().default('us-east-1'),
+  AWS_S3_ENDPOINT: Joi.string()
+    .uri({ scheme: ['http', 'https'] })
+    .allow('')
+    .default(''),
+  AWS_S3_BUCKET: Joi.string().allow('').default(''),
+  AWS_ACCESS_KEY_ID: Joi.string().allow('').default(''),
+  AWS_SECRET_ACCESS_KEY: Joi.string().allow('').default(''),
+  AWS_S3_FORCE_PATH_STYLE: Joi.boolean().default(false),
+  MEDIA_R2_ACCOUNT_ID: Joi.string().allow('').default(''),
+  MEDIA_R2_BUCKET: Joi.string().allow('').default(''),
+  MEDIA_R2_ACCESS_KEY_ID: Joi.string().allow('').default(''),
+  MEDIA_R2_SECRET_ACCESS_KEY: Joi.string().allow('').default(''),
+  MEDIA_PUBLIC_BASE_URL: Joi.string()
+    .uri({ scheme: ['http', 'https'] })
+    .allow('')
+    .default(''),
+  MEDIA_UPLOAD_URL_TTL_SECONDS: Joi.number()
+    .integer()
+    .min(60)
+    .max(604_800)
+    .default(900),
+  MEDIA_IMAGE_MAX_BYTES: Joi.number()
+    .integer()
+    .min(1)
+    .max(MAX_IMAGE_UPLOAD_BYTES)
+    .default(10 * 1024 * 1024),
+  MEDIA_ALLOWED_IMAGE_TYPES: Joi.string()
+    .pattern(/^image\/(jpeg|png|webp|gif)(,image\/(jpeg|png|webp|gif))*$/u)
+    .default('image/jpeg,image/png,image/webp,image/gif'),
 
   ECONOMY_IAP_VERIFIER: Joi.string()
     .valid('dev', 'store', 'disabled')
@@ -241,6 +338,11 @@ export const coreApiEnvSchema = Joi.object({
     .integer()
     .min(200)
     .default(2000),
+  ECONOMY_OUTBOX_MAX_ATTEMPTS: Joi.number()
+    .integer()
+    .min(1)
+    .max(100)
+    .default(5),
   ECONOMY_RECONCILIATION_ENABLED: Joi.boolean().default(true),
   ECONOMY_RECONCILIATION_INTERVAL_MS: Joi.number()
     .integer()
@@ -441,10 +543,24 @@ export const coreApiEnvSchema = Joi.object({
   SAFETY_TRUST_SCORE_FLOOR: Joi.number().integer().default(0),
 
   // Notification — Giai đoạn 4 (docs/services/notification-service.md § 4)
-  // 'dev' (no-op, chặn cứng ở production) — chưa có FCM/APNs thật, giống ECONOMY_IAP_VERIFIER
+  // 'dev' (no-op, chặn cứng ở production), 'fcm' hoặc 'apns' dùng adapter provider tương ứng.
   NOTIFICATION_PUSH_PROVIDER: Joi.string()
-    .valid('dev', 'fcm', 'disabled')
+    .valid('dev', 'fcm', 'apns', 'disabled')
     .default('dev'),
+  NOTIFICATION_PUSH_HTTP_TIMEOUT_MS: Joi.number()
+    .integer()
+    .min(100)
+    .default(5000),
+  NOTIFICATION_FCM_PROJECT_ID: Joi.string().allow('').default(''),
+  NOTIFICATION_FCM_CLIENT_EMAIL: Joi.string().allow('').default(''),
+  NOTIFICATION_FCM_PRIVATE_KEY: Joi.string().allow('').default(''),
+  NOTIFICATION_APNS_TEAM_ID: Joi.string().allow('').default(''),
+  NOTIFICATION_APNS_KEY_ID: Joi.string().allow('').default(''),
+  NOTIFICATION_APNS_PRIVATE_KEY: Joi.string().allow('').default(''),
+  NOTIFICATION_APNS_BUNDLE_ID: Joi.string().allow('').default(''),
+  NOTIFICATION_APNS_ENVIRONMENT: Joi.string()
+    .valid('sandbox', 'production')
+    .default('sandbox'),
 
   // Movie Match — Giai đoạn 5 (docs/services/movie-match-service.md § 8)
   MOVIE_MATCH_URL_MAX_LENGTH: Joi.number().integer().min(1).default(2048),
@@ -535,7 +651,8 @@ export const coreApiEnvSchema = Joi.object({
 
   // Video ngắn — W5, hướng Momo (docs/services/short-video-service.md)
   VIDEO_CAPTION_MAX_LENGTH: Joi.number().integer().min(1).default(500),
-  VIDEO_UPLOAD_ENABLED: Joi.boolean().default(true),
+  // Fail-closed: upload chỉ mở khi môi trường chủ động bật và provider thật đã được tích hợp.
+  VIDEO_UPLOAD_ENABLED: Joi.boolean().default(false),
   // pre = duyệt trước khi public (dating app VN, mặc định an toàn); post = public ngay, duyệt sau
   VIDEO_MODERATION_MODE: Joi.string().valid('pre', 'post').default('pre'),
   // Watch-time tối thiểu để tính 1 view "qualified" — cộng Video.viewCount đúng 1 lần khi vượt ngưỡng

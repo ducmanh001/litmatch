@@ -15,8 +15,8 @@ Follow, đổi query feed cá nhân hoá là việc riêng, không ảnh hưởn
 ## 2. Data model
 
 - `Post`: `authorUserId`, `content` (nullable), `imageUrl` (nullable — CHECK ít nhất 1 trong 2 có
-  giá trị; client tự upload ảnh ra host ngoài, backend chỉ lưu URL — không có storage/CDN trong
-  scope, cùng cách `User.avatarId` chỉ là reference), `likeCount`/`commentCount` (denormalized,
+  giá trị; browser upload qua Media Service bằng `imageAssetId`, backend resolve URL cloud trước
+  khi lưu), `likeCount`/`commentCount` (denormalized,
   cập nhật ATOMIC cùng transaction với insert/delete `Reaction`/`Comment` — chống pitfall "tăng
   trực tiếp 1 cột counter không transaction", docs/10 § Feed), `deletedAt` (soft delete — giữ lại
   cho comment con còn tham chiếu + audit, không hard-delete cascade).
@@ -56,7 +56,8 @@ mutable/cặp, unique DB `(postId, userId)` chặn double-like race; unlike xoá
 ## 6. Ngoài scope GĐ4
 
 - Không có Follow/personalized feed, không fanout, không edit post/comment (chỉ tạo + xoá mềm).
-- Không upload ảnh thật (chỉ nhận URL) — thêm storage/CDN là quyết định hạ tầng riêng.
+- Không nhận URL ảnh tùy ý từ client — upload ảnh đi qua Media Service; storage provider/config
+  được mô tả tại [media-service.md](./media-service.md).
 - Không cascade lọc block cho toàn bộ commenter trong thread (§ 3).
 
 ## 7. Audience per-post (W3 — docs/plans/2026-07-14-plan-6-tinh-nang-social-discovery.md § 3.3)

@@ -1,6 +1,10 @@
 import { createHash } from 'node:crypto';
 
-import { HttpStatus, Injectable } from '@nestjs/common';
+import {
+  HttpStatus,
+  Injectable,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@litmatch/common-exceptions';
@@ -29,7 +33,7 @@ import {
 import { LedgerDirection } from '../entities/ledger-entry.entity';
 import { TransactionType } from '../entities/transaction.entity';
 import { PayosClient, PayosWebhookEvent } from '../ports/payos-client';
-import { LedgerService } from './ledger.service';
+import { LedgerPersistencePort } from '../ports/ledger-persistence.port';
 
 export interface PayosOrderView {
   orderId: string;
@@ -56,7 +60,7 @@ export class PayosService {
     private readonly packageRepo: Repository<PayosPackage>,
     @InjectRepository(PayosPaymentOrder)
     private readonly orderRepo: Repository<PayosPaymentOrder>,
-    private readonly ledger: LedgerService,
+    private readonly ledger: LedgerPersistencePort,
     private readonly client: PayosClient,
     private readonly config: ConfigService<CoreApiEnv, true>,
   ) {}
@@ -263,10 +267,8 @@ export class PayosService {
       configured ||
       this.config.getOrThrow('PAYOS_WEB_WALLET_URL', { infer: true });
     if (!base) {
-      throw new DomainException(
-        EconomyErrors.PAYOS_DISABLED,
-        'Thiếu URL quay lại ví web cho payOS',
-        HttpStatus.SERVICE_UNAVAILABLE,
+      throw new ServiceUnavailableException(
+        `${EconomyErrors.PAYOS_DISABLED}: Thiếu URL quay lại ví web cho payOS`,
       );
     }
     const url = new URL(base);

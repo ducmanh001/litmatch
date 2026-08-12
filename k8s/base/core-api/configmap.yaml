@@ -51,6 +51,15 @@ data:
 
   USER_DEFAULT_AVATAR_ID: 'default-01'
 
+  # --- image uploads ---
+  MEDIA_STORAGE_PROVIDER: 'r2'
+  MEDIA_R2_ACCOUNT_ID: 'REPLACE_ME'
+  MEDIA_R2_BUCKET: 'litmatch-images'
+  MEDIA_PUBLIC_BASE_URL: 'https://images.example.com'
+  MEDIA_UPLOAD_URL_TTL_SECONDS: '900'
+  MEDIA_IMAGE_MAX_BYTES: '10485760'
+  MEDIA_ALLOWED_IMAGE_TYPES: 'image/jpeg,image/png,image/webp,image/gif'
+
   # --- economy ---
   # 'dev' = DevIapVerifier (chặn ở production nếu code enforce) — đổi 'store' khi có credential Apple/Google thật
   ECONOMY_IAP_VERIFIER: 'dev'
@@ -139,8 +148,13 @@ data:
   SAFETY_TRUST_SCORE_FLOOR: '0'
 
   # --- notification ---
-  # 'dev' = no-op — chưa có credential FCM/APNs thật (nợ kỹ thuật đã ghi ở docs/07 GĐ4)
+  # Provider adapter chỉ được bật sau khi Secret chứa credential tương ứng.
   NOTIFICATION_PUSH_PROVIDER: 'dev'
+  NOTIFICATION_PUSH_HTTP_TIMEOUT_MS: '5000'
+  ANALYTICS_ENABLED: 'false'
+  ANALYTICS_PROVIDER: 'disabled'
+  POSTHOG_HOST: 'https://us.i.posthog.com'
+  ANALYTICS_HTTP_TIMEOUT_MS: '5000'
 
   # --- movie match ---
   MOVIE_MATCH_URL_MAX_LENGTH: '2048'

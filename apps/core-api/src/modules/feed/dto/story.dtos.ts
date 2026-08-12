@@ -3,7 +3,7 @@ import {
   IsEnum,
   IsOptional,
   IsString,
-  IsUrl,
+  IsUUID,
   MaxLength,
 } from 'class-validator';
 
@@ -11,8 +11,8 @@ import { Story, StoryAudience } from '../entities/story.entity';
 
 export class CreateStoryDto {
   @ApiProperty()
-  @IsUrl()
-  mediaUrl!: string;
+  @IsUUID()
+  mediaAssetId!: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -25,6 +25,13 @@ export class CreateStoryDto {
   @IsEnum(StoryAudience)
   audience?: StoryAudience;
 }
+
+/** Input nội bộ sau khi controller đã resolve asset thành URL cloud. */
+export type CreateStoryInput = {
+  mediaUrl?: string;
+  caption?: string;
+  audience?: StoryAudience;
+};
 
 export class ReplyToStoryDto {
   @ApiProperty()

@@ -18,6 +18,8 @@ import { SocialVerifierService } from './services/social-verifier';
 import { TokenService } from './services/token.service';
 import { GuestDeviceTokenService } from './services/guest-device-token.service';
 import { PhoneSearchService } from './services/phone-search.service';
+import { RefreshSessionPort } from './ports/refresh-session.port';
+import { TypeOrmRefreshSessionAdapter } from './repositories/typeorm-refresh-session.adapter';
 
 @Module({
   imports: [
@@ -39,6 +41,8 @@ import { PhoneSearchService } from './services/phone-search.service';
     SocialVerifierService,
     GuestDeviceTokenService,
     PhoneSearchService,
+    TypeOrmRefreshSessionAdapter,
+    { provide: RefreshSessionPort, useExisting: TypeOrmRefreshSessionAdapter },
   ],
   exports: [GuestDeviceTokenService],
 })

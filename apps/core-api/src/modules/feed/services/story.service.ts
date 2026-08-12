@@ -20,11 +20,7 @@ import type { CoreApiEnv } from '../../../config/env.validation';
 const STORY_RING_BATCH_LIMIT = 1_000;
 const STORY_VIEWER_BATCH_LIMIT = 500;
 
-export interface CreateStoryInput {
-  mediaUrl: string;
-  caption?: string;
-  audience?: StoryAudience;
-}
+import type { CreateStoryInput } from '../dto/story.dtos';
 
 /**
  * Sub-service Stories (docs/services/feed-service.md § 8) — chỉ `FeedController`/`StoryController`

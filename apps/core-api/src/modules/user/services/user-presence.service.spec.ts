@@ -1,29 +1,19 @@
 import { UserPresenceService } from './user-presence.service';
 
 describe('UserPresenceService', () => {
-  it('dọn lease hết hạn rồi trả online khi còn socket', async () => {
-    const redis = {
-      zremrangebyscore: jest.fn(),
-      zcard: jest.fn().mockResolvedValue(1),
-    };
-    const service = new UserPresenceService(redis as never);
+  it('đọc online qua UserPresenceReaderPort', async () => {
+    const presence = { isOnline: jest.fn().mockResolvedValue(true) };
+    const service = new UserPresenceService(presence);
 
     await expect(service.isOnline('u1')).resolves.toBe(true);
-    expect(redis.zremrangebyscore).toHaveBeenCalledWith(
-      'realtime:presence:u1',
-      '-inf',
-      expect.any(Number),
-    );
+    expect(presence.isOnline).toHaveBeenCalledWith('u1');
   });
 
-  it('Redis lỗi → fail closed thành offline', async () => {
-    const redis = {
-      zremrangebyscore: jest.fn().mockRejectedValue(new Error('down')),
-      zcard: jest.fn(),
-    };
-    const service = new UserPresenceService(redis as never);
+  it('trả kết quả fail-closed từ UserPresenceReaderPort', async () => {
+    const presence = { isOnline: jest.fn().mockResolvedValue(false) };
+    const service = new UserPresenceService(presence);
 
     await expect(service.isOnline('u1')).resolves.toBe(false);
-    expect(redis.zcard).not.toHaveBeenCalled();
+    expect(presence.isOnline).toHaveBeenCalledWith('u1');
   });
 });

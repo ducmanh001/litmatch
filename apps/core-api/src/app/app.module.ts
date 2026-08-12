@@ -16,6 +16,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { ResponseEnvelopeInterceptor } from '../common/interceptors/response-envelope.interceptor';
 import { MetricsModule } from '../common/metrics/metrics.module';
+import { EventsModule } from '../common/events';
 import { AdminModule } from '../modules/admin';
 import { AuthModule } from '../modules/auth';
 import { AvatarModule } from '../modules/avatar';
@@ -37,6 +38,8 @@ import { ShortVideoModule } from '../modules/short-video';
 import { SoulMatchModule } from '../modules/soul-match';
 import { SupportModule } from '../modules/support';
 import { UserModule } from '../modules/user';
+import { MediaModule } from '../modules/media';
+import { PlatformModule } from '../common/platform';
 
 import { HealthController } from './health.controller';
 import { ReadinessService } from './readiness.service';
@@ -81,7 +84,10 @@ import { CapabilitiesService } from './capabilities.service';
     }),
     ScheduleModule.forRoot(),
     MetricsModule,
+    EventsModule,
+    PlatformModule,
     UserModule,
+    MediaModule,
     AuthModule,
     EconomyModule,
     MatchingModule,

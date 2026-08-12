@@ -4,11 +4,11 @@ import { z } from 'zod';
 export const sendMessageSchema = z
   .object({
     content: z.string().trim().max(1000).optional(),
-    imageUrl: z.union([z.literal(''), z.string().trim().url()]).optional(),
+    imageAssetId: z.string().optional(),
   })
   .refine(
     (value) =>
-      (value.content?.length ?? 0) > 0 || (value.imageUrl?.length ?? 0) > 0,
+      (value.content?.length ?? 0) > 0 || (value.imageAssetId?.length ?? 0) > 0,
     { message: 'Nhập nội dung hoặc thêm ảnh', path: ['content'] },
   );
 

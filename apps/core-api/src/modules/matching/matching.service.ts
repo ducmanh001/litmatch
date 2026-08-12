@@ -32,8 +32,9 @@ import {
   MatchSessionStatus,
 } from './entities/match-session.entity';
 import {
-  MATCHING_ACTIVE_SHARDS_KEY,
-  MATCHING_REDIS,
+  MATCHING_QUEUE,
+  MATCHING_RATE_LIMIT,
+  MATCHING_REALTIME,
   shardKeyOfTicket,
   speedupCountKey,
   ticketScore,
@@ -53,25 +54,15 @@ import type {
 } from '@litmatch/common-dtos';
 import type { EntityManager } from 'typeorm';
 import type { Notification } from '../notification';
-import type Redis from 'ioredis';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import type { CoreApiEnv } from '../../config/env.validation';
 import type { JoinQueueDto } from './dto/matching.dtos';
-
-/**
- * Rate-limit speed-up (spec § 4): INCR + EXPIRE-lần-đầu + check-quá-giới-hạn trong 1 Lua atomic.
- * Trả -1 = vượt giới hạn (đã tự DECR lại, lượt bị chặn không tiêu slot). Chặn TRƯỚC khi trừ tiền —
- * không bao giờ trừ rồi hoàn.
- */
-const SPEEDUP_RATE_LIMIT_LUA = `
-local c = redis.call('INCR', KEYS[1])
-if c == 1 then redis.call('EXPIRE', KEYS[1], ARGV[2]) end
-if c > tonumber(ARGV[1]) then
-  redis.call('DECR', KEYS[1])
-  return -1
-end
-return c
-`;
+import type {
+  RateLimitPort,
+  RateLimitReservation,
+} from '../../common/redis/rate-limit.port';
+import type { RealtimePublisherPort } from '../../common/realtime/realtime-publisher.port';
+import type { MatchingQueuePort } from './ports/matching-queue.port';
 
 /**
  * Nghiệp vụ ticket/queue của Matching (docs/services/matching-service.md).
@@ -90,7 +81,10 @@ export class MatchingService {
     private readonly economy: EconomyService,
     private readonly notificationService: NotificationService,
     private readonly config: ConfigService<CoreApiEnv, true>,
-    @Inject(MATCHING_REDIS) private readonly redis: Redis,
+    @Inject(MATCHING_QUEUE) private readonly queue: MatchingQueuePort,
+    @Inject(MATCHING_RATE_LIMIT) private readonly rateLimit: RateLimitPort,
+    @Inject(MATCHING_REALTIME)
+    private readonly realtime: RealtimePublisherPort,
     private readonly matcherWakeup: MatcherWakeup,
     private readonly guestQuota: GuestMatchQuotaService,
   ) {}
@@ -261,7 +255,7 @@ export class MatchingService {
       return manager.save(ticket);
     });
     // ZREM idempotent — fail thì ticket thành zombie Redis, matcher verify-lại-lúc-ghép sẽ loại (docs/10 § Matching)
-    await this.redis.zrem(shardKeyOfTicket(cancelled), cancelled.id);
+    await this.queue.remove(shardKeyOfTicket(cancelled), cancelled.id);
     return cancelled;
   }
 
@@ -365,7 +359,7 @@ export class MatchingService {
               data: { ticketId, sessionId },
             };
             return publishRealtimeEvent(
-              this.redis,
+              this.realtime,
               this.logger,
               userId,
               envelope,
@@ -418,30 +412,28 @@ export class MatchingService {
     // "lượt mới" — bỏ qua rate-limit, nếu không client retry lúc counter đầy sẽ ăn 409 oan.
     const isRetry = await this.economy.hasTransaction(prefixedKey);
 
-    // 1) Rate-limit TRƯỚC khi trừ tiền — vượt giới hạn thì chưa mất đồng nào (spec § 4)
-    if (!isRetry) {
-      const granted = Number(
-        await this.redis.eval(
-          SPEEDUP_RATE_LIMIT_LUA,
-          1,
-          countKey,
-          String(maxPerHour),
-          String(SPEEDUP_RATE_WINDOW_SECONDS),
-        ),
-      );
-      if (granted < 0) {
-        throw new DomainException(
-          MatchingErrors.SPEEDUP_RATE_LIMITED,
-          `Vượt giới hạn ${maxPerHour} lần speed-up/giờ`,
-          HttpStatus.CONFLICT,
-          { maxPerHour },
-        );
-      }
-    }
-
     // 2) Trừ tiền — ledger tự lo lock ví + idempotency + check số dư tại thời điểm trừ
     let spend: { transactionId: string; replayed: boolean };
+    let reservation: RateLimitReservation | undefined;
     try {
+      // 1) Rate-limit TRƯỚC khi trừ tiền — vượt giới hạn thì chưa mất đồng nào (spec § 4)
+      if (!isRetry) {
+        const consumed = await this.rateLimit.consume({
+          key: countKey,
+          limit: maxPerHour,
+          windowSeconds: SPEEDUP_RATE_WINDOW_SECONDS,
+        });
+        if (!consumed.allowed) {
+          throw new DomainException(
+            MatchingErrors.SPEEDUP_RATE_LIMITED,
+            `Vượt giới hạn ${maxPerHour} lần speed-up/giờ`,
+            HttpStatus.CONFLICT,
+            { maxPerHour },
+          );
+        }
+        reservation = consumed.reservation;
+      }
+
       spend = await this.economy.spendDiamond(
         user.userId,
         TransactionType.MatchingSpeedup,
@@ -453,7 +445,8 @@ export class MatchingService {
       );
     } catch (err) {
       // trừ tiền fail (vd không đủ diamond) → trả lại slot rate-limit vừa chiếm
-      if (!isRetry) await this.redis.decr(countKey).catch(() => undefined);
+      if (reservation)
+        await this.rateLimit.refund(reservation).catch(() => false);
       throw err;
     }
     if (!spend.replayed) {
@@ -466,16 +459,17 @@ export class MatchingService {
       );
     } else if (!isRetry) {
       // 2 request song song CÙNG key: bên thua replay muộn — không phải lượt mới → hoàn slot
-      await this.redis.decr(countKey).catch(() => undefined);
+      if (reservation)
+        await this.rateLimit.refund(reservation).catch(() => false);
     }
 
     // 4) Set score Redis tuyệt đối từ tổng boost trong DB — XX: member đã rời queue thì bỏ qua
     const fresh = await this.ticketRepo.findOneByOrFail({ id: ticket.id });
-    await this.redis.zadd(
+    await this.queue.enqueue(
       shardKeyOfTicket(fresh),
-      'XX',
       String(ticketScore(fresh)),
       fresh.id,
+      'XX',
     );
 
     return {
@@ -622,9 +616,14 @@ export class MatchingService {
   /** ZADD NX (không đè score đã boost) + SADD shard active — dùng chung cho join/replay. */
   async ensureEnqueued(ticket: MatchTicket): Promise<void> {
     const shard = shardKeyOfTicket(ticket);
-    await this.redis.zadd(shard, 'NX', String(ticketScore(ticket)), ticket.id);
+    await this.queue.enqueue(
+      shard,
+      String(ticketScore(ticket)),
+      ticket.id,
+      'NX',
+    );
     // SADD SAU ZADD: nếu matcher vừa SREM shard rỗng giữa 2 lệnh, SADD này khôi phục lại
-    await this.redis.sadd(MATCHING_ACTIVE_SHARDS_KEY, shard);
+    await this.queue.markActive(shard);
     this.matcherWakeup.notify();
   }
 

@@ -3,6 +3,10 @@
 	admin off
 }
 
+:80 {
+	respond /health 200
+}
+
 app.{$DOMAIN} {
 	encode zstd gzip
 	reverse_proxy web:4300

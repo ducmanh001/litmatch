@@ -11,6 +11,7 @@ import { PostAuthorAvatar } from './post-author-avatar';
 import { useCurrentUser } from '../../../shared/auth/use-current-user';
 import { useIdempotencyKey } from '../../../shared/idempotency/use-idempotency-key';
 import { showToast } from '../../../shared/lib/toast-store';
+import { uploadImage } from '../../../shared/media/image-upload';
 
 import type { CreatePostForm } from '../create-post-schema';
 import type { SVGProps } from 'react';
@@ -65,29 +66,52 @@ const AUDIENCE_OPTIONS = [
 export function PostComposer() {
   const form = useForm<CreatePostForm>({
     resolver: zodResolver(createPostSchema),
-    defaultValues: { content: '', imageUrl: '', audience: 'public' },
+    defaultValues: { content: '', imageAssetId: '', audience: 'public' },
   });
   const createPost = useCreatePost();
   const { key: idempotencyKey, resetKey } = useIdempotencyKey();
   const { data: currentUser } = useCurrentUser();
   const [showImageInput, setShowImageInput] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [uploadedImageAssetId, setUploadedImageAssetId] = useState<
+    string | undefined
+  >();
+  const [uploadError, setUploadError] = useState<string | undefined>();
+  const [isUploading, setIsUploading] = useState(false);
 
   const message =
     form.formState.errors.content?.message ??
-    form.formState.errors.imageUrl?.message ??
+    form.formState.errors.imageAssetId?.message ??
+    uploadError ??
     (isApiError(createPost.error)
       ? createPost.error.message
       : createPost.error != null
         ? 'Có lỗi xảy ra, thử lại.'
         : undefined);
 
-  const onSubmit = form.handleSubmit((values) => {
+  const onSubmit = form.handleSubmit(async (values) => {
+    setUploadError(undefined);
+    let imageAssetId = uploadedImageAssetId;
+    if (imageFile !== null && imageAssetId === undefined) {
+      setIsUploading(true);
+      try {
+        imageAssetId = (await uploadImage(imageFile, 'post')).assetId;
+        setUploadedImageAssetId(imageAssetId);
+      } catch (error) {
+        setUploadError(
+          error instanceof Error ? error.message : 'Upload ảnh thất bại.',
+        );
+        setIsUploading(false);
+        return;
+      }
+      setIsUploading(false);
+    }
     createPost.mutate(
       {
         body: {
           content: values.content === '' ? undefined : values.content,
-          imageUrl: values.imageUrl === '' ? undefined : values.imageUrl,
+          imageAssetId,
           audience: values.audience,
         },
         idempotencyKey,
@@ -95,7 +119,13 @@ export function PostComposer() {
       {
         onSuccess: (posted) => {
           if (posted === undefined) return;
-          form.reset({ content: '', imageUrl: '', audience: values.audience });
+          form.reset({
+            content: '',
+            imageAssetId: '',
+            audience: values.audience,
+          });
+          setImageFile(null);
+          setUploadedImageAssetId(undefined);
           setShowImageInput(false);
           setShowEmojiPicker(false);
           resetKey();
@@ -122,14 +152,27 @@ export function PostComposer() {
         />
       </div>
       {showImageInput && (
-        <input
-          type="text"
-          autoFocus
-          aria-label="Đường dẫn ảnh (không bắt buộc)"
-          placeholder="Đường dẫn ảnh (không bắt buộc)"
-          className="h-10 w-full rounded-xl border border-black/5 bg-transparent px-3 text-sm placeholder:text-slate-400 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-iris dark:border-white/10"
-          {...form.register('imageUrl')}
-        />
+        <div className="space-y-1">
+          <input
+            type="file"
+            autoFocus
+            aria-label="Chọn ảnh (không bắt buộc)"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            onChange={(event) => {
+              const file = event.target.files?.[0] ?? null;
+              setImageFile(file);
+              setUploadedImageAssetId(undefined);
+              form.setValue('imageAssetId', file === null ? '' : 'selected');
+              setUploadError(undefined);
+            }}
+            className="h-10 w-full rounded-xl border border-black/5 bg-transparent px-3 py-2 text-sm file:mr-2 file:rounded-full file:border-0 file:bg-iris/10 file:px-3 file:py-1 file:text-xs file:font-semibold dark:border-white/10"
+          />
+          {imageFile !== null && (
+            <p className="text-xs text-slate-500 dark:text-white/60">
+              Đã chọn: {imageFile.name}
+            </p>
+          )}
+        </div>
       )}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1 text-slate-400">
@@ -137,7 +180,16 @@ export function PostComposer() {
             type="button"
             aria-label="Đính kèm ảnh"
             aria-pressed={showImageInput}
-            onClick={() => setShowImageInput((shown) => !shown)}
+            onClick={() =>
+              setShowImageInput((shown) => {
+                if (shown) {
+                  setImageFile(null);
+                  setUploadedImageAssetId(undefined);
+                  form.setValue('imageAssetId', '');
+                }
+                return !shown;
+              })
+            }
             className={`flex h-8 w-8 items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 ${
               showImageInput ? 'text-irisl' : ''
             }`}
@@ -170,9 +222,13 @@ export function PostComposer() {
         <button
           type="submit"
           className="rounded-full bg-irisl px-5 py-2 text-sm font-bold text-white disabled:opacity-50"
-          disabled={createPost.isPending}
+          disabled={createPost.isPending || isUploading}
         >
-          {createPost.isPending ? 'Đang đăng…' : 'Đăng'}
+          {isUploading
+            ? 'Đang tải ảnh…'
+            : createPost.isPending
+              ? 'Đang đăng…'
+              : 'Đăng'}
         </button>
       </div>
       {showEmojiPicker && (

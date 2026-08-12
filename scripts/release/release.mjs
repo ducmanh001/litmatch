@@ -8,6 +8,7 @@ import {
   parseEnvFile,
   validateReleaseConfig,
 } from './release-config.mjs';
+import { assertProductionProfile } from './production-profile.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
 const composeFile = resolve(root, 'deploy/production/compose.yml');
@@ -87,8 +88,11 @@ function compose(...args) {
 }
 
 function preflight() {
+  assertProductionProfile(root);
   compose('config', '--quiet');
-  console.log('[release] Preflight PASS: env, command và Compose hợp lệ.');
+  console.log(
+    '[release] Preflight PASS: env, production profile, command và Compose hợp lệ.',
+  );
 }
 
 function build() {

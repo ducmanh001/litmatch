@@ -52,7 +52,7 @@ export class Message {
 
   /**
    * NULL cho message thường. HTTP chỉ set được `kind='image'` (whitelist ở FriendController —
-   * client gửi `imageUrl`, controller đóng gói); các kind khác (vd `story_reply`) vẫn chỉ
+   * client gửi `imageAssetId`, controller resolve thành cloud URL); các kind khác (vd `story_reply`) vẫn chỉ
    * module khác set qua DI.
    */
   @Column({ type: 'jsonb', nullable: true })

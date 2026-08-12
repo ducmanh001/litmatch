@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   buildCursorPage,
@@ -10,7 +10,9 @@ import { EntityManager, Repository } from 'typeorm';
 
 import { NotificationErrors } from './notification.errors';
 import { Notification, NotificationType } from './entities/notification.entity';
-import { PushPort } from './ports/push-provider';
+import { AnalyticsPort, PushNotificationPort } from '../../common/platform';
+
+import type { AnalyticsEvent } from '../../common/platform';
 
 import type { CursorPage, CursorPageQueryDto } from '@litmatch/common-dtos';
 
@@ -38,7 +40,8 @@ export class NotificationService {
   constructor(
     @InjectRepository(Notification)
     private readonly notificationRepo: Repository<Notification>,
-    private readonly pushPort: PushPort,
+    private readonly pushPort: PushNotificationPort,
+    @Optional() private readonly analyticsPort?: AnalyticsPort,
   ) {}
 
   async createWithManager(
@@ -79,15 +82,32 @@ export class NotificationService {
    * Best-effort — gọi SAU khi Notification đã commit (docs/services/notification-service.md § 1).
    * Không bao giờ throw ra caller: push fail không được làm hỏng luồng nghiệp vụ gốc.
    */
-  async sendPush(notification: Notification): Promise<void> {
+  async sendPush(
+    notification: Notification,
+    deviceToken?: string,
+  ): Promise<void> {
     try {
-      await this.pushPort.send(notification);
-    } catch (err) {
-      this.logger.warn(
-        `Push notification ${notification.id} lỗi (bỏ qua, in-app vẫn còn): ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
+      const result = await this.pushPort.send({
+        notificationId: notification.id,
+        recipientId: notification.userId,
+        type: notification.type,
+        ...(deviceToken ? { deviceToken } : {}),
+      });
+      if (result?.status === 'failed') {
+        this.logger.warn('Push provider failed; in-app notification retained');
+      }
+    } catch {
+      this.logger.warn('Push provider failed; in-app notification retained');
+    }
+  }
+
+  /** Optional analytics side effect; callers must not depend on its completion. */
+  async trackAnalytics(event: AnalyticsEvent): Promise<void> {
+    if (this.analyticsPort === undefined) return;
+    try {
+      await this.analyticsPort.track(event);
+    } catch {
+      this.logger.warn('Analytics provider failed; event was ignored');
     }
   }
 

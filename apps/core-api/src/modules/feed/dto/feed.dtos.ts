@@ -3,7 +3,7 @@ import {
   IsEnum,
   IsOptional,
   IsString,
-  IsUrl,
+  IsUUID,
   MaxLength,
 } from 'class-validator';
 import type { CursorPage } from '@litmatch/common-dtos';
@@ -21,14 +21,21 @@ export class CreatePostDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsUrl()
-  imageUrl?: string;
+  @IsUUID()
+  imageAssetId?: string;
 
   @ApiPropertyOptional({ enum: PostAudience, default: PostAudience.Public })
   @IsOptional()
   @IsEnum(PostAudience)
   audience?: PostAudience;
 }
+
+/** Input nội bộ sau khi controller đã resolve asset thành URL cloud. */
+export type CreatePostInput = {
+  content?: string;
+  imageUrl?: string;
+  audience?: PostAudience;
+};
 
 export class PostDto {
   @ApiProperty() id!: string;

@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 
-import { PayosClient } from './payos-client';
+import { PayosHttpClientAdapter } from './payos-client';
 
 describe('PayosClient', () => {
   const config = {
@@ -30,7 +30,7 @@ describe('PayosClient', () => {
         { status: 200 },
       ),
     );
-    const client = new PayosClient(config as never);
+    const client = new PayosHttpClientAdapter(config as never);
     await client.createPaymentLink({
       orderCode: '1760000000000000',
       amountVnd: '50000',
@@ -55,7 +55,7 @@ describe('PayosClient', () => {
   });
 
   it('từ chối webhook có signature sai trước khi service có thể query DB', () => {
-    const client = new PayosClient(config as never);
+    const client = new PayosHttpClientAdapter(config as never);
     let caught: unknown;
     try {
       client.verifyWebhook({
@@ -79,7 +79,7 @@ describe('PayosClient', () => {
   });
 
   it('quyết định success từ data đã ký, không tin outer success/code', () => {
-    const client = new PayosClient(config as never);
+    const client = new PayosHttpClientAdapter(config as never);
     const data = {
       amount: 50000,
       code: '00',
@@ -128,7 +128,7 @@ describe('PayosClient', () => {
         { status: 200 },
       ),
     );
-    const client = new PayosClient(config as never);
+    const client = new PayosHttpClientAdapter(config as never);
 
     await expect(
       client.createPaymentLink({

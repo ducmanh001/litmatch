@@ -6,6 +6,7 @@ import { InitAuthUser1751900000000 } from '../../database/migrations/17519000000
 import { UserProfilePreferences1755800000000 } from '../../database/migrations/1755800000000-user-profile-preferences';
 import { UserRole1753600000000 } from '../../database/migrations/1753600000000-user-role';
 import { EconomyLedger1752000000000 } from '../../database/migrations/1752000000000-economy-ledger';
+import { OutboxReliability1757000000000 } from '../../database/migrations/1757000000000-outbox-reliability';
 import { EconomyRefund1752100000000 } from '../../database/migrations/1752100000000-economy-refund';
 import { Avatar1753100000000 } from '../../database/migrations/1753100000000-avatar';
 
@@ -126,6 +127,7 @@ d('Avatar integration (Postgres thật)', () => {
         UserProfilePreferences1755800000000,
         UserRole1753600000000,
         EconomyLedger1752000000000,
+        OutboxReliability1757000000000,
         EconomyRefund1752100000000,
         Avatar1753100000000,
       ],

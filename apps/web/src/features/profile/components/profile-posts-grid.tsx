@@ -30,8 +30,7 @@ export function ProfilePostsGrid({ userId }: { userId: string }) {
             className="relative aspect-square overflow-hidden rounded-xl bg-surf2"
           >
             {post.imageUrl !== null ? (
-              // Ảnh từ URL người dùng tự nhập, domain bất kỳ — next/image cần remotePatterns
-              // cấu hình trước (docs/13 § 13.9); dùng <img> thuần như post-card.tsx.
+              // Ảnh đã được core-api resolve từ asset cloud; dùng <img> thuần như post-card.tsx.
               <img
                 src={post.imageUrl}
                 alt={t('profile.postImageAlt')}

@@ -93,7 +93,7 @@ export function useSendFriendMessage(conversationId: string) {
   return useMutation({
     mutationFn: async (input: {
       content?: string;
-      imageUrl?: string;
+      imageAssetId?: string;
       idempotencyKey: string;
     }) => {
       const res = await apiClient.POST('/api/v1/conversations/{id}/messages', {
@@ -101,7 +101,7 @@ export function useSendFriendMessage(conversationId: string) {
           path: { id: conversationId },
           header: { 'Idempotency-Key': input.idempotencyKey },
         },
-        body: { content: input.content, imageUrl: input.imageUrl },
+        body: { content: input.content, imageAssetId: input.imageAssetId },
       });
       return res.data?.data;
     },

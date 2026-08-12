@@ -7,6 +7,7 @@ import { InitAuthUser1751900000000 } from '../../database/migrations/17519000000
 import { UserProfilePreferences1755800000000 } from '../../database/migrations/1755800000000-user-profile-preferences';
 import { UserRole1753600000000 } from '../../database/migrations/1753600000000-user-role';
 import { EconomyLedger1752000000000 } from '../../database/migrations/1752000000000-economy-ledger';
+import { OutboxReliability1757000000000 } from '../../database/migrations/1757000000000-outbox-reliability';
 import { EconomyRefund1752100000000 } from '../../database/migrations/1752100000000-economy-refund';
 import { MatchingCore1752200000000 } from '../../database/migrations/1752200000000-matching-core';
 import { MatchingGenderPreference1752300000000 } from '../../database/migrations/1752300000000-matching-gender-preference';
@@ -60,6 +61,9 @@ import {
   MATCHING_ACTIVE_SHARDS_KEY,
   matchingShardKey,
 } from './redis/matching-redis.provider';
+import { RedisMatchingQueue } from './redis/redis-matching-queue.adapter';
+import { RedisRateLimitAdapter } from '../../common/redis/redis-rate-limit.adapter';
+import { RedisRealtimePublisher } from '../../common/realtime/redis-realtime-publisher.adapter';
 
 import type { ConfigService } from '@nestjs/config';
 import type { SchedulerRegistry } from '@nestjs/schedule';
@@ -128,6 +132,9 @@ const schedulerStub = {
 d('Matching integration (Postgres + Redis thật)', () => {
   let ds: DataSource;
   let redis: Redis;
+  let matchingQueue: RedisMatchingQueue;
+  let matchingRateLimit: RedisRateLimitAdapter;
+  let matchingRealtime: RedisRealtimePublisher;
   let matching: MatchingService;
   let economy: EconomyService;
   let worker: MatcherWorkerService;
@@ -242,6 +249,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
         UserProfilePreferences1755800000000,
         UserRole1753600000000,
         EconomyLedger1752000000000,
+        OutboxReliability1757000000000,
         EconomyRefund1752100000000,
         MatchingCore1752200000000,
         MatchingGenderPreference1752300000000,
@@ -260,6 +268,9 @@ d('Matching integration (Postgres + Redis thật)', () => {
     redis = new Redis(process.env['REDIS_URL'] ?? 'redis://localhost:6379', {
       db: 15,
     });
+    matchingQueue = new RedisMatchingQueue(redis, MATCHING_ACTIVE_SHARDS_KEY);
+    matchingRateLimit = new RedisRateLimitAdapter(redis);
+    matchingRealtime = new RedisRealtimePublisher(redis);
 
     const ledger = new LedgerService(
       ds,
@@ -306,7 +317,9 @@ d('Matching integration (Postgres + Redis thật)', () => {
       economy,
       notificationStub as never,
       configStub,
-      redis,
+      matchingQueue,
+      matchingRateLimit,
+      matchingRealtime,
       matcherWakeup,
       guestQuota,
     );
@@ -317,7 +330,8 @@ d('Matching integration (Postgres + Redis thật)', () => {
       ds,
       configStub,
       schedulerStub,
-      redis,
+      matchingQueue,
+      matchingRealtime,
       policyStub,
       matchingMetrics,
       notificationStub as never,
@@ -327,13 +341,19 @@ d('Matching integration (Postgres + Redis thật)', () => {
       ds,
       configStub,
       schedulerStub,
-      redis,
+      matchingQueue,
+      matchingRealtime,
       policyStub,
       matchingMetrics,
       notificationStub as never,
       matcherWakeup,
     );
-    sweeper = new TicketSweeperService(ds, configStub, schedulerStub, redis);
+    sweeper = new TicketSweeperService(
+      ds,
+      configStub,
+      schedulerStub,
+      matchingQueue,
+    );
     invite = new InviteService(
       ds,
       ds.getRepository(MatchInvite),
@@ -341,7 +361,8 @@ d('Matching integration (Postgres + Redis thật)', () => {
       safetyStub as never,
       notificationStub as never,
       policyStub,
-      redis,
+      matchingRateLimit,
+      matchingRealtime,
       configStub,
     );
     inviteSweeper = new InviteSweeperService(ds, configStub, schedulerStub);

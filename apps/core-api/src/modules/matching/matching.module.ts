@@ -1,7 +1,6 @@
 import { Inject, Module, OnApplicationShutdown } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { closeCoreRedisClient } from '../../common/redis/core-redis-client';
 import { MatchingController } from './matching.controller';
 import { InviteController } from './controllers/invite.controller';
 import { MatchingMetrics } from './matching.metrics';
@@ -18,8 +17,13 @@ import { GuestMatchQuota } from './entities/guest-match-quota.entity';
 import { GuestMatchQuotaService } from './services/guest-match-quota.service';
 import { MATCH_INTERACTION_POLICY } from './ports/interaction-policy';
 import {
-  MATCHING_REDIS,
-  matchingRedisProvider,
+  MATCHING_QUEUE,
+  MATCHING_RATE_LIMIT,
+  MATCHING_REALTIME,
+  matchingRateLimitProvider,
+  matchingRealtimeProvider,
+  matchingRedisClientProvider,
+  matchingQueueProvider,
 } from './redis/matching-redis.provider';
 import { EconomyModule } from '../economy';
 import { NotificationModule } from '../notification';
@@ -27,7 +31,9 @@ import { SafetyModule, SafetyService } from '../safety';
 import { UserModule } from '../user';
 import { AuthModule } from '../auth';
 
-import type Redis from 'ioredis';
+import type { RateLimitPort } from '../../common/redis/rate-limit.port';
+import type { RealtimePublisherPort } from '../../common/realtime/realtime-publisher.port';
+import type { MatchingQueuePort } from './ports/matching-queue.port';
 
 @Module({
   imports: [
@@ -53,7 +59,10 @@ import type Redis from 'ioredis';
     TicketSweeperService,
     InviteSweeperService,
     GuestMatchQuotaService,
-    matchingRedisProvider,
+    matchingRedisClientProvider,
+    matchingQueueProvider,
+    matchingRateLimitProvider,
+    matchingRealtimeProvider,
     // Safety module cung cấp implementation thật (docs/services/safety-service.md § 6) —
     // SafetyService.canPair thoả mãn MatchInteractionPolicy bằng structural typing
     { provide: MATCH_INTERACTION_POLICY, useExisting: SafetyService },
@@ -62,9 +71,16 @@ import type Redis from 'ioredis';
   exports: [MatchingService],
 })
 export class MatchingModule implements OnApplicationShutdown {
-  constructor(@Inject(MATCHING_REDIS) private readonly redis: Redis) {}
+  constructor(
+    @Inject(MATCHING_QUEUE) private readonly queue: MatchingQueuePort,
+    @Inject(MATCHING_RATE_LIMIT) private readonly rateLimit: RateLimitPort,
+    @Inject(MATCHING_REALTIME)
+    private readonly realtime: RealtimePublisherPort,
+  ) {}
 
   async onApplicationShutdown(): Promise<void> {
-    await closeCoreRedisClient(this.redis);
+    await this.queue.close();
+    await this.rateLimit.close?.();
+    await this.realtime.close?.();
   }
 }
