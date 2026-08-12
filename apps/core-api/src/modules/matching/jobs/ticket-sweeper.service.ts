@@ -21,14 +21,13 @@ import {
   MatchSessionStatus,
 } from '../entities/match-session.entity';
 import {
-  MATCHING_ACTIVE_SHARDS_KEY,
-  MATCHING_REDIS,
+  MATCHING_QUEUE,
   matchingShardKey,
   ticketScore,
 } from '../redis/matching-redis.provider';
 
-import type Redis from 'ioredis';
 import type { CoreApiEnv } from '../../../config/env.validation';
+import type { MatchingQueuePort } from '../ports/matching-queue.port';
 
 const SWEEPER_JOB = 'matching-ticket-sweeper';
 /** Giới hạn số session xử lý mỗi tick — batch vận hành nội bộ, không phải rule nghiệp vụ. */
@@ -57,7 +56,7 @@ export class TicketSweeperService
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly config: ConfigService<CoreApiEnv, true>,
     private readonly scheduler: SchedulerRegistry,
-    @Inject(MATCHING_REDIS) private readonly redis: Redis,
+    @Inject(MATCHING_QUEUE) private readonly queue: MatchingQueuePort,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -131,7 +130,7 @@ export class TicketSweeperService
     ];
     for (const row of rows) {
       // ZREM idempotent — ticketId không còn trong sorted set (đã bị pop) thì bỏ qua (spec § 3)
-      await this.redis.zrem(
+      await this.queue.remove(
         matchingShardKey(row.match_type, row.region, row.age_band),
         row.id,
       );
@@ -226,13 +225,13 @@ export class TicketSweeperService
         ticket.region,
         ticket.ageBand,
       );
-      await this.redis.zadd(
+      await this.queue.enqueue(
         shard,
-        'NX',
         String(ticketScore(ticket)),
         ticket.id,
+        'NX',
       );
-      await this.redis.sadd(MATCHING_ACTIVE_SHARDS_KEY, shard);
+      await this.queue.markActive(shard);
     }
     return done;
   }

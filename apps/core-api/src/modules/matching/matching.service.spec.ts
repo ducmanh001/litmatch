@@ -15,7 +15,6 @@ import { GuestMatchQuotaService } from './services/guest-match-quota.service';
 
 import type { ConfigService } from '@nestjs/config';
 import type { DataSource, EntityManager, Repository } from 'typeorm';
-import type Redis from 'ioredis';
 
 import type { CoreApiEnv } from '../../config/env.validation';
 import type { EconomyService } from '../economy';
@@ -57,7 +56,7 @@ function makeTicket(overrides: Partial<MatchTicket> = {}): MatchTicket {
   });
 }
 
-describe('MatchingService (unit — mock repo/redis/economy)', () => {
+describe('MatchingService (unit — mock repo/capabilities/economy)', () => {
   let ticketRepo: jest.Mocked<
     Pick<
       Repository<MatchTicket>,
@@ -69,14 +68,9 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
       | 'increment'
     >
   >;
-  let redis: {
-    eval: jest.Mock;
-    zadd: jest.Mock;
-    zrem: jest.Mock;
-    sadd: jest.Mock;
-    decr: jest.Mock;
-    publish: jest.Mock;
-  };
+  let queue: Record<string, jest.Mock>;
+  let rateLimit: Record<string, jest.Mock>;
+  let realtime: Record<string, jest.Mock>;
   let economy: { spendDiamond: jest.Mock; hasTransaction: jest.Mock };
   let notificationService: {
     createWithManager: jest.Mock;
@@ -107,12 +101,29 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
         generatedMaps: [],
       })),
     } as never;
-    redis = {
-      eval: jest.fn(async () => 1),
-      zadd: jest.fn(async () => 1),
-      zrem: jest.fn(async () => 1),
-      sadd: jest.fn(async () => 1),
-      decr: jest.fn(async () => 0),
+    queue = {
+      enqueue: jest.fn(async () => undefined),
+      remove: jest.fn(async () => undefined),
+      popMin: jest.fn(async () => []),
+      listActiveShards: jest.fn(async () => []),
+      markActive: jest.fn(async () => undefined),
+      unmarkActive: jest.fn(async () => undefined),
+      hasEntries: jest.fn(async () => false),
+      close: jest.fn(async () => undefined),
+    };
+    rateLimit = {
+      consume: jest.fn(async () => ({
+        allowed: true as const,
+        deduplicated: false,
+        reservation: {
+          rateLimitKey: 'matching:speedup:count:user-me',
+          reservationKey: 'reservation-1',
+          windowKey: 'window-1',
+        },
+      })),
+      refund: jest.fn(async () => true),
+    };
+    realtime = {
       publish: jest.fn(async () => 1),
     };
     economy = {
@@ -179,7 +190,9 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
       economy as unknown as EconomyService,
       notificationService as never,
       config,
-      redis as unknown as Redis,
+      queue as never,
+      rateLimit as never,
+      realtime as never,
       matcherWakeup,
       guestQuota as unknown as GuestMatchQuotaService,
     );
@@ -194,14 +207,13 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
       );
       expect(ticket.region).toBe('VN'); // từ profile, client không gửi được
       expect(ticket.ageBand).toBe(Math.floor(26 / 5)); // sinh 2000-01-01, hôm nay 2026-07 → 26 tuổi
-      expect(redis.zadd).toHaveBeenCalledWith(
+      expect(queue.enqueue).toHaveBeenCalledWith(
         'matching:queue:voice:VN:5',
-        'NX',
         String(ticket.enqueuedAt.getTime()),
         ticket.id,
+        'NX',
       );
-      expect(redis.sadd).toHaveBeenCalledWith(
-        'matching:shards:active',
+      expect(queue.markActive).toHaveBeenCalledWith(
         'matching:queue:voice:VN:5',
       );
       expect(matcherWakeup.notify).toHaveBeenCalledTimes(1);
@@ -253,11 +265,11 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
         'k1',
       );
       expect(ticket).toBe(existing);
-      expect(redis.zadd).toHaveBeenCalledWith(
+      expect(queue.enqueue).toHaveBeenCalledWith(
         expect.any(String),
-        'NX',
         expect.any(String),
         existing.id,
+        'NX',
       );
     });
 
@@ -413,7 +425,7 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
       manager.findOne.mockResolvedValueOnce(makeTicket());
       const cancelled = await service.cancelTicket(me, 'ticket-1');
       expect(cancelled.status).toBe(MatchTicketStatus.Cancelled);
-      expect(redis.zrem).toHaveBeenCalledWith(
+      expect(queue.remove).toHaveBeenCalledWith(
         'matching:queue:voice:VN:5',
         'ticket-1',
       );
@@ -429,7 +441,10 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
     });
 
     it('rate-limit vượt giới hạn → 409 RATE_LIMITED và KHÔNG gọi spendDiamond (chặn trước khi trừ tiền)', async () => {
-      redis.eval.mockResolvedValueOnce(-1);
+      rateLimit.consume.mockResolvedValueOnce({
+        allowed: false,
+        deduplicated: false,
+      });
       await expect(
         service.speedup(me, 'ticket-1', 'sk1'),
       ).rejects.toMatchObject({
@@ -440,9 +455,17 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
 
     it('happy path: rate-limit TRƯỚC spendDiamond, rồi boost DB + ZADD XX score tuyệt đối', async () => {
       const callOrder: string[] = [];
-      redis.eval.mockImplementationOnce(async () => {
+      rateLimit.consume.mockImplementationOnce(async () => {
         callOrder.push('rate-limit');
-        return 1;
+        return {
+          allowed: true,
+          deduplicated: false,
+          reservation: {
+            rateLimitKey: 'matching:speedup:count:user-me',
+            reservationKey: 'reservation-1',
+            windowKey: 'window-1',
+          },
+        };
       });
       economy.spendDiamond.mockImplementationOnce(async () => {
         callOrder.push('spend');
@@ -466,11 +489,11 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
       // score tuyệt đối = enqueuedAtMs - tổng boost trong DB (không ZINCRBY tương đối)
       const expectedScore =
         new Date('2026-07-12T00:00:00Z').getTime() - 300_000;
-      expect(redis.zadd).toHaveBeenCalledWith(
+      expect(queue.enqueue).toHaveBeenCalledWith(
         'matching:queue:voice:VN:5',
-        'XX',
         String(expectedScore),
         'ticket-1',
+        'XX',
       );
       expect(result.replayed).toBe(false);
     });
@@ -483,15 +506,13 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
       const result = await service.speedup(me, 'ticket-1', 'sk1');
       expect(result.replayed).toBe(true);
       expect(ticketRepo.increment).not.toHaveBeenCalled();
-      expect(redis.decr).toHaveBeenCalledWith(
-        `matching:speedup:count:${me.userId}`,
-      );
+      expect(rateLimit.refund).toHaveBeenCalledTimes(1);
       // vẫn sửa lại score Redis từ tổng boost DB (retry-hoàn-tất an toàn, spec § 4)
-      expect(redis.zadd).toHaveBeenCalledWith(
+      expect(queue.enqueue).toHaveBeenCalledWith(
         expect.any(String),
-        'XX',
         expect.any(String),
         'ticket-1',
+        'XX',
       );
     });
 
@@ -504,9 +525,7 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
       ).rejects.toMatchObject({
         code: 'ECONOMY_WALLET_INSUFFICIENT_BALANCE',
       });
-      expect(redis.decr).toHaveBeenCalledWith(
-        `matching:speedup:count:${me.userId}`,
-      );
+      expect(rateLimit.refund).toHaveBeenCalledTimes(1);
       expect(ticketRepo.increment).not.toHaveBeenCalled();
     });
 
@@ -518,8 +537,8 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
       });
       const result = await service.speedup(me, 'ticket-1', 'sk1');
       expect(result.replayed).toBe(true);
-      expect(redis.eval).not.toHaveBeenCalled(); // retry không bị đếm/chặn như lượt mới
-      expect(redis.decr).not.toHaveBeenCalled(); // không chiếm slot thì không có gì để hoàn
+      expect(rateLimit.consume).not.toHaveBeenCalled(); // retry không bị đếm/chặn như lượt mới
+      expect(rateLimit.refund).not.toHaveBeenCalled(); // không chiếm slot thì không có gì để hoàn
       expect(ticketRepo.increment).not.toHaveBeenCalled();
     });
 
@@ -532,7 +551,7 @@ describe('MatchingService (unit — mock repo/redis/economy)', () => {
       ).rejects.toMatchObject({
         code: MatchingErrors.TICKET_INVALID_TRANSITION,
       });
-      expect(redis.eval).not.toHaveBeenCalled();
+      expect(rateLimit.consume).not.toHaveBeenCalled();
       expect(economy.spendDiamond).not.toHaveBeenCalled();
     });
   });

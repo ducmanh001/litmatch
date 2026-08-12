@@ -247,6 +247,8 @@ d('Soul Match integration (Postgres thật)', () => {
       notificationStub as never,
       configStub,
       {} as never,
+      {} as never,
+      {} as never,
       new MatcherWakeup(),
       {
         authorize: async () => undefined,

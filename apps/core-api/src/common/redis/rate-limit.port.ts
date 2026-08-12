@@ -4,6 +4,8 @@
 export interface RateLimitPort {
   consume(request: RateLimitConsumeRequest): Promise<RateLimitConsumeResult>;
   refund(reservation: RateLimitReservation): Promise<boolean>;
+  /** Optional lifecycle hook for adapters that own a shared transport client. */
+  close?(): Promise<void>;
 }
 
 export interface RateLimitConsumeRequest {

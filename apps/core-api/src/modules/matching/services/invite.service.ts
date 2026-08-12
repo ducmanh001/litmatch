@@ -14,7 +14,6 @@ import {
   violatedConstraint,
 } from '../../../database/postgres-errors';
 import { publishRealtimeEvent } from '../../../common/realtime/publish-realtime';
-import { checkRateLimit } from '../../../common/redis/rate-limit';
 import {
   ageBandOf,
   inviteAcceptIdempotencyKey,
@@ -34,13 +33,15 @@ import {
   MatchSession,
   MatchSessionStatus,
 } from '../entities/match-session.entity';
-import { MATCHING_REDIS } from '../redis/matching-redis.provider';
+import {
+  MATCHING_RATE_LIMIT,
+  MATCHING_REALTIME,
+} from '../redis/matching-redis.provider';
 import { MATCH_INTERACTION_POLICY } from '../ports/interaction-policy';
 import { NotificationService, NotificationType } from '../../notification';
 import { SafetyService } from '../../safety';
 import { User, UserService, UserStatus } from '../../user';
 
-import type Redis from 'ioredis';
 import type {
   CursorPage,
   CursorPageQueryDto,
@@ -52,6 +53,8 @@ import type { AuthenticatedUser } from '../../../common/decorators/current-user.
 import type { CoreApiEnv } from '../../../config/env.validation';
 import type { MatchInteractionPolicy } from '../ports/interaction-policy';
 import type { CreateInviteDto } from '../dto/invite.dtos';
+import type { RateLimitPort } from '../../../common/redis/rate-limit.port';
+import type { RealtimePublisherPort } from '../../../common/realtime/realtime-publisher.port';
 
 const RATE_LIMIT_WINDOW_SECONDS = 3600;
 
@@ -81,7 +84,9 @@ export class InviteService {
     private readonly notificationService: NotificationService,
     @Inject(MATCH_INTERACTION_POLICY)
     private readonly interactionPolicy: MatchInteractionPolicy,
-    @Inject(MATCHING_REDIS) private readonly redis: Redis,
+    @Inject(MATCHING_RATE_LIMIT) private readonly rateLimit: RateLimitPort,
+    @Inject(MATCHING_REALTIME)
+    private readonly realtime: RealtimePublisherPort,
     private readonly config: ConfigService<CoreApiEnv, true>,
   ) {}
 
@@ -101,13 +106,12 @@ export class InviteService {
       'MATCHING_INVITE_RATE_LIMIT_PER_HOUR',
       { infer: true },
     );
-    const allowed = await checkRateLimit(
-      this.redis,
-      inviteRateLimitKey(user.userId),
-      maxPerHour,
-      RATE_LIMIT_WINDOW_SECONDS,
-    );
-    if (!allowed) {
+    const consumed = await this.rateLimit.consume({
+      key: inviteRateLimitKey(user.userId),
+      limit: maxPerHour,
+      windowSeconds: RATE_LIMIT_WINDOW_SECONDS,
+    });
+    if (!consumed.allowed) {
       throw new DomainException(
         MatchingErrors.INVITE_RATE_LIMITED,
         `Vượt giới hạn ${maxPerHour} lời mời/giờ`,
@@ -408,7 +412,7 @@ export class InviteService {
             data: { ticketId, sessionId },
           };
           return publishRealtimeEvent(
-            this.redis,
+            this.realtime,
             this.logger,
             userId,
             envelope,

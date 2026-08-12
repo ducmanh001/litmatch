@@ -61,6 +61,9 @@ import {
   MATCHING_ACTIVE_SHARDS_KEY,
   matchingShardKey,
 } from './redis/matching-redis.provider';
+import { RedisMatchingQueue } from './redis/redis-matching-queue.adapter';
+import { RedisRateLimitAdapter } from '../../common/redis/redis-rate-limit.adapter';
+import { RedisRealtimePublisher } from '../../common/realtime/redis-realtime-publisher.adapter';
 
 import type { ConfigService } from '@nestjs/config';
 import type { SchedulerRegistry } from '@nestjs/schedule';
@@ -129,6 +132,9 @@ const schedulerStub = {
 d('Matching integration (Postgres + Redis thật)', () => {
   let ds: DataSource;
   let redis: Redis;
+  let matchingQueue: RedisMatchingQueue;
+  let matchingRateLimit: RedisRateLimitAdapter;
+  let matchingRealtime: RedisRealtimePublisher;
   let matching: MatchingService;
   let economy: EconomyService;
   let worker: MatcherWorkerService;
@@ -262,6 +268,9 @@ d('Matching integration (Postgres + Redis thật)', () => {
     redis = new Redis(process.env['REDIS_URL'] ?? 'redis://localhost:6379', {
       db: 15,
     });
+    matchingQueue = new RedisMatchingQueue(redis, MATCHING_ACTIVE_SHARDS_KEY);
+    matchingRateLimit = new RedisRateLimitAdapter(redis);
+    matchingRealtime = new RedisRealtimePublisher(redis);
 
     const ledger = new LedgerService(
       ds,
@@ -308,7 +317,9 @@ d('Matching integration (Postgres + Redis thật)', () => {
       economy,
       notificationStub as never,
       configStub,
-      redis,
+      matchingQueue,
+      matchingRateLimit,
+      matchingRealtime,
       matcherWakeup,
       guestQuota,
     );
@@ -319,7 +330,8 @@ d('Matching integration (Postgres + Redis thật)', () => {
       ds,
       configStub,
       schedulerStub,
-      redis,
+      matchingQueue,
+      matchingRealtime,
       policyStub,
       matchingMetrics,
       notificationStub as never,
@@ -329,13 +341,19 @@ d('Matching integration (Postgres + Redis thật)', () => {
       ds,
       configStub,
       schedulerStub,
-      redis,
+      matchingQueue,
+      matchingRealtime,
       policyStub,
       matchingMetrics,
       notificationStub as never,
       matcherWakeup,
     );
-    sweeper = new TicketSweeperService(ds, configStub, schedulerStub, redis);
+    sweeper = new TicketSweeperService(
+      ds,
+      configStub,
+      schedulerStub,
+      matchingQueue,
+    );
     invite = new InviteService(
       ds,
       ds.getRepository(MatchInvite),
@@ -343,7 +361,8 @@ d('Matching integration (Postgres + Redis thật)', () => {
       safetyStub as never,
       notificationStub as never,
       policyStub,
-      redis,
+      matchingRateLimit,
+      matchingRealtime,
       configStub,
     );
     inviteSweeper = new InviteSweeperService(ds, configStub, schedulerStub);

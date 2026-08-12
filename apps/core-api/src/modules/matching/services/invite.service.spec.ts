@@ -17,7 +17,6 @@ import { UserStatus } from '../../user';
 
 import type { ConfigService } from '@nestjs/config';
 import type { DataSource, EntityManager, Repository } from 'typeorm';
-import type Redis from 'ioredis';
 import type { CoreApiEnv } from '../../../config/env.validation';
 import type { AuthenticatedUser } from '../../../common/decorators/current-user.decorator';
 import type { NotificationService } from '../../notification';
@@ -77,7 +76,7 @@ function makeUser(overrides: Partial<User> = {}): User {
   } as User;
 }
 
-describe('InviteService (unit — mock repo/redis/deps)', () => {
+describe('InviteService (unit — mock repo/capabilities/deps)', () => {
   let inviteRepo: jest.Mocked<
     Pick<
       Repository<MatchInvite>,
@@ -88,7 +87,8 @@ describe('InviteService (unit — mock repo/redis/deps)', () => {
   let safetyService: { getHiddenUserIds: jest.Mock };
   let notificationService: { create: jest.Mock; sendPush: jest.Mock };
   let interactionPolicy: { canPair: jest.Mock };
-  let redis: { eval: jest.Mock; publish: jest.Mock };
+  let rateLimit: Record<string, jest.Mock>;
+  let realtime: Record<string, jest.Mock>;
   let manager: {
     findOne: jest.Mock;
     find: jest.Mock;
@@ -115,7 +115,19 @@ describe('InviteService (unit — mock repo/redis/deps)', () => {
       sendPush: jest.fn(async () => undefined),
     };
     interactionPolicy = { canPair: jest.fn(async () => true) };
-    redis = { eval: jest.fn(async () => 1), publish: jest.fn(async () => 1) };
+    rateLimit = {
+      consume: jest.fn(async () => ({
+        allowed: true as const,
+        deduplicated: false,
+        reservation: {
+          rateLimitKey: 'matching:invite:count:user-inviter',
+          reservationKey: 'reservation-1',
+          windowKey: 'window-1',
+        },
+      })),
+      refund: jest.fn(async () => true),
+    };
+    realtime = { publish: jest.fn(async () => 1) };
     manager = {
       findOne: jest.fn(),
       find: jest.fn(async () => []),
@@ -136,7 +148,8 @@ describe('InviteService (unit — mock repo/redis/deps)', () => {
       safetyService as unknown as SafetyService,
       notificationService as unknown as NotificationService,
       interactionPolicy as unknown as MatchInteractionPolicy,
-      redis as unknown as Redis,
+      rateLimit as never,
+      realtime as never,
       configStub,
     );
   });
@@ -151,12 +164,15 @@ describe('InviteService (unit — mock repo/redis/deps)', () => {
       ).rejects.toMatchObject({
         code: MatchingErrors.INVITE_TARGET_UNAVAILABLE,
       });
-      expect(redis.eval).not.toHaveBeenCalled();
+      expect(rateLimit.consume).not.toHaveBeenCalled();
       expect(inviteRepo.save).not.toHaveBeenCalled();
     });
 
     it('vượt rate limit → INVITE_RATE_LIMITED, không check hidden-set/insert', async () => {
-      redis.eval.mockResolvedValue(-1);
+      rateLimit.consume.mockResolvedValue({
+        allowed: false,
+        deduplicated: false,
+      });
       await expect(
         service.createInvite(inviter, {
           inviteeUserId: invitee.userId,

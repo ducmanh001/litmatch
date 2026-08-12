@@ -306,6 +306,8 @@ d('Calling integration (Postgres thật)', () => {
       } as never,
       configStub,
       {} as never,
+      {} as never,
+      {} as never,
       new MatcherWakeup(),
       {
         authorize: async () => undefined,

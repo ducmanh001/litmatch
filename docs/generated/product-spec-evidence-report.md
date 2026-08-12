@@ -78,7 +78,7 @@ The service catalog names every top-level Core API module and links module-speci
 - Status: `implemented`
 - Owner: core-api/economy
 - Contracts: `openapi/core-api.json`, `docs/services/economy-service.md`, `docs/06-domain-rules.md`
-- Implementation evidence: `apps/core-api/src/modules/economy/economy.controller.ts:48` — contains `@Controller('economy')`; `apps/core-api/src/modules/economy/services/ledger.service.ts:73` — contains `LedgerService`
+- Implementation evidence: `apps/core-api/src/modules/economy/economy.controller.ts:48` — contains `@Controller('economy')`; `apps/core-api/src/modules/economy/services/ledger.service.ts:48` — contains `LedgerService`
 - Verification evidence (automated-test-source): `apps/core-api/src/modules/economy/economy.integration.spec.ts:8` — contains `Economy`
 
 ### Queue ticket, pairing, guest quota and paid speed-up
@@ -86,8 +86,8 @@ The service catalog names every top-level Core API module and links module-speci
 - Status: `implemented`
 - Owner: core-api/matching
 - Contracts: `openapi/core-api.json`, `docs/services/matching-service.md`, `docs/06-domain-rules.md`
-- Implementation evidence: `apps/core-api/src/modules/matching/matching.controller.ts:42` — contains `@Controller('matching')`; `apps/core-api/src/modules/matching/jobs/matcher-worker.service.ts:71` — contains `MatcherWorkerService`; `apps/core-api/src/modules/matching/services/guest-match-quota.service.ts:27` — contains `GuestMatchQuotaService`
-- Verification evidence (automated-test-source): `apps/core-api/src/modules/matching/matching.integration.spec.ts:436` — contains `guest quota: concurrent guest mới cùng IP`
+- Implementation evidence: `apps/core-api/src/modules/matching/matching.controller.ts:42` — contains `@Controller('matching')`; `apps/core-api/src/modules/matching/jobs/matcher-worker.service.ts:72` — contains `MatcherWorkerService`; `apps/core-api/src/modules/matching/services/guest-match-quota.service.ts:27` — contains `GuestMatchQuotaService`
+- Verification evidence (automated-test-source): `apps/core-api/src/modules/matching/matching.integration.spec.ts:457` — contains `guest quota: concurrent guest mới cùng IP`
 
 ### Anonymous text match, rating and friendship unlock
 
@@ -95,7 +95,7 @@ The service catalog names every top-level Core API module and links module-speci
 - Owner: core-api/soul-match
 - Contracts: `openapi/core-api.json`, `docs/services/soul-match-service.md`, `docs/services/realtime-gateway.md`
 - Implementation evidence: `apps/core-api/src/modules/soul-match/soul-match.controller.ts:43` — contains `@Controller('soul-match')`
-- Verification evidence (automated-test-source): `apps/core-api/src/modules/soul-match/soul-match.integration.spec.ts:11` — contains `Soul`
+- Verification evidence (automated-test-source): `apps/core-api/src/modules/soul-match/soul-match.integration.spec.ts:12` — contains `Soul`
 
 ### Voice-call lifecycle and settlement
 
@@ -103,7 +103,7 @@ The service catalog names every top-level Core API module and links module-speci
 - Owner: core-api/calling
 - Contracts: `openapi/core-api.json`, `docs/services/calling-service.md`, `docs/06-domain-rules.md`
 - Implementation evidence: `apps/core-api/src/modules/calling/calling.controller.ts:26` — contains `@Controller('calling')`
-- Verification evidence (automated-test-source): `apps/core-api/src/modules/calling/calling.integration.spec.ts:13` — contains `Calling`
+- Verification evidence (automated-test-source): `apps/core-api/src/modules/calling/calling.integration.spec.ts:14` — contains `Calling`
 
 ### Party-room lifecycle, LiveKit token and member roles
 
@@ -111,7 +111,7 @@ The service catalog names every top-level Core API module and links module-speci
 - Owner: core-api/party-room
 - Contracts: `openapi/core-api.json`, `docs/services/party-room-service.md`, `docs/services/realtime-gateway.md`
 - Implementation evidence: `apps/core-api/src/modules/party-room/party-room.controller.ts:46` — contains `@Controller('party/rooms')`
-- Verification evidence (automated-test-source): `apps/core-api/src/modules/party-room/party-room.integration.spec.ts:14` — contains `Party`
+- Verification evidence (automated-test-source): `apps/core-api/src/modules/party-room/party-room.integration.spec.ts:15` — contains `Party`
 
 ### Party-room gifts through Economy
 
@@ -119,7 +119,7 @@ The service catalog names every top-level Core API module and links module-speci
 - Owner: core-api/gift
 - Contracts: `openapi/core-api.json`, `docs/services/gift-service.md`, `docs/services/economy-service.md`
 - Implementation evidence: `apps/core-api/src/modules/gift/gift.controller.ts:37` — contains `export class GiftController`
-- Verification evidence (automated-test-source): `apps/core-api/src/modules/gift/gift.integration.spec.ts:15` — contains `Gift`
+- Verification evidence (automated-test-source): `apps/core-api/src/modules/gift/gift.integration.spec.ts:16` — contains `Gift`
 
 ### Friendship, direct chat and streak
 
@@ -151,7 +151,7 @@ The service catalog names every top-level Core API module and links module-speci
 - Owner: core-api/avatar, core-api/discovery, core-api/mood
 - Contracts: `openapi/core-api.json`, `docs/services/avatar-service.md`, `docs/services/discovery-service.md`, `docs/services/mood-service.md`
 - Implementation evidence: `apps/core-api/src/modules/avatar/avatar.controller.ts:45` — contains `@Controller('avatar')`; `apps/core-api/src/modules/discovery/discovery.controller.ts:26` — contains `@Controller('discovery')`; `apps/core-api/src/modules/mood/mood.controller.ts:35` — contains `@Controller('mood')`
-- Verification evidence (automated-test-source): `apps/core-api/src/modules/avatar/avatar.integration.spec.ts:10` — contains `Avatar`; `apps/core-api/src/modules/discovery/discovery.integration.spec.ts:13` — contains `Discovery`; `apps/core-api/src/modules/mood/mood.integration.spec.ts:12` — contains `Mood`
+- Verification evidence (automated-test-source): `apps/core-api/src/modules/avatar/avatar.integration.spec.ts:11` — contains `Avatar`; `apps/core-api/src/modules/discovery/discovery.integration.spec.ts:13` — contains `Discovery`; `apps/core-api/src/modules/mood/mood.integration.spec.ts:12` — contains `Mood`
 
 ### In-process notification dispatch with isolated push and analytics adapters
 
@@ -277,7 +277,7 @@ The service catalog names every top-level Core API module and links module-speci
 
 | #   | Assumption                                                                                                                                | Break vector / consequence                                               | Guard location                                                                                                                                                                                                                                                                        | Verdict |
 | --- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| 1   | Backend authorization and validation do not depend on a visible web button; a custom authenticated client may call the endpoint directly. | A caller invokes the API without any web confirmation flow.              | `apps/core-api/src/app/app.module.ts:115` — contains `{ provide: APP_GUARD, useClass: JwtAuthGuard }`; `apps/core-api/src/modules/short-video/short-video.controller.ts:129` — contains `await this.videoService.reportVideo(user, id, dto.reason, dto.description);`                 | PASS    |
+| 1   | Backend authorization and validation do not depend on a visible web button; a custom authenticated client may call the endpoint directly. | A caller invokes the API without any web confirmation flow.              | `apps/core-api/src/app/app.module.ts:117` — contains `{ provide: APP_GUARD, useClass: JwtAuthGuard }`; `apps/core-api/src/modules/short-video/short-video.controller.ts:129` — contains `await this.videoService.reportVideo(user, id, dto.reason, dto.description);`                 | PASS    |
 | 2   | A caller cannot create report evidence for a video that does not exist or is not visible to that caller.                                  | A guessed, stale, or unauthorized video UUID is submitted.               | `apps/core-api/src/modules/short-video/short-video.service.ts:481` — contains `Chốt target tồn tại/visible trước khi ghi report`; `apps/core-api/src/modules/short-video/short-video.service.spec.ts:430` — contains `validate video tồn tại trước khi gọi Safety`                    | PASS    |
 | 3   | Retry or rapid double-submit by one reporter does not inflate the distinct-reporter count.                                                | The same user repeats or races the request.                              | `apps/core-api/src/database/migrations/1754900000000-report-target-video.ts:31` — contains `CREATE UNIQUE INDEX uq_reports_video_reporter`; `apps/core-api/src/modules/safety/safety.service.ts:163` — contains `if (!isUniqueViolation(err)) throw err;`                             | PASS    |
 | 4   | The client cannot choose the moderation threshold or force an arbitrary status transition.                                                | A forged body claims a higher report count or requests removal directly. | `apps/core-api/src/modules/short-video/short-video.service.ts:492` — contains `if (distinctReporterCount >= threshold)`; `apps/core-api/src/modules/short-video/short-video.service.ts:499` — contains `return this.transition(videoId, VideoStatus.Published, VideoStatus.Removed);` | PASS    |
