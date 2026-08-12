@@ -1,12 +1,13 @@
 import { ConfigService } from '@nestjs/config';
 import { createCoreRedisClient } from '../../../common/redis/core-redis-client';
+import { RedisMatchingQueue } from './redis-matching-queue.adapter';
 
 import type { Provider } from '@nestjs/common';
 import type { CoreApiEnv } from '../../../config/env.validation';
 import type { MatchTicket } from '../entities/match-ticket.entity';
 
-/** Client ioredis riêng của module Matching (không dùng chung connection với module khác). */
-export const MATCHING_REDIS = Symbol('MATCHING_REDIS');
+/** Capability token for the derived sorted-set queue; not a general Redis client. */
+export const MATCHING_QUEUE = Symbol('MATCHING_QUEUE');
 
 /** Set các shard đang có ticket chờ — matcher chỉ quét set này, không quét keyspace (spec § 2). */
 export const MATCHING_ACTIVE_SHARDS_KEY = 'matching:shards:active';
@@ -47,9 +48,12 @@ export function ticketScore(
   );
 }
 
-export const matchingRedisProvider: Provider = {
-  provide: MATCHING_REDIS,
+export const matchingQueueProvider: Provider = {
+  provide: MATCHING_QUEUE,
   inject: [ConfigService],
   useFactory: (config: ConfigService<CoreApiEnv, true>) =>
-    createCoreRedisClient(config.getOrThrow('REDIS_URL', { infer: true })),
+    new RedisMatchingQueue(
+      createCoreRedisClient(config.getOrThrow('REDIS_URL', { infer: true })),
+      MATCHING_ACTIVE_SHARDS_KEY,
+    ),
 };

@@ -8,6 +8,7 @@ import { UserRole1753600000000 } from '../../database/migrations/1753600000000-u
 import { EconomyLedger1752000000000 } from '../../database/migrations/1752000000000-economy-ledger';
 import { EconomyRefund1752100000000 } from '../../database/migrations/1752100000000-economy-refund';
 import { PayosDiamond1756300000000 } from '../../database/migrations/1756300000000-payos-diamond';
+import { OutboxReliability1757000000000 } from '../../database/migrations/1757000000000-outbox-reliability';
 import { AuthIdentity } from '../auth/entities/auth-identity.entity';
 import { PhoneOtp } from '../auth/entities/phone-otp.entity';
 import { RefreshToken } from '../auth/entities/refresh-token.entity';
@@ -44,9 +45,9 @@ import { PayosService } from './services/payos.service';
 
 import type { ConfigService } from '@nestjs/config';
 import type { SchedulerRegistry } from '@nestjs/schedule';
-import type { Producer } from 'kafkajs';
 
 import type { CoreApiEnv } from '../../config/env.validation';
+import type { EventBusPort } from '../../common/events';
 import type { IapVerifier } from './ports/iap-verifier';
 import type { PayosClient } from './ports/payos-client';
 
@@ -124,6 +125,7 @@ d('Economy integration (Postgres thật)', () => {
         EconomyLedger1752000000000,
         EconomyRefund1752100000000,
         PayosDiamond1756300000000,
+        OutboxReliability1757000000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -672,32 +674,34 @@ d('Economy integration (Postgres thật)', () => {
    * Không mock DB — mọi assert đọc lại từ Postgres thật sau khi lỗi đã xảy ra.
    */
   describe('Chaos luồng tiền', () => {
-    /** Relay instance với producer thay thế (seam test) — flushOnce không đụng config/scheduler. */
-    const makeRelay = (producer: Producer): OutboxRelayService => {
+    /** Relay instance với EventBusPort thay thế — flushOnce không đụng config/scheduler. */
+    const makeRelay = (
+      eventBus: EventBusPort,
+      maxAttempts = 3,
+    ): OutboxRelayService => {
       const relay = new OutboxRelayService(
         ds,
-        { getOrThrow: () => false } as unknown as ConfigService<
-          CoreApiEnv,
-          true
-        >,
+        {
+          getOrThrow: (key: keyof CoreApiEnv) =>
+            key === 'ECONOMY_OUTBOX_MAX_ATTEMPTS' ? maxAttempts : false,
+        } as unknown as ConfigService<CoreApiEnv, true>,
         { addInterval: () => undefined } as unknown as SchedulerRegistry,
+        eventBus,
       );
-      (relay as unknown as { producer: Producer }).producer = producer;
       return relay;
     };
 
-    /** Producer giả ghi nhận event id vào sink; delayMs > 0 giữ lock lâu để 2 instance thật sự chồng lấn. */
-    const sinkProducer = (sink: string[], delayMs = 0): Producer =>
+    /** Event bus giả ghi nhận event id; delayMs > 0 giữ lock lâu để 2 instance thật sự chồng lấn. */
+    const sinkBus = (sink: string[], delayMs = 0): EventBusPort =>
       ({
-        send: async (record: { messages: Array<{ value?: unknown }> }) => {
-          for (const message of record.messages) {
-            sink.push((JSON.parse(String(message.value)) as { id: string }).id);
-          }
+        publish: async (event) => {
+          sink.push(event.id);
           if (delayMs > 0)
             await new Promise((resolve) => setTimeout(resolve, delayMs));
-          return [];
         },
-      }) as unknown as Producer;
+        publishDeadLetter: async () => undefined,
+        subscribe: async () => undefined,
+      }) as EventBusPort;
 
     const creditEntries = (userId: string, amount: bigint) => [
       {
@@ -811,8 +815,8 @@ d('Economy integration (Postgres thật)', () => {
       const sinkA: string[] = [];
       const sinkB: string[] = [];
       const [publishedA, publishedB] = await Promise.all([
-        makeRelay(sinkProducer(sinkA, 25)).flushOnce(),
-        makeRelay(sinkProducer(sinkB, 25)).flushOnce(),
+        makeRelay(sinkBus(sinkA, 25)).flushOnce(),
+        makeRelay(sinkBus(sinkB, 25)).flushOnce(),
       ]);
 
       // Tổng publish = đúng số event, mỗi event đúng 1 lần trên cả 2 instance gộp lại
@@ -852,10 +856,12 @@ d('Economy integration (Postgres thật)', () => {
       });
 
       const deadRelay = makeRelay({
-        send: async () => {
+        publish: async () => {
           throw new Error('chaos: Kafka broker unreachable');
         },
-      } as unknown as Producer);
+        publishDeadLetter: async () => undefined,
+        subscribe: async () => undefined,
+      });
       expect(await deadRelay.flushOnce()).toBe(0);
 
       // Event KHÔNG mất, không bị đánh dấu published khống — chỉ tăng attempts chờ retry
@@ -867,13 +873,56 @@ d('Economy integration (Postgres thật)', () => {
 
       // Kafka sống lại → tick sau publish ĐÚNG event đó, đúng 1 lần
       const sink: string[] = [];
-      expect(await makeRelay(sinkProducer(sink)).flushOnce()).toBe(1);
+      expect(await makeRelay(sinkBus(sink)).flushOnce()).toBe(1);
       expect(sink).toEqual([pending[0].id]);
       expect(
         await countInt(
           `SELECT count(*)::int AS c FROM outbox_events WHERE published_at IS NULL`,
         ),
       ).toBe(0);
+    });
+
+    it('retry có bound → sau max attempts event được giữ lại ở trạng thái dead-letter, không retry vô hạn', async () => {
+      await ds.query(
+        `UPDATE outbox_events SET published_at = now(), dead_lettered_at = NULL WHERE published_at IS NULL`,
+      );
+      const userId = await makeUser('chaos-bounded-retry');
+      await ledger.record({
+        type: TransactionType.IapPurchase,
+        idempotencyKey: 'chaos-bounded-retry-1',
+        actorUserId: userId,
+        entries: creditEntries(userId, 25n),
+      });
+
+      const deadLetters: string[] = [];
+      const failingBus: EventBusPort = {
+        publish: async () => {
+          throw new Error('chaos: Kafka remains unavailable');
+        },
+        publishDeadLetter: async (event) => {
+          deadLetters.push(event.id);
+        },
+        subscribe: async () => undefined,
+      };
+      const relay = makeRelay(failingBus, 2);
+
+      expect(await relay.flushOnce()).toBe(0);
+      expect(await relay.flushOnce()).toBe(0);
+
+      const rows: Array<{
+        attempts: number;
+        dead_lettered_at: Date | null;
+      }> = await ds.query(
+        `SELECT attempts, dead_lettered_at
+           FROM outbox_events
+          WHERE payload->>'userId' = $1
+          ORDER BY created_at DESC
+          LIMIT 1`,
+        [userId],
+      );
+      expect(rows[0]?.attempts).toBe(2);
+      expect(rows[0]?.dead_lettered_at).not.toBeNull();
+      expect(deadLetters).toHaveLength(1);
     });
   });
 });

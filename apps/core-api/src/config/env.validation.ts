@@ -26,6 +26,10 @@ export interface CoreApiEnv {
   DATABASE_URL: string;
   REDIS_URL: string;
   KAFKA_BROKERS: string;
+  EVENT_BUS_KAFKA_REQUEST_TIMEOUT_MS: number;
+  EVENT_BUS_KAFKA_RETRIES: number;
+  EVENT_BUS_CONSUMER_MAX_ATTEMPTS: number;
+  EVENT_BUS_CONSUMER_RETRY_DELAY_MS: number;
   JWT_SECRET: string;
   JWT_ACCESS_TTL_SECONDS: number;
   AUTH_REFRESH_TTL_DAYS: number;
@@ -73,6 +77,7 @@ export interface CoreApiEnv {
   ECONOMY_STORE_HTTP_TIMEOUT_MS: number;
   ECONOMY_OUTBOX_RELAY_ENABLED: boolean;
   ECONOMY_OUTBOX_RELAY_INTERVAL_MS: number;
+  ECONOMY_OUTBOX_MAX_ATTEMPTS: number;
   ECONOMY_RECONCILIATION_ENABLED: boolean;
   ECONOMY_RECONCILIATION_INTERVAL_MS: number;
   ECONOMY_RECONCILIATION_FAST_INTERVAL_MS: number;
@@ -229,6 +234,21 @@ export const coreApiEnvSchema = Joi.object({
     .uri({ scheme: ['redis', 'rediss'] })
     .default('redis://localhost:6379'),
   KAFKA_BROKERS: Joi.string().default('localhost:9092'),
+  EVENT_BUS_KAFKA_REQUEST_TIMEOUT_MS: Joi.number()
+    .integer()
+    .min(100)
+    .default(5000),
+  EVENT_BUS_KAFKA_RETRIES: Joi.number().integer().min(0).max(10).default(1),
+  EVENT_BUS_CONSUMER_MAX_ATTEMPTS: Joi.number()
+    .integer()
+    .min(1)
+    .max(10)
+    .default(3),
+  EVENT_BUS_CONSUMER_RETRY_DELAY_MS: Joi.number()
+    .integer()
+    .min(0)
+    .max(60_000)
+    .default(250),
 
   JWT_SECRET: Joi.string().min(32).required(),
   JWT_ACCESS_TTL_SECONDS: Joi.number().integer().min(60).default(900),
@@ -318,6 +338,11 @@ export const coreApiEnvSchema = Joi.object({
     .integer()
     .min(200)
     .default(2000),
+  ECONOMY_OUTBOX_MAX_ATTEMPTS: Joi.number()
+    .integer()
+    .min(1)
+    .max(100)
+    .default(5),
   ECONOMY_RECONCILIATION_ENABLED: Joi.boolean().default(true),
   ECONOMY_RECONCILIATION_INTERVAL_MS: Joi.number()
     .integer()
