@@ -1,5 +1,4 @@
 import {
-  HttpStatus,
   Injectable,
   Logger,
   OnApplicationBootstrap,
@@ -13,28 +12,19 @@ import { DataSource } from 'typeorm';
 import { ManagedInterval } from '../../../common/scheduling/managed-interval';
 import type { CoreApiEnv } from '../../../config/env.validation';
 import {
-  ANDROID_PUBLISHER_API_BASE,
-  ANDROID_PUBLISHER_SCOPE,
-} from '../economy.constants';
-import {
   IapProvider,
   IapReceipt,
   IapReceiptStatus,
 } from '../entities/iap.entities';
-import {
-  appleServerApiBaseUrl,
-  getAppleServerApiToken,
-} from '../clients/apple-server-api';
-import { getGoogleServiceAccountAccessToken } from '../clients/google-service-account';
-import { storeApiAbortSignal } from '../clients/store-api-http';
 import { RefundService } from '../services/refund.service';
+import {
+  AppleRefundGateway,
+  GoogleVoidedPurchasesGateway,
+} from '../ports/refund-gateways';
 
 const JOB = 'economy-iap-refund-poll';
 /** Batch vận hành nội bộ mỗi tick — không phải rule nghiệp vụ (cùng phong cách SESSION_SWEEP_BATCH). */
 const REFUND_POLL_BATCH = 200;
-/** maxResults tối đa của Google Voided Purchases API. */
-const VOIDED_PURCHASES_PAGE_SIZE = 1000;
-
 interface RefundPollReport {
   checked: number;
   refunded: number;
@@ -64,6 +54,8 @@ export class IapRefundPollService
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly refundService: RefundService,
+    private readonly appleRefund: AppleRefundGateway,
+    private readonly googleRefund: GoogleVoidedPurchasesGateway,
     private readonly config: ConfigService<CoreApiEnv, true>,
     private readonly scheduler: SchedulerRegistry,
   ) {}
@@ -141,7 +133,7 @@ export class IapRefundPollService
   private async pollApple(receipts: IapReceipt[]): Promise<number> {
     let refunded = 0;
     for (const receipt of receipts) {
-      if (await this.appleHasRefundRecord(receipt.providerTransactionId)) {
+      if (await this.appleRefund.hasRefund(receipt.providerTransactionId)) {
         await this.refundService.refundIapPurchase(
           IapProvider.Apple,
           receipt.providerTransactionId,
@@ -153,53 +145,12 @@ export class IapRefundPollService
     return refunded;
   }
 
-  private async appleHasRefundRecord(
-    originalTransactionId: string,
-  ): Promise<boolean> {
-    const token = await getAppleServerApiToken(this.config);
-    const url = `${appleServerApiBaseUrl(this.config)}/inApps/v2/refund/lookup/${encodeURIComponent(originalTransactionId)}`;
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: storeApiAbortSignal(this.config),
-    });
-    if (res.status === HttpStatus.NOT_FOUND) return false; // Apple trả 404 khi chưa từng có refund cho transaction này
-    if (!res.ok) {
-      this.logger.warn(
-        `Apple Get Refund History lỗi ${res.status} cho ${originalTransactionId}`,
-      );
-      return false;
-    }
-    const body = (await res.json()) as { signedTransactions?: string[] };
-    return (body.signedTransactions?.length ?? 0) > 0;
-  }
-
   private async pollGoogle(
     receipts: IapReceipt[],
     since: Date,
   ): Promise<number> {
     if (receipts.length === 0) return 0;
-    const packageName = this.config.getOrThrow('ECONOMY_GOOGLE_PACKAGE_NAME', {
-      infer: true,
-    });
-    const accessToken = await getGoogleServiceAccountAccessToken(
-      this.config,
-      ANDROID_PUBLISHER_SCOPE,
-    );
-    const url = `${ANDROID_PUBLISHER_API_BASE}/applications/${encodeURIComponent(packageName)}/purchases/voidedpurchases?startTime=${since.getTime()}&maxResults=${VOIDED_PURCHASES_PAGE_SIZE}`;
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      signal: storeApiAbortSignal(this.config),
-    });
-    if (!res.ok) {
-      this.logger.warn(`Google Voided Purchases API lỗi ${res.status}`);
-      return 0;
-    }
-    const body = (await res.json()) as {
-      voidedPurchases?: Array<{ orderId: string }>;
-    };
-    const voidedOrderIds = new Set(
-      (body.voidedPurchases ?? []).map((v) => v.orderId),
-    );
+    const voidedOrderIds = await this.googleRefund.findVoidedPurchaseIds(since);
 
     let refunded = 0;
     for (const receipt of receipts) {

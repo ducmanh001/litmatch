@@ -16,6 +16,7 @@ describe('startTracing', () => {
     delete process.env['OTEL_EXPORTER_OTLP_ENDPOINT'];
     delete process.env['OTEL_EXPORTER_OTLP_TRACES_ENDPOINT'];
     delete process.env['OTEL_EXPORTER_OTLP_METRICS_ENDPOINT'];
+    delete process.env['OTEL_EXPORTER_OTLP_HEADERS'];
     delete process.env['GRAFANA_CLOUD_PROMETHEUS_URL'];
     delete process.env['GRAFANA_CLOUD_PROMETHEUS_USER'];
     delete process.env['GRAFANA_CLOUD_TEMPO_USER'];
@@ -74,6 +75,16 @@ describe('startTracing', () => {
       Authorization: `Basic ${Buffer.from('tempo-user:secret-token').toString(
         'base64',
       )}`,
+    });
+  });
+
+  it('ưu tiên OTEL_EXPORTER_OTLP_HEADERS chuẩn thay vì tự dựng credential khác', () => {
+    process.env['OTEL_EXPORTER_OTLP_HEADERS'] =
+      'Authorization=Bearer%20trace-token,x-service=core-api';
+
+    expect(resolveTraceHeaders()).toEqual({
+      Authorization: 'Bearer trace-token',
+      'x-service': 'core-api',
     });
   });
 

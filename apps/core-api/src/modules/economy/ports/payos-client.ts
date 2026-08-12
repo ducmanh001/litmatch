@@ -1,6 +1,10 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-import { HttpStatus, Injectable } from '@nestjs/common';
+import {
+  HttpStatus,
+  Injectable,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DomainException } from '@litmatch/common-exceptions';
 
@@ -33,10 +37,20 @@ export interface PayosWebhookEvent {
 
 const PAYOS_CHECKOUT_BASE_URL = 'https://pay.payos.vn/web';
 
-/** Port cho payOS: credential và checksum chỉ tồn tại server-side. */
+/** Port cho payOS; business service không phụ thuộc HTTP/credential provider. */
+export abstract class PayosClient {
+  abstract createPaymentLink(
+    input: PayosCreatePaymentLinkInput,
+  ): Promise<PayosCreatePaymentLinkResult>;
+  abstract verifyWebhook(payload: Record<string, unknown>): PayosWebhookEvent;
+}
+
+/** HTTP adapter cho payOS; credential và checksum chỉ tồn tại server-side. */
 @Injectable()
-export class PayosClient {
-  constructor(private readonly config: ConfigService<CoreApiEnv, true>) {}
+export class PayosHttpClientAdapter extends PayosClient {
+  constructor(private readonly config: ConfigService<CoreApiEnv, true>) {
+    super();
+  }
 
   async createPaymentLink(
     input: PayosCreatePaymentLinkInput,
@@ -46,10 +60,8 @@ export class PayosClient {
       !Number.isSafeInteger(Number(input.orderCode)) ||
       !Number.isSafeInteger(Number(input.amountVnd))
     ) {
-      throw new DomainException(
-        EconomyErrors.PAYOS_PROVIDER_UNAVAILABLE,
+      throw new ServiceUnavailableException(
         'Mã đơn hoặc số tiền payOS vượt giới hạn an toàn',
-        HttpStatus.SERVICE_UNAVAILABLE,
       );
     }
     const payload = {
@@ -172,10 +184,9 @@ export class PayosClient {
       infer: true,
     });
     if (!clientId || !apiKey || !checksumKey) {
-      throw new DomainException(
+      throw new ServiceUnavailableException(
         EconomyErrors.PAYOS_DISABLED,
         'Nạp diamond qua payOS chưa được cấu hình',
-        HttpStatus.SERVICE_UNAVAILABLE,
       );
     }
     return { clientId, apiKey, checksumKey };
@@ -205,10 +216,9 @@ export class PayosClient {
     } catch {
       // Chuẩn hoá lỗi dependency ở dưới; không log credential/payload thanh toán.
     }
-    throw new DomainException(
+    throw new ServiceUnavailableException(
       EconomyErrors.PAYOS_PROVIDER_UNAVAILABLE,
       'payOS tạm thời không thể tạo liên kết thanh toán',
-      HttpStatus.SERVICE_UNAVAILABLE,
     );
   }
 

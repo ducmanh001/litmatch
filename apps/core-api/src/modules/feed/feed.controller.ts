@@ -36,6 +36,7 @@ import {
   IdempotencyKey,
 } from '../../common/decorators/idempotency-key.decorator';
 import { PublicProfileDto, UserService } from '../user';
+import { ImageAssetPurpose, MediaService } from '../media';
 
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 
@@ -46,6 +47,7 @@ export class FeedController {
   constructor(
     private readonly feedService: FeedService,
     private readonly userService: UserService,
+    private readonly mediaService: MediaService,
   ) {}
 
   @HttpPost('posts')
@@ -59,7 +61,23 @@ export class FeedController {
     @Body() dto: CreatePostDto,
     @IdempotencyKey() idempotencyKey: string,
   ): Promise<PostDto> {
-    const post = await this.feedService.createPost(user, dto, idempotencyKey);
+    const imageUrl =
+      !user.isGuest && dto.imageAssetId
+        ? await this.mediaService.resolveImageUrl(
+            user.userId,
+            dto.imageAssetId,
+            ImageAssetPurpose.Post,
+          )
+        : undefined;
+    const post = await this.feedService.createPost(
+      user,
+      {
+        content: dto.content,
+        audience: dto.audience,
+        imageUrl,
+      },
+      idempotencyKey,
+    );
     return PostDto.from(post, await this.getAuthor(post.authorUserId));
   }
 

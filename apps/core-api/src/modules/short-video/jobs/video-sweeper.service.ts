@@ -11,6 +11,7 @@ import { DataSource } from 'typeorm';
 
 import { ManagedInterval } from '../../../common/scheduling/managed-interval';
 import { VideoStatus } from '../entities/video.entity';
+import { VideoStoragePort } from '../ports/video-storage.port';
 
 import type { CoreApiEnv } from '../../../config/env.validation';
 
@@ -31,6 +32,7 @@ export class VideoSweeperService
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly storagePort: VideoStoragePort,
     private readonly config: ConfigService<CoreApiEnv, true>,
     private readonly scheduler: SchedulerRegistry,
   ) {}
@@ -60,7 +62,7 @@ export class VideoSweeperService
         'VIDEO_UPLOAD_TIMEOUT_SECONDS',
         { infer: true },
       );
-      const [, count] = (await this.dataSource.query(
+      const expired = (await this.dataSource.query(
         `UPDATE videos
             SET status = $1, updated_at = now()
           WHERE status = $2 AND id IN (
@@ -69,15 +71,37 @@ export class VideoSweeperService
                AND created_at < now() - make_interval(secs => $3)
              ORDER BY created_at ASC, id ASC
              LIMIT $4
-          )`,
+          )
+          RETURNING id, storage_key`,
         [
           VideoStatus.Failed,
           VideoStatus.Uploading,
           timeoutSeconds,
           VIDEO_SWEEP_BATCH,
         ],
-      )) as [unknown, number];
-      return count;
+      )) as Array<{ id: string; storage_key: string }>;
+      const failed = (await this.dataSource.query(
+        `SELECT id, storage_key
+           FROM videos
+          WHERE status = $1
+          ORDER BY updated_at ASC, id ASC
+          LIMIT $2`,
+        [VideoStatus.Failed, VIDEO_SWEEP_BATCH],
+      )) as Array<{ id: string; storage_key: string }>;
+
+      const cleanupTargets = new Map(
+        [...expired, ...failed].map((video) => [video.id, video]),
+      );
+      for (const video of cleanupTargets.values()) {
+        try {
+          await this.storagePort.delete(video.storage_key);
+        } catch (error) {
+          this.logger.warn(
+            `Không cleanup được video object ${video.id}; sẽ retry ở tick sau: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+      return expired.length;
     }, 0);
   }
 }

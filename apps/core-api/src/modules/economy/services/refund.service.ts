@@ -4,7 +4,7 @@ import { DomainException } from '@litmatch/common-exceptions';
 import { Repository } from 'typeorm';
 
 import { EconomyErrors } from '../economy.errors';
-import { LedgerService } from './ledger.service';
+import { LedgerPersistencePort } from '../ports/ledger-persistence.port';
 import {
   IapProvider,
   IapReceipt,
@@ -29,7 +29,7 @@ export class RefundService {
     private readonly receiptRepo: Repository<IapReceipt>,
     @InjectRepository(LedgerTransaction)
     private readonly transactionRepo: Repository<LedgerTransaction>,
-    private readonly ledger: LedgerService,
+    private readonly ledger: LedgerPersistencePort,
   ) {}
 
   async refundIapPurchase(

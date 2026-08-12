@@ -13,6 +13,7 @@ import { SupportTicket1755300000000 } from '../../database/migrations/1755300000
 import { AdminSupportPermission1755400000000 } from '../../database/migrations/1755400000000-admin-support-permission';
 import { MatchingCore1752200000000 } from '../../database/migrations/1752200000000-matching-core';
 import { EconomyLedger1752000000000 } from '../../database/migrations/1752000000000-economy-ledger';
+import { OutboxReliability1757000000000 } from '../../database/migrations/1757000000000-outbox-reliability';
 import { EconomyRefund1752100000000 } from '../../database/migrations/1752100000000-economy-refund';
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
 import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
@@ -158,6 +159,7 @@ d('Admin integration (Postgres thật)', () => {
         UserProfilePreferences1755800000000,
         UserRole1753600000000,
         EconomyLedger1752000000000,
+        OutboxReliability1757000000000,
         EconomyRefund1752100000000,
         MatchingCore1752200000000,
         Safety1752800000000,

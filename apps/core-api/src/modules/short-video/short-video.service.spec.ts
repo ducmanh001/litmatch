@@ -224,6 +224,34 @@ describe('ShortVideoService (unit — mock repo/ports/dataSource)', () => {
       );
     });
 
+    it('retry sau lỗi cấp URL → reissue cùng storageKey đã lưu, không tạo upload intent mới', async () => {
+      storagePort.issueUploadUrl.mockRejectedValueOnce(
+        new Error('temporary storage outage'),
+      );
+      await expect(
+        service.createUploadIntent(author, { caption: 'hello' }, 'retry-key'),
+      ).rejects.toThrow('temporary storage outage');
+
+      const existing = makeVideo({
+        status: VideoStatus.Uploading,
+        storageKey: 'dev-video/original-key',
+        caption: 'hello',
+      });
+      videoRepo.save.mockRejectedValueOnce({ code: '23505' });
+      videoRepo.findOneByOrFail.mockResolvedValue(existing);
+
+      const result = await service.createUploadIntent(
+        author,
+        { caption: 'hello' },
+        'retry-key',
+      );
+
+      expect(result.video).toBe(existing);
+      expect(storagePort.issueUploadUrl).toHaveBeenLastCalledWith(
+        'dev-video/original-key',
+      );
+    });
+
     it('replay (unique violation) cùng caption → đọc lại video cũ, không tạo đôi', async () => {
       videoRepo.save.mockRejectedValueOnce({ code: '23505' });
       const existing = makeVideo({ status: VideoStatus.Uploading });

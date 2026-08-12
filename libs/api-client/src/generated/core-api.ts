@@ -145,6 +145,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/media/images/upload-intent': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Xin presigned URL upload ảnh — body binary không đi qua core-api */
+    post: operations['MediaController_createImageUploadIntent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/auth/guest': {
     parameters: {
       query?: never;
@@ -2801,6 +2818,20 @@ export interface components {
       avatarId: string;
       interests: string[] | null;
     };
+    CreateImageUploadIntentDto: {
+      /** @enum {string} */
+      purpose: 'post' | 'message' | 'story';
+      /** @example image/jpeg */
+      contentType: string;
+      sizeBytes: number;
+    };
+    ImageUploadIntentDto: {
+      assetId: string;
+      uploadUrl: string;
+      publicUrl: string;
+      /** Format: date-time */
+      expiresAt: string;
+    };
     GuestLoginDto: {
       /**
        * @description ID thiết bị ổn định do app sinh ra
@@ -2938,7 +2969,7 @@ export interface components {
       provider: 'apple' | 'google';
       /** @example com.litmatch.diamond.100 */
       productId: string;
-      /** @description Payload theo provider: apple {receiptData}, google {purchaseToken}; dev verifier nhận {devTransactionId} */
+      /** @description Payload theo provider: apple {receiptData, transactionId?}, google {purchaseToken}; dev verifier nhận {devTransactionId} */
       payload: {
         [key: string]: unknown;
       };
@@ -3129,7 +3160,7 @@ export interface components {
     };
     SendFriendMessageDto: {
       content?: string;
-      imageUrl?: string;
+      imageAssetId?: string;
     };
     SoulSessionViewDto: {
       sessionId: string;
@@ -3371,7 +3402,7 @@ export interface components {
     };
     CreatePostDto: {
       content?: string;
-      imageUrl?: string;
+      imageAssetId?: string;
       /**
        * @default public
        * @enum {string}
@@ -3412,7 +3443,7 @@ export interface components {
       nextCursor: string | null;
     };
     CreateStoryDto: {
-      mediaUrl: string;
+      mediaAssetId: string;
       caption?: string;
       /**
        * @default friends
@@ -4152,6 +4183,34 @@ export interface operations {
         content: {
           'application/json': {
             data: components['schemas']['PublicProfileDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  MediaController_createImageUploadIntent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateImageUploadIntentDto'];
+      };
+    };
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['ImageUploadIntentDto'];
             meta?: {
               [key: string]: unknown;
             };

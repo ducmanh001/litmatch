@@ -38,30 +38,42 @@ thành consumer độc lập/nhiều consumer.
 | `post_liked`      | `FeedService.like`                                                        | `{ postId, actorUserId }`                          | Bỏ qua nếu actor = author (không tự notify chính mình)                                                                                                                     |
 | `post_commented`  | `FeedService.createComment`                                               | `{ postId, commentId, actorUserId }`               | Tương tự — bỏ qua tự comment lên bài mình                                                                                                                                  |
 
-## 4. Push — dev/disabled, chưa có FCM/APNs thật
+## 4. Push — isolated provider adapters
 
-`PushPort` (abstract, `ports/push-provider.ts`) có `DevPushProvider` (log + no-op cho local/test,
-chặn cứng nếu bị chọn trong production) và `DisabledPushProvider` (no-op tường minh cho production
-subset; in-app notification vẫn persist). **Chưa viết `StoreFcmPushProvider`/APNs thật** (khác với Economy's
-`StoreIapVerifier` đã viết đủ dù chưa chạy sandbox) — quyết định phạm vi: viết code chưa test được
-với credential thật (Firebase service account, APNs cert) không tạo giá trị ngay bây giờ, việc
-thật của module này ở GĐ4 là in-app notification (đã hoạt động đầy đủ). Nợ kỹ thuật ghi rõ, làm khi
-có credential thật + quyết định provider (FCM cho Android, APNs cho iOS, hay 1 lớp trung gian như
-OneSignal).
+Business code chỉ phụ thuộc `PushNotificationPort` tại `common/platform`; `Dev`, `Disabled`, FCM
+HTTP v1 và APNs HTTP/2 là các adapter được chọn bởi `NOTIFICATION_PUSH_PROVIDER`. `dev` bị chặn ở
+production; `disabled` chỉ bỏ external push nên row in-app vẫn được persist. FCM/APNs không log
+device token, payload hay user id. Lỗi provider trả trạng thái thất bại/bị nuốt ở boundary và không
+được làm hỏng transaction chính.
 
-Config: `NOTIFICATION_PUSH_PROVIDER` (`dev` | `fcm` | `disabled`, default `dev`). Chọn `fcm` khi
-chưa có adapter thật làm app fail-fast; production không có credential phải chọn `disabled`, không
-fallback về `dev`.
+Adapter nhận device token khi caller có token. Luồng đăng ký/rotate token native chưa thuộc scope
+này; các call site hiện tại không có token nên vẫn giữ fallback in-app/dev/disabled như trước.
 
-## 5. API
+Config provider: `NOTIFICATION_PUSH_PROVIDER` (`dev` | `fcm` | `apns` | `disabled`, default `dev`),
+`NOTIFICATION_PUSH_HTTP_TIMEOUT_MS` và credential tương ứng `NOTIFICATION_FCM_*` hoặc
+`NOTIFICATION_APNS_*`. Production không có credential/token phải chọn `disabled`, không fallback về
+`dev`.
+
+## 5. Analytics — optional PostHog adapter
+
+Business code chỉ gọi `AnalyticsPort`; `PostHogAnalyticsAdapter` dùng server capture API và không
+import `posthog-js`. `ANALYTICS_ENABLED=false` hoặc `ANALYTICS_PROVIDER=disabled` chọn no-op.
+Provider failure được log bằng thông điệp tổng quát và bỏ qua; key nhạy cảm như token, secret,
+OTP, receipt, message, email, phone và IP bị loại khỏi properties trước khi gửi.
+
+Config: `ANALYTICS_ENABLED`, `ANALYTICS_PROVIDER` (`posthog` | `disabled`), `POSTHOG_PROJECT_TOKEN`,
+`POSTHOG_HOST` và `ANALYTICS_HTTP_TIMEOUT_MS`.
+
+## 6. API
 
 - `GET /notifications` — cursor, mới nhất trước.
 - `GET /notifications/unread-count` — badge số chưa đọc.
 - `POST /notifications/:id/read` — đánh dấu đã đọc, idempotent, chỉ chủ sở hữu.
 
-## 6. Ngoài scope GĐ4
+## 7. Ngoài scope GĐ4
 
-- Push thật (FCM/APNs) — § 4.
+- Native device-token registration/rotation và preference theo từng loại notification — cần contract
+  backend/native riêng.
 - Notification preference (tắt riêng từng loại) — chưa có, mọi loại luôn bật.
 - Soul Match message (ẩn danh, cửa sổ ngắn 2-3 phút) KHÔNG có notification — giá trị thấp do phòng
   đóng nhanh, ẩn danh cũng khiến payload khó thiết kế đúng như `friend_message`.

@@ -36,6 +36,7 @@ describe('MatcherWorkerService wake-up scheduling', () => {
       undefined as never,
       undefined as never,
       undefined as never,
+      undefined as never,
       wakeup,
     );
     return { worker, wakeup };

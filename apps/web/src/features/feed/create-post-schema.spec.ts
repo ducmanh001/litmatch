@@ -8,30 +8,20 @@ describe('createPostSchema', () => {
     ).toBe(true);
   });
 
-  it('chấp nhận chỉ có imageUrl', () => {
+  it('chấp nhận chỉ có imageAssetId', () => {
     expect(
       createPostSchema.safeParse({
-        imageUrl: 'https://example.com/a.png',
+        imageAssetId: 'selected',
         audience: 'public',
       }).success,
     ).toBe(true);
   });
 
-  it('từ chối khi cả content và imageUrl đều rỗng', () => {
+  it('từ chối khi cả content và imageAssetId đều rỗng', () => {
     expect(
       createPostSchema.safeParse({
         content: '',
-        imageUrl: '',
-        audience: 'public',
-      }).success,
-    ).toBe(false);
-  });
-
-  it('từ chối imageUrl không phải URL hợp lệ', () => {
-    expect(
-      createPostSchema.safeParse({
-        content: '',
-        imageUrl: 'not-a-url',
+        imageAssetId: '',
         audience: 'public',
       }).success,
     ).toBe(false);

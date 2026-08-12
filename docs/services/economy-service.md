@@ -123,12 +123,12 @@ Cả hai chân nằm trong **cùng 1 DB transaction** (nếu 1 chân fail thì r
 
 > **Trạng thái Giai đoạn 3 (Gift đã code — [gift-service.md](./gift-service.md))**: luồng tặng chạy qua `EconomyService.sendGift` (type `gift_send`, 4 bút toán như trên; chân PTS bỏ hẳn khi điểm = 0 — người nhận là guest, docs/06). Guard chặn balance âm (`ledger.service.ts`) và `CHECK (earnings >= 0)` GIỮ NGUYÊN; **luồng hoàn tiền Gift CHƯA code** — reverse gift sẽ đụng `newEarnings < 0n` đúng thiết kế. Trước khi code hoàn Gift (khi PTS có luồng tiêu), cần quyết định: PTS có được phép âm khi reverse không, hay chặn hoàn nếu người nhận đã tiêu hết PTS.
 
-## 7. Giới hạn đã biết, cần đóng trước khi bật `store` thật (không chặn code Giai đoạn 1, nhưng phải nhớ)
+## 7. Biên provider đã đóng trước khi bật `store` thật
 
 Mọi request Apple/Google có deadline `ECONOMY_STORE_HTTP_TIMEOUT_MS` (mặc định 10 giây);
 timeout được coi là lỗi dependency, không được đổi thành "receipt không hợp lệ" của client.
 
-- **`StoreIapVerifier.verifyApple()` khớp `product_id` bằng `find()` — lấy phần tử ĐẦU TIÊN trùng product trong mảng `in_app` của receipt.** Với product tiêu dùng nhiều lần (consumable, user mua lại cùng `productId` nhiều lần), receipt hợp nhất của Apple chứa NHIỀU giao dịch cùng `product_id` — `providerTransactionId` lưu lại có thể không phải giao dịch user vừa mua, và khác với `transactionId` mà Apple gửi trong App Store Server Notification khi refund giao dịch cụ thể đó → `RefundService.refundIapPurchase()` có thể trả `unknown_receipt` dù thực ra có receipt tương ứng. Cần đóng trước khi bật `ECONOMY_IAP_VERIFIER=store`/`ECONOMY_APPLE_WEBHOOK_VERIFIER=store` ở production: client nên gửi kèm `transactionId` cụ thể (StoreKit 2 cung cấp sẵn) thay vì chỉ `productId`, server khớp đúng theo id đó.
+- Với Apple consumable, client gửi thêm `transactionId` cụ thể (StoreKit 2 cung cấp sẵn) trong `payload`; adapter khớp cả `productId` và transaction đó. Nếu receipt chứa nhiều giao dịch cùng product mà thiếu `transactionId`, request bị từ chối để không credit/refund nhầm. Apple/Google/payOS HTTP và refund polling đều đi qua adapter có deadline; timeout là lỗi dependency, không bị diễn giải thành receipt sai.
 
 ## 8. Nạp Diamond qua payOS (web Việt Nam)
 

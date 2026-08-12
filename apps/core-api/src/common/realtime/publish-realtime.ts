@@ -2,7 +2,8 @@ import { realtimeUserChannel } from '@litmatch/common-dtos';
 
 import type { Logger } from '@nestjs/common';
 import type { RealtimeEnvelope } from '@litmatch/common-dtos';
-import type Redis from 'ioredis';
+
+import type { RealtimePublisherPort } from './realtime-publisher.port';
 
 /**
  * Publish 1 event realtime cho 1 user qua Redis pub/sub — signaling-gateway subscribe và
@@ -11,16 +12,19 @@ import type Redis from 'ioredis';
  * BEST-EFFORT theo thiết kế: nuốt lỗi + log warn, KHÔNG throw — event realtime là ephemeral,
  * client luôn còn REST polling làm fallback; publish fail không được phá nghiệp vụ đã commit
  * (vì publish luôn chạy SAU khi DB transaction xong — dual-write chấp nhận, không dùng outbox).
- * Helper thuần nhận Redis client của từng module (mỗi module giữ connection riêng — docs/05 § 5.3).
+ * Helper chỉ phụ thuộc capability publisher; Redis là một adapter có thể thay thế được.
  */
 export async function publishRealtimeEvent(
-  redis: Redis,
+  publisher: RealtimePublisherPort,
   logger: Logger,
   userId: string,
   envelope: RealtimeEnvelope,
 ): Promise<void> {
   try {
-    await redis.publish(realtimeUserChannel(userId), JSON.stringify(envelope));
+    await publisher.publish(
+      realtimeUserChannel(userId),
+      JSON.stringify(envelope),
+    );
   } catch (err) {
     logger.warn(
       `Publish realtime '${envelope.event}' cho user ${userId} thất bại (client còn polling fallback): ${
@@ -29,3 +33,6 @@ export async function publishRealtimeEvent(
     );
   }
 }
+
+export type { RealtimePublisherPort } from './realtime-publisher.port';
+export { RedisRealtimePublisher } from './redis-realtime-publisher.adapter';

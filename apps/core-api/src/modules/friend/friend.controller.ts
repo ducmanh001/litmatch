@@ -36,6 +36,7 @@ import {
   IdempotencyKey,
 } from '../../common/decorators/idempotency-key.decorator';
 import { PublicProfileDto, UserService } from '../user';
+import { ImageAssetPurpose, MediaService } from '../media';
 
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 
@@ -46,6 +47,7 @@ export class FriendController {
   constructor(
     private readonly friendService: FriendService,
     private readonly userService: UserService,
+    private readonly mediaService: MediaService,
   ) {}
 
   @Get('friends')
@@ -177,15 +179,22 @@ export class FriendController {
     @Body() dto: SendFriendMessageDto,
     @IdempotencyKey() idempotencyKey: string,
   ): Promise<MessageDto> {
+    const imageUrl = dto.imageAssetId
+      ? await this.mediaService.resolveImageUrl(
+          user.userId,
+          dto.imageAssetId,
+          ImageAssetPurpose.Message,
+        )
+      : undefined;
     const message = await this.friendService.sendMessage(
       user.userId,
       id,
       dto.content ?? '',
       idempotencyKey,
-      // Kind whitelist tại boundary: HTTP chỉ set được ảnh-theo-URL; các kind nội bộ khác
+      // Kind whitelist tại boundary: HTTP chỉ set được ảnh từ asset đã xác thực; các kind nội bộ khác
       // (vd story_reply) vẫn chỉ đi qua DI giữa module.
-      dto.imageUrl !== undefined
-        ? { kind: 'image', payload: { url: dto.imageUrl } }
+      imageUrl !== undefined
+        ? { kind: 'image', payload: { url: imageUrl } }
         : null,
     );
     return MessageDto.from(message);

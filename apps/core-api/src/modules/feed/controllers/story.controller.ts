@@ -29,6 +29,7 @@ import {
   IdempotencyKey,
 } from '../../../common/decorators/idempotency-key.decorator';
 import { MessageDto } from '../../friend';
+import { ImageAssetPurpose, MediaService } from '../../media';
 
 import type { AuthenticatedUser } from '../../../common/decorators/current-user.decorator';
 
@@ -36,7 +37,10 @@ import type { AuthenticatedUser } from '../../../common/decorators/current-user.
 @ApiBearerAuth()
 @Controller('stories')
 export class StoryController {
-  constructor(private readonly storyService: StoryService) {}
+  constructor(
+    private readonly storyService: StoryService,
+    private readonly mediaService: MediaService,
+  ) {}
 
   @Post()
   @ApiIdempotencyKeyHeader()
@@ -49,8 +53,23 @@ export class StoryController {
     @Body() dto: CreateStoryDto,
     @IdempotencyKey() idempotencyKey: string,
   ): Promise<StoryDto> {
+    const mediaUrl = !user.isGuest
+      ? await this.mediaService.resolveImageUrl(
+          user.userId,
+          dto.mediaAssetId,
+          ImageAssetPurpose.Story,
+        )
+      : undefined;
     return StoryDto.from(
-      await this.storyService.createStory(user, dto, idempotencyKey),
+      await this.storyService.createStory(
+        user,
+        {
+          mediaUrl,
+          caption: dto.caption,
+          audience: dto.audience,
+        },
+        idempotencyKey,
+      ),
     );
   }
 

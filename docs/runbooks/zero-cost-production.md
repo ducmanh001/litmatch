@@ -65,7 +65,15 @@ pnpm release:preflight
 ```
 
 Preflight từ chối placeholder, secret ngắn, thiếu DRI/Sentry/OTel/Grafana, cấu hình PostHog thiếu
-một nửa và Compose không hợp lệ.
+một nửa, endpoint telemetry sai transport và Compose không hợp lệ. Nó cũng chạy
+`pnpm release:profile-check` để kiểm tra healthcheck của bốn runtime image, dependency
+`service_healthy`, telemetry bắt buộc và production Kustomize overlay trước khi build.
+
+Có thể chạy riêng contract không cần secret production:
+
+```bash
+pnpm release:profile-check
+```
 
 ## 4. Vòng đời mỗi release
 

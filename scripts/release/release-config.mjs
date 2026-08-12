@@ -10,8 +10,15 @@ export const REQUIRED_RELEASE_KEYS = [
   'POSTGRES_DB',
   'JWT_SECRET',
   'AUTH_OTP_PEPPER',
+  'AUTH_GUEST_DEVICE_TOKEN_SECRET',
+  'MATCHING_GUEST_QUOTA_PEPPER',
   'LIVEKIT_API_KEY',
   'LIVEKIT_API_SECRET',
+  'MEDIA_R2_ACCOUNT_ID',
+  'MEDIA_R2_BUCKET',
+  'MEDIA_R2_ACCESS_KEY_ID',
+  'MEDIA_R2_SECRET_ACCESS_KEY',
+  'MEDIA_PUBLIC_BASE_URL',
   'OBSERVABILITY_OWNER',
   'SENTRY_CORE_API_DSN',
   'SENTRY_SIGNALING_DSN',
@@ -80,9 +87,37 @@ export function validateReleaseConfig(values) {
   if ((values.AUTH_OTP_PEPPER ?? '').length < 16) {
     errors.push('AUTH_OTP_PEPPER phải dài ít nhất 16 ký tự');
   }
+  if ((values.AUTH_GUEST_DEVICE_TOKEN_SECRET ?? '').length < 32) {
+    errors.push('AUTH_GUEST_DEVICE_TOKEN_SECRET phải dài ít nhất 32 ký tự');
+  }
+  if ((values.MATCHING_GUEST_QUOTA_PEPPER ?? '').length < 32) {
+    errors.push('MATCHING_GUEST_QUOTA_PEPPER phải dài ít nhất 32 ký tự');
+  }
   if ((values.LIVEKIT_API_SECRET ?? '').length < 32) {
     errors.push('LIVEKIT_API_SECRET phải dài ít nhất 32 ký tự');
   }
+  validateHttpUrl(
+    errors,
+    values.MEDIA_PUBLIC_BASE_URL,
+    'MEDIA_PUBLIC_BASE_URL',
+  );
+  validateHttpUrl(
+    errors,
+    values.OTEL_EXPORTER_OTLP_ENDPOINT,
+    'OTEL_EXPORTER_OTLP_ENDPOINT',
+  );
+  validateHttpUrl(
+    errors,
+    values.GRAFANA_CLOUD_PROMETHEUS_URL,
+    'GRAFANA_CLOUD_PROMETHEUS_URL',
+  );
+  validateHttpUrl(
+    errors,
+    values.GRAFANA_CLOUD_LOKI_URL,
+    'GRAFANA_CLOUD_LOKI_URL',
+  );
+  validateTelemetryPaths(errors, values);
+  validateOtelHeaders(errors, values.OTEL_EXPORTER_OTLP_HEADERS);
   for (const [key, value] of Object.entries(values)) {
     if (/replace|example\.com|203\.0\.113\.10/iu.test(value)) {
       errors.push(`${key} vẫn là placeholder`);
@@ -108,6 +143,51 @@ export function validateReleaseConfig(values) {
   }
 
   return errors;
+}
+
+function validateHttpUrl(errors, value, key) {
+  if (!value) return;
+  try {
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      errors.push(`${key} phải dùng HTTP(S)`);
+    }
+  } catch {
+    errors.push(`${key} phải là URL hợp lệ`);
+  }
+}
+
+function validateTelemetryPaths(errors, values) {
+  for (const [key, allowedPaths] of [
+    ['GRAFANA_CLOUD_PROMETHEUS_URL', ['/otlp', '/otlp/v1/metrics']],
+    ['GRAFANA_CLOUD_LOKI_URL', ['/loki/api/v1/push', '/otlp', '/otlp/v1/logs']],
+  ]) {
+    const value = values[key];
+    if (!value) continue;
+    try {
+      const path = new URL(value).pathname.replace(/\/+$/u, '') || '/';
+      if (!allowedPaths.includes(path)) {
+        errors.push(
+          `${key} phải là endpoint ${allowedPaths.join(' hoặc ')}; không dùng endpoint remote_write khác giao thức`,
+        );
+      }
+    } catch {
+      // validateHttpUrl đã thêm lỗi URL cụ thể.
+    }
+  }
+}
+
+function validateOtelHeaders(errors, value) {
+  if (!value) return;
+  for (const entry of value.split(',')) {
+    const separator = entry.indexOf('=');
+    if (separator <= 0 || entry.slice(separator + 1).trim() === '') {
+      errors.push(
+        'OTEL_EXPORTER_OTLP_HEADERS phải có dạng key=value, phân cách bằng dấu phẩy',
+      );
+      return;
+    }
+  }
 }
 
 export function createRuntimeEnv(values, releaseTag) {

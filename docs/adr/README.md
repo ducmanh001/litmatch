@@ -45,3 +45,4 @@ Quan hệ với `docs/03-architecture.md`: file 03 mô tả kiến trúc **hiệ
 | [0009](./0009-hosted-free-alpha-release-profile.md)     | Profile alpha hosted-free đa nhà cung cấp                | 2026-07-22 | Accepted   |
 | [0010](./0010-hosted-observability-error-monitoring.md) | Sentry Cloud cho lỗi, Grafana Cloud cho vận hành hosted  | 2026-07-24 | Accepted   |
 | [0011](./0011-hybrid-modular-layered-event-driven.md)   | Hybrid modular/layered và event-driven có chọn lọc       | 2026-07-30 | Accepted   |
+| [0012](./0012-postgres-persistence-boundaries.md)       | Persistence boundary cho PostgreSQL và TypeORM           | 2026-08-07 | Accepted   |

@@ -42,7 +42,11 @@ describe('PostComposer', () => {
     expect(postSpy).toHaveBeenCalledWith(
       '/api/v1/feed/posts',
       expect.objectContaining({
-        body: { content: 'Xin chào', imageUrl: undefined, audience: 'friends' },
+        body: {
+          content: 'Xin chào',
+          imageAssetId: undefined,
+          audience: 'friends',
+        },
       }),
     );
   });

@@ -40,12 +40,12 @@ thừa; conditional UPDATE đủ an toàn và đơn giản hơn nhiều — cùn
   `VIDEO_MODERATION_MODE`. Dev port đồng bộ (trả kết quả ngay) nên toàn bộ chuỗi chạy trong 1 lần
   gọi — vendor thật (Cloudflare Stream/Mux, ADR sau) là bất đồng bộ (webhook), sẽ tách bước
   transcode thành handler webhook riêng mà KHÔNG đổi state machine.
-- 2 port `VideoStoragePort`/`VideoTranscodePort` + `Dev*Provider`. Khi
-  `VIDEO_UPLOAD_ENABLED=false`, service chặn create/finalize trước DB/storage side effect và
-  production được boot với capability tắt. Nếu flag bật dưới `NODE_ENV=production`, dev provider
-  fail-fast lúc bootstrap; mỗi method port cũng tự chặn phòng bypass — cùng pattern
-  `dev-only provider`/`DevIapVerifier`. Vendor thật là quyết định ADR riêng (đã hỏi lại người dùng 2026-07-14: ưu
-  tiên vendor gộp Cloudflare Stream/Mux hơn tự ráp S3+transcoder).
+- 2 port `VideoStoragePort`/`VideoTranscodePort` + adapter cụ thể được chọn trong module factory.
+  `VIDEO_UPLOAD_ENABLED=false` chặn create/finalize trước DB/storage side effect và production
+  dùng adapter unavailable để boot view-only; adapter dev không được khởi tạo trong production.
+  Nếu flag bật dưới `NODE_ENV=production`, factory fail-fast vì chưa có provider thật. Vendor thật
+  là quyết định ADR riêng (đã hỏi lại người dùng 2026-07-14: ưu tiên vendor gộp Cloudflare
+  Stream/Mux hơn tự ráp S3+transcoder).
 
 ## 3. View counting — chống đếm đôi, self-view không tính
 

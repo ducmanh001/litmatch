@@ -88,6 +88,18 @@ const environment = {
   MATCHING_GUEST_QUOTA_PEPPER:
     process.env['LOCAL_CI_MATCHING_GUEST_QUOTA_PEPPER'] ??
     'local-ci-matching-quota-pepper-0123456789abcdef',
+  // Production-mode smoke must boot a real storage adapter. The endpoint and
+  // credentials are deliberately local-only; VIDEO_UPLOAD_ENABLED remains
+  // false, so this profile never performs an object-store write.
+  MEDIA_STORAGE_PROVIDER: 's3',
+  AWS_REGION: 'us-east-1',
+  AWS_S3_ENDPOINT: 'http://127.0.0.1:9000',
+  AWS_S3_BUCKET: 'litmatch-images-ci',
+  AWS_ACCESS_KEY_ID: 'local-ci-access-key',
+  AWS_SECRET_ACCESS_KEY: 'local-ci-secret-key-0123456789',
+  AWS_S3_FORCE_PATH_STYLE: 'true',
+  MEDIA_PUBLIC_BASE_URL: 'http://127.0.0.1:9000/litmatch-images-ci',
+  MEDIA_UPLOAD_URL_TTL_SECONDS: '900',
   DATABASE_URL:
     process.env['LOCAL_CI_DATABASE_URL'] ??
     'postgresql://litmatch:litmatch_local@localhost:5432/litmatch_ci',
@@ -591,6 +603,24 @@ function runContainerSmoke() {
       `AUTH_GUEST_DEVICE_TOKEN_SECRET=${environment.AUTH_GUEST_DEVICE_TOKEN_SECRET}`,
       '--env',
       `MATCHING_GUEST_QUOTA_PEPPER=${environment.MATCHING_GUEST_QUOTA_PEPPER}`,
+      '--env',
+      `MEDIA_STORAGE_PROVIDER=${environment.MEDIA_STORAGE_PROVIDER}`,
+      '--env',
+      `AWS_REGION=${environment.AWS_REGION}`,
+      '--env',
+      `AWS_S3_ENDPOINT=${environment.AWS_S3_ENDPOINT}`,
+      '--env',
+      `AWS_S3_BUCKET=${environment.AWS_S3_BUCKET}`,
+      '--env',
+      `AWS_ACCESS_KEY_ID=${environment.AWS_ACCESS_KEY_ID}`,
+      '--env',
+      `AWS_SECRET_ACCESS_KEY=${environment.AWS_SECRET_ACCESS_KEY}`,
+      '--env',
+      `AWS_S3_FORCE_PATH_STYLE=${environment.AWS_S3_FORCE_PATH_STYLE}`,
+      '--env',
+      `MEDIA_PUBLIC_BASE_URL=${environment.MEDIA_PUBLIC_BASE_URL}`,
+      '--env',
+      `MEDIA_UPLOAD_URL_TTL_SECONDS=${environment.MEDIA_UPLOAD_URL_TTL_SECONDS}`,
       '--env',
       'AUTH_PHONE_OTP_ENABLED=true',
       '--env',

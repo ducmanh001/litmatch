@@ -70,11 +70,22 @@ describe('NotificationService (unit — mock repo/pushPort)', () => {
     it('push thành công → gọi đúng pushPort.send', async () => {
       const n = makeNotification();
       await service.sendPush(n);
-      expect(pushPort.send).toHaveBeenCalledWith(n);
+      expect(pushPort.send).toHaveBeenCalledWith({
+        notificationId: n.id,
+        recipientId: n.userId,
+        type: n.type,
+      });
     });
 
     it('push lỗi → nuốt lỗi, KHÔNG throw ra caller', async () => {
       pushPort.send.mockRejectedValue(new Error('fcm down'));
+      await expect(
+        service.sendPush(makeNotification()),
+      ).resolves.toBeUndefined();
+    });
+
+    it('provider trả failure → vẫn không throw ra caller', async () => {
+      pushPort.send.mockResolvedValue({ status: 'failed' });
       await expect(
         service.sendPush(makeNotification()),
       ).resolves.toBeUndefined();

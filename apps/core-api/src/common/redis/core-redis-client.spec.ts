@@ -31,6 +31,16 @@ describe('core Redis client', () => {
 
     expect(first).toBe(second);
     expect(Redis).toHaveBeenCalledTimes(1);
+    expect(Redis).toHaveBeenLastCalledWith(
+      'redis://shared-test',
+      expect.objectContaining({
+        connectTimeout: 1_000,
+        commandTimeout: 1_000,
+        maxRetriesPerRequest: 1,
+        enableOfflineQueue: false,
+        retryStrategy: coreRedisReconnectDelay,
+      }),
+    );
 
     await closeCoreRedisClient(first);
     expect(first.quit).not.toHaveBeenCalled();

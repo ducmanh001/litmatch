@@ -15,6 +15,7 @@ import { FriendModule } from '../friend';
 import { NotificationModule } from '../notification';
 import { SafetyModule } from '../safety';
 import { UserModule } from '../user';
+import { MediaModule } from '../media';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { UserModule } from '../user';
     FriendModule, // areFriends()/listFriendIds() cho audience=friends + Stories reply→DM
     NotificationModule, // in-app notification post_liked/post_commented (notification-service.md § 3)
     UserModule, // compose public author một batch, không để client N+1 GET /users/:id
+    MediaModule, // resolve asset ownership + public URL trước khi ghi content
   ],
   controllers: [FeedController, StoryController],
   providers: [FeedService, StoryService, StorySweeperService],

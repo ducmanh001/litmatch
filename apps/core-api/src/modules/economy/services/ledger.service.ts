@@ -18,7 +18,6 @@ import { EconomyMetrics } from '../economy.metrics';
 import {
   LedgerAccount,
   LedgerAccountKind,
-  LedgerCurrency,
 } from '../entities/ledger-account.entity';
 import { LedgerDirection, LedgerEntry } from '../entities/ledger-entry.entity';
 import { OutboxEvent } from '../entities/outbox-event.entity';
@@ -28,41 +27,17 @@ import {
   TransactionType,
 } from '../entities/transaction.entity';
 import { Wallet } from '../entities/wallet.entity';
+import {
+  LedgerPersistencePort,
+  type LedgerEntryInput,
+  type RecordResult,
+  type RecordTransactionInput,
+} from '../ports/ledger-persistence.port';
 
 const USER_ACCOUNT_KINDS = new Set([
   LedgerAccountKind.UserWallet,
   LedgerAccountKind.UserEarnings,
 ]);
-
-export interface LedgerEntryInput {
-  accountKind: LedgerAccountKind;
-  userId?: string;
-  direction: LedgerDirection;
-  amount: bigint;
-  currency: LedgerCurrency;
-}
-
-export interface RecordTransactionInput {
-  type: TransactionType;
-  idempotencyKey: string;
-  entries: LedgerEntryInput[];
-  actorUserId?: string;
-  metadata?: Record<string, unknown>;
-  reversalOf?: string;
-  /** Chạy trong CÙNG DB transaction sau khi ghi sổ (vd set VIP expiry, lưu receipt) — fail thì rollback cả sổ. */
-  withinTransaction?: (
-    manager: EntityManager,
-    transaction: LedgerTransaction,
-  ) => Promise<void>;
-  /** Ghi đè eventType outbox mặc định (theo dấu balanceDelta) — vd refund cần 'economy.diamond.refunded' rõ ràng thay vì 'debited' chung chung. */
-  outboxEventTypeOverride?: string;
-}
-
-export interface RecordResult {
-  transaction: LedgerTransaction;
-  /** true = request trùng idempotency key, trả lại giao dịch cũ, không ghi gì thêm. */
-  replayed: boolean;
-}
 
 /**
  * WRITER DUY NHẤT vào ledger/wallet (docs/services/economy-service.md § 3).
@@ -70,11 +45,13 @@ export interface RecordResult {
  * Không service nào khác được inject repository của ledger_entries/wallets để ghi.
  */
 @Injectable()
-export class LedgerService {
+export class LedgerService extends LedgerPersistencePort {
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly metrics: EconomyMetrics,
-  ) {}
+  ) {
+    super();
+  }
 
   async record(input: RecordTransactionInput): Promise<RecordResult> {
     this.validateEntries(input.entries);

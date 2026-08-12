@@ -362,7 +362,7 @@
     },
     {
       "id": "notification",
-      "title": "In-process notification dispatch and development push provider",
+      "title": "In-process notification dispatch with isolated push and analytics adapters",
       "status": "implemented",
       "owner": "core-api/notification",
       "contracts": [
@@ -381,6 +381,10 @@
           {
             "path": "apps/core-api/src/modules/notification/notification.service.spec.ts",
             "contains": "NotificationService"
+          },
+          {
+            "path": "apps/core-api/src/common/platform/platform.adapters.spec.ts",
+            "contains": "disabled feature/provider selects no-op adapters"
           }
         ]
       }

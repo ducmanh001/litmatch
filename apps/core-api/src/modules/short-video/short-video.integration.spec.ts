@@ -19,8 +19,8 @@ import { Video, VideoStatus } from './entities/video.entity';
 import { VideoView } from './entities/video-view.entity';
 import { VideoComment } from './entities/video-comment.entity';
 import { VideoReaction } from './entities/video-reaction.entity';
-import { DevVideoStorageProvider } from './ports/video-storage.port';
-import { DevVideoTranscodeProvider } from './ports/video-transcode.port';
+import { DevVideoStorageAdapter } from './ports/dev-video-storage.adapter';
+import { DevVideoTranscodeAdapter } from './ports/dev-video-transcode.adapter';
 import { SafetyService, ReportReason } from '../safety';
 import { Block } from '../safety/entities/block.entity';
 import { Report } from '../safety/entities/report.entity';
@@ -170,8 +170,8 @@ d('short-video integration (Postgres thật)', () => {
       userService,
       configStub,
     );
-    const storagePort = new DevVideoStorageProvider(configStub);
-    const transcodePort = new DevVideoTranscodeProvider(configStub);
+    const storagePort = new DevVideoStorageAdapter(configStub);
+    const transcodePort = new DevVideoTranscodeAdapter(configStub);
 
     video = new ShortVideoService(
       ds,
@@ -186,7 +186,12 @@ d('short-video integration (Postgres thật)', () => {
       safetyService,
       configStub,
     );
-    sweeper = new VideoSweeperService(ds, configStub, schedulerStub);
+    sweeper = new VideoSweeperService(
+      ds,
+      storagePort,
+      configStub,
+      schedulerStub,
+    );
     ranking = new VideoRankingService(ds, configStub, schedulerStub);
   });
 

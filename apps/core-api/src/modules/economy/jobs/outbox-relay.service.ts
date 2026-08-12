@@ -7,15 +7,18 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { InjectDataSource } from '@nestjs/typeorm';
-import { Kafka, Producer } from 'kafkajs';
 import { DataSource } from 'typeorm';
 
+import { EventBusPort, type EventEnvelope } from '../../../common/events';
 import { ManagedInterval } from '../../../common/scheduling/managed-interval';
 import type { CoreApiEnv } from '../../../config/env.validation';
 import { OutboxEvent } from '../entities/outbox-event.entity';
 
 const RELAY_JOB = 'economy-outbox-relay';
 const BATCH_SIZE = 100;
+const DEFAULT_EVENT_VERSION = 1;
+const ORDERING_KEY_FIELDS = ['transactionId', 'userId'] as const;
+const MAX_ERROR_LENGTH = 2_000;
 
 /**
  * Relay của Outbox Pattern (docs/03 § 3.6): đọc event chưa publish
@@ -27,13 +30,13 @@ export class OutboxRelayService
   implements OnApplicationBootstrap, OnApplicationShutdown
 {
   private readonly logger = new Logger(OutboxRelayService.name);
-  private producer: Producer | null = null;
   private readonly job = new ManagedInterval();
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly config: ConfigService<CoreApiEnv, true>,
     private readonly scheduler: SchedulerRegistry,
+    private readonly eventBus: EventBusPort,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -41,15 +44,6 @@ export class OutboxRelayService
       !this.config.getOrThrow('ECONOMY_OUTBOX_RELAY_ENABLED', { infer: true })
     )
       return;
-
-    const kafka = new Kafka({
-      clientId: 'core-api-outbox-relay',
-      brokers: this.config
-        .getOrThrow('KAFKA_BROKERS', { infer: true })
-        .split(','),
-    });
-    this.producer = kafka.producer();
-    await this.producer.connect();
 
     this.job.start(this.scheduler, {
       jobName: RELAY_JOB,
@@ -65,7 +59,6 @@ export class OutboxRelayService
 
   async onApplicationShutdown(): Promise<void> {
     this.job.stop();
-    await this.producer?.disconnect();
   }
 
   /** 1 vòng relay — public để test/chạy tay. */
@@ -78,6 +71,7 @@ export class OutboxRelayService
           .setLock('pessimistic_write')
           .setOnLocked('skip_locked')
           .where('e.published_at IS NULL')
+          .andWhere('e.dead_lettered_at IS NULL')
           .orderBy('e.created_at', 'ASC')
           .limit(BATCH_SIZE)
           .getMany();
@@ -85,26 +79,25 @@ export class OutboxRelayService
 
         for (const event of events) {
           try {
-            await this.producer?.send({
-              topic: event.topic,
-              messages: [
-                {
-                  key: event.eventType,
-                  value: JSON.stringify({
-                    id: event.id,
-                    type: event.eventType,
-                    ...event.payload,
-                  }),
-                },
-              ],
-            });
+            await this.eventBus.publish(toEventEnvelope(event));
             event.publishedAt = new Date();
+            event.lastError = null;
           } catch (err) {
             event.attempts += 1;
+            event.lastError = stringifyError(err);
             this.logger.error(
-              { eventId: event.id, err: `${err}` },
-              'Publish event thất bại, sẽ retry',
+              {
+                eventId: event.id,
+                topic: event.topic,
+                attempts: event.attempts,
+                maxAttempts: this.maxAttempts(),
+                err: event.lastError,
+              },
+              'Outbox event publish failed',
             );
+            if (event.attempts >= this.maxAttempts()) {
+              await this.deadLetter(event);
+            }
           }
         }
         await manager.save(events);
@@ -112,4 +105,74 @@ export class OutboxRelayService
       });
     }, 0);
   }
+
+  private maxAttempts(): number {
+    return this.config.getOrThrow('ECONOMY_OUTBOX_MAX_ATTEMPTS', {
+      infer: true,
+    });
+  }
+
+  private async deadLetter(event: OutboxEvent): Promise<void> {
+    try {
+      await this.eventBus.publishDeadLetter(
+        toEventEnvelope(event),
+        event.lastError ?? 'unknown publish failure',
+        event.attempts,
+      );
+      this.logger.error(
+        {
+          eventId: event.id,
+          topic: event.topic,
+          attempts: event.attempts,
+          deadLetterTopic: `${event.topic}.DLQ`,
+        },
+        'Outbox event moved to dead-letter topic',
+      );
+    } catch (deadLetterError) {
+      // Keep the payload and mark it terminal even if Kafka is still down. This prevents an
+      // infinite retry loop; the retained row is the operator replay source of truth.
+      this.logger.error(
+        {
+          eventId: event.id,
+          topic: event.topic,
+          attempts: event.attempts,
+          err: stringifyError(deadLetterError),
+        },
+        'Outbox dead-letter publish failed; retaining terminal row for replay',
+      );
+    } finally {
+      event.deadLetteredAt = new Date();
+    }
+  }
+}
+
+function toEventEnvelope(event: OutboxEvent): EventEnvelope {
+  return {
+    id: event.id,
+    topic: event.topic,
+    type: event.eventType,
+    version: eventVersion(event.payload),
+    key: orderingKey(event),
+    payload: event.payload,
+  };
+}
+
+function eventVersion(payload: Record<string, unknown>): number {
+  const version = payload['version'];
+  return typeof version === 'number' && Number.isInteger(version)
+    ? version
+    : DEFAULT_EVENT_VERSION;
+}
+
+function orderingKey(event: OutboxEvent): string {
+  for (const field of ORDERING_KEY_FIELDS) {
+    const value = event.payload[field];
+    if (typeof value === 'string' && value.length > 0) return value;
+  }
+  return event.id;
+}
+
+function stringifyError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.slice(0, MAX_ERROR_LENGTH);
 }

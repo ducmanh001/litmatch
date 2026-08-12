@@ -42,4 +42,35 @@ describe('coreApiEnvSchema invariants', () => {
     expect(schema.validate('auth.google,topUp.web').error).toBeUndefined();
     expect(schema.validate('wallet.magicTopup').error).toBeDefined();
   });
+
+  it('chấp nhận các storage profile S3-compatible và endpoint chỉ nhận HTTP(S)', () => {
+    const providerSchema = coreApiEnvSchema.extract('MEDIA_STORAGE_PROVIDER');
+    const endpointSchema = coreApiEnvSchema.extract('AWS_S3_ENDPOINT');
+
+    expect(providerSchema.validate('s3').error).toBeUndefined();
+    expect(providerSchema.validate('minio').error).toBeUndefined();
+    expect(endpointSchema.validate('http://minio:9000').error).toBeUndefined();
+    expect(
+      endpointSchema.validate('ftp://storage.example').error,
+    ).toBeDefined();
+  });
+
+  it('video upload mặc định tắt khi provider production chưa có', () => {
+    const schema = coreApiEnvSchema.extract('VIDEO_UPLOAD_ENABLED');
+
+    expect(schema.validate(undefined).value).toBe(false);
+    expect(schema.validate(true).error).toBeUndefined();
+  });
+
+  it('notification and analytics provider flags are explicit and fail closed by default', () => {
+    const push = coreApiEnvSchema.extract('NOTIFICATION_PUSH_PROVIDER');
+    const analytics = coreApiEnvSchema.extract('ANALYTICS_PROVIDER');
+    const enabled = coreApiEnvSchema.extract('ANALYTICS_ENABLED');
+
+    expect(push.validate(undefined).value).toBe('dev');
+    expect(push.validate('apns').error).toBeUndefined();
+    expect(push.validate('unknown').error).toBeDefined();
+    expect(analytics.validate(undefined).value).toBe('disabled');
+    expect(enabled.validate(undefined).value).toBe(false);
+  });
 });

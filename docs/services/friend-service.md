@@ -43,10 +43,10 @@ tạo.
   trùng/mất dòng khi phân trang).
 - Gửi: Idempotency-Key bắt buộc, unique DB prefix `friend:msg:{userId}:{key}` — client retry
   không nhân đôi; replay trả lại message cũ.
-- Ảnh đính kèm: client gửi `imageUrl` (URL, cùng pattern `CreatePostDto.imageUrl` của Feed) —
-  controller whitelist thành `attachment {kind:'image', payload:{url}}`; các kind nội bộ khác
-  (vd `story_reply`) chỉ set được qua DI giữa module. `content` được rỗng khi có ảnh; rỗng cả
-  hai → 422 `FRIEND_MESSAGE_EMPTY`.
+- Ảnh đính kèm: client upload qua Media Service rồi gửi `imageAssetId`; backend kiểm tra ownership
+  - object tồn tại rồi whitelist thành `attachment {kind:'image', payload:{url}}`; các kind nội bộ khác
+    (vd `story_reply`) chỉ set được qua DI giữa module. `content` được rỗng khi có ảnh; rỗng cả
+    hai → 422 `FRIEND_MESSAGE_EMPTY`.
 - `Conversation.lastMessageAt` cập nhật cùng transaction với insert message — dùng để sắp
   xếp danh sách chat gần nhất ở `GET /friends` (không phải nguồn sự thật gì khác, chỉ để sort).
 

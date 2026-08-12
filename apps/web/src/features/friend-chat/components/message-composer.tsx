@@ -8,6 +8,7 @@ import { useForm } from 'react-hook-form';
 
 import { useIdempotencyKey } from '../../../shared/idempotency/use-idempotency-key';
 import { DiamondIcon } from '../../../shared/ui/icons';
+import { uploadImage } from '../../../shared/media/image-upload';
 import { useSendFriendMessage } from '../api';
 import { sendMessageSchema } from '../send-message-schema';
 
@@ -20,32 +21,57 @@ export function MessageComposer({
 }) {
   const form = useForm<SendMessageForm>({
     resolver: zodResolver(sendMessageSchema),
-    defaultValues: { content: '', imageUrl: '' },
+    defaultValues: { content: '', imageAssetId: '' },
   });
   const sendMessage = useSendFriendMessage(conversationId);
   const { key, resetKey } = useIdempotencyKey();
   const [showImageInput, setShowImageInput] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [uploadedImageAssetId, setUploadedImageAssetId] = useState<
+    string | undefined
+  >();
+  const [uploadError, setUploadError] = useState<string | undefined>();
+  const [isUploading, setIsUploading] = useState(false);
 
   const message =
     form.formState.errors.content?.message ??
-    form.formState.errors.imageUrl?.message ??
+    form.formState.errors.imageAssetId?.message ??
+    uploadError ??
     (isApiError(sendMessage.error)
       ? sendMessage.error.message
       : sendMessage.error != null
         ? 'Có lỗi xảy ra, thử lại.'
         : undefined);
 
-  const onSubmit = form.handleSubmit(({ content, imageUrl }) => {
+  const onSubmit = form.handleSubmit(async ({ content }) => {
+    setUploadError(undefined);
+    let imageAssetId = uploadedImageAssetId;
+    if (imageFile !== null && imageAssetId === undefined) {
+      setIsUploading(true);
+      try {
+        imageAssetId = (await uploadImage(imageFile, 'message')).assetId;
+        setUploadedImageAssetId(imageAssetId);
+      } catch (error) {
+        setUploadError(
+          error instanceof Error ? error.message : 'Upload ảnh thất bại.',
+        );
+        setIsUploading(false);
+        return;
+      }
+      setIsUploading(false);
+    }
     sendMessage.mutate(
       {
         content: content === '' ? undefined : content,
-        imageUrl: imageUrl === '' ? undefined : imageUrl,
+        imageAssetId,
         idempotencyKey: key,
       },
       {
         onSuccess: (sent) => {
           if (sent === undefined) return;
           form.reset();
+          setImageFile(null);
+          setUploadedImageAssetId(undefined);
           setShowImageInput(false);
           resetKey();
         },
@@ -60,7 +86,16 @@ export function MessageComposer({
           type="button"
           aria-label="Đính kèm ảnh"
           aria-pressed={showImageInput}
-          onClick={() => setShowImageInput((shown) => !shown)}
+          onClick={() =>
+            setShowImageInput((shown) => {
+              if (shown) {
+                setImageFile(null);
+                setUploadedImageAssetId(undefined);
+                form.setValue('imageAssetId', '');
+              }
+              return !shown;
+            })
+          }
           className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-surf2 ${
             showImageInput ? 'text-irisl' : 'text-slate-500 dark:text-white/75'
           }`}
@@ -97,7 +132,7 @@ export function MessageComposer({
           type="submit"
           aria-label={sendMessage.isPending ? 'Đang gửi…' : 'Gửi'}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-irisl text-white disabled:opacity-50"
-          disabled={sendMessage.isPending}
+          disabled={sendMessage.isPending || isUploading}
         >
           <svg
             width="15"
@@ -117,14 +152,27 @@ export function MessageComposer({
         </button>
       </div>
       {showImageInput && (
-        <input
-          type="text"
-          autoFocus
-          aria-label="Đường dẫn ảnh đính kèm"
-          placeholder="Dán đường dẫn ảnh…"
-          className="h-10 w-full rounded-xl border border-black/5 bg-transparent px-3 text-sm placeholder:text-slate-400 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-iris dark:border-white/10"
-          {...form.register('imageUrl')}
-        />
+        <div className="space-y-1">
+          <input
+            type="file"
+            autoFocus
+            aria-label="Chọn ảnh đính kèm"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            onChange={(event) => {
+              const file = event.target.files?.[0] ?? null;
+              setImageFile(file);
+              setUploadedImageAssetId(undefined);
+              form.setValue('imageAssetId', file === null ? '' : 'selected');
+              setUploadError(undefined);
+            }}
+            className="h-10 w-full rounded-xl border border-black/5 bg-transparent px-3 py-2 text-sm file:mr-2 file:rounded-full file:border-0 file:bg-iris/10 file:px-3 file:py-1 file:text-xs file:font-semibold dark:border-white/10"
+          />
+          {imageFile !== null && (
+            <p className="text-xs text-slate-500 dark:text-white/60">
+              Đã chọn: {imageFile.name}
+            </p>
+          )}
+        </div>
       )}
       {message !== undefined && (
         <p role="alert" className="text-sm text-destructive">

@@ -30,6 +30,13 @@ export class OutboxEvent {
   @Column({ type: 'timestamptz', nullable: true })
   publishedAt!: Date | null;
 
+  /** Terminal relay state; the original payload remains available for inspection/replay. */
+  @Column({ type: 'timestamptz', nullable: true })
+  deadLetteredAt!: Date | null;
+
+  @Column({ type: 'text', nullable: true })
+  lastError!: string | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 }

@@ -21,7 +21,7 @@ import { PrivacySettingsService } from '../user';
 
 import type { CursorPage, CursorPageQueryDto } from '@litmatch/common-dtos';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
-import type { CreateCommentDto, CreatePostDto } from './dto/feed.dtos';
+import type { CreateCommentDto, CreatePostInput } from './dto/feed.dtos';
 import type { Notification } from '../notification';
 
 /**
@@ -50,7 +50,7 @@ export class FeedService {
    */
   async createPost(
     user: AuthenticatedUser,
-    dto: CreatePostDto,
+    dto: CreatePostInput,
     idempotencyKey: string,
   ): Promise<Post> {
     this.assertNotGuest(user);

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { ShortVideoController } from './short-video.controller';
@@ -9,14 +10,12 @@ import { Video } from './entities/video.entity';
 import { VideoView } from './entities/video-view.entity';
 import { VideoComment } from './entities/video-comment.entity';
 import { VideoReaction } from './entities/video-reaction.entity';
+import { VideoStoragePort } from './ports/video-storage.port';
+import { VideoTranscodePort } from './ports/video-transcode.port';
 import {
-  DevVideoStorageProvider,
-  VideoStoragePort,
-} from './ports/video-storage.port';
-import {
-  DevVideoTranscodeProvider,
-  VideoTranscodePort,
-} from './ports/video-transcode.port';
+  createVideoStorageAdapter,
+  createVideoTranscodeAdapter,
+} from './ports/video-provider.factory';
 import { FriendModule } from '../friend';
 import { SafetyModule } from '../safety';
 import { UserModule } from '../user';
@@ -34,9 +33,16 @@ import { UserModule } from '../user';
     ShortVideoService,
     VideoSweeperService,
     VideoRankingService,
-    // Đổi sang provider thật (Cloudflare Stream/Mux, ADR sau) khi tích hợp.
-    { provide: VideoStoragePort, useClass: DevVideoStorageProvider },
-    { provide: VideoTranscodePort, useClass: DevVideoTranscodeProvider },
+    {
+      provide: VideoStoragePort,
+      inject: [ConfigService],
+      useFactory: createVideoStorageAdapter,
+    },
+    {
+      provide: VideoTranscodePort,
+      inject: [ConfigService],
+      useFactory: createVideoTranscodeAdapter,
+    },
   ],
   exports: [ShortVideoService],
 })

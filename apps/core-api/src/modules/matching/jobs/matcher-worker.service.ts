@@ -27,8 +27,8 @@ import { MatchingMetrics } from '../matching.metrics';
 import { MATCH_INTERACTION_POLICY } from '../ports/interaction-policy';
 import { MatcherWakeup } from '../matcher-wakeup';
 import {
-  MATCHING_ACTIVE_SHARDS_KEY,
-  MATCHING_REDIS,
+  MATCHING_QUEUE,
+  MATCHING_REALTIME,
 } from '../redis/matching-redis.provider';
 import { User, UserStatus } from '../../user';
 import { NotificationService, NotificationType } from '../../notification';
@@ -38,9 +38,10 @@ import type {
   RealtimeEnvelope,
 } from '@litmatch/common-dtos';
 import type { Notification } from '../../notification';
-import type Redis from 'ioredis';
 import type { CoreApiEnv } from '../../../config/env.validation';
 import type { MatchInteractionPolicy } from '../ports/interaction-policy';
+import type { RealtimePublisherPort } from '../../../common/realtime/realtime-publisher.port';
+import type { MatchingQueuePort } from '../ports/matching-queue.port';
 
 const MATCHER_JOB = 'matching-matcher';
 const MATCHER_WAKE_DEBOUNCE_MS = 50;
@@ -82,7 +83,9 @@ export class MatcherWorkerService
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly config: ConfigService<CoreApiEnv, true>,
     private readonly scheduler: SchedulerRegistry,
-    @Inject(MATCHING_REDIS) private readonly redis: Redis,
+    @Inject(MATCHING_QUEUE) private readonly queue: MatchingQueuePort,
+    @Inject(MATCHING_REALTIME)
+    private readonly realtime: RealtimePublisherPort,
     @Inject(MATCH_INTERACTION_POLICY)
     private readonly interactionPolicy: MatchInteractionPolicy,
     private readonly metrics: MatchingMetrics,
@@ -177,9 +180,7 @@ export class MatcherWorkerService
         'matching.matcher.tick',
         async (span) => {
           let matched = 0;
-          for (const shard of await this.redis.smembers(
-            MATCHING_ACTIVE_SHARDS_KEY,
-          )) {
+          for (const shard of await this.queue.listActiveShards()) {
             matched += await this.drainShard(shard);
           }
           span.setAttribute('matching.matched_pairs', matched);
@@ -196,20 +197,20 @@ export class MatcherWorkerService
     let matched = 0;
     for (let i = 0; i < batchSize; i++) {
       // ZPOPMIN key 2: atomic — không cần Lua, 2 matcher không lấy trùng (spec § 2)
-      const popped = await this.redis.zpopmin(shard, 2);
+      const popped = await this.queue.popMin(shard, 2);
       if (popped.length === 0) {
         await this.cleanupShardIfEmpty(shard);
         break;
       }
-      if (popped.length < 4) {
+      if (popped.length < 2) {
         // chỉ còn 1 ticket — trả lại đúng score cũ, chờ người tiếp theo
-        await this.redis.zadd(shard, 'NX', popped[1], popped[0]);
+        await this.queue.enqueue(shard, popped[0][1], popped[0][0], 'NX');
         break;
       }
       const outcome = await this.tryPair(
         shard,
-        { id: popped[0], score: Number(popped[1]) },
-        { id: popped[2], score: Number(popped[3]) },
+        { id: popped[0][0], score: Number(popped[0][1]) },
+        { id: popped[1][0], score: Number(popped[1][1]) },
       );
       if (outcome === 'matched') matched += 1;
       // Cặp hợp lệ nhưng block/report lẫn nhau → cả 2 đã được trả lại queue với score cũ.
@@ -357,9 +358,9 @@ export class MatcherWorkerService
     if (result.requeue.length > 0) {
       for (const r of result.requeue) {
         // score gốc từ ZPOPMIN (đã gồm boost) — không mất lượt chờ (spec § 2); NX phòng trùng
-        await this.redis.zadd(shard, 'NX', String(r.score), r.id);
+        await this.queue.enqueue(shard, String(r.score), r.id, 'NX');
       }
-      await this.redis.sadd(MATCHING_ACTIVE_SHARDS_KEY, shard);
+      await this.queue.markActive(shard);
     }
     if (result.matchedPair) {
       // Matching latency (docs/07 GĐ6) — ghi cho CẢ 2 vé, mỗi bên có wait time riêng
@@ -374,7 +375,7 @@ export class MatcherWorkerService
             data: { ticketId, sessionId },
           };
           return publishRealtimeEvent(
-            this.redis,
+            this.realtime,
             this.logger,
             userId,
             envelope,
@@ -392,9 +393,7 @@ export class MatcherWorkerService
 
   /** Dọn shard rỗng khỏi set active (spec § 2) — re-check sau SREM để không nuốt enqueue chen giữa. */
   private async cleanupShardIfEmpty(shard: string): Promise<void> {
-    await this.redis.srem(MATCHING_ACTIVE_SHARDS_KEY, shard);
-    if ((await this.redis.zcard(shard)) > 0) {
-      await this.redis.sadd(MATCHING_ACTIVE_SHARDS_KEY, shard);
-    }
+    await this.queue.unmarkActive(shard);
+    if (await this.queue.hasEntries(shard)) await this.queue.markActive(shard);
   }
 }

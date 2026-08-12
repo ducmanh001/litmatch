@@ -217,6 +217,15 @@ test('local and GitHub CI provide every required non-database application secret
     'AUTH_OTP_PEPPER',
     'AUTH_GUEST_DEVICE_TOKEN_SECRET',
     'MATCHING_GUEST_QUOTA_PEPPER',
+    'MEDIA_STORAGE_PROVIDER',
+    'AWS_REGION',
+    'AWS_S3_ENDPOINT',
+    'AWS_S3_BUCKET',
+    'AWS_ACCESS_KEY_ID',
+    'AWS_SECRET_ACCESS_KEY',
+    'AWS_S3_FORCE_PATH_STYLE',
+    'MEDIA_PUBLIC_BASE_URL',
+    'MEDIA_UPLOAD_URL_TTL_SECONDS',
   ]) {
     assert.match(localCi, new RegExp(`\\b${variable}:`, 'u'), variable);
     assert.match(

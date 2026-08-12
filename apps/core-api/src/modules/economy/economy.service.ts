@@ -9,7 +9,7 @@ import { buildCursorPage, decodeCursor } from '@litmatch/common-dtos';
 
 import { ECONOMY_EVENTS_TOPIC } from './economy.constants';
 import { EconomyErrors } from './economy.errors';
-import { LedgerService } from './services/ledger.service';
+import { LedgerPersistencePort } from './ports/ledger-persistence.port';
 import {
   LedgerAccountKind,
   LedgerCurrency,
@@ -77,7 +77,7 @@ export class EconomyService {
     @InjectRepository(VipPlan) private readonly planRepo: Repository<VipPlan>,
     @InjectRepository(LedgerTransaction)
     private readonly txnRepo: Repository<LedgerTransaction>,
-    private readonly ledger: LedgerService,
+    private readonly ledger: LedgerPersistencePort,
     private readonly iapVerifier: IapVerifier,
   ) {}
 

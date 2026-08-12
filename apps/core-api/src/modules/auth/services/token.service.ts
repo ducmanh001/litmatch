@@ -1,11 +1,9 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@litmatch/common-exceptions';
-import { IsNull, Repository } from 'typeorm';
 
 import { UserService } from '../../user';
 
@@ -13,7 +11,7 @@ import type { AccessTokenPayload, Role } from '@litmatch/common-dtos';
 import type { CoreApiEnv } from '../../../config/env.validation';
 import { REFRESH_TOKEN_BYTES } from '../auth.constants';
 import { AuthErrors } from '../auth.errors';
-import { RefreshToken } from '../entities/refresh-token.entity';
+import { RefreshSessionPort } from '../ports/refresh-session.port';
 
 export interface IssuedTokens {
   accessToken: string;
@@ -24,8 +22,8 @@ export interface IssuedTokens {
 @Injectable()
 export class TokenService {
   constructor(
-    @InjectRepository(RefreshToken)
-    private readonly refreshRepo: Repository<RefreshToken>,
+    @Inject(RefreshSessionPort)
+    private readonly refreshSessions: RefreshSessionPort,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService<CoreApiEnv, true>,
     private readonly userService: UserService,
@@ -52,14 +50,12 @@ export class TokenService {
     const ttlDays = this.config.getOrThrow('AUTH_REFRESH_TTL_DAYS', {
       infer: true,
     });
-    await this.refreshRepo.save(
-      this.refreshRepo.create({
-        userId,
-        tokenHash: this.hash(refreshPlain),
-        familyId: familyId ?? randomUUID(),
-        expiresAt: new Date(Date.now() + ttlDays * 24 * 3600 * 1000),
-      }),
-    );
+    await this.refreshSessions.issue({
+      userId,
+      tokenHash: this.hash(refreshPlain),
+      familyId: familyId ?? randomUUID(),
+      expiresAt: this.refreshExpiresAt(ttlDays),
+    });
 
     return { accessToken, refreshToken: refreshPlain, expiresIn };
   }
@@ -72,24 +68,30 @@ export class TokenService {
   async rotate(
     refreshPlain: string,
   ): Promise<{ userId: string; tokens: IssuedTokens }> {
-    const token = await this.refreshRepo.findOneBy({
-      tokenHash: this.hash(refreshPlain),
-    });
-    if (!token || token.revokedAt || token.expiresAt < new Date()) {
-      throw new DomainException(
-        AuthErrors.REFRESH_TOKEN_INVALID,
-        'Refresh token không hợp lệ',
-        HttpStatus.UNAUTHORIZED,
-      );
+    const session = await this.refreshSessions.findByTokenHash(
+      this.hash(refreshPlain),
+    );
+    if (!session || session.revokedAt || session.expiresAt <= new Date()) {
+      throw this.invalidRefreshToken();
     }
 
-    const marked = await this.refreshRepo.update(
-      { id: token.id, rotatedAt: IsNull(), revokedAt: IsNull() },
-      { rotatedAt: new Date() },
-    );
-    if (!marked.affected) {
-      // Token đã rotate trước đó mà lại được dùng lần nữa → nghi bị đánh cắp, revoke cả family
-      await this.revokeFamily(token.familyId);
+    const ttlDays = this.config.getOrThrow('AUTH_REFRESH_TTL_DAYS', {
+      infer: true,
+    });
+    const user = await this.userService.getByIdOrThrow(session.userId);
+    const tokens = await this.issueTokens(user.id, user.isGuest, user.role);
+    const result = await this.refreshSessions.rotate({
+      tokenId: session.id,
+      replacement: {
+        tokenHash: this.hash(tokens.refreshToken),
+        expiresAt: this.refreshExpiresAt(ttlDays),
+      },
+    });
+
+    if (result === 'invalid') {
+      throw this.invalidRefreshToken();
+    }
+    if (result === 'reused') {
       throw new DomainException(
         AuthErrors.REFRESH_TOKEN_REUSED,
         'Refresh token đã bị dùng lại — phiên bị thu hồi',
@@ -97,34 +99,55 @@ export class TokenService {
       );
     }
 
-    // Đọc role HIỆN TẠI (không phải role lúc login trước đó) — nếu bị hạ/nâng quyền giữa
-    // chừng, access token mới phải phản ánh đúng, không giữ role cũ trong refresh token record.
-    const user = await this.userService.getByIdOrThrow(token.userId);
-    const tokens = await this.issueForUser(
-      token.userId,
-      user.isGuest,
-      user.role,
-      token.familyId,
-    );
-    return { userId: token.userId, tokens };
+    return { userId: session.userId, tokens };
   }
 
   /** Logout — idempotent. */
   async revoke(refreshPlain: string): Promise<void> {
-    await this.refreshRepo.update(
-      { tokenHash: this.hash(refreshPlain), revokedAt: IsNull() },
-      { revokedAt: new Date() },
-    );
+    await this.refreshSessions.revoke(this.hash(refreshPlain));
   }
 
   async revokeFamily(familyId: string): Promise<void> {
-    await this.refreshRepo.update(
-      { familyId, revokedAt: IsNull() },
-      { revokedAt: new Date() },
+    await this.refreshSessions.revokeFamily(familyId);
+  }
+
+  private async issueTokens(
+    userId: string,
+    isGuest: boolean,
+    role: Role,
+  ): Promise<IssuedTokens> {
+    const expiresIn = this.config.getOrThrow('JWT_ACCESS_TTL_SECONDS', {
+      infer: true,
+    });
+    const accessToken = await this.jwtService.signAsync(
+      {
+        sub: userId,
+        isGuest,
+        role,
+        jti: randomUUID(),
+      } satisfies AccessTokenPayload,
+      { expiresIn },
+    );
+    return {
+      accessToken,
+      refreshToken: randomBytes(REFRESH_TOKEN_BYTES).toString('base64url'),
+      expiresIn,
+    };
+  }
+
+  private refreshExpiresAt(ttlDays: number): Date {
+    return new Date(Date.now() + ttlDays * 24 * 3600 * 1000);
+  }
+
+  private invalidRefreshToken(): DomainException {
+    return new DomainException(
+      AuthErrors.REFRESH_TOKEN_INVALID,
+      'Refresh token không hợp lệ',
+      HttpStatus.UNAUTHORIZED,
     );
   }
 
-  /** SHA-256 đủ cho token REFRESH_TOKEN_BYTES-byte entropy cao (không phải password) — không cần bcrypt. */
+  /** SHA-256 đủ cho token REFRESH_TOKEN_BYTES-byte entropy cao (không phải password). */
   private hash(value: string): string {
     return createHash('sha256').update(value).digest('hex');
   }
