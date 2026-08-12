@@ -41,7 +41,11 @@ export function MatchTypePicker({
 }) {
   const form = useForm<JoinQueueForm>({
     resolver: zodResolver(joinQueueSchema),
-    defaultValues: { matchType: 'soul', genderPreference: 'any' },
+    defaultValues: {
+      matchType: 'soul',
+      useDiamond: false,
+      genderPreference: 'any',
+    },
   });
   const joinQueue = useJoinQueue();
   // 1 key cho cả intent "vào hàng đợi" hiện tại — giữ nguyên qua các lần retry lỗi mạng.

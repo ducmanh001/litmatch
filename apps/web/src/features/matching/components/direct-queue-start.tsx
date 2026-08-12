@@ -29,7 +29,7 @@ export function DirectQueueStart({
     started.current = true;
     joinQueue.mutate(
       {
-        body: { matchType, genderPreference: 'any' },
+        body: { matchType, useDiamond: false, genderPreference: 'any' },
         idempotencyKey: key,
       },
       {
