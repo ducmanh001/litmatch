@@ -5,18 +5,23 @@ import { BaseAppEntity } from '../../../common/entities/base.entity';
 export enum CallSessionStatus {
   /** Đã tạo (join lần đầu) — chờ đủ 2 bên vào phòng LiveKit. */
   Pending = 'pending',
-  /** Cả 2 đã join — startedAt là mốc tính free window + billing. */
+  /** Cả 2 đã join — startedAt là mốc tính giới hạn 7 phút của Voice Match. */
   Active = 'active',
   /** Terminal — mọi transition sau đó là no-op idempotent. */
   Ended = 'ended',
 }
 
+export enum CallKind {
+  VoiceMatch = 'voice_match',
+  Friend = 'friend',
+}
+
 export enum CallEndReason {
   /** Kết thúc bình thường: member gọi end / rời phòng / room_finished. */
   Completed = 'completed',
-  /** Hết free window khi billing tắt — server tự end (docs/10 § Calling). */
+  /** Hết giới hạn Voice Match — server tự end (docs/10 § Calling). */
   FreeLimit = 'free_limit',
-  /** 1 trong 2 bên không đủ diamond cho phút tiếp theo. */
+  /** Legacy reason giữ để đọc call cũ; Voice Match hiện không debit theo phút. */
   InsufficientBalance = 'insufficient_balance',
   /** Không đủ 2 bên join trong CALLING_PENDING_TIMEOUT_SECONDS. */
   PendingTimeout = 'pending_timeout',
@@ -37,8 +42,8 @@ export enum CallEndReason {
   where: "status = 'active' AND reconnect_started_at IS NOT NULL",
 })
 export class CallSession extends BaseAppEntity {
-  @Column({ type: 'uuid' })
-  matchSessionId!: string;
+  @Column({ type: 'uuid', nullable: true })
+  matchSessionId!: string | null;
 
   /** Room LiveKit = `call-{id}` — lưu để webhook lookup ngược; client không tự chọn room. */
   @Column({ type: 'varchar', length: 64 })
@@ -49,6 +54,9 @@ export class CallSession extends BaseAppEntity {
 
   @Column({ type: 'uuid' })
   userBId!: string;
+
+  @Column({ type: 'varchar', length: 16, default: CallKind.VoiceMatch })
+  callKind!: CallKind;
 
   @Column({ type: 'varchar', length: 16, default: CallSessionStatus.Pending })
   status!: CallSessionStatus;
@@ -62,7 +70,7 @@ export class CallSession extends BaseAppEntity {
   @Column({ type: 'timestamptz', nullable: true })
   startedAt!: Date | null;
 
-  /** Mốc bắt đầu cửa sổ reconnect; trong khoảng này timer/billing được tạm dừng. */
+  /** Mốc bắt đầu cửa sổ reconnect; trong khoảng này timer được tạm dừng. */
   @Column({ type: 'timestamptz', nullable: true })
   reconnectStartedAt!: Date | null;
 
@@ -82,7 +90,7 @@ export class CallSession extends BaseAppEntity {
   @Column({ type: 'int', nullable: true })
   durationSeconds!: number | null;
 
-  /** Số phút ĐÃ trừ diamond xong (đối xứng 2 bên — spec § 4); 0 khi billing tắt. */
+  /** Legacy response field, luôn 0 từ khi Voice Match không còn tính phí theo phút. */
   @Column({ type: 'int', default: 0 })
   billedMinutes!: number;
 }

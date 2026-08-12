@@ -11,6 +11,7 @@ import { FriendChat1752600000000 } from '../../database/migrations/1752600000000
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
 import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
 import { MiniGame1753400000000 } from '../../database/migrations/1753400000000-mini-game';
+import { MatchingDailyEntitlements1757100000000 } from '../../database/migrations/1757100000000-matching-daily-entitlements';
 
 import { MiniGameErrors } from './mini-game.errors';
 import { MiniGameService } from './mini-game.service';
@@ -139,6 +140,7 @@ d('Mini Game integration (Postgres thật)', () => {
         UserRole1753600000000,
         MatchingCore1752200000000,
         MatchingGenderPreference1752300000000,
+        MatchingDailyEntitlements1757100000000,
         SoulMatch1752400000000,
         FriendChat1752600000000,
         Safety1752800000000,

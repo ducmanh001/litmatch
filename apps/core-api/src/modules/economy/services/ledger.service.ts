@@ -54,98 +54,28 @@ export class LedgerService extends LedgerPersistencePort {
   }
 
   async record(input: RecordTransactionInput): Promise<RecordResult> {
-    this.validateEntries(input.entries);
-    if (input.type === TransactionType.Adjustment && !input.actorUserId) {
-      // Adjustment (sửa sai thủ công) ĐƯỢC PHÉP đẩy balance âm (xem applyWalletDeltas) — bắt
-      // buộc có actor để audit được (docs/10 § Economy "reversal/adjustment không actor_user_id
-      // → không audit được khi có tranh chấp"). Refund tự động (Reversal) không bắt buộc vì đã
-      // có reversalOf + reason làm audit trail riêng.
-      throw new Error(
-        'Transaction type=adjustment bắt buộc có actorUserId (ai thực hiện sửa sai) để audit',
-      );
-    }
+    this.validateInput(input);
     const requestHash = this.hashRequest(input);
-
-    // Fast path: key đã tồn tại → replay (check trước để không tốn transaction)
     const existing = await this.dataSource
       .getRepository(LedgerTransaction)
-      .findOneBy({
-        idempotencyKey: input.idempotencyKey,
-      });
+      .findOneBy({ idempotencyKey: input.idempotencyKey });
     if (existing) {
-      // assertSameRequest có thể throw IDEMPOTENCY_CONFLICT — record ĐÚNG kết quả, không đoán trước
-      let transaction: LedgerTransaction;
       try {
-        transaction = this.assertSameRequest(existing, requestHash);
+        const transaction = this.assertSameRequest(existing, requestHash);
+        this.metrics.record(input.type, 'replayed');
+        return { transaction, replayed: true };
       } catch (err) {
         this.metrics.record(input.type, 'failed');
         throw err;
       }
-      this.metrics.record(input.type, 'replayed');
-      return { transaction, replayed: true };
     }
 
     try {
-      const transaction = await this.dataSource.transaction(async (manager) => {
-        // Insert transaction TRƯỚC — unique constraint trên idempotency_key là chốt chặn
-        // cuối cho 2 request song song cùng key (bên thua nhận 23505, xử lý ở catch dưới)
-        const txn = await manager.save(
-          manager.create(LedgerTransaction, {
-            type: input.type,
-            status: TransactionStatus.Completed,
-            idempotencyKey: input.idempotencyKey,
-            requestHash,
-            actorUserId: input.actorUserId ?? null,
-            reversalOf: input.reversalOf ?? null,
-            metadata: input.metadata ?? {},
-          }),
-        );
-
-        // TypeORM transaction dùng một pg connection: không chạy query song song trên cùng
-        // connection (`client.query()` concurrent bị deprecate ở pg@9). Thứ tự entry cũng cần
-        // giữ nguyên để map account ↔ ledger entry deterministic.
-        const accounts: LedgerAccount[] = [];
-        for (const entry of input.entries) {
-          accounts.push(await this.resolveAccount(manager, entry));
-        }
-
-        // Điểm tuần tự hoá per-user: lock các ví theo thứ tự userId cố định (tránh deadlock)
-        const userIds = [
-          ...new Set(
-            input.entries
-              .filter((e) => e.userId)
-              .map((e) => e.userId as string),
-          ),
-        ].sort();
-        const wallets = new Map<string, Wallet>();
-        for (const userId of userIds) {
-          wallets.set(userId, await this.lockWallet(manager, userId));
-        }
-
-        await manager.save(
-          input.entries.map((entry, i) =>
-            manager.create(LedgerEntry, {
-              transactionId: txn.id,
-              accountId: accounts[i].id,
-              direction: entry.direction,
-              amount: entry.amount.toString(),
-              currency: entry.currency,
-            }),
-          ),
-        );
-
-        await this.applyWalletDeltas(
-          manager,
-          txn,
-          input.entries,
-          wallets,
-          input.outboxEventTypeOverride,
-        );
-        await input.withinTransaction?.(manager, txn);
-        return txn;
-      });
-      this.metrics.record(input.type, 'success');
-      return { transaction, replayed: false };
+      const result = await this.dataSource.transaction((manager) =>
+        this.recordInManager(manager, input),
+      );
+      this.metrics.record(input.type, result.replayed ? 'replayed' : 'success');
+      return result;
     } catch (err) {
       if (
         isUniqueViolation(err) &&
@@ -154,21 +84,100 @@ export class LedgerService extends LedgerPersistencePort {
         const winner = await this.dataSource
           .getRepository(LedgerTransaction)
           .findOneByOrFail({ idempotencyKey: input.idempotencyKey });
-        let transaction: LedgerTransaction;
         try {
-          transaction = this.assertSameRequest(winner, requestHash);
+          const transaction = this.assertSameRequest(winner, requestHash);
+          this.metrics.record(input.type, 'replayed');
+          return { transaction, replayed: true };
         } catch (assertErr) {
           this.metrics.record(input.type, 'failed');
           throw assertErr;
         }
-        this.metrics.record(input.type, 'replayed');
-        return { transaction, replayed: true };
       }
-      // Transaction failure rate (docs/07 GĐ6) — bao gồm cả lỗi nghiệp vụ (WALLET_INSUFFICIENT_BALANCE
-      // ném từ applyWalletDeltas trong transaction) lẫn lỗi hạ tầng, đều là "giao dịch không ghi sổ được"
       this.metrics.record(input.type, 'failed');
       throw err;
     }
+  }
+
+  async recordInManager(
+    manager: EntityManager,
+    input: RecordTransactionInput,
+  ): Promise<RecordResult> {
+    this.validateInput(input);
+    const requestHash = this.hashRequest(input);
+    const existing = await manager.findOne(LedgerTransaction, {
+      where: { idempotencyKey: input.idempotencyKey },
+    });
+    if (existing) {
+      return {
+        transaction: this.assertSameRequest(existing, requestHash),
+        replayed: true,
+      };
+    }
+
+    // ON CONFLICT DO NOTHING avoids aborting the caller-owned transaction on a
+    // concurrent idempotency replay. PostgreSQL waits for the competing insert,
+    // then the winner is read below from the same transaction.
+    const insertResult = await manager
+      .createQueryBuilder()
+      .insert()
+      .into(LedgerTransaction)
+      .values({
+        type: input.type,
+        status: TransactionStatus.Completed,
+        idempotencyKey: input.idempotencyKey,
+        requestHash,
+        actorUserId: input.actorUserId ?? null,
+        reversalOf: input.reversalOf ?? null,
+        metadata: (input.metadata ?? {}) as never,
+      })
+      .orIgnore()
+      .execute();
+
+    const insertedId =
+      insertResult.identifiers[0]?.id ?? insertResult.raw[0]?.id;
+
+    const txn = await manager.findOneByOrFail(LedgerTransaction, {
+      idempotencyKey: input.idempotencyKey,
+    });
+    if (!insertedId)
+      return {
+        transaction: this.assertSameRequest(txn, requestHash),
+        replayed: true,
+      };
+
+    const accounts: LedgerAccount[] = [];
+    for (const entry of input.entries)
+      accounts.push(await this.resolveAccount(manager, entry));
+
+    const userIds = [
+      ...new Set(
+        input.entries.filter((e) => e.userId).map((e) => e.userId as string),
+      ),
+    ].sort();
+    const wallets = new Map<string, Wallet>();
+    for (const userId of userIds)
+      wallets.set(userId, await this.lockWallet(manager, userId));
+
+    await manager.save(
+      input.entries.map((entry, i) =>
+        manager.create(LedgerEntry, {
+          transactionId: txn.id,
+          accountId: accounts[i].id,
+          direction: entry.direction,
+          amount: entry.amount.toString(),
+          currency: entry.currency,
+        }),
+      ),
+    );
+    await this.applyWalletDeltas(
+      manager,
+      txn,
+      input.entries,
+      wallets,
+      input.outboxEventTypeOverride,
+    );
+    await input.withinTransaction?.(manager, txn);
+    return { transaction: txn, replayed: false };
   }
 
   /**
@@ -300,6 +309,15 @@ export class LedgerService extends LedgerPersistencePort {
   }
 
   // ---------- nội bộ ----------
+
+  private validateInput(input: RecordTransactionInput): void {
+    this.validateEntries(input.entries);
+    if (input.type === TransactionType.Adjustment && !input.actorUserId) {
+      throw new Error(
+        'Transaction type=adjustment bắt buộc có actorUserId (ai thực hiện sửa sai) để audit',
+      );
+    }
+  }
 
   private validateEntries(entries: LedgerEntryInput[]): void {
     if (entries.length < 2)

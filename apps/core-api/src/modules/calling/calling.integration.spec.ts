@@ -16,14 +16,18 @@ import { Safety1752800000000 } from '../../database/migrations/1752800000000-saf
 import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
 import { VoiceMatchCompletion1756000000000 } from '../../database/migrations/1756000000000-voice-match-completion';
 import { CallingReconnectWindow1756500000000 } from '../../database/migrations/1756500000000-calling-reconnect-window';
+import { FriendCalling1757200000000 } from '../../database/migrations/1757200000000-friend-calling';
+import { MatchingDailyEntitlements1757100000000 } from '../../database/migrations/1757100000000-matching-daily-entitlements';
 
 import { CallingService } from './calling.service';
 import { CallTickerService } from './jobs/call-ticker.service';
 import {
   CallEndReason,
+  CallKind,
   CallSession,
   CallSessionStatus,
 } from './entities/call-session.entity';
+import { VoiceMatchReaction } from './entities/voice-match-reaction.entity';
 import { MatchingService } from '../matching';
 import { MatcherWakeup } from '../matching/matcher-wakeup';
 import { GuestMatchQuotaService } from '../matching/services/guest-match-quota.service';
@@ -63,14 +67,14 @@ import type { LivekitRoomPort } from './ports/livekit-room';
 
 /**
  * Integration test Calling trên Postgres thật (docs/05 § 5.9 + tiêu chí Economy docs/10):
- * billing tick idempotent (2 ticker song song không trừ đôi), race end-vs-tick,
- * insufficient balance → end, free-limit không đụng tiền. DB riêng `<tên gốc>_calling`.
+ * Voice Match hết 7 phút thì server tự end, friend call không bị giới hạn thời lượng,
+ * race end-vs-tick. DB riêng `<tên gốc>_calling`.
  */
 const INTEGRATION_DB_URL = process.env['INTEGRATION_DB_URL'];
 const d = INTEGRATION_DB_URL ? describe : describe.skip;
 if (!INTEGRATION_DB_URL) {
   console.warn(
-    '[calling.integration] BỎ QUA — set INTEGRATION_DB_URL để chạy bộ test billing trên Postgres thật',
+    '[calling.integration] BỎ QUA — set INTEGRATION_DB_URL để chạy bộ test lifecycle trên Postgres thật',
   );
 }
 
@@ -80,9 +84,8 @@ const CONFIG: Record<string, unknown> = {
   LIVEKIT_URL: 'ws://localhost:7880',
   LIVEKIT_REGION_URLS: '', // single-region — resolver GĐ7 không đụng tới ở suite này
   CALLING_TOKEN_TTL_SECONDS: 120,
-  // free window nhỏ + pending timeout lớn: test tự backdate thay vì ngồi chờ
-  CALLING_FREE_CALL_SECONDS: 5,
-  CALLING_PRICE_PER_MINUTE_DIAMOND: 0,
+  // test backdate thay vì chờ đủ 7 phút thật
+  CALLING_FREE_CALL_SECONDS: 420,
   CALLING_PENDING_TIMEOUT_SECONDS: 3600,
   CALLING_RECONNECT_WINDOW_SECONDS: 30,
   CALLING_TICKER_INTERVAL_MS: 1000,
@@ -108,6 +111,7 @@ d('Calling integration (Postgres thật)', () => {
   let ticker: CallTickerService;
   let tickerB: CallTickerService; // instance thứ 2 — giả lập 2 pod ticker song song
   const deletedRooms: string[] = [];
+  const friendPairs = new Set<string>();
   const livekitStub: LivekitRoomPort = {
     mintJoinToken: async (room, identity) => `tok:${room}:${identity}`,
     deleteRoom: async (room) => {
@@ -244,6 +248,7 @@ d('Calling integration (Postgres thật)', () => {
         MatchTicket,
         MatchSession,
         CallSession,
+        VoiceMatchReaction,
         LedgerAccount,
         LedgerTransaction,
         LedgerEntry,
@@ -262,12 +267,14 @@ d('Calling integration (Postgres thật)', () => {
         EconomyRefund1752100000000,
         MatchingCore1752200000000,
         MatchingGenderPreference1752300000000,
+        MatchingDailyEntitlements1757100000000,
         SoulMatch1752400000000,
         Calling1752500000000,
         Safety1752800000000,
         ReportTargetVideo1754900000000,
         VoiceMatchCompletion1756000000000,
         CallingReconnectWindow1756500000000,
+        FriendCalling1757200000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -307,20 +314,29 @@ d('Calling integration (Postgres thật)', () => {
       configStub,
       {} as never,
       {} as never,
-      {} as never,
       new MatcherWakeup(),
       {
         authorize: async () => undefined,
         consume: async () => undefined,
+        consumeForMatch: async () => ({
+          quotaDate: '2026-07-29',
+          freeLimit: 10,
+          tier: null,
+          paidDiamond: false,
+        }),
       } as unknown as GuestMatchQuotaService,
     );
     calling = new CallingService(
       ds,
       ds.getRepository(CallSession),
-      // Mutual-like không phải trọng tâm suite billing/lifecycle này.
-      {} as never,
+      ds.getRepository(VoiceMatchReaction),
       matchingService,
-      {} as never,
+      // Friend graph được stub ở đây; persistence của Friendship đã có suite Friend integration.
+      {
+        areFriends: async (a: string, b: string) =>
+          friendPairs.has([a, b].sort().join(':')),
+        ensureFriendship: async () => ({ created: true }),
+      } as never,
       livekitStub,
       configStub,
       userService,
@@ -329,20 +345,8 @@ d('Calling integration (Postgres thật)', () => {
       // metrics call drop rate không phải trọng tâm suite này — test riêng ở calling.metrics.spec.ts
       { recordEnded: () => undefined } as never,
     );
-    ticker = new CallTickerService(
-      ds,
-      configStub,
-      schedulerStub,
-      calling,
-      economy,
-    );
-    tickerB = new CallTickerService(
-      ds,
-      configStub,
-      schedulerStub,
-      calling,
-      economy,
-    );
+    ticker = new CallTickerService(ds, configStub, schedulerStub, calling);
+    tickerB = new CallTickerService(ds, configStub, schedulerStub, calling);
   });
 
   afterAll(async () => {
@@ -350,8 +354,8 @@ d('Calling integration (Postgres thật)', () => {
   });
 
   beforeEach(() => {
-    CONFIG['CALLING_PRICE_PER_MINUTE_DIAMOND'] = 0;
     deletedRooms.length = 0;
+    friendPairs.clear();
   });
 
   it('join 2 bên đồng thời → đúng 1 call (unique match_session_id); webhook joined đủ 2 → active', async () => {
@@ -390,11 +394,11 @@ d('Calling integration (Postgres thật)', () => {
     expect(fresh.startedAt).not.toBeNull();
   });
 
-  it('free-limit (price=0): hết free window server tự end, KHÔNG đụng tiền, room được dọn', async () => {
+  it('Voice Match quá free window 7 phút: server tự end, KHÔNG đụng tiền, room được dọn', async () => {
     const [a, b] = await Promise.all([createUser('f-a'), createUser('f-b')]);
     await fund(a.id);
     const before = await balanceOf(a.id);
-    const call = await activeCall(a, b, 10); // 10s > free 5s
+    const call = await activeCall(a, b, 430); // 430s > free 420s
 
     await ticker.runOnce();
 
@@ -408,67 +412,7 @@ d('Calling integration (Postgres thật)', () => {
     expect(await balanceOf(a.id)).toBe(before); // không trừ đồng nào
   });
 
-  it('billing: 2 ticker SONG SONG cùng phút → mỗi bên trừ đúng 1 lần; phút sau trừ tiếp', async () => {
-    CONFIG['CALLING_PRICE_PER_MINUTE_DIAMOND'] = 5;
-    const [a, b] = await Promise.all([createUser('b-a'), createUser('b-b')]);
-    await Promise.all([fund(a.id), fund(b.id)]);
-    // 5s free + đã qua 10s → đang ở phút tính phí thứ 1
-    const call = await activeCall(a, b, 15);
-
-    await Promise.all([ticker.runOnce(), tickerB.runOnce()]);
-    expect(await balanceOf(a.id)).toBe(1200 - 5);
-    expect(await balanceOf(b.id)).toBe(1200 - 5);
-    let fresh = await ds
-      .getRepository(CallSession)
-      .findOneByOrFail({ id: call.id });
-    expect(fresh.status).toBe(CallSessionStatus.Active); // đủ tiền — call tiếp tục
-    expect(fresh.billedMinutes).toBe(1);
-
-    // backdate thêm 60s → sang phút tính phí thứ 2
-    const startedAt = fresh.startedAt as Date; // active thì luôn có startedAt
-    await ds
-      .getRepository(CallSession)
-      .update(
-        { id: call.id },
-        { startedAt: new Date(startedAt.getTime() - 60_000) },
-      );
-    await ticker.runOnce();
-    expect(await balanceOf(a.id)).toBe(1200 - 10);
-    expect(await balanceOf(b.id)).toBe(1200 - 10);
-    fresh = await ds
-      .getRepository(CallSession)
-      .findOneByOrFail({ id: call.id });
-    expect(fresh.billedMinutes).toBe(2);
-  });
-
-  it('billing: 1 bên không đủ diamond → end insufficient_balance, phút đã trừ không hoàn', async () => {
-    CONFIG['CALLING_PRICE_PER_MINUTE_DIAMOND'] = 5;
-    const [rich, poor] = await Promise.all([
-      createUser('i-rich'),
-      createUser('i-poor'),
-    ]);
-    await fund(rich.id); // poor: 0 diamond
-    const call = await activeCall(rich, poor, 15);
-
-    await ticker.runOnce();
-
-    const fresh = await ds
-      .getRepository(CallSession)
-      .findOneByOrFail({ id: call.id });
-    expect(fresh.status).toBe(CallSessionStatus.Ended);
-    expect(fresh.endReason).toBe(CallEndReason.InsufficientBalance);
-    expect(fresh.billedMinutes).toBe(0); // phút 1 không hoàn tất
-    // biên bất đối xứng đã chấp nhận (spec § 6): rich bị trừ phút 1 trước khi poor fail
-    expect(await balanceOf(rich.id)).toBe(1200 - 5);
-    expect(await balanceOf(poor.id)).toBe(0);
-
-    // tick lặp sau khi ended — không trừ thêm (race end-vs-tick)
-    await ticker.runOnce();
-    expect(await balanceOf(rich.id)).toBe(1200 - 5);
-  });
-
   it('race end-vs-tick: call end TRƯỚC tick → tick không trừ đồng nào', async () => {
-    CONFIG['CALLING_PRICE_PER_MINUTE_DIAMOND'] = 5;
     const [a, b] = await Promise.all([createUser('r-a'), createUser('r-b')]);
     await Promise.all([fund(a.id), fund(b.id)]);
     const call = await activeCall(a, b, 15);
@@ -483,6 +427,46 @@ d('Calling integration (Postgres thật)', () => {
       .findOneByOrFail({ id: call.id });
     expect(fresh.endReason).toBe(CallEndReason.Completed);
     expect(fresh.billedMinutes).toBe(0);
+  });
+
+  it('mutual friend call: không có MatchSession, không bị giới hạn 7 phút và có thể gọi lại', async () => {
+    const [a, b] = await Promise.all([
+      createUser('friend-a'),
+      createUser('friend-b'),
+    ]);
+    await expect(
+      calling.joinFriendCall(auth(a.id), b.id),
+    ).rejects.toMatchObject({
+      code: 'CALLING_SESSION_NOT_FOUND',
+    });
+    friendPairs.add([a.id, b.id].sort().join(':'));
+
+    const first = await calling.joinFriendCall(auth(a.id), b.id);
+    const second = await calling.joinFriendCall(auth(b.id), a.id);
+    expect(first.call.id).toBe(second.call.id);
+    expect(first.call.callKind).toBe(CallKind.Friend);
+    expect(first.call.matchSessionId).toBeNull();
+
+    for (const uid of [a.id, b.id]) {
+      await calling.handleWebhookEvent({
+        event: 'participant_joined',
+        roomName: first.call.roomName,
+        participantIdentity: uid,
+      });
+    }
+    await ds
+      .getRepository(CallSession)
+      .update(
+        { id: first.call.id },
+        { startedAt: new Date(Date.now() - 60 * 60 * 1000) },
+      );
+    await ticker.runOnce();
+
+    const fresh = await ds
+      .getRepository(CallSession)
+      .findOneByOrFail({ id: first.call.id });
+    expect(fresh.status).toBe(CallSessionStatus.Active);
+    expect(deletedRooms).not.toContain(first.call.roomName);
   });
 
   it('pending timeout: 1 bên không bao giờ join → ticker end pending_timeout + dọn room', async () => {

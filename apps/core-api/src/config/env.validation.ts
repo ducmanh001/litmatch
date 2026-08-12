@@ -110,12 +110,21 @@ export interface CoreApiEnv {
   MATCHING_CONFIRM_TIMEOUT_SECONDS: number;
   MATCHING_AGE_BAND_SIZE: number;
   MATCHING_SPEEDUP_PRICE_DIAMOND: number;
-  MATCHING_SPEEDUP_MAX_PER_HOUR: number;
+  MATCHING_VIP_SPEEDUP_PRICE_DIAMOND: number;
+  MATCHING_SVIP_SPEEDUP_PRICE_DIAMOND: number;
   MATCHING_PRIORITY_BOOST_MS: number;
   MATCHING_TRUST_PENALTY_MS_PER_POINT: number;
   MATCHING_TRUST_PENALTY_MAX_MS: number;
   MATCHING_GUEST_DAILY_LIMIT: number;
   MATCHING_GUEST_QUOTA_PEPPER: string;
+  MATCHING_DAILY_SOUL_LIMIT: number;
+  MATCHING_DAILY_VOICE_LIMIT: number;
+  MATCHING_VIP_DAILY_SOUL_LIMIT: number;
+  MATCHING_VIP_DAILY_VOICE_LIMIT: number;
+  MATCHING_SVIP_DAILY_SOUL_LIMIT: number;
+  MATCHING_SVIP_DAILY_VOICE_LIMIT: number;
+  MATCHING_EXTRA_SOUL_PRICE_DIAMOND: number;
+  MATCHING_EXTRA_VOICE_PRICE_DIAMOND: number;
   SOUL_CHAT_DURATION_SECONDS: number;
   SOUL_RATING_WINDOW_SECONDS: number;
   SOUL_CHAT_MESSAGE_MAX_LENGTH: number;
@@ -129,7 +138,6 @@ export interface CoreApiEnv {
   LIVEKIT_API_KEY: string;
   LIVEKIT_API_SECRET: string;
   CALLING_FREE_CALL_SECONDS: number;
-  CALLING_PRICE_PER_MINUTE_DIAMOND: number;
   CALLING_PENDING_TIMEOUT_SECONDS: number;
   CALLING_RECONNECT_WINDOW_SECONDS: number;
   CALLING_TICKER_INTERVAL_MS: number;
@@ -416,7 +424,11 @@ export const coreApiEnvSchema = Joi.object({
   MATCHING_CONFIRM_TIMEOUT_SECONDS: Joi.number().integer().min(3).default(15),
   MATCHING_AGE_BAND_SIZE: Joi.number().integer().min(1).default(5),
   MATCHING_SPEEDUP_PRICE_DIAMOND: Joi.number().integer().min(1).default(50),
-  MATCHING_SPEEDUP_MAX_PER_HOUR: Joi.number().integer().min(1).default(3),
+  MATCHING_VIP_SPEEDUP_PRICE_DIAMOND: Joi.number().integer().min(1).default(40),
+  MATCHING_SVIP_SPEEDUP_PRICE_DIAMOND: Joi.number()
+    .integer()
+    .min(1)
+    .default(30),
   MATCHING_PRIORITY_BOOST_MS: Joi.number().integer().min(0).default(300_000),
   // Trust score < 100 làm chậm priority matching (docs/services/safety-service.md § 3.2) —
   // KHÔNG chặn hẳn matching, chỉ làm "trẻ" ảo trong queue; ban thật là UserStatus.Banned
@@ -427,6 +439,14 @@ export const coreApiEnvSchema = Joi.object({
   MATCHING_TRUST_PENALTY_MAX_MS: Joi.number().integer().min(0).default(120_000),
   MATCHING_GUEST_DAILY_LIMIT: Joi.number().integer().min(1).default(3),
   MATCHING_GUEST_QUOTA_PEPPER: Joi.string().min(32).required(),
+  MATCHING_DAILY_SOUL_LIMIT: Joi.number().integer().min(1).default(10),
+  MATCHING_DAILY_VOICE_LIMIT: Joi.number().integer().min(1).default(10),
+  MATCHING_VIP_DAILY_SOUL_LIMIT: Joi.number().integer().min(1).default(30),
+  MATCHING_VIP_DAILY_VOICE_LIMIT: Joi.number().integer().min(1).default(20),
+  MATCHING_SVIP_DAILY_SOUL_LIMIT: Joi.number().integer().min(1).default(60),
+  MATCHING_SVIP_DAILY_VOICE_LIMIT: Joi.number().integer().min(1).default(40),
+  MATCHING_EXTRA_SOUL_PRICE_DIAMOND: Joi.number().integer().min(1).default(20),
+  MATCHING_EXTRA_VOICE_PRICE_DIAMOND: Joi.number().integer().min(1).default(40),
 
   // Soul Match — Giai đoạn 2 (docs/services/soul-match-service.md § 6); default 2-3 phút theo docs/06
   SOUL_CHAT_DURATION_SECONDS: Joi.number().integer().min(30).default(150),
@@ -485,8 +505,6 @@ export const coreApiEnvSchema = Joi.object({
     .min(16)
     .default('devsecret_change_me_0123456789abcdef'),
   CALLING_FREE_CALL_SECONDS: Joi.number().integer().min(10).default(420),
-  // 0 (default) = free-only, hết free window server tự end; >0 = trừ cả 2 bên mỗi phút
-  CALLING_PRICE_PER_MINUTE_DIAMOND: Joi.number().integer().min(0).default(0),
   CALLING_PENDING_TIMEOUT_SECONDS: Joi.number().integer().min(5).default(60),
   CALLING_RECONNECT_WINDOW_SECONDS: Joi.number().integer().min(5).default(30),
   CALLING_TICKER_INTERVAL_MS: Joi.number().integer().min(200).default(1000),

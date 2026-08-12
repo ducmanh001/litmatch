@@ -16,7 +16,6 @@ import {
   callingRedisProvider,
 } from './redis/calling-redis.provider';
 import { LivekitWebhookController } from './webhooks/livekit-webhook.controller';
-import { EconomyModule } from '../economy';
 import { FriendModule } from '../friend';
 import { MatchingModule } from '../matching';
 import { UserModule } from '../user';
@@ -27,7 +26,6 @@ import type Redis from 'ioredis';
   imports: [
     TypeOrmModule.forFeature([CallSession, VoiceMatchReaction]),
     MatchingModule, // đọc MatchSession qua MatchingService (read-only — cùng pattern Soul Match)
-    EconomyModule, // billing theo phút qua spendDiamond (DI trong process — docs/03 § 3.7)
     FriendModule, // Voice Match mutual like tạo Friendship + Conversation atomically
     UserModule, // đọc User.region để chọn LiveKit URL theo region (GĐ7 — ADR 0005)
   ],

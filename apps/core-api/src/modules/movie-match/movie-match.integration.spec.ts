@@ -12,6 +12,7 @@ import { Safety1752800000000 } from '../../database/migrations/1752800000000-saf
 import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
 import { MovieMatch1753200000000 } from '../../database/migrations/1753200000000-movie-match';
 import { MovieMatchAnon1755900000000 } from '../../database/migrations/1755900000000-movie-match-anon';
+import { MatchingDailyEntitlements1757100000000 } from '../../database/migrations/1757100000000-matching-daily-entitlements';
 
 import { MovieMatchErrors } from './movie-match.errors';
 import {
@@ -156,6 +157,7 @@ d('Movie Match integration (Postgres thật)', () => {
         UserRole1753600000000,
         MatchingCore1752200000000,
         MatchingGenderPreference1752300000000,
+        MatchingDailyEntitlements1757100000000,
         SoulMatch1752400000000,
         FriendChat1752600000000,
         Safety1752800000000,
