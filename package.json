@@ -61,6 +61,7 @@
     "db:revert": "nx run core-api:migration-revert",
     "verify": "pnpm format:check && pnpm lint && pnpm test && pnpm build",
     "release:preflight": "node scripts/release/release.mjs preflight",
+    "release:profile-check": "node scripts/release/production-profile.mjs",
     "release:deploy": "node scripts/release/release.mjs deploy",
     "release:backup": "node scripts/release/release.mjs backup",
     "release:smoke": "node scripts/release/release.mjs smoke",

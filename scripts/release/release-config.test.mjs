@@ -13,8 +13,15 @@ const validConfig = {
   POSTGRES_DB: 'litmatch',
   JWT_SECRET: 'j'.repeat(32),
   AUTH_OTP_PEPPER: 'p'.repeat(16),
+  AUTH_GUEST_DEVICE_TOKEN_SECRET: 'g'.repeat(32),
+  MATCHING_GUEST_QUOTA_PEPPER: 'q'.repeat(32),
   LIVEKIT_API_KEY: 'livekit-key',
   LIVEKIT_API_SECRET: 'l'.repeat(32),
+  MEDIA_R2_ACCOUNT_ID: 'account-id',
+  MEDIA_R2_BUCKET: 'litmatch-images',
+  MEDIA_R2_ACCESS_KEY_ID: 'r2-access-key',
+  MEDIA_R2_SECRET_ACCESS_KEY: 'r'.repeat(32),
+  MEDIA_PUBLIC_BASE_URL: 'https://images.litmatch.test',
   OBSERVABILITY_OWNER: 'platform-primary',
   SENTRY_CORE_API_DSN: 'https://public@sentry.invalid/1',
   SENTRY_SIGNALING_DSN: 'https://public@sentry.invalid/2',
@@ -57,4 +64,24 @@ test('release config từ chối placeholder, secret ngắn và telemetry produc
   assert.ok(errors.some((error) => error.includes('JWT_SECRET')));
   assert.ok(errors.some((error) => error.includes('SENTRY_SIGNALING_DSN')));
   assert.ok(errors.some((error) => error.includes('Facebook App ID')));
+});
+
+test('release config từ chối telemetry URL sai giao thức hoặc sai transport', () => {
+  const errors = validateReleaseConfig({
+    ...validConfig,
+    OTEL_EXPORTER_OTLP_ENDPOINT: 'not-a-url',
+    GRAFANA_CLOUD_PROMETHEUS_URL:
+      'https://prometheus.example.net/api/prom/push',
+    GRAFANA_CLOUD_LOKI_URL: 'https://logs.example.net/unsupported',
+    OTEL_EXPORTER_OTLP_HEADERS: 'Authorization=',
+  });
+
+  assert.ok(
+    errors.some((error) => error.includes('OTEL_EXPORTER_OTLP_ENDPOINT')),
+  );
+  assert.ok(errors.some((error) => error.includes('remote_write')));
+  assert.ok(errors.some((error) => error.includes('GRAFANA_CLOUD_LOKI_URL')));
+  assert.ok(
+    errors.some((error) => error.includes('OTEL_EXPORTER_OTLP_HEADERS')),
+  );
 });

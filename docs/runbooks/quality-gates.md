@@ -5,15 +5,16 @@ thay targeted reproduction; local PASS không chứng minh production.
 
 ## Gate ladder
 
-| Khi nào                | Gate tối thiểu                                                               | Ghi chú                                          |
-| ---------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------ |
-| Trong vòng lặp sửa nhỏ | Targeted test + lint/typecheck/build liên quan                               | Dùng target thật từ `nx show project`            |
-| Docs/spec              | `pnpm docs:check`, `pnpm agent:check`, targeted Prettier check               | Generated artifacts phải up-to-date              |
-| Agent/tooling          | `pnpm agent:check`, `pnpm agent:test`                                        | Chạy context scope `agents`                      |
-| Frontend contract      | `pnpm agent:verify frontend`, `pnpm openapi:check`                           | Có thể cần Core API emit/generation              |
-| Business nhạy cảm      | `pnpm agent:verify <scope>` + `review-module verify` + integration test thật | Economy/Matching/Calling/Gift/Party/Feed/Safety  |
-| Trước push             | `pnpm ci:preflight`                                                          | Clean quality + test/build/E2E + container smoke |
-| Staging reliability    | `pnpm reliability:production-gate`                                           | Cần evidence env được runbook reliability mô tả  |
+| Khi nào                | Gate tối thiểu                                                               | Ghi chú                                                                |
+| ---------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Trong vòng lặp sửa nhỏ | Targeted test + lint/typecheck/build liên quan                               | Dùng target thật từ `nx show project`                                  |
+| Docs/spec              | `pnpm docs:check`, `pnpm agent:check`, targeted Prettier check               | Generated artifacts phải up-to-date                                    |
+| Agent/tooling          | `pnpm agent:check`, `pnpm agent:test`                                        | Chạy context scope `agents`                                            |
+| Frontend contract      | `pnpm agent:verify frontend`, `pnpm openapi:check`                           | Có thể cần Core API emit/generation                                    |
+| Business nhạy cảm      | `pnpm agent:verify <scope>` + `review-module verify` + integration test thật | Economy/Matching/Calling/Gift/Party/Feed/Safety                        |
+| Trước push             | `pnpm ci:preflight`                                                          | Clean quality + test/build/E2E + container smoke                       |
+| Production profile     | `pnpm release:profile-check`                                                 | Kiểm tra Compose, healthcheck image, telemetry bắt buộc và K8s overlay |
+| Staging reliability    | `pnpm reliability:production-gate`                                           | Cần evidence env được runbook reliability mô tả                        |
 
 Xem gate chính xác được scope router yêu cầu bằng:
 

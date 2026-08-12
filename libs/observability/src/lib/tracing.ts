@@ -147,6 +147,9 @@ export function resolveTraceEndpoint(): string | undefined {
 }
 
 export function resolveTraceHeaders(): Record<string, string> {
+  const configured = process.env['OTEL_EXPORTER_OTLP_HEADERS'];
+  if (configured) return parseOtelHeaders(configured);
+
   const username =
     process.env['GRAFANA_CLOUD_TEMPO_USER'] ||
     process.env['GRAFANA_CLOUD_PROMETHEUS_USER'];
@@ -158,6 +161,28 @@ export function resolveTraceHeaders(): Record<string, string> {
       'base64',
     )}`,
   };
+}
+
+/** Parse the standard OTLP `key=value,key2=value2` header environment variable. */
+export function parseOtelHeaders(value: string): Record<string, string> {
+  const headers: Record<string, string> = {};
+  for (const entry of value.split(',')) {
+    const separator = entry.indexOf('=');
+    if (separator <= 0) {
+      throw new Error(
+        'OTEL_EXPORTER_OTLP_HEADERS phải có dạng key=value, phân cách bằng dấu phẩy',
+      );
+    }
+    const key = entry.slice(0, separator).trim();
+    const rawHeaderValue = entry.slice(separator + 1).trim();
+    if (key === '' || rawHeaderValue === '') {
+      throw new Error(
+        'OTEL_EXPORTER_OTLP_HEADERS không được chứa key/value rỗng',
+      );
+    }
+    headers[key] = decodeURIComponent(rawHeaderValue);
+  }
+  return headers;
 }
 
 const DEFAULT_METRICS_EXPORT_INTERVAL_MS = 15_000;

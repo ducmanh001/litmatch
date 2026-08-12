@@ -178,6 +178,7 @@ run(['agent:check']);
 run(['agent:test']);
 if (config.openapi) run(['openapi:check']);
 if (config.doctor) run(['doctor']);
+if (config.doctor) run(['release:profile-check']);
 if (config.mediaCompose) {
   runCommand('docker', [
     'compose',
