@@ -12,9 +12,6 @@ export const DEFAULT_REGION = 'GLOBAL';
 /** User chưa khai sinh nhật → band riêng "chưa rõ tuổi", chỉ ghép với nhau. */
 export const UNKNOWN_AGE_BAND = -1;
 
-/** Cửa sổ đếm rate-limit speed-up — gắn với ngữ nghĩa "per hour" của MATCHING_SPEEDUP_MAX_PER_HOUR. */
-export const SPEEDUP_RATE_WINDOW_SECONDS = 3600;
-
 /**
  * Idempotency key của Matching (lưu ở cột unique trong Postgres — docs/05 § 5.10, KHÔNG phải
  * Redis key; key Redis nằm ở `redis/matching-redis.provider.ts`). Tập trung 1 chỗ để thấy được
@@ -36,6 +33,14 @@ export function speedupIdempotencyKey(
   idempotencyKey: string,
 ): string {
   return `matching:speedup:${userId}:${idempotencyKey}`;
+}
+
+/** Giao dịch trả Diamond cho lượt match vượt quota miễn phí. */
+export function extraMatchIdempotencyKey(
+  userId: string,
+  idempotencyKey: string,
+): string {
+  return `matching:extra-match:${userId}:${idempotencyKey}`;
 }
 
 /** Sweeper requeue bên đã confirm — tất định theo (session, ticket cũ), sweeper chạy lại không tạo ticket đôi. */

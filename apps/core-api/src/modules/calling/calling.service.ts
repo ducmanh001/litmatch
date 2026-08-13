@@ -17,6 +17,7 @@ import { CallingErrors } from './calling.errors';
 import { CallingMetrics } from './calling.metrics';
 import {
   CallEndReason,
+  CallKind,
   CallSession,
   CallSessionStatus,
   callRoomName,
@@ -36,6 +37,7 @@ import type Redis from 'ioredis';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import type { CoreApiEnv } from '../../config/env.validation';
 import type { LivekitWebhookEvent } from './ports/livekit-room';
+import { canonicalPair } from '../../common/entities/canonical-pair';
 
 export interface JoinCallResult {
   call: CallSession;
@@ -61,7 +63,7 @@ export type VoiceMatchLikeState = VoiceMatchLikeResult;
 /**
  * Nghiệp vụ voice call 2 người trên LiveKit (docs/services/calling-service.md).
  * State machine spec § 1 — `ended` terminal, mọi transition idempotent (webhook retry an toàn).
- * Timer/billing enforce ở CallTickerService; ở đây là lifecycle + token + end idempotent.
+ * Voice Match timer enforce ở CallTickerService; ở đây là lifecycle + token + end idempotent.
  */
 @Injectable()
 export class CallingService {
@@ -144,6 +146,7 @@ export class CallingService {
             userAId: session.userAId,
             userBId: session.userBId,
             status: CallSessionStatus.Pending,
+            callKind: CallKind.VoiceMatch,
           }),
         );
       } catch (err) {
@@ -192,6 +195,70 @@ export class CallingService {
     };
   }
 
+  /** Tạo/lấy một friend call; không có free timer và không liên quan MatchSession. */
+  async joinFriendCall(
+    user: AuthenticatedUser,
+    friendUserId: string,
+  ): Promise<JoinCallResult> {
+    if (
+      user.userId === friendUserId ||
+      !(await this.friendService.areFriends(user.userId, friendUserId))
+    ) {
+      throw new DomainException(
+        CallingErrors.SESSION_NOT_FOUND,
+        'Chỉ bạn bè sau mutual like mới được gọi voice lâu dài',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    const [userAId, userBId] = canonicalPair(user.userId, friendUserId);
+    let call = await this.callRepo
+      .createQueryBuilder('call')
+      .where('call.call_kind = :kind', { kind: CallKind.Friend })
+      .andWhere('call.user_a_id = :userAId', { userAId })
+      .andWhere('call.user_b_id = :userBId', { userBId })
+      .andWhere('call.status IN (:...statuses)', {
+        statuses: [CallSessionStatus.Pending, CallSessionStatus.Active],
+      })
+      .getOne();
+    if (!call) {
+      try {
+        const id = randomUUID();
+        call = await this.callRepo.save(
+          this.callRepo.create({
+            id,
+            matchSessionId: null,
+            roomName: callRoomName(id),
+            userAId,
+            userBId,
+            callKind: CallKind.Friend,
+            status: CallSessionStatus.Pending,
+          }),
+        );
+      } catch (err) {
+        if (!isUniqueViolation(err)) throw err;
+        call = await this.callRepo
+          .createQueryBuilder('call')
+          .where('call.call_kind = :kind', { kind: CallKind.Friend })
+          .andWhere('call.user_a_id = :userAId', { userAId })
+          .andWhere('call.user_b_id = :userBId', { userBId })
+          .andWhere('call.status IN (:...statuses)', {
+            statuses: [CallSessionStatus.Pending, CallSessionStatus.Active],
+          })
+          .getOneOrFail();
+      }
+    }
+    const token = await this.livekit.mintJoinToken(
+      call.roomName,
+      user.userId,
+      this.config.getOrThrow('CALLING_TOKEN_TTL_SECONDS', { infer: true }),
+    );
+    return {
+      call,
+      token,
+      livekitUrl: await this.resolveCallLivekitUrl(call),
+    };
+  }
+
   /** Poll fallback của realtime `call.ended` — chỉ member (gộp 404, chống oracle). */
   async getCall(user: AuthenticatedUser, callId: string): Promise<CallSession> {
     let call = await this.callRepo.findOneBy({ id: callId });
@@ -219,6 +286,8 @@ export class CallingService {
   ): Promise<VoiceMatchLikeState> {
     const partnerId =
       call.userAId === user.userId ? call.userBId : call.userAId;
+    if (call.callKind === CallKind.Friend)
+      return { liked: false, matched: true, friendUserId: partnerId };
     const liked = await this.reactionRepo.existsBy({
       callId: call.id,
       raterUserId: user.userId,
@@ -242,7 +311,8 @@ export class CallingService {
         HttpStatus.NOT_FOUND,
       );
     }
-    await this.matchingService.endVoiceSession(user, call.matchSessionId);
+    if (call.callKind !== CallKind.Friend && call.matchSessionId)
+      await this.matchingService.endVoiceSession(user, call.matchSessionId);
     return call;
   }
 
@@ -300,8 +370,9 @@ export class CallingService {
         // bấm like. `pending` chưa có cuộc nói chuyện thực nên vẫn bị chặn; `active` và `ended`
         // đều hợp lệ, reaction unique bảo đảm retry/double tap vô hại.
         if (
-          call.status !== CallSessionStatus.Active &&
-          call.status !== CallSessionStatus.Ended
+          call.callKind === CallKind.Friend ||
+          (call.status !== CallSessionStatus.Active &&
+            call.status !== CallSessionStatus.Ended)
         ) {
           throw new DomainException(
             CallingErrors.CALL_NOT_ENDED,
@@ -363,7 +434,7 @@ export class CallingService {
 
   /**
    * End idempotent — dùng bởi endpoint/webhook/ticker (spec § 1). Lock call FOR UPDATE:
-   * đây chính là chốt chặn race end-vs-billing-tick (docs/10 § Calling). Chỉ lời gọi
+   * đây chính là chốt chặn race end-vs-tick (docs/10 § Calling). Chỉ lời gọi
    * thực hiện transition mới dọn room + publish realtime (không bắn đôi khi retry).
    */
   async endById(callId: string, reason: CallEndReason): Promise<EndCallResult> {
@@ -381,7 +452,7 @@ export class CallingService {
       call.endedAt = new Date();
       // Không tính thời gian nằm trong cửa sổ reconnect vào thời lượng đã dùng.
       // Nếu cửa sổ hết hạn thì mốc startedAt được dời qua đoạn gián đoạn trước khi
-      // duration/billing được chốt.
+      // duration được chốt.
       if (call.startedAt && call.reconnectStartedAt) {
         const pausedMs = Math.max(
           0,
@@ -544,7 +615,7 @@ export class CallingService {
         call.status === CallSessionStatus.Pending
       ) {
         call.status = CallSessionStatus.Active;
-        call.startedAt = call.startedAt ?? now; // mốc free window + billing (spec § 4)
+        call.startedAt = call.startedAt ?? now; // mốc giới hạn Voice Match (spec § 4)
       }
 
       if (call.status === CallSessionStatus.Active) {
@@ -611,11 +682,12 @@ export class CallingService {
   private async cleanupEndedCall(call: CallSession): Promise<void> {
     // Chốt Matching trước khi phát event: user nhận `call.ended` rồi quay lại tìm match sẽ không
     // bao giờ bị session confirmed cũ giữ lại. Đây cũng cover webhook/ticker, không chỉ nút UI.
-    await this.matchingService.endVoiceSessionForCall(
-      call.matchSessionId,
-      call.userAId,
-      call.userBId,
-    );
+    if (call.callKind !== CallKind.Friend && call.matchSessionId)
+      await this.matchingService.endVoiceSessionForCall(
+        call.matchSessionId,
+        call.userAId,
+        call.userBId,
+      );
     await this.livekit.deleteRoom(call.roomName).catch((err) => {
       // room có thể đã tự đóng (room_finished) — không phải lỗi nghiệp vụ
       this.logger.debug(

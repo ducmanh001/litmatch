@@ -38,7 +38,7 @@
 
 **A. Cấu trúc & thiết kế**
 
-- God Service: 1 service/class ôm quá nhiều trách nhiệm (vd `MatchingService` vừa lo queue vừa lo billing vừa lo notification)
+- God Service: 1 service/class ôm quá nhiều trách nhiệm (vd `MatchingService` vừa lo queue vừa lo economy vừa lo notification)
 - Business logic rò rỉ ra Controller (Controller tự tính toán thay vì chỉ điều phối)
 - Business logic rò rỉ vào Repository (Repository chứa if/else nghiệp vụ thay vì chỉ query)
 - Duplicate logic giữa nhiều service do không tách shared library
@@ -134,7 +134,9 @@
 - Thiếu rate-limit số lần match/giờ → bot có thể spam tạo queue ảo
 - **Ticket (yêu cầu ghép) không có state machine rõ ràng** (`queued → matched → confirmed → expired/cancelled`) → dễ xảy ra trạng thái mơ hồ khi 2 sự kiện đến gần như đồng thời (vd user vừa cancel vừa được match)
 - Ở quy mô lớn: 1 queue Redis duy nhất không shard theo region/tiêu chí → matcher trở thành hotspot, hoặc match ra 2 người cách nhau nửa vòng trái đất (latency cao khi call)
-- Speed-up (trả diamond để ưu tiên) trừ tiền xong nhưng không có gì đảm bảo user thực sự được ưu tiên (không có priority score/queue riêng thực thi) → mất tiền mà không có tác dụng, hoặc ngược lại: có thể trả tiền speed-up nhiều lần liên tiếp để luôn đứng đầu, chèn ép user thường bất công (cần giới hạn số lần/khung giờ)
+- Speed-up (trả diamond để ưu tiên) phải trừ tiền idempotent và cập nhật priority score/queue thật sự;
+  số lượt không giới hạn theo sản phẩm nhưng vẫn phải có technical throttling/observability để
+  chống abuse API, không để request replay trừ tiền hoặc làm hỏng queue.
 - **Client hard-code giá speed-up** — config server đổi nhưng UI vẫn báo giá cũ, user xác nhận một
   giá rồi ledger trừ giá khác. Mọi `TicketDto` phải trả `speedupPriceDiamond` từ đúng config debit;
   nested ticket của response speed-up cũng không được bỏ field này.

@@ -11,6 +11,7 @@ import { Safety1752800000000 } from '../../database/migrations/1752800000000-saf
 import { PalmMatch1753300000000 } from '../../database/migrations/1753300000000-palm-match';
 import { UserRole1753600000000 } from '../../database/migrations/1753600000000-user-role';
 import { PalmMatchSession1755500000000 } from '../../database/migrations/1755500000000-palm-match-session';
+import { MatchingDailyEntitlements1757100000000 } from '../../database/migrations/1757100000000-matching-daily-entitlements';
 
 import { PalmMatchClientState } from './dto/palm-match.dtos';
 import {
@@ -145,6 +146,7 @@ d('Palm Match integration (Postgres thật)', () => {
         UserRole1753600000000,
         MatchingCore1752200000000,
         MatchingGenderPreference1752300000000,
+        MatchingDailyEntitlements1757100000000,
         SoulMatch1752400000000,
         FriendChat1752600000000,
         Safety1752800000000,

@@ -15,6 +15,7 @@ import { Safety1752800000000 } from '../../database/migrations/1752800000000-saf
 import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
 import { MatchInvite1754700000000 } from '../../database/migrations/1754700000000-match-invite';
 import { GuestMatchQuota1756400000000 } from '../../database/migrations/1756400000000-guest-match-quota';
+import { MatchingDailyEntitlements1757100000000 } from '../../database/migrations/1757100000000-matching-daily-entitlements';
 import { AuthIdentity } from '../auth/entities/auth-identity.entity';
 import { PhoneOtp } from '../auth/entities/phone-otp.entity';
 import { RefreshToken } from '../auth/entities/refresh-token.entity';
@@ -26,7 +27,10 @@ import { LedgerService } from '../economy/services/ledger.service';
 import { LedgerAccount } from '../economy/entities/ledger-account.entity';
 import { LedgerEntry } from '../economy/entities/ledger-entry.entity';
 import { OutboxEvent } from '../economy/entities/outbox-event.entity';
-import { LedgerTransaction } from '../economy/entities/transaction.entity';
+import {
+  LedgerTransaction,
+  TransactionType,
+} from '../economy/entities/transaction.entity';
 import { Wallet } from '../economy/entities/wallet.entity';
 import {
   IapProduct,
@@ -56,6 +60,7 @@ import {
 } from './entities/match-session.entity';
 import { MatchInvite, MatchInviteStatus } from './entities/match-invite.entity';
 import { GuestMatchQuota } from './entities/guest-match-quota.entity';
+import { MatchDailyQuota } from './entities/match-daily-quota.entity';
 import { GuestMatchQuotaService } from './services/guest-match-quota.service';
 import {
   MATCHING_ACTIVE_SHARDS_KEY,
@@ -102,13 +107,22 @@ const CONFIG: Record<string, unknown> = {
   MATCHING_CONFIRM_TIMEOUT_SECONDS: 3600,
   MATCHING_AGE_BAND_SIZE: 5,
   MATCHING_SPEEDUP_PRICE_DIAMOND: 50,
-  MATCHING_SPEEDUP_MAX_PER_HOUR: 3,
+  MATCHING_VIP_SPEEDUP_PRICE_DIAMOND: 40,
+  MATCHING_SVIP_SPEEDUP_PRICE_DIAMOND: 30,
   MATCHING_PRIORITY_BOOST_MS: 300_000,
   // Mọi user tạo qua createUser() dùng trustScore mặc định 100 (DB default) → penalty luôn 0,
   // không ảnh hưởng các assertion score đã có (docs/services/safety-service.md § 3.2)
   MATCHING_TRUST_PENALTY_MS_PER_POINT: 2000,
   MATCHING_TRUST_PENALTY_MAX_MS: 120_000,
   MATCHING_GUEST_DAILY_LIMIT: 3,
+  MATCHING_DAILY_SOUL_LIMIT: 10,
+  MATCHING_DAILY_VOICE_LIMIT: 10,
+  MATCHING_VIP_DAILY_SOUL_LIMIT: 30,
+  MATCHING_VIP_DAILY_VOICE_LIMIT: 20,
+  MATCHING_SVIP_DAILY_SOUL_LIMIT: 60,
+  MATCHING_SVIP_DAILY_VOICE_LIMIT: 40,
+  MATCHING_EXTRA_SOUL_PRICE_DIAMOND: 20,
+  MATCHING_EXTRA_VOICE_PRICE_DIAMOND: 40,
   MATCHING_GUEST_QUOTA_PEPPER: 'matching-integration-quota-pepper-000000',
   USER_DEFAULT_AVATAR_ID: 'default-01',
   // timeout lớn để invite không tự "già" giữa lúc suite chạy chậm; test hết hạn tự backdate thủ công
@@ -243,6 +257,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
         MatchSession,
         MatchInvite,
         GuestMatchQuota,
+        MatchDailyQuota,
       ],
       migrations: [
         InitAuthUser1751900000000,
@@ -257,6 +272,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
         ReportTargetVideo1754900000000,
         MatchInvite1754700000000,
         GuestMatchQuota1756400000000,
+        MatchingDailyEntitlements1757100000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -309,6 +325,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
         verifyForUser: async (token: string) => token,
       } as never,
       configStub,
+      economy,
     );
     matching = new MatchingService(
       ds,
@@ -318,7 +335,6 @@ d('Matching integration (Postgres + Redis thật)', () => {
       notificationStub as never,
       configStub,
       matchingQueue,
-      matchingRateLimit,
       matchingRealtime,
       matcherWakeup,
       guestQuota,
@@ -483,6 +499,49 @@ d('Matching integration (Postgres + Redis thật)', () => {
     expect(rejected?.reason).toMatchObject({
       code: MatchingErrors.GUEST_DAILY_QUOTA_EXCEEDED,
     });
+  });
+
+  it('regular quota: 10 Soul/Voice miễn phí, lượt Voice thứ 11 trả 40 Diamond và ghi ledger atomically', async () => {
+    const user = await createUser('regular-quota');
+    for (let index = 0; index < 10; index += 1) {
+      const ticket = await matching.joinQueue(
+        auth(user.id),
+        { matchType: MatchType.Voice },
+        `regular-free-${index}`,
+      );
+      await matching.cancelTicket(auth(user.id), ticket.id);
+    }
+
+    const quota = await ds.getRepository(MatchDailyQuota).findOneBy({
+      userId: user.id,
+      matchType: MatchType.Voice,
+    });
+    expect(quota?.count).toBe(10);
+    await expect(
+      matching.joinQueue(
+        auth(user.id),
+        { matchType: MatchType.Voice },
+        'regular-over-limit',
+      ),
+    ).rejects.toMatchObject({ code: MatchingErrors.DAILY_QUOTA_EXCEEDED });
+
+    await fund(user.id);
+    const before = BigInt((await economy.getWallet(user.id)).balance);
+    const paid = await matching.joinQueue(
+      auth(user.id),
+      { matchType: MatchType.Voice, useDiamond: true },
+      'regular-paid-voice',
+    );
+    expect(paid.paidDiamond).toBe(true);
+    expect(BigInt((await economy.getWallet(user.id)).balance)).toBe(
+      before - 40n,
+    );
+    expect(
+      await ds.getRepository(LedgerTransaction).countBy({
+        actorUserId: user.id,
+        type: TransactionType.MatchingExtraMatch,
+      }),
+    ).toBe(1);
   });
 
   it('2 matcher tick chạy đồng thời trên cùng shard → 2 ticket chỉ được ghép ĐÚNG 1 lần (ZPOPMIN atomic + verify DB)', async () => {
@@ -744,7 +803,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
     ).toBe(MatchTicketStatus.Confirmed);
   });
 
-  it('speedup: N request song song vượt MATCHING_SPEEDUP_MAX_PER_HOUR → đúng số bị chặn 409, KHÔNG trừ tiền quá giới hạn', async () => {
+  it('speedup: không giới hạn số lượt, mỗi request hợp lệ trừ Diamond riêng', async () => {
     const u = await createUser('speedup-1');
     await fund(u.id); // 1200 diamond
     const t = await matching.joinQueue(
@@ -754,34 +813,27 @@ d('Matching integration (Postgres + Redis thật)', () => {
     );
     const before = BigInt((await economy.getWallet(u.id)).balance);
 
-    // 6 request song song, key KHÁC nhau, max 3/giờ → đúng 3 thành công, 3 bị 409
+    // 6 request song song, key KHÁC nhau → cả 6 thành công nếu ví đủ tiền
     const results = await Promise.allSettled(
       Array.from({ length: 6 }, (_, i) =>
         matching.speedup(auth(u.id), t.id, `sp-${i}`),
       ),
     );
     const ok = results.filter((r) => r.status === 'fulfilled');
-    const limited = results.filter(
-      (r) =>
-        r.status === 'rejected' &&
-        (r.reason as { code?: string }).code ===
-          MatchingErrors.SPEEDUP_RATE_LIMITED,
-    );
-    expect(ok.length).toBe(3);
-    expect(limited.length).toBe(3);
+    expect(ok.length).toBe(6);
 
-    // tiền trừ đúng 3 × 50, không hơn (docs/10 § Matching — speed-up phải có giới hạn)
+    // tiền trừ đúng 6 × 50, không có quota nghiệp vụ theo giờ
     const after = BigInt((await economy.getWallet(u.id)).balance);
-    expect(before - after).toBe(150n);
+    expect(before - after).toBe(300n);
 
-    // boost thực sự được thực thi: score Redis = enqueuedAtMs - 3 × boost (trả tiền là được ưu tiên thật)
+    // boost thực sự được thực thi: score Redis = enqueuedAtMs - 6 × boost
     const fresh = await ds
       .getRepository(MatchTicket)
       .findOneByOrFail({ id: t.id });
-    expect(fresh.priorityBoostMs).toBe(3 * 300_000);
+    expect(fresh.priorityBoostMs).toBe(6 * 300_000);
     const shard = matchingShardKey(MatchType.Voice, 'VN', t.ageBand);
     expect(await redis.zscore(shard, t.id)).toBe(
-      String(fresh.enqueuedAt.getTime() - 3 * 300_000),
+      String(fresh.enqueuedAt.getTime() - 6 * 300_000),
     );
 
     // retry cùng key đã dùng → replay, không trừ tiền thêm, không boost thêm
@@ -791,10 +843,10 @@ d('Matching integration (Postgres + Redis thật)', () => {
     expect(
       (await ds.getRepository(MatchTicket).findOneByOrFail({ id: t.id }))
         .priorityBoostMs,
-    ).toBe(3 * 300_000);
+    ).toBe(6 * 300_000);
   });
 
-  it('speedup không đủ diamond → lỗi Economy, slot rate-limit được hoàn lại (không mất lượt oan)', async () => {
+  it('speedup không đủ diamond → lỗi Economy, nạp thêm rồi vẫn tăng tốc được', async () => {
     const u = await createUser('speedup-poor');
     const t = await matching.joinQueue(
       auth(u.id),
@@ -806,7 +858,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
     ).rejects.toMatchObject({
       code: EconomyErrors.WALLET_INSUFFICIENT_BALANCE,
     });
-    // slot đã hoàn — nạp tiền rồi vẫn speedup được đủ 3 lần
+    // Không có slot nghiệp vụ cần hoàn — nạp tiền rồi vẫn speedup được
     await fund(u.id);
     for (let i = 0; i < 3; i++) {
       await matching.speedup(auth(u.id), t.id, `sp-after-${i}`);

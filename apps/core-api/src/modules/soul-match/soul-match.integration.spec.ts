@@ -15,6 +15,7 @@ import { SoulChatFriendHistory1756600000000 } from '../../database/migrations/17
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
 import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
 import { MessageAttachment1754400000000 } from '../../database/migrations/1754400000000-message-attachment';
+import { MatchingDailyEntitlements1757100000000 } from '../../database/migrations/1757100000000-matching-daily-entitlements';
 
 import { SoulMatchService } from './soul-match.service';
 import { SoulMatchErrors } from './soul-match.errors';
@@ -198,6 +199,7 @@ d('Soul Match integration (Postgres thật)', () => {
         EconomyRefund1752100000000,
         MatchingCore1752200000000,
         MatchingGenderPreference1752300000000,
+        MatchingDailyEntitlements1757100000000,
         SoulMatch1752400000000,
         FriendChat1752600000000,
         SoulChatFriendHistory1756600000000,
@@ -248,11 +250,16 @@ d('Soul Match integration (Postgres thật)', () => {
       configStub,
       {} as never,
       {} as never,
-      {} as never,
       new MatcherWakeup(),
       {
         authorize: async () => undefined,
         consume: async () => undefined,
+        consumeForMatch: async () => ({
+          quotaDate: '2026-07-29',
+          freeLimit: 10,
+          tier: null,
+          paidDiamond: false,
+        }),
       } as unknown as GuestMatchQuotaService,
     );
     service = new SoulMatchService(

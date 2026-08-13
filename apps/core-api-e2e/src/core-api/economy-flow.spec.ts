@@ -1,10 +1,16 @@
+import { randomUUID } from 'node:crypto';
+
 import { JwtService } from '@nestjs/jwt';
 import axios from 'axios';
 import { Pool } from 'pg';
 
-const E2E_USER_ID = '00000000-0000-4000-8000-0000000000e2';
-const E2E_IAP_TRANSACTION_ID = 'core-e2e-economy-iap-v1';
-const E2E_VIP_IDEMPOTENCY_KEY = 'core-e2e-economy-vip-v1';
+// Local CI reuses its isolated database between pushes. Keep every execution's
+// fixture namespace unique so a replay never resolves to an expired transaction
+// left by an earlier run.
+const E2E_RUN_ID = randomUUID();
+const E2E_USER_ID = E2E_RUN_ID;
+const E2E_IAP_TRANSACTION_ID = `core-e2e-economy-iap-${E2E_RUN_ID}`;
+const E2E_VIP_IDEMPOTENCY_KEY = `core-e2e-economy-vip-${E2E_RUN_ID}`;
 
 interface IapResult {
   transactionId: string;

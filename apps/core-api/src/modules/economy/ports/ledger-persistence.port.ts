@@ -60,6 +60,15 @@ export interface RecordResult {
 export abstract class LedgerPersistencePort {
   abstract record(input: RecordTransactionInput): Promise<RecordResult>;
 
+  /**
+   * Ghi ledger vào transaction do domain caller sở hữu. Caller phải truyền cùng
+   * EntityManager cho side effect nghiệp vụ để debit + business state atomic.
+   */
+  abstract recordInManager(
+    manager: EntityManager,
+    input: RecordTransactionInput,
+  ): Promise<RecordResult>;
+
   abstract reverse(
     originalTransactionId: string,
     idempotencyKey: string,

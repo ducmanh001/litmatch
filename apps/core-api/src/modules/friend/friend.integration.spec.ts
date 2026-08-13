@@ -14,6 +14,7 @@ import { ReportTargetVideo1754900000000 } from '../../database/migrations/175490
 import { ConversationStreak1754200000000 } from '../../database/migrations/1754200000000-conversation-streak';
 import { MessageAttachment1754400000000 } from '../../database/migrations/1754400000000-message-attachment';
 import { ConversationMemberState1755600000000 } from '../../database/migrations/1755600000000-conversation-member-state';
+import { MatchingDailyEntitlements1757100000000 } from '../../database/migrations/1757100000000-matching-daily-entitlements';
 
 import { FriendService } from './friend.service';
 import { FriendErrors } from './friend.errors';
@@ -157,6 +158,7 @@ d('Friend integration (Postgres thật)', () => {
         UserRole1753600000000,
         MatchingCore1752200000000,
         MatchingGenderPreference1752300000000,
+        MatchingDailyEntitlements1757100000000,
         SoulMatch1752400000000,
         FriendChat1752600000000,
         Safety1752800000000,

@@ -24,7 +24,8 @@ import type { AuthenticatedUser } from '../../common/decorators/current-user.dec
 const CONFIG: Record<string, unknown> = {
   MATCHING_AGE_BAND_SIZE: 5,
   MATCHING_SPEEDUP_PRICE_DIAMOND: 50,
-  MATCHING_SPEEDUP_MAX_PER_HOUR: 3,
+  MATCHING_VIP_SPEEDUP_PRICE_DIAMOND: 40,
+  MATCHING_SVIP_SPEEDUP_PRICE_DIAMOND: 30,
   MATCHING_PRIORITY_BOOST_MS: 300_000,
   MATCHING_TRUST_PENALTY_MS_PER_POINT: 2000,
   MATCHING_TRUST_PENALTY_MAX_MS: 120_000,
@@ -49,6 +50,7 @@ function makeTicket(overrides: Partial<MatchTicket> = {}): MatchTicket {
     priorityBoostMs: 0,
     trustPenaltyMs: 0,
     sessionId: null,
+    paidDiamond: false,
     idempotencyKey: 'matching:join:user-me:k1',
     createdAt: new Date('2026-07-12T00:00:00Z'),
     updatedAt: new Date('2026-07-12T00:00:00Z'),
@@ -69,9 +71,12 @@ describe('MatchingService (unit — mock repo/capabilities/economy)', () => {
     >
   >;
   let queue: Record<string, jest.Mock>;
-  let rateLimit: Record<string, jest.Mock>;
   let realtime: Record<string, jest.Mock>;
-  let economy: { spendDiamond: jest.Mock; hasTransaction: jest.Mock };
+  let economy: {
+    spendDiamond: jest.Mock;
+    spendDiamondInTransaction: jest.Mock;
+    getActiveVipTier: jest.Mock;
+  };
   let notificationService: {
     createWithManager: jest.Mock;
     sendPush: jest.Mock;
@@ -84,6 +89,7 @@ describe('MatchingService (unit — mock repo/capabilities/economy)', () => {
   let guestQuota: {
     authorize: jest.Mock;
     consume: jest.Mock;
+    consumeForMatch: jest.Mock;
   };
   let service: MatchingService;
   let matcherWakeup: MatcherWakeup;
@@ -111,18 +117,6 @@ describe('MatchingService (unit — mock repo/capabilities/economy)', () => {
       hasEntries: jest.fn(async () => false),
       close: jest.fn(async () => undefined),
     };
-    rateLimit = {
-      consume: jest.fn(async () => ({
-        allowed: true as const,
-        deduplicated: false,
-        reservation: {
-          rateLimitKey: 'matching:speedup:count:user-me',
-          reservationKey: 'reservation-1',
-          windowKey: 'window-1',
-        },
-      })),
-      refund: jest.fn(async () => true),
-    };
     realtime = {
       publish: jest.fn(async () => 1),
     };
@@ -131,7 +125,11 @@ describe('MatchingService (unit — mock repo/capabilities/economy)', () => {
         transactionId: 'txn-1',
         replayed: false,
       })),
-      hasTransaction: jest.fn(async () => false),
+      spendDiamondInTransaction: jest.fn(async () => ({
+        transactionId: 'txn-extra-1',
+        replayed: false,
+      })),
+      getActiveVipTier: jest.fn(async () => null),
     };
     notificationService = {
       createWithManager: jest.fn(async (_manager, input) => ({
@@ -174,6 +172,12 @@ describe('MatchingService (unit — mock repo/capabilities/economy)', () => {
         keyHashes: [],
       })),
       consume: jest.fn().mockResolvedValue(undefined),
+      consumeForMatch: jest.fn().mockResolvedValue({
+        quotaDate: '2026-07-29',
+        freeLimit: 10,
+        tier: null,
+        paidDiamond: false,
+      }),
     };
 
     const config = {
@@ -191,7 +195,6 @@ describe('MatchingService (unit — mock repo/capabilities/economy)', () => {
       notificationService as never,
       config,
       queue as never,
-      rateLimit as never,
       realtime as never,
       matcherWakeup,
       guestQuota as unknown as GuestMatchQuotaService,
@@ -440,46 +443,18 @@ describe('MatchingService (unit — mock repo/capabilities/economy)', () => {
       );
     });
 
-    it('rate-limit vượt giới hạn → 409 RATE_LIMITED và KHÔNG gọi spendDiamond (chặn trước khi trừ tiền)', async () => {
-      rateLimit.consume.mockResolvedValueOnce({
-        allowed: false,
-        deduplicated: false,
-      });
-      await expect(
-        service.speedup(me, 'ticket-1', 'sk1'),
-      ).rejects.toMatchObject({
-        code: MatchingErrors.SPEEDUP_RATE_LIMITED,
-      });
-      expect(economy.spendDiamond).not.toHaveBeenCalled();
-    });
-
-    it('happy path: rate-limit TRƯỚC spendDiamond, rồi boost DB + ZADD XX score tuyệt đối', async () => {
-      const callOrder: string[] = [];
-      rateLimit.consume.mockImplementationOnce(async () => {
-        callOrder.push('rate-limit');
-        return {
-          allowed: true,
-          deduplicated: false,
-          reservation: {
-            rateLimitKey: 'matching:speedup:count:user-me',
-            reservationKey: 'reservation-1',
-            windowKey: 'window-1',
-          },
-        };
-      });
+    it('happy path: trừ Diamond rồi boost DB + ZADD XX score tuyệt đối', async () => {
       economy.spendDiamond.mockImplementationOnce(async () => {
-        callOrder.push('spend');
         return { transactionId: 'txn-1', replayed: false };
       });
 
       const result = await service.speedup(me, 'ticket-1', 'sk1');
-      expect(callOrder).toEqual(['rate-limit', 'spend']);
       expect(economy.spendDiamond).toHaveBeenCalledWith(
         me.userId,
         TransactionType.MatchingSpeedup,
         50,
         `matching:speedup:${me.userId}:sk1`,
-        { ticketId: 'ticket-1' },
+        { ticketId: 'ticket-1', priceDiamond: 50 },
       );
       expect(ticketRepo.increment).toHaveBeenCalledWith(
         { id: 'ticket-1', status: MatchTicketStatus.Queued },
@@ -498,7 +473,22 @@ describe('MatchingService (unit — mock repo/capabilities/economy)', () => {
       expect(result.replayed).toBe(false);
     });
 
-    it('replay cùng key → KHÔNG cộng boost lần 2, hoàn lại slot rate-limit (docs/10 § 10.0.D)', async () => {
+    it('cho phép tăng tốc không giới hạn số lần nếu đủ Diamond', async () => {
+      await service.speedup(me, 'ticket-1', 'sk1');
+      await service.speedup(me, 'ticket-1', 'sk2');
+
+      expect(economy.spendDiamond).toHaveBeenCalledTimes(2);
+      expect(ticketRepo.increment).toHaveBeenCalledTimes(2);
+      expect(economy.spendDiamond).toHaveBeenLastCalledWith(
+        me.userId,
+        TransactionType.MatchingSpeedup,
+        50,
+        `matching:speedup:${me.userId}:sk2`,
+        { ticketId: 'ticket-1', priceDiamond: 50 },
+      );
+    });
+
+    it('replay cùng key → KHÔNG cộng boost lần 2', async () => {
       economy.spendDiamond.mockResolvedValueOnce({
         transactionId: 'txn-1',
         replayed: true,
@@ -506,7 +496,6 @@ describe('MatchingService (unit — mock repo/capabilities/economy)', () => {
       const result = await service.speedup(me, 'ticket-1', 'sk1');
       expect(result.replayed).toBe(true);
       expect(ticketRepo.increment).not.toHaveBeenCalled();
-      expect(rateLimit.refund).toHaveBeenCalledTimes(1);
       // vẫn sửa lại score Redis từ tổng boost DB (retry-hoàn-tất an toàn, spec § 4)
       expect(queue.enqueue).toHaveBeenCalledWith(
         expect.any(String),
@@ -516,7 +505,7 @@ describe('MatchingService (unit — mock repo/capabilities/economy)', () => {
       );
     });
 
-    it('spendDiamond fail (không đủ diamond) → hoàn slot rate-limit, không boost', async () => {
+    it('spendDiamond fail (không đủ diamond) → không boost', async () => {
       economy.spendDiamond.mockRejectedValueOnce(
         new DomainException('ECONOMY_WALLET_INSUFFICIENT_BALANCE', 'x', 422),
       );
@@ -525,20 +514,28 @@ describe('MatchingService (unit — mock repo/capabilities/economy)', () => {
       ).rejects.toMatchObject({
         code: 'ECONOMY_WALLET_INSUFFICIENT_BALANCE',
       });
-      expect(rateLimit.refund).toHaveBeenCalledTimes(1);
       expect(ticketRepo.increment).not.toHaveBeenCalled();
     });
 
-    it('RETRY request đã trả tiền (transaction tồn tại) → bỏ qua rate-limit, replay bình thường (docs/05 § 5.10)', async () => {
-      economy.hasTransaction.mockResolvedValueOnce(true);
+    it('VIP/SVIP dùng mức giá speed-up riêng', async () => {
+      economy.getActiveVipTier.mockResolvedValueOnce('vip');
+      await service.speedup(me, 'ticket-1', 'vip-key');
+      expect(economy.spendDiamond).toHaveBeenCalledWith(
+        me.userId,
+        TransactionType.MatchingSpeedup,
+        40,
+        `matching:speedup:${me.userId}:vip-key`,
+        { ticketId: 'ticket-1', priceDiamond: 40 },
+      );
+    });
+
+    it('retry request đã trả tiền → replay bình thường', async () => {
       economy.spendDiamond.mockResolvedValueOnce({
         transactionId: 'txn-1',
         replayed: true,
       });
       const result = await service.speedup(me, 'ticket-1', 'sk1');
       expect(result.replayed).toBe(true);
-      expect(rateLimit.consume).not.toHaveBeenCalled(); // retry không bị đếm/chặn như lượt mới
-      expect(rateLimit.refund).not.toHaveBeenCalled(); // không chiếm slot thì không có gì để hoàn
       expect(ticketRepo.increment).not.toHaveBeenCalled();
     });
 
@@ -551,7 +548,6 @@ describe('MatchingService (unit — mock repo/capabilities/economy)', () => {
       ).rejects.toMatchObject({
         code: MatchingErrors.TICKET_INVALID_TRANSITION,
       });
-      expect(rateLimit.consume).not.toHaveBeenCalled();
       expect(economy.spendDiamond).not.toHaveBeenCalled();
     });
   });

@@ -40,12 +40,14 @@ describe('MatchingController — API contract', () => {
     confirmTicket: jest.fn(),
     speedup: jest.fn(),
     getSpeedupPriceDiamond: jest.fn(() => 73),
+    getSpeedupPriceDiamondForUser: jest.fn(async () => 73),
   };
   let controller: MatchingController;
 
   beforeEach(() => {
     jest.clearAllMocks();
     service.getSpeedupPriceDiamond.mockReturnValue(73);
+    service.getSpeedupPriceDiamondForUser.mockResolvedValue(73);
     controller = new MatchingController(service as unknown as MatchingService);
   });
 

@@ -12,9 +12,9 @@ import {
 import { publishRealtimeEvent } from '../../common/realtime/publish-realtime';
 import {
   DEFAULT_REGION,
-  SPEEDUP_RATE_WINDOW_SECONDS,
   UQ_ACTIVE_USER,
   ageBandOf,
+  extraMatchIdempotencyKey,
   joinIdempotencyKey,
   speedupIdempotencyKey,
   trustPenaltyMsOf,
@@ -33,13 +33,11 @@ import {
 } from './entities/match-session.entity';
 import {
   MATCHING_QUEUE,
-  MATCHING_RATE_LIMIT,
   MATCHING_REALTIME,
   shardKeyOfTicket,
-  speedupCountKey,
   ticketScore,
 } from './redis/matching-redis.provider';
-import { EconomyService, TransactionType } from '../economy';
+import { EconomyService, TransactionType, VipTier } from '../economy';
 import { NotificationService, NotificationType } from '../notification';
 import { MatcherWakeup } from './matcher-wakeup';
 import { UserService, UserStatus } from '../user';
@@ -57,10 +55,6 @@ import type { Notification } from '../notification';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import type { CoreApiEnv } from '../../config/env.validation';
 import type { JoinQueueDto } from './dto/matching.dtos';
-import type {
-  RateLimitPort,
-  RateLimitReservation,
-} from '../../common/redis/rate-limit.port';
 import type { RealtimePublisherPort } from '../../common/realtime/realtime-publisher.port';
 import type { MatchingQueuePort } from './ports/matching-queue.port';
 
@@ -82,7 +76,6 @@ export class MatchingService {
     private readonly notificationService: NotificationService,
     private readonly config: ConfigService<CoreApiEnv, true>,
     @Inject(MATCHING_QUEUE) private readonly queue: MatchingQueuePort,
-    @Inject(MATCHING_RATE_LIMIT) private readonly rateLimit: RateLimitPort,
     @Inject(MATCHING_REALTIME)
     private readonly realtime: RealtimePublisherPort,
     private readonly matcherWakeup: MatcherWakeup,
@@ -100,6 +93,7 @@ export class MatchingService {
     quotaContext: GuestQuotaRequestContext = { ip: 'unknown' },
   ): Promise<MatchTicket> {
     const genderPreference = dto.genderPreference ?? GenderPreference.Any;
+    const useDiamond = dto.useDiamond ?? false;
     const prefixedKey = joinIdempotencyKey(user.userId, idempotencyKey);
 
     let ticket: MatchTicket;
@@ -130,11 +124,31 @@ export class MatchingService {
             user.userId,
             dto.matchType,
             genderPreference,
+            useDiamond,
           );
           return replay;
         }
 
-        await this.guestQuota.consume(manager, authorization);
+        const quota = await this.guestQuota.consumeForMatch(
+          manager,
+          authorization,
+          dto.matchType,
+          useDiamond,
+        );
+        if (quota.paidDiamond) {
+          await this.economy.spendDiamondInTransaction(
+            manager,
+            user.userId,
+            TransactionType.MatchingExtraMatch,
+            this.getExtraMatchPriceDiamond(dto.matchType),
+            extraMatchIdempotencyKey(user.userId, idempotencyKey),
+            {
+              matchType: dto.matchType,
+              quotaDate: quota.quotaDate,
+              freeLimit: quota.freeLimit,
+            },
+          );
+        }
         return manager.save(
           manager.create(MatchTicket, {
             userId: user.userId,
@@ -148,6 +162,7 @@ export class MatchingService {
             trustPenaltyMs: this.trustPenaltyMsOf(profile.trustScore),
             sessionId: null,
             idempotencyKey: prefixedKey,
+            paidDiamond: quota.paidDiamond,
           }),
         );
       });
@@ -163,6 +178,7 @@ export class MatchingService {
           user.userId,
           dto.matchType,
           genderPreference,
+          useDiamond,
         );
         // Replay: đảm bảo ticket còn queued vẫn có mặt trong Redis (NX — không đè score đã boost)
         if (existing.status === MatchTicketStatus.Queued)
@@ -190,11 +206,13 @@ export class MatchingService {
     userId: string,
     matchType: MatchType,
     genderPreference: GenderPreference,
+    useDiamond: boolean,
   ): void {
     if (
       ticket.userId === userId &&
       ticket.matchType === matchType &&
-      ticket.genderPreference === genderPreference
+      ticket.genderPreference === genderPreference &&
+      ticket.paidDiamond === useDiamond
     )
       return;
     throw new DomainException(
@@ -240,6 +258,29 @@ export class MatchingService {
     return this.config.getOrThrow('MATCHING_SPEEDUP_PRICE_DIAMOND', {
       infer: true,
     });
+  }
+
+  async getSpeedupPriceDiamondForUser(userId: string): Promise<number> {
+    const tier = await this.economy.getActiveVipTier(userId);
+    if (tier === VipTier.Svip)
+      return this.config.getOrThrow('MATCHING_SVIP_SPEEDUP_PRICE_DIAMOND', {
+        infer: true,
+      });
+    if (tier === VipTier.Vip)
+      return this.config.getOrThrow('MATCHING_VIP_SPEEDUP_PRICE_DIAMOND', {
+        infer: true,
+      });
+    return this.getSpeedupPriceDiamond();
+  }
+
+  getExtraMatchPriceDiamond(matchType: MatchType): number {
+    return matchType === MatchType.Soul
+      ? this.config.getOrThrow('MATCHING_EXTRA_SOUL_PRICE_DIAMOND', {
+          infer: true,
+        })
+      : this.config.getOrThrow('MATCHING_EXTRA_VOICE_PRICE_DIAMOND', {
+          infer: true,
+        });
   }
 
   /** Huỷ ticket của chính mình — chỉ hợp lệ khi đang queued (state machine § 1). */
@@ -376,9 +417,9 @@ export class MatchingService {
   }
 
   /**
-   * Speed-up (spec § 4) — thứ tự BẮT BUỘC: rate-limit Redis → spendDiamond (idempotent) → boost.
+   * Speed-up không giới hạn số lần — mỗi lần vẫn là một giao dịch Diamond riêng.
    * Boost cộng dồn trong DB rồi set score Redis TUYỆT ĐỐI (ZADD XX): retry/replay cùng key
-   * chỉ sửa lại score về đúng tổng đã trả tiền, không double-boost (docs/10 § 10.0.D).
+   * chỉ sửa lại score về đúng tổng đã trả tiền, không double-boost.
    */
   async speedup(
     user: AuthenticatedUser,
@@ -398,57 +439,19 @@ export class MatchingService {
       );
     }
 
-    const maxPerHour = this.config.getOrThrow('MATCHING_SPEEDUP_MAX_PER_HOUR', {
-      infer: true,
-    });
-    const price = this.getSpeedupPriceDiamond();
+    const price = await this.getSpeedupPriceDiamondForUser(user.userId);
     const boostMs = this.config.getOrThrow('MATCHING_PRIORITY_BOOST_MS', {
       infer: true,
     });
-    const countKey = speedupCountKey(user.userId);
     const prefixedKey = speedupIdempotencyKey(user.userId, idempotencyKey);
 
-    // 0) Retry của request ĐÃ trả tiền → phải replay kết quả cũ (docs/05 § 5.10), không phải
-    // "lượt mới" — bỏ qua rate-limit, nếu không client retry lúc counter đầy sẽ ăn 409 oan.
-    const isRetry = await this.economy.hasTransaction(prefixedKey);
-
-    // 2) Trừ tiền — ledger tự lo lock ví + idempotency + check số dư tại thời điểm trừ
-    let spend: { transactionId: string; replayed: boolean };
-    let reservation: RateLimitReservation | undefined;
-    try {
-      // 1) Rate-limit TRƯỚC khi trừ tiền — vượt giới hạn thì chưa mất đồng nào (spec § 4)
-      if (!isRetry) {
-        const consumed = await this.rateLimit.consume({
-          key: countKey,
-          limit: maxPerHour,
-          windowSeconds: SPEEDUP_RATE_WINDOW_SECONDS,
-        });
-        if (!consumed.allowed) {
-          throw new DomainException(
-            MatchingErrors.SPEEDUP_RATE_LIMITED,
-            `Vượt giới hạn ${maxPerHour} lần speed-up/giờ`,
-            HttpStatus.CONFLICT,
-            { maxPerHour },
-          );
-        }
-        reservation = consumed.reservation;
-      }
-
-      spend = await this.economy.spendDiamond(
-        user.userId,
-        TransactionType.MatchingSpeedup,
-        price,
-        prefixedKey,
-        {
-          ticketId,
-        },
-      );
-    } catch (err) {
-      // trừ tiền fail (vd không đủ diamond) → trả lại slot rate-limit vừa chiếm
-      if (reservation)
-        await this.rateLimit.refund(reservation).catch(() => false);
-      throw err;
-    }
+    const spend = await this.economy.spendDiamond(
+      user.userId,
+      TransactionType.MatchingSpeedup,
+      price,
+      prefixedKey,
+      { ticketId, priceDiamond: price },
+    );
     if (!spend.replayed) {
       // 3) Cộng dồn boost trong DB — atomic, chỉ khi ticket còn queued (vừa matched thì thôi, tiền
       // vẫn trừ đúng 1 lần theo spec § 4: completion phía Redis/boost retry được, không hoàn tiền)
@@ -457,10 +460,6 @@ export class MatchingService {
         'priorityBoostMs',
         boostMs,
       );
-    } else if (!isRetry) {
-      // 2 request song song CÙNG key: bên thua replay muộn — không phải lượt mới → hoàn slot
-      if (reservation)
-        await this.rateLimit.refund(reservation).catch(() => false);
     }
 
     // 4) Set score Redis tuyệt đối từ tổng boost trong DB — XX: member đã rời queue thì bỏ qua

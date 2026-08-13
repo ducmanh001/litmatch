@@ -86,8 +86,8 @@ The service catalog names every top-level Core API module and links module-speci
 - Status: `implemented`
 - Owner: core-api/matching
 - Contracts: `openapi/core-api.json`, `docs/services/matching-service.md`, `docs/06-domain-rules.md`
-- Implementation evidence: `apps/core-api/src/modules/matching/matching.controller.ts:42` — contains `@Controller('matching')`; `apps/core-api/src/modules/matching/jobs/matcher-worker.service.ts:72` — contains `MatcherWorkerService`; `apps/core-api/src/modules/matching/services/guest-match-quota.service.ts:27` — contains `GuestMatchQuotaService`
-- Verification evidence (automated-test-source): `apps/core-api/src/modules/matching/matching.integration.spec.ts:457` — contains `guest quota: concurrent guest mới cùng IP`
+- Implementation evidence: `apps/core-api/src/modules/matching/matching.controller.ts:42` — contains `@Controller('matching')`; `apps/core-api/src/modules/matching/jobs/matcher-worker.service.ts:72` — contains `MatcherWorkerService`; `apps/core-api/src/modules/matching/services/guest-match-quota.service.ts:37` — contains `GuestMatchQuotaService`
+- Verification evidence (automated-test-source): `apps/core-api/src/modules/matching/matching.integration.spec.ts:473` — contains `guest quota: concurrent guest mới cùng IP`
 
 ### Anonymous text match, rating and friendship unlock
 

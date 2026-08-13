@@ -245,7 +245,11 @@ describe('QueueStatusPanel', () => {
     expect(post).toHaveBeenCalledWith(
       '/api/v1/matching/tickets',
       expect.objectContaining({
-        body: { matchType: 'voice', genderPreference: 'any' },
+        body: {
+          matchType: 'voice',
+          useDiamond: false,
+          genderPreference: 'any',
+        },
       }),
     );
   });

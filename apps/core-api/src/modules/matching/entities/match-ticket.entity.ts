@@ -126,4 +126,8 @@ export class MatchTicket extends BaseAppEntity {
 
   @Column({ length: 255, unique: true })
   idempotencyKey!: string;
+
+  /** True when this queue entry was opened by paying Diamond after free quota. */
+  @Column({ default: false })
+  paidDiamond!: boolean;
 }
