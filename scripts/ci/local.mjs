@@ -349,11 +349,24 @@ function runAffectedVerification() {
     '--parallel=2',
     '--outputStyle=static',
   ];
+  if (projects.includes('signaling-gateway')) {
+    // The Redis lease integration suite proves crash expiry and live renewal with a
+    // short production TTL. Keep it off the shared Nx worker pool so unrelated
+    // Jest/Vitest work cannot starve its event-loop refresh timer.
+    run('Affected signaling tests (isolated)', pnpm, [
+      'nx',
+      'test',
+      'signaling-gateway',
+      '--skip-nx-cache',
+      '--outputStyle=static',
+    ]);
+  }
   run('Affected unit and integration tests', pnpm, [
     'nx',
     'affected',
     '-t',
     'test',
+    '--exclude=signaling-gateway',
     ...targetArguments,
   ]);
   run('Affected builds', pnpm, [

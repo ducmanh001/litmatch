@@ -201,6 +201,18 @@ test('pre-push profile verifies affected code without clean-container or image s
   assert.doesNotMatch(result.stdout, /Build Core API image/u);
 });
 
+test('pre-push isolates the timing-sensitive signaling test target', () => {
+  const localCi = readFileSync('scripts/ci/local.mjs', 'utf8');
+
+  assert.match(localCi, /Affected signaling tests \(isolated\)/u);
+  assert.match(
+    localCi,
+    /projects\.includes\('signaling-gateway'\)[\s\S]{0,500}'nx',\s*'test',\s*'signaling-gateway'/u,
+  );
+  assert.match(localCi, /'signaling-gateway',\s*'--skip-nx-cache'/u);
+  assert.match(localCi, /'--exclude=signaling-gateway'/u);
+});
+
 test('local CI provisions both runtime and integration databases on a fresh host', () => {
   const result = dryRun('ci');
 
