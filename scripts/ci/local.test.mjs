@@ -163,6 +163,22 @@ test('local CI rejects every bypass mechanism in a CI environment', () => {
   }
 });
 
+test('Economy E2E fixtures are isolated per execution', () => {
+  const economyE2e = readFileSync(
+    'apps/core-api-e2e/src/core-api/economy-flow.spec.ts',
+    'utf8',
+  );
+
+  assert.match(economyE2e, /randomUUID\(\)/u);
+  assert.match(economyE2e, /const E2E_USER_ID = E2E_RUN_ID/u);
+  assert.match(economyE2e, /E2E_IAP_TRANSACTION_ID = `[^`]*\$\{E2E_RUN_ID\}/u);
+  assert.match(economyE2e, /E2E_VIP_IDEMPOTENCY_KEY = `[^`]*\$\{E2E_RUN_ID\}/u);
+  assert.doesNotMatch(
+    economyE2e,
+    /const E2E_(?:USER_ID|IAP_TRANSACTION_ID|VIP_IDEMPOTENCY_KEY) = ['"]/u,
+  );
+});
+
 test('GitHub CI uses the same local profiles for quality, tests, and containers', () => {
   const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
   const workflowConfig = parseYaml(workflow);
