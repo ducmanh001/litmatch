@@ -98,7 +98,7 @@ test('aggregate gates own stage watchdogs instead of a blanket 45-second timeout
   assert.match(agentContract, /NX_TUI=false[\s\S]{0,160}--outputStyle=static/u);
 });
 
-test('commit owns formatting and staged guard checks; push owns the complete preflight', () => {
+test('commit owns staged guards; push owns the affected preflight', () => {
   const commitHook = readFileSync('.husky/pre-commit', 'utf8');
   const pushHook = readFileSync('.husky/pre-push', 'utf8');
   const repositoryCheck = readFileSync(
@@ -108,6 +108,10 @@ test('commit owns formatting and staged guard checks; push owns the complete pre
 
   assert.match(commitHook, /lint-staged[\s\S]*agent:check -- --staged/u);
   assert.match(pushHook, /pnpm ci:preflight/u);
+  assert.match(
+    readFileSync('package.json', 'utf8'),
+    /"ci:preflight":\s*"node scripts\/ci\/local\.mjs prepush"/u,
+  );
   assert.match(pushHook, /NX_NATIVE_COMMAND_RUNNER=false/u);
   assert.match(pushHook, /export NX_TUI=false/u);
   assert.match(pushHook, /export NX_DAEMON=false/u);
@@ -115,6 +119,7 @@ test('commit owns formatting and staged guard checks; push owns the complete pre
   assert.match(pushHook, /export TERM=dumb/u);
   assert.match(pushHook, /export FORCE_COLOR=0/u);
   assert.doesNotMatch(pushHook, /ci:local:clean/u);
+  assert.doesNotMatch(pushHook, /ci:local:all/u);
   assert.match(commitHook, /LITMATCH_CI_BYPASS/u);
   assert.match(pushHook, /LITMATCH_CI_BYPASS/u);
   assert.match(
@@ -179,6 +184,31 @@ test('Economy E2E fixtures are isolated per execution', () => {
   );
 });
 
+test('pre-push profile verifies affected code without clean-container or image smoke', () => {
+  const result = dryRun('prepush');
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Profile: prepush/u);
+  assert.match(result.stdout, /Affected Nx projects: core-api, core-api-e2e/u);
+  assert.match(result.stdout, /OpenAPI contract check/u);
+  assert.match(result.stdout, /Affected unit and integration tests/u);
+  assert.match(result.stdout, /Affected builds/u);
+  assert.match(result.stdout, /Affected end-to-end tests/u);
+  assert.doesNotMatch(
+    result.stdout,
+    /Run quality gate in a clean Node 22 Linux container/u,
+  );
+  assert.doesNotMatch(result.stdout, /Build Core API image/u);
+});
+
+test('local CI provisions both runtime and integration databases on a fresh host', () => {
+  const result = dryRun('ci');
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Ensure isolated database litmatch_ci/u);
+  assert.match(result.stdout, /Ensure isolated database litmatch_test/u);
+});
+
 test('GitHub CI uses the same local profiles for quality, tests, and containers', () => {
   const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
   const workflowConfig = parseYaml(workflow);
@@ -218,7 +248,10 @@ test('quality profiles check formatting without rewriting the workspace', () => 
   assert.doesNotMatch(localCi, /Auto-fix formatting before quality checks/u);
   assert.doesNotMatch(localCi, /stage\('clean: format', 'pnpm format'\)/u);
   assert.match(localCi, /\['format:check'\]/u);
-  assert.match(qualityGates, /Quick\/clean\/preflight không tự sửa source/u);
+  assert.match(
+    qualityGates,
+    /Quick\/clean\/prepush\/preflight không tự sửa source/u,
+  );
 });
 
 test('local and GitHub CI provide every required non-database application secret', () => {

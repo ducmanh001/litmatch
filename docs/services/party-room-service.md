@@ -24,10 +24,11 @@
   ([10 § Party Room](../10-code-review-checklist.md)). `host`/`speaker`: `canPublish=true`.
 - Cấp/thu speaker (CHỈ host — [06-domain-rules.md](../06-domain-rules.md)) đi qua luồng
   `invite → target accept`: invite chỉ ghi `speaker_invite_pending`, target vẫn là audience và
-  token vẫn `canPublish=false`; chỉ endpoint accept của chính target mới đổi role. Khi accept,
-  `RoomService.updateParticipant` được gọi và **đợi ACK trong cùng DB transaction**: SFU fail →
-  rollback role DB (không bao giờ DB nói `audience` mà SFU vẫn cho publish); participant không nối
-  thì coi như xong (token lần sau lấy role từ DB). Target có thể decline idempotent.
+  token vẫn `canPublish=false`; chỉ endpoint accept của chính target mới đổi role. Role được commit
+  trước, sau đó `RoomService.updateParticipant` được gọi **ngoài DB transaction** để không giữ row
+  lock trong lúc chờ network. Nếu SFU fail, service chỉ rollback role khi chưa có transition mới
+  hơn thắng, thử khôi phục grant cũ và trả 503 để client retry; participant không nối thì coi như
+  xong (token lần sau lấy role từ DB). Target có thể decline idempotent.
 - `speaker_limit` đếm role `speaker` (host là publisher mặc định, không chiếm slot).
 
 ## 3. Concurrency

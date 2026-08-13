@@ -105,6 +105,7 @@ d('Party Room integration (Postgres thật)', () => {
     }>,
     removed: [] as Array<{ room: string; identity: string }>,
     failNextCreate: false,
+    failNextPermissionUpdate: false,
   };
   const livekitStub: PartyLivekitRoomPort = {
     createRoom: async (roomName: string) => {
@@ -125,6 +126,10 @@ d('Party Room integration (Postgres thật)', () => {
       identity: string,
       canPublish: boolean,
     ): Promise<UpdatePublishResult> => {
+      if (sfu.failNextPermissionUpdate) {
+        sfu.failNextPermissionUpdate = false;
+        throw new Error('SFU permission down (giả lập)');
+      }
       sfu.permissionUpdates.push({ room, identity, canPublish });
       return 'updated';
     },
@@ -258,6 +263,7 @@ d('Party Room integration (Postgres thật)', () => {
     sfu.permissionUpdates.length = 0;
     sfu.removed.length = 0;
     sfu.failNextCreate = false;
+    sfu.failNextPermissionUpdate = false;
   });
 
   it('tạo phòng: host membership atomic, SFU room tạo tường minh, token host publish được', async () => {
@@ -422,6 +428,38 @@ d('Party Room integration (Postgres thật)', () => {
     await party.inviteSpeaker(auth(host.id), room.id, loser.id);
     const promoted = await party.acceptSpeakerInvite(auth(loser.id), room.id);
     expect(promoted.role).toBe(PartyRole.Speaker);
+  });
+
+  it('SFU đổi quyền fail sau commit → khôi phục role/invite và trả 503 để retry', async () => {
+    const host = await createUser('perm-fail-host');
+    const member = await createUser('perm-fail-member');
+    const { room } = await party.createRoom(
+      auth(host.id),
+      'Phòng permission fail',
+    );
+    await party.joinRoom(auth(member.id), room.id);
+    await party.inviteSpeaker(auth(host.id), room.id, member.id);
+
+    sfu.failNextPermissionUpdate = true;
+    await expect(
+      party.acceptSpeakerInvite(auth(member.id), room.id),
+    ).rejects.toMatchObject({
+      message: 'PARTY_MEDIA_PERMISSION_UPDATE_FAILED',
+      status: 503,
+    });
+
+    const restored = await ds.getRepository(PartyRoomMember).findOneByOrFail({
+      roomId: room.id,
+      userId: member.id,
+      leftAt: IsNull(),
+    });
+    expect(restored.role).toBe(PartyRole.Audience);
+    expect(restored.speakerInvitePending).toBe(true);
+    expect(sfu.permissionUpdates).toContainEqual({
+      room: partyRoomName(room.id),
+      identity: member.id,
+      canPublish: false,
+    });
   });
 
   it('authz role: không phải host → 403; đổi role host → 409; target ngoài phòng → 404', async () => {
