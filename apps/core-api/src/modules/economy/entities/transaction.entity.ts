@@ -10,7 +10,9 @@ export enum TransactionType {
   IapPurchase = 'iap_purchase',
   VipPurchase = 'vip_purchase',
   MatchingSpeedup = 'matching_speedup',
-  /** Billing voice call theo phút (docs/services/calling-service.md § 4). */
+  /** Mở thêm một lượt Soul/Voice Match sau khi hết quota miễn phí. */
+  MatchingExtraMatch = 'matching_extra_match',
+  /** Legacy type giữ để đọc ledger cũ; Calling không tạo giao dịch mới loại này. */
   CallingPerMinute = 'calling_per_minute',
   /** Tặng quà: 2 chân độc lập DIA + PTS trong 1 transaction (docs/services/economy-service.md § 6). */
   GiftSend = 'gift_send',

@@ -24,7 +24,7 @@ vào cách triển khai cụ thể trong NestJS.
 - **Error handling chuẩn hoá**: `DomainException` base class + global `ExceptionFilter`, format lỗi thống nhất (code, message, traceId).
 - **Idempotency bắt buộc** cho mọi API động tới diamond (idempotencyKey).
 - **Transaction DB bắt buộc** cho mọi thao tác trừ/cộng diamond (`SELECT FOR UPDATE` hoặc optimistic lock) — chỗ hay bug nhất trong toàn hệ thống.
-- **Test bắt buộc**: unit test Service (Jest), e2e test cho flow quan trọng (matching → call → billing, mua diamond → nhận gift).
+- **Test bắt buộc**: unit test Service (Jest), e2e test cho flow quan trọng (matching → call lifecycle, mua diamond → nhận gift).
 - **Lint/format**: ESLint + Prettier + Husky pre-commit.
 
 ## 5.2 NestJS lifecycle convention
@@ -123,7 +123,7 @@ Tóm tắt bắt buộc:
   **test race-condition** (2 request song song cùng trừ tiền / cùng lấy 1 user khỏi queue) — xem
   [10-code-review-checklist.md § 10.1.E](./10-code-review-checklist.md).
 - Verification nhiều tầng cho flow nhạy cảm: integration test trên Postgres/Redis thật bắt buộc
-  cho mua diamond, gift, matching → call → billing và refund/reversal; HTTP E2E bắt buộc giữ ít
+  cho mua diamond, gift, matching → call lifecycle và refund/reversal; HTTP E2E bắt buộc giữ ít
   nhất health/readiness + một vertical Economy flow qua auth/controller/ledger. Flow cần
   dependency ngoài (LiveKit/store) dùng port fake trong integration test và có sandbox smoke
   riêng trước production — không biến CI thành test giả hoặc phụ thuộc mạng không ổn định.

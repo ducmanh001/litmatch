@@ -135,7 +135,7 @@ export interface MatchConfirmedEventData {
 
 export interface CallEndedEventData {
   callId: string;
-  matchSessionId: string;
+  matchSessionId: string | null;
   /** completed | free_limit | insufficient_balance | pending_timeout (calling-service.md § 1). */
   reason: string;
   durationSeconds: number;

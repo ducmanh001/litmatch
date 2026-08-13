@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsOptional } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional } from 'class-validator';
 
 import {
   GenderPreference,
@@ -21,6 +21,16 @@ export class JoinQueueDto {
   matchType!: MatchType;
 
   @ApiProperty({
+    required: false,
+    default: false,
+    description:
+      'Sau khi hết quota miễn phí, chọn true để trả Diamond mở thêm lượt match.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  useDiamond?: boolean;
+
+  @ApiProperty({
     enum: GenderPreference,
     required: false,
     default: GenderPreference.Any,
@@ -36,6 +46,8 @@ export class TicketDto {
   @ApiProperty() id!: string;
   @ApiProperty({ enum: MatchType }) matchType!: MatchType;
   @ApiProperty({ enum: MatchTicketStatus }) status!: MatchTicketStatus;
+  @ApiProperty({ description: 'Lượt này đã trả Diamond hay chưa.' })
+  paidDiamond!: boolean;
   @ApiProperty({
     minimum: 1,
     description:
@@ -60,6 +72,7 @@ export class TicketDto {
     dto.id = ticket.id;
     dto.matchType = ticket.matchType;
     dto.status = ticket.status;
+    dto.paidDiamond = ticket.paidDiamond;
     dto.speedupPriceDiamond = speedupPriceDiamond;
     dto.region = ticket.region;
     dto.ageBand = ticket.ageBand;

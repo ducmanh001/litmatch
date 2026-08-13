@@ -61,29 +61,50 @@ Mọi transition khác throw `MATCHING_TICKET_INVALID_TRANSITION`.
   ): Promise<{ transactionId: string; replayed: boolean }>
   ```
   Debit `UserWallet` / Credit `SystemRevenue`, cùng pattern `ledger.record()` + `SELECT FOR UPDATE` như `purchaseVip` — KHÔNG side-effect nghiệp vụ nào khác (không set VIP, không outbox riêng — chỉ default outbox event theo balanceDelta). Thêm `TransactionType.MatchingSpeedup = 'matching_speedup'` vào `transaction.entity.ts`.
-- Rate limit `MATCHING_SPEEDUP_MAX_PER_HOUR`: đếm bằng Redis counter `matching:speedup:count:{userId}` (`INCR` + `EXPIRE 3600` chỉ khi counter vừa tạo — atomic bằng 1 lệnh Lua nhỏ hoặc `SET ... NX EX` cho lần đầu), **không** dùng cột đếm trên `MatchTicket` (tránh sai khi nhiều ticket). Vượt giới hạn → `MATCHING_SPEEDUP_RATE_LIMITED` (409), KHÔNG gọi `spendDiamond` (chặn trước khi trừ tiền, không trừ rồi hoàn).
-- Thứ tự bắt buộc: check rate limit → `spendDiamond` (đã tự lock+idempotent) → cập nhật `priorityDeadline`/score Redis. Nếu bước cuối lỗi sau khi đã trừ tiền: đây là tiền đã trừ đúng 1 lần (idempotency đảm bảo), completion phía Redis retry được an toàn (không trừ tiền lại).
-- Mọi `TicketDto` bắt buộc trả `speedupPriceDiamond` đọc từ chính
-  `MATCHING_SPEEDUP_PRICE_DIAMOND`; `SpeedupResultDto.ticket` cũng dùng cùng field này. Client chỉ
-  hiển thị giá server trả, không hard-code. Server vẫn đọc lại config khi debit nên response
-  client cũ/cache cũ không bao giờ là nguồn quyết định số diamond bị trừ.
+- Speed-up **không giới hạn số lượt theo giờ/ngày**. Mỗi lần bấm vẫn là một giao dịch Diamond
+  riêng, chỉ được thực hiện khi ticket còn `queued`; technical HTTP throttling vẫn có thể bảo vệ
+  API nhưng không phải quota nghiệp vụ.
+- Giá server hiện hành: regular `MATCHING_SPEEDUP_PRICE_DIAMOND` = 50 DIA, VIP = 40 DIA,
+  SVIP = 30 DIA. Server đọc tier và giá ngay trước khi debit, client không được hard-code.
+- Thứ tự bắt buộc: `spendDiamond` (đã tự lock+idempotent) → cập nhật priority/score Redis. Nếu
+  bước cuối lỗi sau khi đã trừ tiền: completion phía Redis retry được an toàn, không trừ tiền lại.
+- Mọi `TicketDto` bắt buộc trả `speedupPriceDiamond`; `SpeedupResultDto.ticket` cũng dùng cùng
+  giá server trả.
+
+## 4.1 Quota match miễn phí và lượt mua thêm
+
+Quota tính theo ngày UTC, tách riêng Soul Match và Voice Match. Guest vẫn dùng quota chống farm
+hiện hữu `MATCHING_GUEST_DAILY_LIMIT = 3` lượt tổng/ngày.
+
+| Tài khoản | Soul miễn phí/ngày | Voice miễn phí/ngày |
+| --------- | -----------------: | ------------------: |
+| Regular   |                 10 |                  10 |
+| VIP       |                 30 |                  20 |
+| SVIP      |                 60 |                  40 |
+
+Khi hết quota, client gửi `useDiamond=true` để mua đúng một lượt match trong request đó: Soul =
+20 DIA/lượt, Voice = 40 DIA/lượt. Debit nằm trong cùng transaction với việc tạo ticket, dùng
+`TransactionType.MatchingExtraMatch` và idempotency key; không có gói phút voice và không hoàn
+lượt khi cancel/expire.
 
 ## 5. Entity
 
-- `MatchTicket extends BaseAppEntity`: `userId (uuid, index)`, `matchType ('soul'|'voice')`, `region (varchar)`, `ageBand (int)`, `genderPreference ('any'|'male'|'female', default 'any' — § 2.1)`, `status (enum MatchTicketStatus)`, `enqueuedAt (timestamptz)`, `sessionId (uuid, nullable)`. Index `(status, matchType, region, ageBand)` cho sweeper quét theo shard.
+- `MatchTicket extends BaseAppEntity`: `userId (uuid, index)`, `matchType ('soul'|'voice')`, `region (varchar)`, `ageBand (int)`, `genderPreference ('any'|'male'|'female', default 'any' — § 2.1)`, `status (enum MatchTicketStatus)`, `enqueuedAt (timestamptz)`, `sessionId (uuid, nullable)`, `paidDiamond (boolean)`. Index `(status, matchType, region, ageBand)` cho sweeper quét theo shard.
+- `MatchDailyQuota`: khóa `(userId, quotaDate, matchType)`, lưu số lượt miễn phí đã consume theo ngày
+  UTC. Guest không dùng bảng này; guest tiếp tục khóa theo device/IP HMAC.
 - `MatchSession extends BaseAppEntity`: `matchType`, `userAId`, `userBId`, `ticketAId`, `ticketBId`, `status (enum: pending_confirm|confirmed|expired)`, `confirmedAId (nullable timestamptz-check hoặc 2 cột confirmedAAt/confirmedBAt)`, `endedAt (nullable)`. Flow mới ghi `confirmed` cùng hai timestamp ngay khi ghép; `pending_confirm` chỉ tương thích dữ liệu cũ.
 - 1 user chỉ 1 ticket `queued`/`matched` tại 1 thời điểm (docs/06) → **partial unique index** Postgres: `UNIQUE (user_id) WHERE status IN ('queued','matched')` — chặn ở DB, không chỉ ở code.
 
 ## 6. API (`api/v1/matching`)
 
-| Endpoint                             | Idempotency-Key | Mô tả                                                                                                                                                    |
-| ------------------------------------ | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /matching/tickets`             | có              | Vào hàng đợi (body: `matchType`, `genderPreference?` — § 2.1) — 409 `MATCHING_TICKET_ALREADY_QUEUED` nếu đã có ticket active (khớp partial unique index) |
-| `GET /matching/tickets/current`      | không           | Phục hồi sau reload: trả `{ ticket: TicketDto \| null }` của chính user từ auth; active chỉ gồm `queued\|matched`                                        |
-| `DELETE /matching/tickets/:id`       | không           | Huỷ ticket của chính mình (check ownership — IDOR, docs/10 § 10.1.D)                                                                                     |
-| `GET /matching/tickets/:id`          | không           | Trạng thái ticket (poll)                                                                                                                                 |
-| `POST /matching/tickets/:id/confirm` | không           | Tương thích session `pending_confirm` cũ; UI mới không gọi endpoint này                                                                                  |
-| `POST /matching/tickets/:id/speedup` | có              | Trừ diamond ưu tiên — xem § 4                                                                                                                            |
+| Endpoint                             | Idempotency-Key | Mô tả                                                                                                                                                                                |
+| ------------------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `POST /matching/tickets`             | có              | Vào hàng đợi (body: `matchType`, `genderPreference?`, `useDiamond?`) — nếu hết quota và `useDiamond=false` trả `MATCHING_DAILY_QUOTA_EXCEEDED`; `useDiamond=true` mua một lượt riêng |
+| `GET /matching/tickets/current`      | không           | Phục hồi sau reload: trả `{ ticket: TicketDto \| null }` của chính user từ auth; active chỉ gồm `queued\|matched`                                                                    |
+| `DELETE /matching/tickets/:id`       | không           | Huỷ ticket của chính mình (check ownership — IDOR, docs/10 § 10.1.D)                                                                                                                 |
+| `GET /matching/tickets/:id`          | không           | Trạng thái ticket (poll)                                                                                                                                                             |
+| `POST /matching/tickets/:id/confirm` | không           | Tương thích session `pending_confirm` cũ; UI mới không gọi endpoint này                                                                                                              |
+| `POST /matching/tickets/:id/speedup` | có              | Trừ diamond ưu tiên — xem § 4                                                                                                                                                        |
 
 ## 7. Domain rule tái xác nhận tại thời điểm ghép (docs/10 § 10.0.C)
 
@@ -94,8 +115,12 @@ Check block/report **không chỉ lúc vào queue** — bắt buộc verify lạ
 `MATCHING_MATCHER_INTERVAL_MS`, `MATCHING_MATCHER_BATCH_SIZE`,
 `MATCHING_SWEEPER_INTERVAL_MS`, `MATCHING_QUEUE_MAX_WAIT_SECONDS`,
 `MATCHING_CONFIRM_TIMEOUT_SECONDS` (chỉ dọn session legacy), `MATCHING_AGE_BAND_SIZE`,
-`MATCHING_SPEEDUP_PRICE_DIAMOND`, `MATCHING_SPEEDUP_MAX_PER_HOUR`,
-`MATCHING_PRIORITY_BOOST_MS` đã có đủ trong `.env.example`, `CoreApiEnv` và
+`MATCHING_SPEEDUP_PRICE_DIAMOND`, `MATCHING_VIP_SPEEDUP_PRICE_DIAMOND`,
+`MATCHING_SVIP_SPEEDUP_PRICE_DIAMOND`, `MATCHING_PRIORITY_BOOST_MS`,
+`MATCHING_DAILY_SOUL_LIMIT`, `MATCHING_DAILY_VOICE_LIMIT`,
+`MATCHING_VIP_DAILY_SOUL_LIMIT`, `MATCHING_VIP_DAILY_VOICE_LIMIT`,
+`MATCHING_SVIP_DAILY_SOUL_LIMIT`, `MATCHING_SVIP_DAILY_VOICE_LIMIT`,
+`MATCHING_EXTRA_SOUL_PRICE_DIAMOND`, `MATCHING_EXTRA_VOICE_PRICE_DIAMOND` đã có đủ trong `.env.example`, `CoreApiEnv` và
 `coreApiEnvSchema` (Joi); code đọc qua `ConfigService<CoreApiEnv, true>`.
 
 ### 8.1 Guest quota và device proof
@@ -113,7 +138,8 @@ Check block/report **không chỉ lúc vào queue** — bắt buộc verify lạ
   thuộc user khác trả 409, không merge; retry identity đã thuộc chính user là idempotent.
 
 Config: `AUTH_GUEST_DEVICE_TOKEN_SECRET`, `AUTH_GUEST_DEVICE_TOKEN_TTL_DAYS`,
-`MATCHING_GUEST_DAILY_LIMIT`, `MATCHING_GUEST_QUOTA_PEPPER`. `HTTP_TRUST_PROXY_HOPS` phải khớp
+`MATCHING_GUEST_DAILY_LIMIT`, `MATCHING_GUEST_QUOTA_PEPPER` và các quota/giá trong § 4.1.
+`HTTP_TRUST_PROXY_HOPS` phải khớp
 đúng số ingress/LB tin cậy của môi trường; mặc định `0` để không tin `X-Forwarded-For` từ client.
 
 Khi upgrade lần đầu, transaction đồng thời xoá guest auth identity và revoke toàn bộ refresh

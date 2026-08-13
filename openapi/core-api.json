@@ -1957,6 +1957,39 @@
         "tags": ["calling"]
       }
     },
+    "/api/v1/calling/friends/{friendUserId}/join": {
+      "post": {
+        "operationId": "CallingController_joinFriend",
+        "parameters": [
+          {
+            "name": "friendUserId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/JoinCallDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Mở/lấy voice call lâu dài với người đã là bạn sau mutual Voice Match like",
+        "tags": ["calling"]
+      }
+    },
     "/api/v1/calling/calls/{id}": {
       "get": {
         "operationId": "CallingController_getCall",
@@ -6697,6 +6730,11 @@
             "enum": ["soul", "voice"],
             "example": "voice"
           },
+          "useDiamond": {
+            "type": "boolean",
+            "default": false,
+            "description": "Sau khi hết quota miễn phí, chọn true để trả Diamond mở thêm lượt match."
+          },
           "genderPreference": {
             "type": "string",
             "enum": ["any", "male", "female"],
@@ -6714,6 +6752,10 @@
           "status": {
             "type": "string",
             "enum": ["queued", "matched", "confirmed", "expired", "cancelled"]
+          },
+          "paidDiamond": {
+            "type": "boolean",
+            "description": "Lượt này đã trả Diamond hay chưa."
           },
           "speedupPriceDiamond": {
             "type": "number",
@@ -6740,6 +6782,7 @@
           "id",
           "matchType",
           "status",
+          "paidDiamond",
           "speedupPriceDiamond",
           "region",
           "ageBand",
@@ -7119,7 +7162,7 @@
         "type": "object",
         "properties": {
           "id": { "type": "string" },
-          "matchSessionId": { "type": "string" },
+          "matchSessionId": { "type": "string", "nullable": true },
           "status": {
             "type": "string",
             "enum": ["pending", "active", "ended"]
@@ -7144,6 +7187,7 @@
             ],
             "nullable": true
           },
+          "callKind": { "type": "string", "enum": ["voice_match", "friend"] },
           "durationSeconds": { "type": "number", "nullable": true },
           "billedMinutes": { "type": "number" },
           "freeCallEndsAt": {
@@ -7162,6 +7206,7 @@
           "startedAt",
           "endedAt",
           "endReason",
+          "callKind",
           "durationSeconds",
           "billedMinutes",
           "freeCallEndsAt",

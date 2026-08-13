@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 
 import {
   CallEndReason,
+  CallKind,
   CallSession,
   CallSessionStatus,
 } from '../entities/call-session.entity';
@@ -10,12 +11,13 @@ import type { VoiceMatchLikeState } from '../calling.service';
 
 export class CallDto {
   @ApiProperty() id!: string;
-  @ApiProperty() matchSessionId!: string;
+  @ApiProperty({ nullable: true, type: String }) matchSessionId!: string | null;
   @ApiProperty({ enum: CallSessionStatus }) status!: CallSessionStatus;
   @ApiProperty({ nullable: true, type: Date }) startedAt!: Date | null;
   @ApiProperty({ nullable: true, type: Date }) endedAt!: Date | null;
   @ApiProperty({ enum: CallEndReason, nullable: true })
   endReason!: CallEndReason | null;
+  @ApiProperty({ enum: CallKind }) callKind!: CallKind;
   @ApiProperty({ nullable: true, type: Number })
   durationSeconds!: number | null;
   @ApiProperty() billedMinutes!: number;
@@ -40,15 +42,17 @@ export class CallDto {
     const dto = new CallDto();
     dto.id = call.id;
     dto.matchSessionId = call.matchSessionId;
+    dto.callKind = call.callKind;
     dto.status = call.status;
     dto.startedAt = call.startedAt;
     dto.endedAt = call.endedAt;
     dto.endReason = call.endReason;
     dto.durationSeconds = call.durationSeconds;
     dto.billedMinutes = call.billedMinutes;
-    dto.freeCallEndsAt = call.startedAt
-      ? new Date(call.startedAt.getTime() + freeCallSeconds * 1000)
-      : null;
+    dto.freeCallEndsAt =
+      call.callKind === CallKind.VoiceMatch && call.startedAt
+        ? new Date(call.startedAt.getTime() + freeCallSeconds * 1000)
+        : null;
     dto.liked = likeState.liked;
     dto.matched = likeState.matched;
     dto.friendUserId = likeState.friendUserId;

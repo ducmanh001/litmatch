@@ -933,6 +933,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/calling/friends/{friendUserId}/join': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Mở/lấy voice call lâu dài với người đã là bạn sau mutual Voice Match like */
+    post: operations['CallingController_joinFriend'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/calling/calls/{id}': {
     parameters: {
       query?: never;
@@ -2993,6 +3010,11 @@ export interface components {
        */
       matchType: 'soul' | 'voice';
       /**
+       * @description Sau khi hết quota miễn phí, chọn true để trả Diamond mở thêm lượt match.
+       * @default false
+       */
+      useDiamond: boolean;
+      /**
        * @description Giới tính muốn ghép (docs/01 #13) — bỏ trống = any. Check khớp 2 CHIỀU lúc ghép.
        * @default any
        * @enum {string}
@@ -3005,6 +3027,8 @@ export interface components {
       matchType: 'soul' | 'voice';
       /** @enum {string} */
       status: 'queued' | 'matched' | 'confirmed' | 'expired' | 'cancelled';
+      /** @description Lượt này đã trả Diamond hay chưa. */
+      paidDiamond: boolean;
       /** @description Giá 1 lần speed-up do server cấu hình; client phải hiển thị giá này, không hard-code. */
       speedupPriceDiamond: number;
       /** @description Shard region server derive từ profile */
@@ -3202,7 +3226,7 @@ export interface components {
     };
     CallDto: {
       id: string;
-      matchSessionId: string;
+      matchSessionId: string | null;
       /** @enum {string} */
       status: 'pending' | 'active' | 'ended';
       /** Format: date-time */
@@ -3216,6 +3240,8 @@ export interface components {
         | 'insufficient_balance'
         | 'pending_timeout'
         | null;
+      /** @enum {string} */
+      callKind: 'voice_match' | 'friend';
       durationSeconds: number | null;
       billedMinutes: number;
       /** Format: date-time */
@@ -5537,6 +5563,32 @@ export interface operations {
       header?: never;
       path: {
         matchSessionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['JoinCallDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  CallingController_joinFriend: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        friendUserId: string;
       };
       cookie?: never;
     };

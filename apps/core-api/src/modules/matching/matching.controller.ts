@@ -67,7 +67,7 @@ export class MatchingController {
         deviceToken: guestDeviceToken,
         ip: req.ip || req.socket.remoteAddress || 'unknown',
       }),
-      this.matchingService.getSpeedupPriceDiamond(),
+      await this.matchingService.getSpeedupPriceDiamondForUser(user.userId),
     );
   }
 
@@ -82,7 +82,7 @@ export class MatchingController {
   ): Promise<ActiveTicketResponseDto> {
     return ActiveTicketResponseDto.from(
       await this.matchingService.getActiveTicket(user),
-      this.matchingService.getSpeedupPriceDiamond(),
+      await this.matchingService.getSpeedupPriceDiamondForUser(user.userId),
     );
   }
 
@@ -97,7 +97,7 @@ export class MatchingController {
   ): Promise<TicketDto> {
     return TicketDto.from(
       await this.matchingService.getTicket(user, id),
-      this.matchingService.getSpeedupPriceDiamond(),
+      await this.matchingService.getSpeedupPriceDiamondForUser(user.userId),
     );
   }
 
@@ -110,7 +110,7 @@ export class MatchingController {
   ): Promise<TicketDto> {
     return TicketDto.from(
       await this.matchingService.cancelTicket(user, id),
-      this.matchingService.getSpeedupPriceDiamond(),
+      await this.matchingService.getSpeedupPriceDiamondForUser(user.userId),
     );
   }
 
@@ -127,7 +127,7 @@ export class MatchingController {
   ): Promise<TicketDto> {
     return TicketDto.from(
       await this.matchingService.confirmTicket(user, id),
-      this.matchingService.getSpeedupPriceDiamond(),
+      await this.matchingService.getSpeedupPriceDiamondForUser(user.userId),
     );
   }
 
@@ -149,7 +149,7 @@ export class MatchingController {
       result.transactionId,
       result.replayed,
       result.ticket,
-      this.matchingService.getSpeedupPriceDiamond(),
+      await this.matchingService.getSpeedupPriceDiamondForUser(user.userId),
     );
   }
 }

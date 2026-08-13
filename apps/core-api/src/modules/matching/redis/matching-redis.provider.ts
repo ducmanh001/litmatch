@@ -35,11 +35,6 @@ export function shardKeyOfTicket(
   return matchingShardKey(ticket.matchType, ticket.region, ticket.ageBand);
 }
 
-/** Counter rate-limit speed-up theo user (spec § 4) — không đếm bằng cột trên ticket. */
-export function speedupCountKey(userId: string): string {
-  return `matching:speedup:count:${userId}`;
-}
-
 /**
  * Score sorted set: nhỏ hơn = được ghép trước; speed-up trừ boost khỏi score (spec § 2).
  * `trustPenaltyMs` cộng thêm (docs/services/safety-service.md § 3.2) — snapshot 1 lần lúc

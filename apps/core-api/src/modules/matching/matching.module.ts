@@ -14,6 +14,7 @@ import { MatchTicket } from './entities/match-ticket.entity';
 import { MatchSession } from './entities/match-session.entity';
 import { MatchInvite } from './entities/match-invite.entity';
 import { GuestMatchQuota } from './entities/guest-match-quota.entity';
+import { MatchDailyQuota } from './entities/match-daily-quota.entity';
 import { GuestMatchQuotaService } from './services/guest-match-quota.service';
 import { MATCH_INTERACTION_POLICY } from './ports/interaction-policy';
 import {
@@ -42,6 +43,7 @@ import type { MatchingQueuePort } from './ports/matching-queue.port';
       MatchSession,
       MatchInvite,
       GuestMatchQuota,
+      MatchDailyQuota,
     ]),
     AuthModule,
     UserModule,
