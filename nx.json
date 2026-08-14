@@ -37,7 +37,10 @@
       ]
     },
     "e2e": {
-      "cache": true
+      "cache": false
+    },
+    "e2e-ci": {
+      "cache": false
     },
     "@nx/js:tsc": {
       "cache": true,

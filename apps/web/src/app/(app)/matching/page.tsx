@@ -1,9 +1,9 @@
 import Link from 'next/link';
 
 import { IncomingInvites } from '../../../features/matching/components/incoming-invites';
-import { MobileMatchActions } from '../../../features/matching/components/mobile-match-actions';
+import { MatchActions } from '../../../features/matching/components/match-actions';
 import { QueueStatusPanel } from '../../../features/matching/components/queue-status-panel';
-import { MatchIcon, MicIcon } from '../../../shared/ui/icons';
+import { MatchIcon } from '../../../shared/ui/icons';
 import { PageHeader } from '../../../shared/ui/page-header';
 
 import type { Metadata } from 'next';
@@ -55,23 +55,7 @@ export default function MatchingPage() {
               trong một không gian tôn trọng, rõ ràng và không vội vàng.
             </p>
           </div>
-          <MobileMatchActions />
-          <div className="hidden flex-wrap gap-3 md:flex md:shrink-0 md:flex-col md:items-stretch">
-            <Link
-              href="/matching?match=soul#match-queue"
-              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-full bg-gradient-to-r from-aqua to-irisl px-5 py-3 text-sm font-extrabold text-white shadow-md shadow-iris/20 transition hover:brightness-105"
-            >
-              <MatchIcon width={17} height={17} />
-              Nhắn tin ẩn danh
-            </Link>
-            <Link
-              href="/matching?match=voice#match-queue"
-              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-full border border-iris/20 bg-card/70 px-5 py-3 text-sm font-extrabold backdrop-blur transition hover:border-iris/35 hover:bg-iris/[0.04] dark:border-white/15 dark:bg-white/[0.05] dark:text-white dark:hover:bg-white/10"
-            >
-              <MicIcon width={17} height={17} />
-              Kết nối bằng voice
-            </Link>
-          </div>
+          <MatchActions />
         </div>
       </div>
 

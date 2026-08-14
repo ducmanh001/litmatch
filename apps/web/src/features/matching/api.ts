@@ -15,8 +15,18 @@ export const matchingKeys = {
   ticket: (id: string) => ['matching', 'ticket', id] as const,
 };
 
-export function toJoinQueueRequest(body: JoinQueueForm) {
-  return { ...body };
+type JoinQueueRequest = Omit<ApiSchema<'JoinQueueDto'>, 'useDiamond'> & {
+  useDiamond?: true;
+};
+
+/**
+ * Giữ tương thích với core-api chưa có paid matching: request miễn phí không
+ * gửi `useDiamond: false` vì ValidationPipe của runtime cũ coi đây là field lạ.
+ * Khi user thực sự mua thêm lượt, vẫn phải truyền rõ `useDiamond: true`.
+ */
+export function toJoinQueueRequest(body: JoinQueueForm): JoinQueueRequest {
+  const { useDiamond, ...request } = body;
+  return useDiamond ? { ...request, useDiamond: true } : request;
 }
 
 /** Trạng thái còn chờ ghép. Session được server xác nhận ngay khi có cặp, nên `confirmed`
@@ -36,7 +46,10 @@ export function useJoinQueue() {
     }) => {
       const res = await apiClient.POST('/api/v1/matching/tickets', {
         params: { header: { 'Idempotency-Key': input.idempotencyKey } },
-        body: toJoinQueueRequest(input.body),
+        // openapi-typescript treats defaulted fields as required, while the
+        // server schema only requires matchType. The mapper above preserves
+        // that server contract and omits the legacy-incompatible false field.
+        body: toJoinQueueRequest(input.body) as ApiSchema<'JoinQueueDto'>,
       });
       return res.data?.data;
     },

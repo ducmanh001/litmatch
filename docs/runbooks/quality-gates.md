@@ -56,10 +56,26 @@ source, dependency hoặc biến môi trường liên quan thay đổi; `LOCAL_C
 thủ công khi đổi plugin/config Nx. Clean Linux quality gate dùng các Docker volume có tên riêng cho
 `node_modules`, pnpm store và `.nx`, nên lần chạy sau không phải bootstrap lại từ đầu. Dev server/Nx
 Console vẫn không được chạy cùng preflight trong cùng worktree nếu có thể ghi đè output.
+Test của `core-api` và `signaling-gateway` không cache vì có integration suite dùng PostgreSQL/Redis;
+E2E cũng tắt cache toàn cục. Local CI còn truyền `--skip-nx-cache` cho test/integration/E2E để mỗi
+lượt kiểm tra chạm runtime thật, trong khi unit/frontend build vẫn giữ cache an toàn.
 Trên Linux, `all` chạy clean quality và test/build đồng thời; Windows chạy tuần tự mặc định vì
 Docker Desktop và Vitest dùng chung CPU/RAM có thể tạo flaky timeout dù không có shared file state.
 Có thể bật thử bằng `LOCAL_CI_PARALLEL=true` trên máy đủ tài nguyên hoặc tắt explicit bằng
 `LOCAL_CI_PARALLEL=false`.
+GitHub Docker job tạo Buildx builder và dùng GHA cache (`LOCAL_CI_DOCKER_BUILDX_CACHE=true`) cho
+các layer image. Local Docker vẫn dùng layer cache mặc định; không cần cấu hình thêm.
+
+Khi cần mô phỏng runner sạch hoàn toàn, chạy strict-clean một lượt:
+
+```powershell
+$env:LOCAL_CI_STRICT_CLEAN = 'true'
+pnpm ci:local:all
+Remove-Item Env:LOCAL_CI_STRICT_CLEAN
+```
+
+Strict-clean reset Nx, cài lại dependency với `--force`, dùng volume Docker tạm và build image với
+`--no-cache`. Không dùng chế độ này cho mọi lần pre-push vì nó chủ ý chậm hơn.
 Các secret bắt buộc để bootstrap contract (`JWT`, OTP, guest device và matching guest quota) dùng
 giá trị CI-only xác định trong runner; gate không được phụ thuộc `.env` không tracked của máy dev.
 

@@ -75,7 +75,11 @@ test('aggregate gates own stage watchdogs instead of a blanket 45-second timeout
   assert.match(localCi, /NX_WORKSPACE_DATA_DIRECTORY:/u);
   assert.match(localCi, /LOCAL_CI_CACHE_ROOT/u);
   assert.match(localCi, /LOCAL_CI_RESET_NX/u);
+  assert.match(localCi, /LOCAL_CI_STRICT_CLEAN/u);
   assert.match(localCi, /LOCAL_CI_PARALLEL/u);
+  assert.match(localCi, /LOCAL_CI_DOCKER_BUILDX_CACHE/u);
+  assert.match(localCi, /type=gha,scope=/u);
+  assert.match(localCi, /--no-cache/u);
   assert.match(localCi, /join\(root, '\.nx', 'local-ci'\)/u);
   assert.match(localCi, /--outputStyle=static/u);
   assert.match(agentVerify, /run-stage\.mjs/u);
@@ -263,6 +267,9 @@ test('GitHub CI uses the same local profiles for quality, tests, and containers'
   );
   assert.match(workflow, /LOCAL_CI_SERVICES_READY:\s*['"]true['"]/u);
   assert.match(workflow, /LOCAL_CI_DATABASE_READY:\s*['"]true['"]/u);
+  assert.match(workflow, /LOCAL_CI_DOCKER_BUILDX_CACHE:\s*['"]true['"]/u);
+  assert.match(workflow, /crazy-max\/ghaction-github-runtime@[a-f0-9]{40}/u);
+  assert.match(workflow, /docker\/setup-buildx-action@[a-f0-9]{40}/u);
 });
 
 test('quality profiles check formatting without rewriting the workspace', () => {
@@ -341,9 +348,38 @@ test('clean local CI profile reuses named Node 22 Linux cache volumes', () => {
   assert.match(result.stdout, /\[ci-local\] \$ docker \[args hidden\]/u);
   assert.doesNotMatch(result.stdout, /bash -lc/u);
   const localCi = readFileSync('scripts/ci/local.mjs', 'utf8');
-  assert.match(localCi, /source=litmatch-local-ci-node-modules/u);
-  assert.match(localCi, /source=litmatch-local-ci-pnpm-store/u);
-  assert.match(localCi, /source=litmatch-local-ci-nx/u);
+  assert.match(localCi, /litmatch-local-ci-node-modules/u);
+  assert.match(localCi, /litmatch-local-ci-pnpm-store/u);
+  assert.match(localCi, /litmatch-local-ci-nx/u);
+  assert.match(localCi, /type=volume,destination=/u);
+});
+
+test('stateful tests and E2E never reuse Nx task cache', () => {
+  const nx = readFileSync('nx.json', 'utf8');
+  const coreApi = readFileSync('apps/core-api/project.json', 'utf8');
+  const signaling = readFileSync('apps/signaling-gateway/project.json', 'utf8');
+  const web = readFileSync('apps/web/project.json', 'utf8');
+  const localCi = readFileSync('scripts/ci/local.mjs', 'utf8');
+
+  assert.match(nx, /"e2e":\s*\{\s*"cache":\s*false\s*\}/u);
+  assert.match(coreApi, /"test":\s*\{\s*"cache":\s*false\s*\}/u);
+  assert.match(signaling, /"test":\s*\{\s*"cache":\s*false\s*\}/u);
+  assert.match(web, /"e2e":\s*\{[\s\S]*?"cache":\s*false/u);
+  assert.match(web, /"e2e-ci":\s*\{\s*"cache":\s*false\s*\}/u);
+  assert.match(web, /"e2e-ci--merge-reports":\s*\{\s*"cache":\s*false\s*\}/u);
+  assert.match(
+    localCi,
+    /Affected unit and integration tests[\s\S]{0,220}--skip-nx-cache/u,
+  );
+  assert.match(
+    localCi,
+    /Affected end-to-end tests[\s\S]{0,180}--skip-nx-cache/u,
+  );
+  assert.match(
+    localCi,
+    /Remaining unit and integration tests with coverage[\s\S]{0,260}--skip-nx-cache/u,
+  );
+  assert.match(localCi, /End-to-end smoke tests[\s\S]{0,180}--skip-nx-cache/u);
 });
 
 test('all local CI profile plans quality, test, and Docker smoke stages', () => {

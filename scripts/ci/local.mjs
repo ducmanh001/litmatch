@@ -45,6 +45,18 @@ const localCiNxRoot =
 const resetNxRequested = ['1', 'true', 'yes', 'on'].includes(
   (process.env['LOCAL_CI_RESET_NX'] ?? '').trim().toLowerCase(),
 );
+const strictCleanRequested = ['1', 'true', 'yes', 'on'].includes(
+  (process.env['LOCAL_CI_STRICT_CLEAN'] ?? '').trim().toLowerCase(),
+);
+const dockerBuildxCacheRequested =
+  process.env['GITHUB_ACTIONS'] === 'true' &&
+  !strictCleanRequested &&
+  ['1', 'true', 'yes', 'on'].includes(
+    (process.env['LOCAL_CI_DOCKER_BUILDX_CACHE'] ?? '').trim().toLowerCase(),
+  );
+const dockerCacheScope = (
+  process.env['LOCAL_CI_DOCKER_CACHE_SCOPE'] ?? 'litmatch-ci'
+).replace(/[^a-zA-Z0-9_.-]/gu, '-');
 const parallelOverride = (process.env['LOCAL_CI_PARALLEL'] ?? '')
   .trim()
   .toLowerCase();
@@ -238,13 +250,14 @@ function prepareDependencies() {
   run('Install dependencies from the lockfile', pnpm, [
     'install',
     '--frozen-lockfile',
+    ...(strictCleanRequested ? ['--force'] : []),
   ]);
   dependenciesPrepared = true;
 }
 
 function prepareNx() {
   if (nxPrepared) return;
-  if (resetNxRequested) {
+  if (resetNxRequested || strictCleanRequested) {
     run('Reset Nx daemon and project-graph cache', pnpm, [
       'nx',
       'reset',
@@ -418,6 +431,7 @@ function runAffectedVerification() {
     'affected',
     '-t',
     'test',
+    '--skip-nx-cache',
     '--exclude=signaling-gateway',
     ...targetArguments,
   ]);
@@ -433,6 +447,7 @@ function runAffectedVerification() {
     'affected',
     '-t',
     'e2e',
+    '--skip-nx-cache',
     ...targetArguments,
   ]);
 }
@@ -459,11 +474,13 @@ function runCleanQuality() {
     'corepack enable',
     stage(
       'clean: install dependencies',
-      'pnpm install --store-dir /pnpm/store --frozen-lockfile',
+      `pnpm install --store-dir /pnpm/store --frozen-lockfile${
+        strictCleanRequested ? ' --force' : ''
+      }`,
     ),
     stage(
       'clean: prepare Nx',
-      resetNxRequested
+      resetNxRequested || strictCleanRequested
         ? 'pnpm nx reset --outputStyle=static'
         : "echo '[ci-local] Reuse persistent clean Nx cache'",
     ),
@@ -476,6 +493,10 @@ function runCleanQuality() {
     stage('clean: format check', 'pnpm format:check'),
     stage('clean: lint', 'pnpm nx run-many -t lint --outputStyle=static'),
   ].join(' && ');
+  const volumeMount = (destination, source) =>
+    strictCleanRequested
+      ? `type=volume,destination=${destination}`
+      : `type=volume,source=${source},destination=${destination}`;
 
   run(
     'Run quality gate in a clean Node 22 Linux container',
@@ -486,11 +507,11 @@ function runCleanQuality() {
       '--volume',
       `${root}:/workspace`,
       '--mount',
-      'type=volume,source=litmatch-local-ci-node-modules,destination=/workspace/node_modules',
+      volumeMount('/workspace/node_modules', 'litmatch-local-ci-node-modules'),
       '--mount',
-      'type=volume,source=litmatch-local-ci-pnpm-store,destination=/pnpm/store',
+      volumeMount('/pnpm/store', 'litmatch-local-ci-pnpm-store'),
       '--mount',
-      'type=volume,source=litmatch-local-ci-nx,destination=/workspace/.nx',
+      volumeMount('/workspace/.nx', 'litmatch-local-ci-nx'),
       '--workdir',
       '/workspace',
       '--env',
@@ -541,6 +562,7 @@ function runTestAndBuild() {
     '-t',
     'test',
     '--coverage',
+    '--skip-nx-cache',
     '--exclude=admin,web,api-client,signaling-gateway',
     '--outputStyle=static',
   ]);
@@ -558,6 +580,7 @@ function runTestAndBuild() {
     'run-many',
     '-t',
     'e2e',
+    '--skip-nx-cache',
     // API E2E suites and browser E2E share the local database; serialize them to avoid
     // one suite resetting users/tickets while another suite is authenticating.
     '--parallel=1',
@@ -755,37 +778,45 @@ function runContainerSmoke(reuseValidatedBuilds = false) {
   const signalingImage = `litmatch/signaling-gateway:${tag}`;
   const webImage = `litmatch/web:${tag}`;
   const edgeImage = `litmatch/edge:${tag}`;
+  const dockerBuildArguments = (dockerfile, image) => {
+    const imageCacheScope = `${dockerCacheScope}-${dockerfile.replace(
+      /[^a-zA-Z0-9]+/gu,
+      '-',
+    )}`;
+    return [
+      ...(dockerBuildxCacheRequested
+        ? [
+            'buildx',
+            'build',
+            '--load',
+            '--cache-from',
+            `type=gha,scope=${imageCacheScope}`,
+            '--cache-to',
+            `type=gha,mode=max,scope=${imageCacheScope}`,
+          ]
+        : ['build']),
+      ...(strictCleanRequested ? ['--no-cache'] : []),
+      '--file',
+      dockerfile,
+      '--tag',
+      image,
+      '.',
+    ];
+  };
   run('Build Core API image', 'docker', [
-    'build',
-    '--file',
-    'apps/core-api/Dockerfile',
-    '--tag',
-    coreImage,
-    '.',
+    ...dockerBuildArguments('apps/core-api/Dockerfile', coreImage),
   ]);
   run('Build Signaling Gateway image', 'docker', [
-    'build',
-    '--file',
-    'apps/signaling-gateway/Dockerfile',
-    '--tag',
-    signalingImage,
-    '.',
+    ...dockerBuildArguments(
+      'apps/signaling-gateway/Dockerfile',
+      signalingImage,
+    ),
   ]);
   run('Build Web image', 'docker', [
-    'build',
-    '--file',
-    'apps/web/Dockerfile',
-    '--tag',
-    webImage,
-    '.',
+    ...dockerBuildArguments('apps/web/Dockerfile', webImage),
   ]);
   run('Build Edge image', 'docker', [
-    'build',
-    '--file',
-    'deploy/production/Dockerfile.edge',
-    '--tag',
-    edgeImage,
-    '.',
+    ...dockerBuildArguments('deploy/production/Dockerfile.edge', edgeImage),
   ]);
 
   removeSmokeContainers();

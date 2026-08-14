@@ -4,6 +4,9 @@
   "sourceRoot": "apps/core-api/src",
   "projectType": "application",
   "targets": {
+    "test": {
+      "cache": false
+    },
     "build": {
       "executor": "nx:run-commands",
       "options": {
