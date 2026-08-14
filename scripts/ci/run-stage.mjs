@@ -23,10 +23,14 @@ if (
 }
 
 const startedAt = Date.now();
-const child = spawn(command, args, {
+const spawnOptions = {
   detached: process.platform !== 'win32',
   stdio: 'inherit',
-});
+  ...(process.platform === 'win32' && /\.(?:cmd|bat)$/iu.test(command)
+    ? { shell: true }
+    : {}),
+};
+const child = spawn(command, args, spawnOptions);
 let timedOut = false;
 let forwardedSignal;
 let killTimer;
