@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
 import { LikeButton } from './like-button';
-import { apiClient } from '../../../shared/api/client';
+import { apiClient, tokenStore } from '../../../shared/api/client';
 
 function renderButton() {
   const queryClient = new QueryClient({
@@ -18,7 +18,16 @@ function renderButton() {
 }
 
 describe('LikeButton', () => {
-  afterEach(() => vi.restoreAllMocks());
+  beforeEach(() =>
+    tokenStore.setSession({
+      accessToken: 'test-access',
+      csrfToken: 'test-csrf',
+    }),
+  );
+  afterEach(() => {
+    vi.restoreAllMocks();
+    tokenStore.setSession(null);
+  });
 
   it('chưa thích — bấm gọi POST reactions rồi hiện trạng thái đã thích', async () => {
     vi.spyOn(apiClient, 'GET').mockResolvedValue({

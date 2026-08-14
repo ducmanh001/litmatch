@@ -15,7 +15,11 @@ const temporarySpec = join(temporaryDirectory, 'core-api.json');
 const temporaryClient = join(temporaryDirectory, 'core-api.ts');
 
 function run(args) {
-  const result = spawnSync(pnpm, args, { cwd: root, stdio: 'inherit' });
+  const result = spawnSync(pnpm, args, {
+    cwd: root,
+    stdio: 'inherit',
+    shell: process.platform === 'win32' && pnpm.endsWith('.cmd'),
+  });
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
@@ -26,7 +30,7 @@ try {
     '--project',
     'apps/core-api/tsconfig.app.json',
     '-r',
-    'tsconfig-paths/register',
+    './scripts/register-tsconfig-paths.cjs',
     'apps/core-api/src/openapi-emit.ts',
     `--output=${temporarySpec}`,
   ]);

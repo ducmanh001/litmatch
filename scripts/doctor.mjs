@@ -28,6 +28,7 @@ function command(file, args = []) {
       cwd: root,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
+      shell: process.platform === 'win32' && file.endsWith('.cmd'),
     }).trim();
   } catch {
     return null;
@@ -72,7 +73,8 @@ const packageJson = JSON.parse(
   readFileSync(new URL('package.json', root), 'utf8'),
 );
 const expectedPnpm = packageJson.packageManager.replace('pnpm@', '');
-const actualPnpm = command('pnpm', ['--version']);
+const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+const actualPnpm = command(pnpmCommand, ['--version']);
 result(
   actualPnpm === expectedPnpm,
   'pnpm version',

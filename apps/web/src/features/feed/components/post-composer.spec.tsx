@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
 import { PostComposer } from './post-composer';
-import { apiClient } from '../../../shared/api/client';
+import { apiClient, tokenStore } from '../../../shared/api/client';
 
 function renderComposer() {
   const queryClient = new QueryClient({
@@ -18,7 +18,16 @@ function renderComposer() {
 }
 
 describe('PostComposer', () => {
-  afterEach(() => vi.restoreAllMocks());
+  beforeEach(() =>
+    tokenStore.setSession({
+      accessToken: 'test-access',
+      csrfToken: 'test-csrf',
+    }),
+  );
+  afterEach(() => {
+    vi.restoreAllMocks();
+    tokenStore.setSession(null);
+  });
 
   it('guest — không hiển thị form đăng bài', async () => {
     vi.spyOn(apiClient, 'GET').mockResolvedValue({
