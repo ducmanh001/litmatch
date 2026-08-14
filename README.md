@@ -63,9 +63,9 @@ Runbook đầy đủ về env ownership, dependency/migration changes, daily wor
 | Đồng bộ OpenAPI + generated client       | `pnpm openapi:sync`; kiểm tra bằng `pnpm openapi:check`              |
 | Kiểm tra format không ghi file           | `pnpm format:check`                                                  |
 | Xem local CI plan                        | `pnpm ci:local:plan`                                                 |
-| Full preflight trước push                | `pnpm ci:preflight`                                                  |
+| Full quality/test/build/E2E preflight trước push | `pnpm ci:preflight`                                             |
 
-`pnpm ci:local:quick` và `pnpm ci:preflight` có bước format ghi file. Không chạy chúng trong shared
+`pnpm ci:local:quick` và `pnpm ci:preflight` không tự sửa source. Không chạy full preflight trong shared
 dirty worktree khi chưa phối hợp ownership; dùng target check theo scope trước. Chi tiết:
 [Quality gates](./docs/runbooks/quality-gates.md).
 
