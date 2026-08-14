@@ -76,7 +76,7 @@ if (!tool) {
 if (directoryIndex >= 0 && !installBase) {
   fail('Thiếu giá trị sau --install-dir.');
 }
-if (process.platform !== 'linux') {
+if (process.platform !== 'linux' && !dryRun) {
   fail(
     'Security tool bootstrap hiện hỗ trợ Linux, khớp với GitHub Actions runner.',
   );

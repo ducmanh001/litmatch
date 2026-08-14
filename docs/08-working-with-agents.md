@@ -120,8 +120,8 @@ liệt kê trong [14-rule-enforcement-matrix.md](./14-rule-enforcement-matrix.md
 4. Viết test song song, thay đổi từng lát nhỏ.
 5. Chạy `pnpm agent:check`, unit test file/target bị ảnh hưởng, lint/build target áp dụng.
 6. Trước khi push/cập nhật PR, chạy local gate bằng `pnpm ci:preflight`; gate này chạy
-   quality toàn repo và toàn bộ test/build/E2E. Full clean-container + image smoke dùng
-   `pnpm ci:local:all` trước merge/release; GitHub CI luôn chạy full gate.
+   full clean-container quality, toàn bộ test/build/E2E và image smoke — cùng phạm vi với
+   `pnpm ci:local:all`. GitHub CI vẫn chạy các job tương ứng và check tổng hợp trước merge.
 7. Với business flow nhạy cảm, chạy `review-module verify`; FAIL thì sửa và verify lại. Với
    docs/tooling không chạm business flow, ghi `review-module: N/A` có lý do.
 8. Bàn giao bằng chứng, không chỉ nói “đã xong”.

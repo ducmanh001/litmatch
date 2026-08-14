@@ -3013,13 +3013,13 @@ export interface components {
        * @description Sau khi hết quota miễn phí, chọn true để trả Diamond mở thêm lượt match.
        * @default false
        */
-      useDiamond?: boolean;
+      useDiamond: boolean;
       /**
        * @description Giới tính muốn ghép (docs/01 #13) — bỏ trống = any. Check khớp 2 CHIỀU lúc ghép.
        * @default any
        * @enum {string}
        */
-      genderPreference?: 'any' | 'male' | 'female';
+      genderPreference: 'any' | 'male' | 'female';
     };
     TicketDto: {
       id: string;

@@ -110,7 +110,7 @@ test('commit owns staged guards; push owns the full local CI preflight', () => {
   assert.match(pushHook, /pnpm ci:preflight/u);
   assert.match(
     readFileSync('package.json', 'utf8'),
-    /"ci:preflight":\s*"node scripts\/ci\/local\.mjs ci"/u,
+    /"ci:preflight":\s*"node scripts\/ci\/local\.mjs all"/u,
   );
   assert.match(pushHook, /NX_NATIVE_COMMAND_RUNNER=false/u);
   assert.match(pushHook, /export NX_TUI=false/u);
@@ -363,7 +363,10 @@ test('all local CI profile plans quality, test, and Docker smoke stages', () => 
   assert.match(result.stdout, /Build Edge image/u);
   assert.match(result.stdout, /Start Web smoke container/u);
   assert.match(result.stdout, /Validate Edge configuration/u);
-  assert.match(result.stdout, /\[ci-local\] \$ pnpm \[args hidden\]/u);
+  assert.match(
+    result.stdout,
+    /\[ci-local\] \$ pnpm(?:\.cmd)? \[args hidden\]/u,
+  );
   assert.match(result.stdout, /\[ci-local\] \$ docker \[args hidden\]/u);
   assert.doesNotMatch(result.stdout, /local-ci-jwt-0123456789abcdef-xyz/u);
   assert.doesNotMatch(result.stdout, /local-ci-pepper-0123456789/u);

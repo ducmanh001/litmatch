@@ -189,6 +189,19 @@ function commandSucceeds(command, args) {
   return result.status === 0;
 }
 
+function requireExecutable(command, message) {
+  if (dryRun) return;
+
+  const result = spawnSync(command, ['--version'], {
+    cwd: root,
+    env: { ...process.env, ...environment },
+    stdio: 'ignore',
+  });
+  if (result.error?.code === 'ENOENT') {
+    throw new Error(message);
+  }
+}
+
 function prepareDependencies() {
   if (dependenciesPrepared) return;
   run('Install dependencies from the lockfile', pnpm, [
@@ -387,6 +400,10 @@ function runAffectedVerification() {
 
 function runCleanQuality() {
   if (!dryRun) mkdirSync(join(root, '.nx'), { recursive: true });
+  requireExecutable(
+    'docker',
+    'Full local preflight cần Docker Desktop/WSL2 để chạy clean Node 22 Linux quality gate.',
+  );
 
   const shellQuote = (value) => `'${value.replaceAll("'", "'\"'\"'")}'`;
   const stage = (label, command) =>
@@ -651,11 +668,15 @@ function waitForHealthEndpoints() {
 }
 
 function runContainerSmoke() {
-  if (process.platform !== 'linux') {
+  if (process.platform !== 'linux' && !dryRun) {
     throw new Error(
       'Container smoke dùng Docker host networking giống GitHub Actions; chạy lệnh này trên Linux/WSL.',
     );
   }
+  requireExecutable(
+    'docker',
+    'Container smoke cần Docker Desktop/WSL2 đang hoạt động.',
+  );
 
   prepareDependencies();
   nxPrepared = false;
