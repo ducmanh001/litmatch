@@ -98,7 +98,7 @@ test('aggregate gates own stage watchdogs instead of a blanket 45-second timeout
   assert.match(agentContract, /NX_TUI=false[\s\S]{0,160}--outputStyle=static/u);
 });
 
-test('commit owns staged guards; push owns the affected preflight', () => {
+test('commit owns staged guards; push owns the full local CI preflight', () => {
   const commitHook = readFileSync('.husky/pre-commit', 'utf8');
   const pushHook = readFileSync('.husky/pre-push', 'utf8');
   const repositoryCheck = readFileSync(
@@ -110,7 +110,7 @@ test('commit owns staged guards; push owns the affected preflight', () => {
   assert.match(pushHook, /pnpm ci:preflight/u);
   assert.match(
     readFileSync('package.json', 'utf8'),
-    /"ci:preflight":\s*"node scripts\/ci\/local\.mjs prepush"/u,
+    /"ci:preflight":\s*"node scripts\/ci\/local\.mjs ci"/u,
   );
   assert.match(pushHook, /NX_NATIVE_COMMAND_RUNNER=false/u);
   assert.match(pushHook, /export NX_TUI=false/u);
@@ -184,7 +184,7 @@ test('Economy E2E fixtures are isolated per execution', () => {
   );
 });
 
-test('pre-push profile verifies affected code without clean-container or image smoke', () => {
+test('prepush profile remains available for an affected-project fast gate', () => {
   const result = dryRun('prepush');
 
   assert.equal(result.status, 0, result.stderr);
