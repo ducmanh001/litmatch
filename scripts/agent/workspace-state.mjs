@@ -8,7 +8,9 @@ function git(root, args) {
     cwd: root,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'ignore'],
-    timeout: 3000,
+    // A Windows bind mount can make Git's status/worktree probes slower inside
+    // the clean Linux CI container than on a native checkout.
+    timeout: 15000,
     maxBuffer: 1024 * 1024,
   });
 }

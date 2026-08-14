@@ -1,9 +1,24 @@
+const path = require('node:path');
+const tsJest = 'ts-jest';
+const { resolver: _nxResolver, ...nxPreset } = require('../../jest.preset.js');
+
 module.exports = {
+  ...nxPreset,
+  // Keep Jest's root at the workspace so pnpm's root-level node_modules is resolvable on Windows.
+  rootDir: path.resolve(__dirname, '../..'),
+  roots: [path.resolve(__dirname, 'src')],
+  moduleDirectories: ['node_modules'],
+  resolver: path.resolve(__dirname, '../../scripts/jest/resolver.cjs'),
+  transform: {
+    '^.+\\.(ts|js|mts|mjs|cts|cjs|html)$': [
+      tsJest,
+      { tsconfig: path.resolve(__dirname, 'tsconfig.spec.json') },
+    ],
+  },
   displayName: 'core-api',
-  preset: '../../jest.preset.js',
   coverageDirectory: '../../coverage/apps/core-api',
   testEnvironment: 'node',
-  setupFiles: ['<rootDir>/src/test-setup.ts'],
+  setupFiles: [path.resolve(__dirname, 'src/test-setup.ts')],
   // Integration suites reset the same PostgreSQL test schema and reserved Redis databases.
   // Running test files in parallel makes those resets race and produces nondeterministic CI.
   maxWorkers: 1,
