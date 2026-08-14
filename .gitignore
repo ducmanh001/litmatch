@@ -9,6 +9,7 @@ out-tsc/
 # nx
 .nx/cache
 .nx/workspace-data
+.nx/local-ci/
 
 # env — không commit secret, dùng .env.example
 .env

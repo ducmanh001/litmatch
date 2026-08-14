@@ -33,6 +33,14 @@ test('stage policy keeps scoped verification aligned with the workload', () => {
   assert.equal(signaling.hardTimeoutMs, 1_440_000);
 });
 
+test('stage policy gives parallel aggregate profiles a bounded one-hour ceiling', () => {
+  const policy = resolveStagePolicy('Parallel test profile');
+
+  assert.equal(policy.profile, 'aggregate');
+  assert.equal(policy.softTimeoutMs, 1_800_000);
+  assert.equal(policy.hardTimeoutMs, 3_600_000);
+});
+
 test('stage policy respects explicit hard and soft overrides', () => {
   const policy = resolveStagePolicy('custom stage', {
     hardTimeoutMs: 120_000,

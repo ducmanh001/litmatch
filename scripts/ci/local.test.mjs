@@ -51,11 +51,11 @@ const posixShellProbe = spawnSync('sh', ['-c', 'exit 0'], {
 });
 const hasPosixShell = posixShellProbe.status === 0;
 
-test('quick local CI profile resets Nx and runs the quality gate', () => {
+test('quick local CI profile reuses input-aware Nx cache and runs the quality gate', () => {
   const result = dryRun('quick');
 
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /Reset Nx daemon and project-graph cache/u);
+  assert.match(result.stdout, /Reuse persistent Nx cache/u);
   assert.match(result.stdout, /Format check/u);
   assert.match(result.stdout, /Validate every GitHub Actions workflow/u);
   assert.match(result.stdout, /Lint every Nx project/u);
@@ -73,8 +73,10 @@ test('aggregate gates own stage watchdogs instead of a blanket 45-second timeout
   assert.match(localCi, /NX_NATIVE_COMMAND_RUNNER:\s*'false'/u);
   assert.match(localCi, /NX_CACHE_DIRECTORY:/u);
   assert.match(localCi, /NX_WORKSPACE_DATA_DIRECTORY:/u);
-  assert.match(localCi, /tmpdir\(\), 'litmatch-local-ci'/u);
-  assert.doesNotMatch(localCi, /\.nx', 'local-ci-(?:cache|workspace-data)/u);
+  assert.match(localCi, /LOCAL_CI_CACHE_ROOT/u);
+  assert.match(localCi, /LOCAL_CI_RESET_NX/u);
+  assert.match(localCi, /LOCAL_CI_PARALLEL/u);
+  assert.match(localCi, /join\(root, '\.nx', 'local-ci'\)/u);
   assert.match(localCi, /--outputStyle=static/u);
   assert.match(agentVerify, /run-stage\.mjs/u);
   assert.match(agentVerify, /AGENT_VERIFY_STAGE_TIMEOUT_MS/u);
@@ -332,18 +334,26 @@ test('web runtime image removes package-manager toolchains', () => {
   assert.match(dockerfile, /\/opt\/yarn-v1\.22\.22/u);
 });
 
-test('clean local CI profile uses an empty node_modules volume in Node 22 Linux', () => {
+test('clean local CI profile reuses named Node 22 Linux cache volumes', () => {
   const result = dryRun('clean');
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /\[ci-local\] \$ docker \[args hidden\]/u);
   assert.doesNotMatch(result.stdout, /bash -lc/u);
+  const localCi = readFileSync('scripts/ci/local.mjs', 'utf8');
+  assert.match(localCi, /source=litmatch-local-ci-node-modules/u);
+  assert.match(localCi, /source=litmatch-local-ci-pnpm-store/u);
+  assert.match(localCi, /source=litmatch-local-ci-nx/u);
 });
 
 test('all local CI profile plans quality, test, and Docker smoke stages', () => {
   const result = dryRun('all');
 
   assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /Run clean quality and test\/build stages in parallel/u,
+  );
   assert.match(
     result.stdout,
     /Run quality gate in a clean Node 22 Linux container/u,

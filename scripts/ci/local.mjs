@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, readdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveStagePolicy } from './stage-policy.mjs';
@@ -32,6 +31,7 @@ const securityToolsScript = fileURLToPath(
 const stageRunnerScript = fileURLToPath(
   new URL('./run-stage.mjs', import.meta.url),
 );
+const localCiScript = fileURLToPath(new URL('./local.mjs', import.meta.url));
 const configuredStageHardTimeoutMs = process.env['LOCAL_CI_STAGE_TIMEOUT_MS']
   ? Number(process.env['LOCAL_CI_STAGE_TIMEOUT_MS'])
   : undefined;
@@ -40,11 +40,22 @@ const configuredStageSoftTimeoutMs = process.env[
 ]
   ? Number(process.env['LOCAL_CI_STAGE_SOFT_TIMEOUT_MS'])
   : undefined;
-const localCiNxRoot = join(tmpdir(), 'litmatch-local-ci', String(process.pid));
+const localCiNxRoot =
+  process.env['LOCAL_CI_CACHE_ROOT'] ?? join(root, '.nx', 'local-ci');
+const resetNxRequested = ['1', 'true', 'yes', 'on'].includes(
+  (process.env['LOCAL_CI_RESET_NX'] ?? '').trim().toLowerCase(),
+);
+const parallelOverride = (process.env['LOCAL_CI_PARALLEL'] ?? '')
+  .trim()
+  .toLowerCase();
+const parallelIndependentStages =
+  parallelOverride === 'true' ||
+  (parallelOverride !== 'false' && process.platform === 'linux');
 const supportedProfiles = new Set([
   'quick',
   'prepush',
   'clean',
+  'ci-test',
   'ci',
   'docker',
   'security',
@@ -233,11 +244,17 @@ function prepareDependencies() {
 
 function prepareNx() {
   if (nxPrepared) return;
-  run('Reset Nx daemon and project-graph cache', pnpm, [
-    'nx',
-    'reset',
-    '--outputStyle=static',
-  ]);
+  if (resetNxRequested) {
+    run('Reset Nx daemon and project-graph cache', pnpm, [
+      'nx',
+      'reset',
+      '--outputStyle=static',
+    ]);
+  } else {
+    console.log(
+      '\n[ci-local] Reuse persistent Nx cache; Nx invalidates entries by task inputs',
+    );
+  }
   nxPrepared = true;
 }
 
@@ -444,7 +461,12 @@ function runCleanQuality() {
       'clean: install dependencies',
       'pnpm install --store-dir /pnpm/store --frozen-lockfile',
     ),
-    stage('clean: reset Nx', 'pnpm nx reset --outputStyle=static'),
+    stage(
+      'clean: prepare Nx',
+      resetNxRequested
+        ? 'pnpm nx reset --outputStyle=static'
+        : "echo '[ci-local] Reuse persistent clean Nx cache'",
+    ),
     stage('clean: agent check', 'pnpm agent:check'),
     stage('clean: agent tests', 'pnpm agent:test'),
     stage(
@@ -464,11 +486,11 @@ function runCleanQuality() {
       '--volume',
       `${root}:/workspace`,
       '--mount',
-      'type=volume,destination=/workspace/node_modules',
+      'type=volume,source=litmatch-local-ci-node-modules,destination=/workspace/node_modules',
       '--mount',
       'type=volume,source=litmatch-local-ci-pnpm-store,destination=/pnpm/store',
       '--mount',
-      'type=volume,destination=/workspace/.nx',
+      'type=volume,source=litmatch-local-ci-nx,destination=/workspace/.nx',
       '--workdir',
       '/workspace',
       '--env',
@@ -696,7 +718,7 @@ function waitForHealthEndpoints() {
   );
 }
 
-function runContainerSmoke() {
+function runContainerSmoke(reuseValidatedBuilds = false) {
   if (process.platform !== 'linux' && !dryRun) {
     throw new Error(
       'Container smoke dùng Docker host networking giống GitHub Actions; chạy lệnh này trên Linux/WSL.',
@@ -708,11 +730,10 @@ function runContainerSmoke() {
   );
 
   prepareDependencies();
-  nxPrepared = false;
   prepareNx();
   startTestServices();
   ensureLocalCiDatabase();
-  if (projectsBuilt) {
+  if (projectsBuilt || reuseValidatedBuilds) {
     console.log(
       '\n[ci-local] Reuse validated application build outputs for Docker images',
     );
@@ -881,6 +902,75 @@ function runContainerSmoke() {
   }
 }
 
+function runProfileInChild(childProfile) {
+  const label = `Parallel ${childProfile === 'ci-test' ? 'test' : childProfile} profile`;
+  const policy = stagePolicy(label);
+
+  return new Promise((resolve) => {
+    const child = spawn(
+      process.execPath,
+      [stageRunnerScript, process.execPath, localCiScript, childProfile],
+      {
+        cwd: root,
+        env: {
+          ...process.env,
+          ...environment,
+          LITMATCH_STAGE_LABEL: label,
+          LITMATCH_STAGE_TIMEOUT_MS: String(policy.hardTimeoutMs),
+          LITMATCH_STAGE_SOFT_TIMEOUT_MS: String(policy.softTimeoutMs),
+        },
+        stdio: 'inherit',
+      },
+    );
+    child.once('error', (error) =>
+      resolve({ childProfile, code: 127, signal: null, error }),
+    );
+    child.once('exit', (code, signal) =>
+      resolve({ childProfile, code, signal }),
+    );
+  });
+}
+
+async function runIndependentAllStages() {
+  console.log(
+    '\n[ci-local] Run clean quality and test/build stages in parallel; Docker smoke waits for validated outputs',
+  );
+  if (dryRun) {
+    runCleanQuality();
+    runTestAndBuild();
+    return;
+  }
+
+  if (!parallelIndependentStages) {
+    console.log(
+      '\n[ci-local] Windows resource guard: run clean quality and test/build sequentially; set LOCAL_CI_PARALLEL=true to opt into parallel execution',
+    );
+    runCleanQuality();
+    runTestAndBuild();
+    return;
+  }
+
+  const results = await Promise.all(
+    ['clean', 'ci-test'].map((childProfile) => runProfileInChild(childProfile)),
+  );
+  const failed = results.find(
+    ({ code, signal }) => code !== 0 || signal !== null,
+  );
+  if (failed) {
+    throw new Error(
+      `Parallel CI stage ${failed.childProfile} failed with ${
+        failed.signal ? `signal ${failed.signal}` : `exit code ${failed.code}`
+      }.`,
+    );
+  }
+
+  // The test child has prepared host node_modules, Nx cache and dist outputs for the
+  // parent smoke phase. The clean child used isolated named Docker volumes.
+  dependenciesPrepared = true;
+  nxPrepared = true;
+  projectsBuilt = true;
+}
+
 function provisionSecurityTool(toolName) {
   console.log(`\n[ci-local] Provision ${toolName}`);
   const result = spawnSync(
@@ -929,7 +1019,7 @@ function runWorkflowLint() {
   ]);
 }
 
-function runProfile() {
+async function runProfile() {
   console.log(`[ci-local] Profile: ${profile}${dryRun ? ' (dry run)' : ''}`);
 
   if (profile === 'quick') {
@@ -943,6 +1033,10 @@ function runProfile() {
   }
   if (profile === 'clean') {
     runCleanQuality();
+    return;
+  }
+  if (profile === 'ci-test') {
+    runTestAndBuild();
     return;
   }
   if (profile === 'ci') {
@@ -961,13 +1055,12 @@ function runProfile() {
     return;
   }
 
-  runCleanQuality();
-  runTestAndBuild();
-  runContainerSmoke();
+  await runIndependentAllStages();
+  runContainerSmoke(true);
 }
 
 try {
-  runProfile();
+  await runProfile();
   console.log(`\n[ci-local] ${profile}: PASS`);
 } catch (error) {
   console.error(`\n[ci-local] ${profile}: FAIL`);

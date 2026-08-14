@@ -14,6 +14,7 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test-setup.ts'],
+    testTimeout: process.env.CI ? 15_000 : 5_000,
     env: {
       NEXT_PUBLIC_API_URL: 'http://localhost:3000',
       NEXT_PUBLIC_SOCKET_URL: 'http://localhost:3001',
