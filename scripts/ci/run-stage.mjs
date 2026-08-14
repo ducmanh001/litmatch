@@ -5,6 +5,9 @@ import { spawn, spawnSync } from 'node:child_process';
 const [command, ...args] = process.argv.slice(2);
 const label = process.env['LITMATCH_STAGE_LABEL'] ?? command ?? 'unknown';
 const timeoutMs = Number(process.env['LITMATCH_STAGE_TIMEOUT_MS']);
+const softTimeoutValue = process.env['LITMATCH_STAGE_SOFT_TIMEOUT_MS'];
+const softTimeoutMs =
+  softTimeoutValue === undefined ? undefined : Number(softTimeoutValue);
 const killGraceMs = Number(
   process.env['LITMATCH_STAGE_KILL_GRACE_MS'] ?? '5000',
 );
@@ -13,11 +16,15 @@ if (
   !command ||
   !Number.isSafeInteger(timeoutMs) ||
   timeoutMs <= 0 ||
+  (softTimeoutMs !== undefined &&
+    (!Number.isSafeInteger(softTimeoutMs) ||
+      softTimeoutMs <= 0 ||
+      softTimeoutMs >= timeoutMs)) ||
   !Number.isSafeInteger(killGraceMs) ||
   killGraceMs <= 0
 ) {
   console.error(
-    '[stage-runner] Command, positive LITMATCH_STAGE_TIMEOUT_MS and kill grace are required.',
+    '[stage-runner] Command, positive hard timeout, optional smaller soft timeout and kill grace are required.',
   );
   process.exit(2);
 }
@@ -35,6 +42,7 @@ let timedOut = false;
 let forwardedSignal;
 let killTimer;
 let terminationFinished;
+let slowTimer;
 
 function signalTree(signal) {
   try {
@@ -73,6 +81,14 @@ const timeout = setTimeout(() => {
   timedOut = true;
   terminateTree(`TIMED_OUT after ${timeoutMs}ms`);
 }, timeoutMs);
+if (softTimeoutMs !== undefined) {
+  slowTimer = setTimeout(() => {
+    console.error(
+      `[stage-runner] SLOW_STAGE after ${softTimeoutMs}ms: ${label}; ` +
+        `continuing until hard timeout ${timeoutMs}ms`,
+    );
+  }, softTimeoutMs);
+}
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, () => {
@@ -88,6 +104,7 @@ const result = await new Promise((resolve) => {
 });
 
 clearTimeout(timeout);
+clearTimeout(slowTimer);
 if (terminationFinished) await terminationFinished;
 else clearTimeout(killTimer);
 
