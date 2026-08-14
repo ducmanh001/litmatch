@@ -11,3 +11,7 @@ apps/web/.open-next/
 
 # Mockup HTML la nguon yeu cau (giu nguyen ban goc do designer/user cung cap), khong format
 layouts/
+
+# Windows checks out these repository aliases as regular files; format the canonical sources instead.
+**/CLAUDE.md
+/.claude/skills/**/SKILL.md
