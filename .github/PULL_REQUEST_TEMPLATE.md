@@ -33,4 +33,4 @@
 
 <!-- Lệnh + kết quả tóm tắt thật (số test pass/fail, coverage nếu có) -->
 
-- [ ] `pnpm ci:preflight` pass trước lần push cuối
+- [ ] `pnpm ci:preflight` pass trước lần push cuối; GitHub `CI required` pass trước merge

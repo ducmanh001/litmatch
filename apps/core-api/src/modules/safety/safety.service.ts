@@ -13,7 +13,7 @@ import {
   ReportStatus,
   ReportTargetType,
 } from './entities/report.entity';
-import { UserService } from '../user';
+import { User, UserService } from '../user';
 
 import type { EntityManager } from 'typeorm';
 import type { CoreApiEnv } from '../../config/env.validation';
@@ -81,6 +81,14 @@ export class SafetyService {
     });
 
     return this.dataSource.transaction(async (manager) => {
+      // Serialize all trust penalties for one target on the durable user row. Without this
+      // lock, concurrent reports can both read the same daily sum/cooldown and overshoot the
+      // cap before either INSERT/score update becomes visible.
+      await manager.getRepository(User).findOne({
+        where: { id: targetUserId },
+        lock: { mode: 'pessimistic_write' },
+      });
+
       const pairCutoff = new Date(Date.now() - pairCooldownDays * DAY_MS);
       const alreadyPenalizedThisPair =
         (await manager.count(Report, {

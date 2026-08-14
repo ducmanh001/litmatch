@@ -37,6 +37,7 @@ const stageTimeoutMs = Number(
 const localCiNxRoot = join(tmpdir(), 'litmatch-local-ci', String(process.pid));
 const supportedProfiles = new Set([
   'quick',
+  'prepush',
   'clean',
   'ci',
   'docker',
@@ -257,6 +258,133 @@ function runQuality() {
   ]);
 }
 
+function affectedBase() {
+  const configuredBase = process.env['AGENT_BASE_SHA']?.trim();
+  if (configuredBase) return configuredBase;
+
+  const remoteMain = spawnSync(
+    'git',
+    ['rev-parse', '--verify', 'origin/main'],
+    {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    },
+  );
+  return remoteMain.status === 0 ? remoteMain.stdout.trim() : 'main';
+}
+
+function affectedBaseArguments() {
+  return ['--base', affectedBase()];
+}
+
+function affectedProjects() {
+  if (dryRun) return ['core-api', 'core-api-e2e'];
+
+  const result = spawnSync(
+    pnpm,
+    [
+      'exec',
+      'nx',
+      'show',
+      'projects',
+      '--affected',
+      '--json',
+      ...affectedBaseArguments(),
+    ],
+    {
+      cwd: root,
+      env: { ...process.env, ...environment },
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(
+      `Không xác định được Nx affected projects (exit code ${result.status ?? 1}).`,
+    );
+  }
+
+  const output = result.stdout.trim();
+  const jsonStart = output.indexOf('[');
+  const jsonEnd = output.lastIndexOf(']');
+  if (jsonStart < 0 || jsonEnd < jsonStart) {
+    throw new Error('Nx affected projects trả về dữ liệu JSON không hợp lệ.');
+  }
+
+  const projects = JSON.parse(output.slice(jsonStart, jsonEnd + 1));
+  if (
+    !Array.isArray(projects) ||
+    projects.some((project) => typeof project !== 'string')
+  ) {
+    throw new Error('Nx affected projects phải là mảng tên project.');
+  }
+  return projects;
+}
+
+function runAffectedVerification() {
+  const projects = affectedProjects();
+  console.log(
+    `\n[ci-local] Affected Nx projects: ${projects.length > 0 ? projects.join(', ') : 'none'}`,
+  );
+
+  run('OpenAPI contract check', pnpm, ['openapi:check']);
+
+  const requiresLocalServices = projects.some((project) =>
+    [
+      'core-api',
+      'core-api-e2e',
+      'signaling-gateway',
+      'signaling-gateway-e2e',
+    ].includes(project),
+  );
+  if (requiresLocalServices) {
+    startTestServices();
+    ensureLocalCiDatabase();
+  }
+
+  const targetArguments = [
+    ...affectedBaseArguments(),
+    '--parallel=2',
+    '--outputStyle=static',
+  ];
+  if (projects.includes('signaling-gateway')) {
+    // The Redis lease integration suite proves crash expiry and live renewal with a
+    // short production TTL. Keep it off the shared Nx worker pool so unrelated
+    // Jest/Vitest work cannot starve its event-loop refresh timer.
+    run('Affected signaling tests (isolated)', pnpm, [
+      'nx',
+      'test',
+      'signaling-gateway',
+      '--skip-nx-cache',
+      '--outputStyle=static',
+    ]);
+  }
+  run('Affected unit and integration tests', pnpm, [
+    'nx',
+    'affected',
+    '-t',
+    'test',
+    '--exclude=signaling-gateway',
+    ...targetArguments,
+  ]);
+  run('Affected builds', pnpm, [
+    'nx',
+    'affected',
+    '-t',
+    'build',
+    ...targetArguments,
+  ]);
+  run('Affected end-to-end tests', pnpm, [
+    'nx',
+    'affected',
+    '-t',
+    'e2e',
+    ...targetArguments,
+  ]);
+}
+
 function runCleanQuality() {
   if (!dryRun) mkdirSync(join(root, '.nx'), { recursive: true });
 
@@ -369,24 +497,23 @@ function runTestAndBuild() {
   ]);
 }
 
-function localCiDatabaseName() {
-  const databaseUrl = new URL(environment.DATABASE_URL);
-  const databaseName = decodeURIComponent(databaseUrl.pathname.slice(1));
+function localCiDatabaseName(databaseUrl, label) {
+  const database = new URL(databaseUrl);
+  const databaseName = decodeURIComponent(database.pathname.slice(1));
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(databaseName)) {
     throw new Error(
-      'LOCAL_CI_DATABASE_URL phải có tên database PostgreSQL đơn giản để local runner tạo database cô lập.',
+      `${label} phải có tên database PostgreSQL đơn giản để local runner tạo database cô lập.`,
     );
   }
   return databaseName;
 }
 
-function ensureLocalCiDatabase() {
+function ensureDatabase(databaseUrl, label) {
+  const databaseName = localCiDatabaseName(databaseUrl, label);
   if (process.env['LOCAL_CI_DATABASE_READY'] === 'true') {
-    console.log('\n[ci-local] Reuse CI-provided isolated database');
     return;
   }
 
-  const databaseName = localCiDatabaseName();
   if (dryRun) {
     console.log(`\n[ci-local] Ensure isolated database ${databaseName}`);
     return;
@@ -431,6 +558,16 @@ function ensureLocalCiDatabase() {
     '--command',
     `CREATE DATABASE "${databaseName}"`,
   ]);
+}
+
+function ensureLocalCiDatabase() {
+  if (process.env['LOCAL_CI_DATABASE_READY'] === 'true') {
+    console.log('\n[ci-local] Reuse CI-provided isolated database');
+    return;
+  }
+
+  ensureDatabase(environment.DATABASE_URL, 'LOCAL_CI_DATABASE_URL');
+  ensureDatabase(environment.INTEGRATION_DB_URL, 'LOCAL_CI_INTEGRATION_DB_URL');
 }
 
 function imageTag() {
@@ -740,6 +877,11 @@ function runProfile() {
 
   if (profile === 'quick') {
     runQuality();
+    return;
+  }
+  if (profile === 'prepush') {
+    runQuality();
+    runAffectedVerification();
     return;
   }
   if (profile === 'clean') {

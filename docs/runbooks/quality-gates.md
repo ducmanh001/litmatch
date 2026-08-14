@@ -12,7 +12,8 @@ thay targeted reproduction; local PASS không chứng minh production.
 | Agent/tooling          | `pnpm agent:check`, `pnpm agent:test`                                        | Chạy context scope `agents`                                            |
 | Frontend contract      | `pnpm agent:verify frontend`, `pnpm openapi:check`                           | Có thể cần Core API emit/generation                                    |
 | Business nhạy cảm      | `pnpm agent:verify <scope>` + `review-module verify` + integration test thật | Economy/Matching/Calling/Gift/Party/Feed/Safety                        |
-| Trước push             | `pnpm ci:preflight`                                                          | Clean quality + test/build/E2E + container smoke                       |
+| Trước push             | `pnpm ci:preflight`                                                          | Quality toàn repo + test/build/E2E của Nx affected projects            |
+| Trước merge/release    | `pnpm ci:local:all`                                                          | Clean quality + toàn bộ test/build/E2E + container smoke               |
 | Production profile     | `pnpm release:profile-check`                                                 | Kiểm tra Compose, healthcheck image, telemetry bắt buộc và K8s overlay |
 | Staging reliability    | `pnpm reliability:production-gate`                                           | Cần evidence env được runbook reliability mô tả                        |
 
@@ -24,15 +25,16 @@ pnpm agent:context <scope>
 
 ## Local CI profiles
 
-| Command                                   | Hành vi                                                                    |
-| ----------------------------------------- | -------------------------------------------------------------------------- |
-| `pnpm ci:local:plan`                      | In plan của full profile, không chạy gate                                  |
-| `pnpm ci:local:quick`                     | Install, reset Nx, agent checks/tests, workflow lint, format check và lint |
-| `pnpm ci:local:clean`                     | Quality gate check-only trong clean Node 22 Linux container                |
-| `pnpm ci:local`                           | Quick quality + DB services + tests/build/E2E                              |
-| `pnpm ci:local:docker`                    | Build image, migration và local container smoke                            |
-| `pnpm ci:preflight` / `pnpm ci:local:all` | Clean quality + test/build/E2E + image smoke                               |
-| `pnpm ci:local:security`                  | Hiện disabled/non-blocking; không được mô tả như security PASS             |
+| Command                                       | Hành vi                                                                    |
+| --------------------------------------------- | -------------------------------------------------------------------------- |
+| `pnpm ci:local:plan`                          | In plan của full profile, không chạy gate                                  |
+| `pnpm ci:local:quick`                         | Install, reset Nx, agent checks/tests, workflow lint, format check và lint |
+| `pnpm ci:local:clean`                         | Quality gate check-only trong clean Node 22 Linux container                |
+| `pnpm ci:local`                               | Quick quality + DB services + tests/build/E2E                              |
+| `pnpm ci:local:docker`                        | Build image, migration và local container smoke                            |
+| `pnpm ci:local:prepush` / `pnpm ci:preflight` | Quality + affected test/build/E2E + OpenAPI check                          |
+| `pnpm ci:local:all`                           | Clean quality + toàn bộ test/build/E2E + image smoke                       |
+| `pnpm ci:local:security`                      | Hiện disabled/non-blocking; không được mô tả như security PASS             |
 
 Trên GitHub Actions, `quality` là prerequisite fail-fast. Sau khi job này PASS,
 `test` (test/build/E2E) và `docker` (container smoke) chạy song song; check tổng hợp
@@ -60,7 +62,7 @@ cho suite này tranh CPU với Jest pool lớn có thể làm timer renew trễ 
 replica đã chết. Không tăng TTL/assertion timeout để che hiện tượng: runner cô lập target nhạy timing,
 sau đó mới chạy các project còn lại song song.
 
-Quick/clean/preflight không tự sửa source; format sai phải được sửa riêng bằng `pnpm format`.
+Quick/clean/prepush/preflight không tự sửa source; format sai phải được sửa riêng bằng `pnpm format`.
 Trong shared dirty worktree, vẫn ưu tiên gate theo path để tránh va chạm với thay đổi song song:
 
 ```bash
