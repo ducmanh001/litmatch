@@ -144,8 +144,9 @@ function run(label, command, args, options = {}) {
 
   const timeoutMs = options.timeoutMs ?? stageTimeoutMs;
   const ownsInnerWatchdogs = options.ownsInnerWatchdogs === true;
+  const executable = ownsInnerWatchdogs ? command : process.execPath;
   const result = spawnSync(
-    ownsInnerWatchdogs ? command : process.execPath,
+    executable,
     ownsInnerWatchdogs ? args : [stageRunnerScript, command, ...args],
     {
       cwd: root,
@@ -158,6 +159,9 @@ function run(label, command, args, options = {}) {
           LITMATCH_STAGE_TIMEOUT_MS: String(timeoutMs),
         }),
       },
+      ...(process.platform === 'win32' && /\.(?:cmd|bat)$/iu.test(executable)
+        ? { shell: true }
+        : {}),
       stdio: 'inherit',
     },
   );
@@ -359,7 +363,9 @@ function runAffectedVerification() {
 
   const targetArguments = [
     ...affectedBaseArguments(),
-    '--parallel=2',
+    // API E2E suites and browser E2E share the local database; serialize them to avoid
+    // one suite resetting users/tickets while another suite is authenticating.
+    '--parallel=1',
     '--outputStyle=static',
   ];
   if (projects.includes('signaling-gateway')) {
@@ -509,7 +515,9 @@ function runTestAndBuild() {
     'run-many',
     '-t',
     'e2e',
-    '--parallel=2',
+    // API E2E suites and browser E2E share the local database; serialize them to avoid
+    // one suite resetting users/tickets while another suite is authenticating.
+    '--parallel=1',
     '--outputStyle=static',
   ]);
 }
@@ -879,6 +887,13 @@ function provisionSecurityTool(toolName) {
 }
 
 function runWorkflowLint() {
+  if (process.platform !== 'linux' && !dryRun) {
+    console.log(
+      '\n[ci-local] Workflow lint runs in the clean Linux container; skipping Linux-only host bootstrap.',
+    );
+    return;
+  }
+
   const shellcheck = provisionSecurityTool('shellcheck');
   const actionlint = provisionSecurityTool('actionlint');
   const workflowDirectory = join(root, '.github', 'workflows');

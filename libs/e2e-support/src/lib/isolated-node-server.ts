@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import {
   closeSync,
   existsSync,
@@ -96,6 +96,17 @@ async function waitForPort(
 }
 
 function terminateProcessGroup(pid: number): void {
+  if (process.platform === 'win32') {
+    const result = spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], {
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    if (result.error) {
+      throw result.error;
+    }
+    return;
+  }
+
   try {
     process.kill(-pid, 'SIGTERM');
   } catch (error) {

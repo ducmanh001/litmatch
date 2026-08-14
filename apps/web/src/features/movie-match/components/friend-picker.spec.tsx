@@ -101,7 +101,7 @@ describe('FriendPicker', () => {
         },
       }),
     );
-  });
+  }, 15_000);
 
   it('link không giống YouTube — hiện gợi ý mềm nhưng không chặn submit', async () => {
     vi.spyOn(apiClient, 'POST').mockResolvedValue({

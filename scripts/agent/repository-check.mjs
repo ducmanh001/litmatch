@@ -16,7 +16,6 @@ import {
   adapterReadinessLine,
   assessDirectoryMirror,
   assessIndexAdapterParity,
-  assessRepositoryAdapterParity,
   assessWindowsAdapterParity,
   parseGitIndexEntries,
 } from './adapter-parity.mjs';
@@ -298,17 +297,12 @@ function validateAdapterParity() {
         indexEntries,
         readSymlink: readIndexSymlink,
       })
-    : process.platform === 'win32'
-      ? assessWindowsAdapterParity({
-          root,
-          repositoryPaths: repositoryFiles,
-          indexEntries,
-          readSymlink: readIndexSymlink,
-        })
-      : assessRepositoryAdapterParity({
-          root,
-          repositoryPaths: repositoryFiles,
-        });
+    : assessWindowsAdapterParity({
+        root,
+        repositoryPaths: repositoryFiles,
+        indexEntries,
+        readSymlink: readIndexSymlink,
+      });
   for (const finding of report.findings) addError(finding.message);
   return report;
 }
