@@ -6,5 +6,22 @@ case "${bypass_value}" in
   ;;
 esac
 
+if ! command -v pnpm >/dev/null 2>&1; then
+  case "$(uname -s 2>/dev/null)" in
+    MINGW*|MSYS*|CYGWIN*)
+      if command -v cygpath >/dev/null 2>&1 && [ -n "${APPDATA:-}" ]; then
+        pnpm_bin="$(cygpath -u "${APPDATA}/npm" 2>/dev/null || true)"
+        [ -d "${pnpm_bin}" ] && export PATH="${pnpm_bin}:${PATH}"
+      fi
+      [ -d "/c/Program Files/nodejs" ] && export PATH="/c/Program Files/nodejs:${PATH}"
+      ;;
+  esac
+fi
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "[husky] pnpm not found; install pnpm or open a new terminal" >&2
+  exit 127
+fi
+
 pnpm exec lint-staged
 pnpm agent:check -- --staged
