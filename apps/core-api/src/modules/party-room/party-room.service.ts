@@ -94,6 +94,15 @@ export type PartyRoomTransitionHook = (
   room: PartyRoom,
 ) => Promise<void>;
 
+type PartyRoleTransitionResult =
+  | { member: PartyRoomMember; changed: false }
+  | {
+      member: PartyRoomMember;
+      changed: true;
+      previousRole: PartyRole;
+      previousInvitePending: boolean;
+    };
+
 /**
  * Nghiệp vụ phòng party multi-user (docs/services/party-room-service.md).
  * Mọi thay đổi state phòng (join/leave/đổi role/close) đều serialize qua lock FOR UPDATE
@@ -420,8 +429,8 @@ export class PartyRoomService {
     targetUserId: string,
     newRole: PartyRole.Audience,
   ): Promise<PartyRoomMember> {
-    const { member, changed } = await this.dataSource.transaction(
-      async (manager) => {
+    const result = await this.dataSource.transaction(
+      async (manager): Promise<PartyRoleTransitionResult> => {
         await this.lockActiveRoom(manager, roomId);
 
         const caller = await manager.findOneBy(PartyRoomMember, {
@@ -458,31 +467,38 @@ export class PartyRoomService {
         }
         if (target.role === newRole) return { member: target, changed: false };
 
+        const previousRole = target.role;
+        const previousInvitePending = target.speakerInvitePending;
         target.role = newRole;
         target.speakerInvitePending = false;
         const saved = await manager.save(target);
-        // Đợi ACK SFU trong transaction: fail → rollback role DB (không lệch trạng thái);
-        // 'not_connected' coi như xong — không nối thì không publish được, token sau theo DB
-        await this.livekit.updateParticipantPublish(
-          partyRoomName(roomId),
-          targetUserId,
-          false,
-        );
-        return { member: saved, changed: true };
+        return {
+          member: saved,
+          changed: true,
+          previousRole,
+          previousInvitePending,
+        };
       },
     );
 
-    if (changed) {
-      await this.publishToRoomMembers(roomId, {
-        event: RealtimeEvents.PartyRoleChanged,
-        data: {
-          roomId,
-          userId: targetUserId,
-          role: member.role,
-        } satisfies PartyRoleChangedEventData,
-      });
-    }
-    return member;
+    if (!result.changed) return result.member;
+    await this.syncPublishPermissionAfterCommit({
+      roomId,
+      userId: targetUserId,
+      canPublish: false,
+      expectedRole: newRole,
+      previousRole: result.previousRole,
+      previousInvitePending: result.previousInvitePending,
+    });
+    await this.publishToRoomMembers(roomId, {
+      event: RealtimeEvents.PartyRoleChanged,
+      data: {
+        roomId,
+        userId: targetUserId,
+        role: result.member.role,
+      } satisfies PartyRoleChangedEventData,
+    });
+    return result.member;
   }
 
   /**
@@ -553,8 +569,8 @@ export class PartyRoomService {
     user: AuthenticatedUser,
     roomId: string,
   ): Promise<PartyRoomMember> {
-    const { member, changed } = await this.dataSource.transaction(
-      async (manager) => {
+    const result = await this.dataSource.transaction(
+      async (manager): Promise<PartyRoleTransitionResult> => {
         const room = await this.lockActiveRoom(manager, roomId);
         const target = await manager.findOneBy(PartyRoomMember, {
           roomId,
@@ -595,16 +611,25 @@ export class PartyRoomService {
         target.role = PartyRole.Speaker;
         target.speakerInvitePending = false;
         const saved = await manager.save(target);
-        await this.livekit.updateParticipantPublish(
-          partyRoomName(roomId),
-          user.userId,
-          true,
-        );
-        return { member: saved, changed: true };
+        return {
+          member: saved,
+          changed: true,
+          previousRole: PartyRole.Audience,
+          previousInvitePending: true,
+        };
       },
     );
-    if (changed) await this.publishRoleChanged(roomId, member);
-    return member;
+    if (!result.changed) return result.member;
+    await this.syncPublishPermissionAfterCommit({
+      roomId,
+      userId: user.userId,
+      canPublish: true,
+      expectedRole: PartyRole.Speaker,
+      previousRole: result.previousRole,
+      previousInvitePending: result.previousInvitePending,
+    });
+    await this.publishRoleChanged(roomId, result.member);
+    return result.member;
   }
 
   /** Từ chối là idempotent; không đổi role và không gọi lệnh publish lên SFU. */
@@ -1038,6 +1063,83 @@ export class PartyRoomService {
   }
 
   // ---------- nội bộ ----------
+
+  /**
+   * Apply LiveKit permission only AFTER the role transaction commits. A provider call cannot be
+   * part of PostgreSQL atomicity: if it runs while the row is locked, a later DB rollback can
+   * leave SFU and DB disagreeing. On provider failure, restore the role only when no newer role
+   * transition has won, then ask SFU to restore the previous grant as a best effort and surface a
+   * retryable 503 to the caller.
+   */
+  private async syncPublishPermissionAfterCommit(input: {
+    roomId: string;
+    userId: string;
+    canPublish: boolean;
+    expectedRole: PartyRole;
+    previousRole: PartyRole;
+    previousInvitePending: boolean;
+  }): Promise<void> {
+    try {
+      await this.livekit.updateParticipantPublish(
+        partyRoomName(input.roomId),
+        input.userId,
+        input.canPublish,
+      );
+      return;
+    } catch (error) {
+      let compensated = false;
+      try {
+        compensated = await this.dataSource.transaction(async (manager) => {
+          await this.lockActiveRoom(manager, input.roomId);
+          const current = await manager.findOneBy(PartyRoomMember, {
+            roomId: input.roomId,
+            userId: input.userId,
+            leftAt: IsNull(),
+          });
+          if (!current || current.role !== input.expectedRole) return false;
+          current.role = input.previousRole;
+          current.speakerInvitePending = input.previousInvitePending;
+          await manager.save(current);
+          return true;
+        });
+      } catch (compensationError) {
+        this.logger.error(
+          `Không thể rollback role sau khi LiveKit đổi quyền thất bại: ${
+            compensationError instanceof Error
+              ? compensationError.message
+              : String(compensationError)
+          }`,
+        );
+      }
+
+      if (compensated) {
+        await this.livekit
+          .updateParticipantPublish(
+            partyRoomName(input.roomId),
+            input.userId,
+            input.previousRole !== PartyRole.Audience,
+          )
+          .catch((restoreError) =>
+            this.logger.error(
+              `Khôi phục grant LiveKit sau lỗi quyền thất bại: ${
+                restoreError instanceof Error
+                  ? restoreError.message
+                  : String(restoreError)
+              }`,
+            ),
+          );
+      }
+
+      this.logger.error(
+        `Đổi quyền publish LiveKit thất bại: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      throw new ServiceUnavailableException(
+        'PARTY_MEDIA_PERMISSION_UPDATE_FAILED',
+      );
+    }
+  }
 
   /**
    * Chốt URL LiveKit theo region của host (User.region — server derive, cùng nguồn với shard

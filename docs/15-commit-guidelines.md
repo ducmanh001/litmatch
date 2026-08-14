@@ -73,8 +73,9 @@ ngược lại, không gộp các feature độc lập chỉ để giảm số c
 4. Đọc lại message theo § 15.1 và bảo đảm commit có thể rollback mà không để schema/code nửa vời.
 
 Husky `pre-commit` chạy Prettier qua `lint-staged`, sau đó `pnpm agent:check -- --staged`. Đây là
-lớp bảo vệ nhanh cho commit, **không** thay thế verification theo scope. `pre-push` mới chạy
-full CI preflight gồm clean quality, test/build/E2E và Docker smoke.
+lớp bảo vệ nhanh cho commit, **không** thay thế verification theo scope. `pre-push` chạy
+`pnpm ci:preflight`: quality toàn repo và test/build/E2E của các Nx affected projects. Full
+clean-container + Docker smoke dùng `pnpm ci:local:all`; GitHub CI vẫn là gate đầy đủ trước merge.
 
 Trong tình huống khẩn cấp có thể bypass **local hook** tường minh bằng
 `LITMATCH_CI_BYPASS=1`; hook sẽ in rõ đang bỏ qua lớp nào. GitHub CI không nhận bypass: mọi

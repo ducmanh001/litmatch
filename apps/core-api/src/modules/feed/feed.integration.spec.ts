@@ -9,6 +9,7 @@ import { MatchingGenderPreference1752300000000 } from '../../database/migrations
 import { SoulMatch1752400000000 } from '../../database/migrations/1752400000000-soul-match';
 import { FriendChat1752600000000 } from '../../database/migrations/1752600000000-friend-chat';
 import { Safety1752800000000 } from '../../database/migrations/1752800000000-safety';
+import { ReportStatus1753800000000 } from '../../database/migrations/1753800000000-report-status';
 import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
 import { Feed1752900000000 } from '../../database/migrations/1752900000000-feed';
 import { Notification1753000000000 } from '../../database/migrations/1753000000000-notification';
@@ -41,12 +42,12 @@ import {
   NotificationService,
   NotificationType,
 } from '../notification';
-import { Block, Report, SafetyService } from '../safety';
+import { Block, Report, ReportReason, SafetyService } from '../safety';
 import { Gender, PrivacySetting, PrivacySettingsService, User } from '../user';
 
 import type { ConfigService } from '@nestjs/config';
 import type { CoreApiEnv } from '../../config/env.validation';
-import type { UserService } from '../user';
+import { UserService } from '../user';
 
 /**
  * Integration test Feed trên Postgres thật (docs/05 § 5.9): block cắt điểm chạm (feed-service.md
@@ -156,6 +157,7 @@ d('Feed integration (Postgres thật)', () => {
         SoulMatch1752400000000,
         FriendChat1752600000000,
         Safety1752800000000,
+        ReportStatus1753800000000,
         ReportTargetVideo1754900000000,
         Feed1752900000000,
         Notification1753000000000,
@@ -172,14 +174,12 @@ d('Feed integration (Postgres thật)', () => {
     await ds.initialize();
     await ds.runMigrations();
 
-    const userServiceStub = {
-      getByIdOrThrow: async (id: string) => ({ id }),
-    } as unknown as UserService;
+    const userService = new UserService(ds.getRepository(User), configStub);
     safety = new SafetyService(
       ds,
       ds.getRepository(Report),
       ds.getRepository(Block),
-      userServiceStub,
+      userService,
       configStub,
     );
     // Push chỉ là stub no-op ở suite này — in-app Notification (nguồn sự thật) test thật bên dưới
@@ -455,6 +455,55 @@ d('Feed integration (Postgres thật)', () => {
         comment.id,
       ),
     ).rejects.toMatchObject({ code: FeedErrors.COMMENT_NOT_FOUND });
+  });
+
+  it('RACE xoá cùng comment → chỉ request thắng mới giảm commentCount', async () => {
+    const author = await createUser('delete-race-author');
+    const commenter = await createUser('delete-race-commenter');
+    const post = await feed.createPost(
+      { userId: author.id, isGuest: false, role: 'user' },
+      { content: 'delete race' },
+      'k-delete-race',
+    );
+    const user = {
+      userId: commenter.id,
+      isGuest: false,
+      role: 'user',
+    } as const;
+    const comment = await feed.createComment(user, post.id, {
+      content: 'delete me twice',
+    });
+
+    await expect(
+      Promise.all([
+        feed.deleteComment(user, comment.id),
+        feed.deleteComment(user, comment.id),
+      ]),
+    ).resolves.toEqual([undefined, undefined]);
+
+    const fresh = await ds.getRepository(Post).findOneByOrFail({ id: post.id });
+    expect(fresh.commentCount).toBe(0);
+  });
+
+  it('RACE Safety report → trust penalty không vượt daily cap', async () => {
+    const target = await createUser('safety-race-target');
+    const reporters = await Promise.all(
+      Array.from({ length: 5 }, (_, i) => createUser(`safety-race-${i}`)),
+    );
+
+    const reports = await Promise.all(
+      reporters.map((reporter) =>
+        safety.report(reporter.id, target.id, ReportReason.Spam),
+      ),
+    );
+
+    expect(
+      reports.reduce((sum, report) => sum + report.trustPenaltyApplied, 0),
+    ).toBe(20);
+    const fresh = await ds
+      .getRepository(User)
+      .findOneByOrFail({ id: target.id });
+    expect(fresh.trustScore).toBe(80);
   });
 
   it('idempotency-key trùng (retry mạng) → không tạo 2 bài, trả lại post cũ', async () => {

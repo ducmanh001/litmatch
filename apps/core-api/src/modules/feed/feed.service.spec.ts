@@ -106,7 +106,7 @@ describe('FeedService (unit — mock repo/safetyService)', () => {
       ),
       increment: jest.fn(async () => undefined),
       decrement: jest.fn(async () => undefined),
-      update: jest.fn(async () => undefined),
+      update: jest.fn(async () => ({ affected: 1 })),
       delete: jest.fn(async () => ({ affected: 1, raw: [] })),
     };
     dataSource = {
@@ -413,6 +413,29 @@ describe('FeedService (unit — mock repo/safetyService)', () => {
         'commentCount',
         1,
       );
+    });
+  });
+
+  describe('deleteComment', () => {
+    it('race xoá trùng không giảm commentCount lần thứ hai', async () => {
+      commentRepo.findOneBy.mockResolvedValue(
+        Object.assign(new Comment(), {
+          id: 'comment-1',
+          authorUserId: me.userId,
+          postId: 'post-1',
+          deletedAt: null,
+        }),
+      );
+      manager.update.mockResolvedValueOnce({ affected: 0 });
+
+      await service.deleteComment(me, 'comment-1');
+
+      expect(manager.update).toHaveBeenCalledWith(
+        Comment,
+        { id: 'comment-1', deletedAt: expect.anything() },
+        { deletedAt: expect.any(Date) },
+      );
+      expect(manager.decrement).not.toHaveBeenCalled();
     });
   });
 

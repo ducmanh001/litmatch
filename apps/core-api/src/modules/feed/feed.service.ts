@@ -6,7 +6,7 @@ import {
   isValidSeqCursor,
 } from '@litmatch/common-dtos';
 import { DomainException } from '@litmatch/common-exceptions';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, IsNull, Repository } from 'typeorm';
 
 import { isUniqueViolation } from '../../database/postgres-errors';
 import { feedPostIdempotencyKey } from './feed.constants';
@@ -327,11 +327,15 @@ export class FeedService {
       );
     }
     await this.dataSource.transaction(async (manager) => {
-      await manager.update(
+      const result = await manager.update(
         Comment,
-        { id: commentId },
+        { id: commentId, deletedAt: IsNull() },
         { deletedAt: new Date() },
       );
+      // The ownership/read check above is intentionally outside the transaction, so a
+      // duplicate delete can race it. Only the request that flips NULL → timestamp may
+      // decrement the denormalized counter.
+      if (result.affected !== 1) return;
       await manager.decrement(Post, { id: comment.postId }, 'commentCount', 1);
     });
   }

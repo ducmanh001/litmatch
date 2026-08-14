@@ -8,6 +8,7 @@ import { Report, ReportReason, ReportStatus } from './entities/report.entity';
 import type { ConfigService } from '@nestjs/config';
 import type { EntityManager, Repository } from 'typeorm';
 import type { CoreApiEnv } from '../../config/env.validation';
+import { User } from '../user';
 import type { UserService } from '../user';
 
 const CONFIG: Record<string, unknown> = {
@@ -52,7 +53,11 @@ function pageQueryBuilderStub(items: Report[], total: number) {
   return qb;
 }
 
-let reportEntityRepo: { findOneBy: jest.Mock; save: jest.Mock };
+let reportEntityRepo: {
+  findOne: jest.Mock;
+  findOneBy: jest.Mock;
+  save: jest.Mock;
+};
 
 describe('SafetyService', () => {
   let reportRepo: {
@@ -96,6 +101,7 @@ describe('SafetyService', () => {
       adjustTrustScore: jest.fn(async () => undefined),
     };
     reportEntityRepo = {
+      findOne: jest.fn(async () => ({ id: 'target' })),
       findOneBy: jest.fn(async () => Object.assign(new Report(), { id: 'r1' })),
       save: jest.fn(async (r) => r),
     };
@@ -148,6 +154,11 @@ describe('SafetyService', () => {
         -5,
         0,
       );
+      expect(manager.getRepository).toHaveBeenCalledWith(User);
+      expect(reportEntityRepo.findOne).toHaveBeenCalledWith({
+        where: { id: 'target' },
+        lock: { mode: 'pessimistic_write' },
+      });
     });
 
     it('report lặp lại CÙNG cặp trong cooldown — vẫn ghi log, penalty = 0 (chống vote-kick)', async () => {
