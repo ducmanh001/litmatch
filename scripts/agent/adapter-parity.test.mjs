@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 
 import {
   assessDirectoryMirror,
   assessIndexAdapterParity,
   assessAdapterManifest,
+  assessWindowsAdapterParity,
   buildAdapterManifest,
   COMPAT_INSTRUCTION_FILENAME,
   COMPAT_SKILL_DIRECTORY,
@@ -184,4 +188,42 @@ test('staged snapshot không cho working-tree adapter che commit thiếu hoặc 
     'missing',
     'wrong-target',
   ]);
+});
+
+test('Windows materialized symlink adapter must match the Git index target', () => {
+  const root = mkdtempSync(join(tmpdir(), 'litmatch-adapter-parity-'));
+  try {
+    writeFileSync(join(root, 'AGENTS.md'), 'canonical\n');
+    writeFileSync(join(root, COMPAT_INSTRUCTION_FILENAME), 'AGENTS.md\r\n');
+    const entries = parseGitIndexEntries(
+      `100644 aaa111 0\tAGENTS.md\0` +
+        `120000 bbb222 0\t${COMPAT_INSTRUCTION_FILENAME}\0`,
+    );
+    const readSymlink = () => 'AGENTS.md';
+
+    const ready = assessWindowsAdapterParity({
+      root,
+      repositoryPaths: ['AGENTS.md', COMPAT_INSTRUCTION_FILENAME],
+      indexEntries: entries,
+      readSymlink,
+      requiredSkillNames: [],
+    });
+    assert.equal(ready.ready, 1);
+    assert.deepEqual(ready.findings, []);
+
+    writeFileSync(join(root, COMPAT_INSTRUCTION_FILENAME), 'drifted\n');
+    const drifted = assessWindowsAdapterParity({
+      root,
+      repositoryPaths: ['AGENTS.md', COMPAT_INSTRUCTION_FILENAME],
+      indexEntries: entries,
+      readSymlink,
+      requiredSkillNames: [],
+    });
+    assert.deepEqual(
+      drifted.findings.map((finding) => finding.code),
+      ['not-symlink'],
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
