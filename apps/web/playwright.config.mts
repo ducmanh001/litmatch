@@ -8,6 +8,10 @@ const baseURL = process.env['BASE_URL'] || 'http://localhost:4300';
 // Cổng riêng cho core-api CHỈ dành cho web:e2e — không dùng chung với PORT mặc định 3000 mà
 // core-api-e2e/signaling-gateway-e2e cũng cần (xem comment ở webServer bên dưới).
 const E2E_CORE_API_PORT = 3011;
+const coreApiStartCommand =
+  process.platform === 'win32'
+    ? `set "PORT=${E2E_CORE_API_PORT}" && node ${workspaceRoot}/dist/apps/core-api/main.js`
+    : `PORT=${E2E_CORE_API_PORT} node ${workspaceRoot}/dist/apps/core-api/main.js`;
 
 /**
  * Read environment variables from file.
@@ -45,7 +49,7 @@ export default defineConfig({
   webServer: [
     {
       // OTP được trả qua response auth và được kiểm tra ở UI; core-api không ghi OTP ra log.
-      command: `npx nx build core-api --configuration=development && PORT=${E2E_CORE_API_PORT} node ${workspaceRoot}/dist/apps/core-api/main.js`,
+      command: `npx nx build core-api --configuration=development && ${coreApiStartCommand}`,
       url: `http://localhost:${E2E_CORE_API_PORT}/health`,
       reuseExistingServer: true,
       cwd: workspaceRoot,

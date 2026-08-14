@@ -33,6 +33,10 @@ const COMPILER_OPTIONS = parseJsonConfigFileContent(
   WORKSPACE_ROOT,
 ).options;
 
+function relativePosix(from: string, to: string): string {
+  return relative(from, to).split(sep).join('/');
+}
+
 /**
  * SHA-256 của danh sách deep-import edge đã sort trong từng integration fixture.
  * Snapshot ở edge-level: thêm/đổi/xoá một import đều buộc cập nhật debt có chủ đích.
@@ -155,7 +159,7 @@ function boundaryViolations(
         (target === otherRoot || target.startsWith(otherRoot + sep)) &&
         !isPublicModuleTarget(target, otherRoot)
       ) {
-        violations.push(`${relative(MODULES_DIR, file)} → ${specifier}`);
+        violations.push(`${relativePosix(MODULES_DIR, file)} → ${specifier}`);
       }
     }
   }
@@ -181,7 +185,7 @@ describe('module boundaries (docs/03 § 3.2)', () => {
         file.endsWith('.ts'),
       );
       const violations = files.flatMap((file) => {
-        const legacyPath = relative(MODULES_DIR, file);
+        const legacyPath = relativePosix(MODULES_DIR, file);
         const fileViolations = boundaryViolations(
           file,
           readFileSync(file, 'utf8'),
