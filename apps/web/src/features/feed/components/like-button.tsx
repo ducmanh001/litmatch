@@ -1,6 +1,7 @@
 'use client';
 
 import { useLike, useReactionStatus, useUnlike } from '../api';
+import { useCurrentUser } from '../../../shared/auth/use-current-user';
 
 import type { SVGProps } from 'react';
 
@@ -34,24 +35,32 @@ export function LikeButton({
   const reaction = useReactionStatus(postId);
   const like = useLike(postId);
   const unlike = useUnlike(postId);
+  const { data: currentUser } = useCurrentUser();
 
   const liked = reaction.data?.liked ?? false;
   const likeCount = reaction.data?.likeCount ?? fallbackLikeCount;
   const pending = like.isPending || unlike.isPending;
+  const guest = currentUser?.isGuest === true;
 
   return (
     <button
       type="button"
-      aria-label={`${liked ? 'Bỏ thích' : 'Thích'} bài viết, ${likeCount} lượt thích`}
+      aria-label={
+        guest
+          ? `Tài khoản khách không thể thích bài viết, ${likeCount} lượt thích`
+          : `${liked ? 'Bỏ thích' : 'Thích'} bài viết, ${likeCount} lượt thích`
+      }
       aria-pressed={liked}
-      disabled={pending}
+      disabled={pending || guest}
       onClick={() => (liked ? unlike.mutate() : like.mutate())}
       className={`flex min-w-0 w-full items-center justify-center gap-2 rounded-xl px-2 py-2.5 text-sm font-semibold transition hover:bg-black/5 disabled:opacity-50 dark:hover:bg-white/5 ${
         liked ? 'text-rose-500' : 'text-slate-500 dark:text-slate-400'
       }`}
     >
       <HeartIcon filled={liked} />
-      <span>{liked ? 'Đã thích' : 'Thích'}</span>
+      <span>
+        {guest ? 'Chỉ tài khoản thường' : liked ? 'Đã thích' : 'Thích'}
+      </span>
     </button>
   );
 }

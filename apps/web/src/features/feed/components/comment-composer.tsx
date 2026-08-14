@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 
 import { useCreateComment } from '../api';
 import { createCommentSchema } from '../create-comment-schema';
+import { useCurrentUser } from '../../../shared/auth/use-current-user';
 import { showToast } from '../../../shared/lib/toast-store';
 
 import type { CreateCommentForm } from '../create-comment-schema';
@@ -16,6 +17,18 @@ export function CommentComposer({ postId }: { postId: string }) {
     defaultValues: { content: '' },
   });
   const createComment = useCreateComment(postId);
+  const { data: currentUser } = useCurrentUser();
+
+  if (currentUser?.isGuest) {
+    return (
+      <p
+        role="note"
+        className="rounded-xl bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200"
+      >
+        Tài khoản khách không thể bình luận.
+      </p>
+    );
+  }
 
   const message =
     form.formState.errors.content?.message ??

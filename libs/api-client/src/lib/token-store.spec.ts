@@ -27,6 +27,22 @@ describe('TokenStore session lifecycle', () => {
     expect(storage.get()).toBe('csrf-new');
   });
 
+  it('giữ guest device token trong memory và xoá khi logout', () => {
+    const store = createTokenStore(memoryCsrfTokenStorage());
+
+    store.setSession({
+      accessToken: 'access',
+      csrfToken: 'csrf-new',
+      guestDeviceToken: 'guest-device',
+    });
+
+    expect(store.getGuestDeviceToken()).toBe('guest-device');
+
+    store.setSession(null);
+
+    expect(store.getGuestDeviceToken()).toBeNull();
+  });
+
   it('setSession(null) → unauthenticated, xoá persisted csrfToken', () => {
     const storage = memoryCsrfTokenStorage();
     const store = createTokenStore(storage);

@@ -114,7 +114,7 @@ export class CapabilitiesService {
           'auth.facebook',
           facebookReady,
           facebookReady ? facebookAppId : '',
-          'Đăng nhập Facebook ckhả dụng.',
+          'Đăng nhập Facebook chưa khả dụng.',
         ),
         guest: this.state(
           CapabilityStatus.Enabled,

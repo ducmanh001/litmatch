@@ -59,4 +59,27 @@ describe('LikeButton', () => {
       { params: { path: { postId: 'post-1' } } },
     );
   });
+
+  it('guest — không gọi API like', async () => {
+    vi.spyOn(apiClient, 'GET').mockImplementation(async (path: string) => {
+      if (path === '/api/v1/feed/posts/{postId}/reactions') {
+        return { data: { data: { liked: false, likeCount: 5 } } } as never;
+      }
+      if (path === '/api/v1/users/me') {
+        return { data: { data: { id: 'guest', isGuest: true } } } as never;
+      }
+      throw new Error(`unexpected GET ${path}`);
+    });
+    const postSpy = vi.spyOn(apiClient, 'POST');
+
+    renderButton();
+    const button = await screen.findByRole('button', {
+      name: /không thể thích/,
+    });
+
+    expect(button).toBeDisabled();
+    await userEvent.click(button);
+
+    expect(postSpy).not.toHaveBeenCalled();
+  });
 });

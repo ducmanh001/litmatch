@@ -33,9 +33,13 @@ export interface ApiClientOptions {
   fetch?: typeof globalThis.fetch;
 }
 
-function isAuthTokensBody(
-  body: unknown,
-): body is { data: { accessToken: string; csrfToken: string } } {
+function isAuthTokensBody(body: unknown): body is {
+  data: {
+    accessToken: string;
+    csrfToken: string;
+    guestDeviceToken?: string;
+  };
+} {
   return (
     typeof body === 'object' &&
     body !== null &&
@@ -47,13 +51,23 @@ function isAuthTokensBody(
     body.data.accessToken !== '' &&
     'csrfToken' in body.data &&
     typeof body.data.csrfToken === 'string' &&
-    body.data.csrfToken !== ''
+    body.data.csrfToken !== '' &&
+    (!('guestDeviceToken' in body.data) ||
+      body.data.guestDeviceToken === undefined ||
+      typeof body.data.guestDeviceToken === 'string')
+  );
+}
+
+function isMatchingTicketsPath(pathname: string): boolean {
+  return (
+    pathname === '/api/v1/matching/tickets' ||
+    pathname.startsWith('/api/v1/matching/tickets/')
   );
 }
 
 /**
  * Client REST duy nhất cho core-api (docs/12 § 12.3 — mọi call qua đây, không fetch tay):
- * - Gắn `Authorization: Bearer` từ TokenStore cho mọi request.
+ * - Gắn `Authorization: Bearer` cho mọi request và guest device header riêng cho Matching tickets.
  * - Non-2xx → ném `ApiError` (envelope `{ error }` — docs/05 § 5.4); mất mạng → `ApiError.network`.
  * - 401 → refresh rotation đúng MỘT lần (single-flight giữa các request song song) rồi retry;
  *   vẫn 401 hoặc refresh fail → xoá session + `onSessionExpired` (docs/13 § 13.7).
@@ -128,6 +142,10 @@ export function createApiClient(options: ApiClientOptions): CoreApiClient {
           {
             accessToken: body.data.accessToken,
             csrfToken: body.data.csrfToken,
+            guestDeviceToken:
+              body.data.guestDeviceToken ??
+              tokenStore.getGuestDeviceToken() ??
+              undefined,
           },
           expectedGeneration,
         );
@@ -156,6 +174,13 @@ export function createApiClient(options: ApiClientOptions): CoreApiClient {
       if (accessToken !== null) {
         request.headers.set('authorization', `Bearer ${accessToken}`);
       }
+      const guestDeviceToken = tokenStore.getGuestDeviceToken();
+      if (
+        guestDeviceToken !== null &&
+        isMatchingTicketsPath(new URL(request.url).pathname)
+      ) {
+        request.headers.set('X-Guest-Device-Token', guestDeviceToken);
+      }
       retryClones.set(request, request.clone());
       return request;
     },
@@ -178,6 +203,13 @@ export function createApiClient(options: ApiClientOptions): CoreApiClient {
           'authorization',
           `Bearer ${tokenStore.getAccessToken() ?? ''}`,
         );
+        const guestDeviceToken = tokenStore.getGuestDeviceToken();
+        if (
+          guestDeviceToken !== null &&
+          isMatchingTicketsPath(new URL(retry.url).pathname)
+        ) {
+          retry.headers.set('X-Guest-Device-Token', guestDeviceToken);
+        }
         const retried = await safeFetch(retry);
         if (retried.status === 401) {
           expireSession();

@@ -20,6 +20,21 @@ function renderComposer() {
 describe('PostComposer', () => {
   afterEach(() => vi.restoreAllMocks());
 
+  it('guest — không hiển thị form đăng bài', async () => {
+    vi.spyOn(apiClient, 'GET').mockResolvedValue({
+      data: { data: { id: 'guest', isGuest: true } },
+    } as never);
+
+    renderComposer();
+
+    expect(
+      await screen.findByText('Tài khoản khách không thể đăng bài viết.'),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('textbox', { name: 'Nội dung bài viết' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('đăng bài với audience đã chọn — gửi đúng lên server', async () => {
     vi.spyOn(apiClient, 'GET').mockResolvedValue({
       data: { data: { id: 'me' } },
