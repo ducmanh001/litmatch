@@ -12,7 +12,7 @@ thay targeted reproduction; local PASS không chứng minh production.
 | Agent/tooling          | `pnpm agent:check`, `pnpm agent:test`                                        | Chạy context scope `agents`                                            |
 | Frontend contract      | `pnpm agent:verify frontend`, `pnpm openapi:check`                           | Có thể cần Core API emit/generation                                    |
 | Business nhạy cảm      | `pnpm agent:verify <scope>` + `review-module verify` + integration test thật | Economy/Matching/Calling/Gift/Party/Feed/Safety                        |
-| Trước push             | `pnpm ci:preflight`                                                          | Quality toàn repo + toàn bộ test/build/E2E                              |
+| Trước push             | `pnpm ci:preflight`                                                          | Quality toàn repo + toàn bộ test/build/E2E                             |
 | Trước merge/release    | `pnpm ci:local:all`                                                          | Clean quality + toàn bộ test/build/E2E + container smoke               |
 | Production profile     | `pnpm release:profile-check`                                                 | Kiểm tra Compose, healthcheck image, telemetry bắt buộc và K8s overlay |
 | Staging reliability    | `pnpm reliability:production-gate`                                           | Cần evidence env được runbook reliability mô tả                        |
@@ -25,17 +25,17 @@ pnpm agent:context <scope>
 
 ## Local CI profiles
 
-| Command                                       | Hành vi                                                                    |
-| --------------------------------------------- | -------------------------------------------------------------------------- |
-| `pnpm ci:local:plan`                          | In plan của full profile, không chạy gate                                  |
-| `pnpm ci:local:quick`                         | Install, reset Nx, agent checks/tests, workflow lint, format check và lint |
-| `pnpm ci:local:clean`                         | Quality gate check-only trong clean Node 22 Linux container                |
-| `pnpm ci:local`                               | Quick quality + DB services + tests/build/E2E                              |
-| `pnpm ci:local:docker`                        | Build image, migration và local container smoke                            |
-| `pnpm ci:local:prepush`                         | Quality + affected test/build/E2E + OpenAPI check (fast/manual)          |
-| `pnpm ci:preflight`                              | Quality + toàn bộ test/build/E2E (pre-push hook)                         |
-| `pnpm ci:local:all`                           | Clean quality + toàn bộ test/build/E2E + image smoke                       |
-| `pnpm ci:local:security`                      | Hiện disabled/non-blocking; không được mô tả như security PASS             |
+| Command                  | Hành vi                                                                    |
+| ------------------------ | -------------------------------------------------------------------------- |
+| `pnpm ci:local:plan`     | In plan của full profile, không chạy gate                                  |
+| `pnpm ci:local:quick`    | Install, reset Nx, agent checks/tests, workflow lint, format check và lint |
+| `pnpm ci:local:clean`    | Quality gate check-only trong clean Node 22 Linux container                |
+| `pnpm ci:local`          | Quick quality + DB services + tests/build/E2E                              |
+| `pnpm ci:local:docker`   | Build image, migration và local container smoke                            |
+| `pnpm ci:local:prepush`  | Quality + affected test/build/E2E + OpenAPI check (fast/manual)            |
+| `pnpm ci:preflight`      | Quality + toàn bộ test/build/E2E (pre-push hook)                           |
+| `pnpm ci:local:all`      | Clean quality + toàn bộ test/build/E2E + image smoke                       |
+| `pnpm ci:local:security` | Hiện disabled/non-blocking; không được mô tả như security PASS             |
 
 Trên GitHub Actions, `quality` là prerequisite fail-fast. Sau khi job này PASS,
 `test` (test/build/E2E) và `docker` (container smoke) chạy song song; check tổng hợp
