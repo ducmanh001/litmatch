@@ -5,6 +5,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
+import { resolveStagePolicy } from '../ci/stage-policy.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const scope = process.argv[2];
@@ -16,9 +17,16 @@ const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 const stageRunnerScript = fileURLToPath(
   new URL('../ci/run-stage.mjs', import.meta.url),
 );
-const stageTimeoutMs = Number(
-  process.env['AGENT_VERIFY_STAGE_TIMEOUT_MS'] ?? 15 * 60 * 1000,
-);
+const configuredStageHardTimeoutMs = process.env[
+  'AGENT_VERIFY_STAGE_TIMEOUT_MS'
+]
+  ? Number(process.env['AGENT_VERIFY_STAGE_TIMEOUT_MS'])
+  : undefined;
+const configuredStageSoftTimeoutMs = process.env[
+  'AGENT_VERIFY_STAGE_SOFT_TIMEOUT_MS'
+]
+  ? Number(process.env['AGENT_VERIFY_STAGE_SOFT_TIMEOUT_MS'])
+  : undefined;
 
 const scopes = {
   frontend: {
@@ -90,6 +98,10 @@ if (!['fast', 'full'].includes(tier)) {
 function runCommand(command, args, environment = {}) {
   console.log(`\n[agent-verify] ${command} ${args.join(' ')}`);
   const label = `agent-verify ${scope}: ${command} ${args[0] ?? ''}`.trim();
+  const policy = resolveStagePolicy(label, {
+    hardTimeoutMs: configuredStageHardTimeoutMs,
+    softTimeoutMs: configuredStageSoftTimeoutMs,
+  });
   const result = spawnSync(
     process.execPath,
     [stageRunnerScript, command, ...args],
@@ -108,7 +120,8 @@ function runCommand(command, args, environment = {}) {
         NO_COLOR: '1',
         FORCE_COLOR: '0',
         LITMATCH_STAGE_LABEL: label,
-        LITMATCH_STAGE_TIMEOUT_MS: String(stageTimeoutMs),
+        LITMATCH_STAGE_TIMEOUT_MS: String(policy.hardTimeoutMs),
+        LITMATCH_STAGE_SOFT_TIMEOUT_MS: String(policy.softTimeoutMs),
       },
     },
   );

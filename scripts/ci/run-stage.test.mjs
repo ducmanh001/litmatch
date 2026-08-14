@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const runner = 'scripts/ci/run-stage.mjs';
 
-function runStage(timeoutMs, source) {
+function runStage(timeoutMs, source, softTimeoutMs) {
   return spawnSync(
     process.execPath,
     [runner, process.execPath, '--input-type=module', '--eval', source],
@@ -19,6 +19,9 @@ function runStage(timeoutMs, source) {
         LITMATCH_STAGE_LABEL: 'stage-runner-test',
         LITMATCH_STAGE_TIMEOUT_MS: String(timeoutMs),
         LITMATCH_STAGE_KILL_GRACE_MS: '100',
+        ...(softTimeoutMs === undefined
+          ? {}
+          : { LITMATCH_STAGE_SOFT_TIMEOUT_MS: String(softTimeoutMs) }),
       },
       // The child deadline is intentionally longer than the production smoke values below.
       // Node startup can be delayed by a clean Linux container bind-mounting a Windows
@@ -58,6 +61,14 @@ test('stage runner does not describe a real child exit 124 as a timeout', () => 
   const result = runStage(10000, 'process.exit(124)');
 
   assert.equal(result.status, 124, result.stderr);
+  assert.doesNotMatch(result.stderr, /TIMED_OUT/u);
+});
+
+test('stage runner warns on a slow child without killing it at the soft deadline', () => {
+  const result = runStage(10000, 'setTimeout(() => process.exit(0), 300)', 100);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stderr, /SLOW_STAGE after 100ms/u);
   assert.doesNotMatch(result.stderr, /TIMED_OUT/u);
 });
 
