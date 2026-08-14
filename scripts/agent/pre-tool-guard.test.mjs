@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
-const adapter = new URL('./pre-tool-guard.mjs', import.meta.url);
+const adapter = fileURLToPath(new URL('./pre-tool-guard.mjs', import.meta.url));
+const root = fileURLToPath(new URL('../../', import.meta.url));
 
 function run(payload) {
-  return spawnSync(process.execPath, [adapter.pathname], {
-    cwd: new URL('../../', import.meta.url),
+  return spawnSync(process.execPath, [adapter], {
+    cwd: root,
     input: JSON.stringify(payload),
     encoding: 'utf8',
   });

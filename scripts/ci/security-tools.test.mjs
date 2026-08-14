@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +11,11 @@ const script = 'scripts/ci/security-tools.mjs';
 const baselinePath = fileURLToPath(
   new URL('../../.gitleaks-baseline.json', import.meta.url),
 );
+
+function assertToolPath(stdout, toolName, version) {
+  const pathParts = stdout.trim().split(/[\\/]/u);
+  assert.deepEqual(pathParts.slice(-2), [`${toolName}-${version}`, toolName]);
+}
 
 function dryRun(tool) {
   const temporaryDirectory = mkdtempSync(
@@ -42,7 +47,7 @@ test('plans the checksum-verified Gitleaks installation', () => {
   const result = dryRun('gitleaks');
 
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /gitleaks-8\.30\.1\/gitleaks\n$/u);
+  assertToolPath(result.stdout, 'gitleaks', '8.30.1');
   assert.match(result.stderr, /Would install gitleaks 8\.30\.1/u);
 });
 
@@ -50,7 +55,7 @@ test('plans the checksum-verified actionlint installation', () => {
   const result = dryRun('actionlint');
 
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /actionlint-1\.7\.12\/actionlint\n$/u);
+  assertToolPath(result.stdout, 'actionlint', '1.7.12');
   assert.match(result.stderr, /Would install actionlint 1\.7\.12/u);
 });
 
@@ -58,7 +63,7 @@ test('plans the checksum-verified ShellCheck installation', () => {
   const result = dryRun('shellcheck');
 
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /shellcheck-0\.11\.0\/shellcheck\n$/u);
+  assertToolPath(result.stdout, 'shellcheck', '0.11.0');
   assert.match(result.stderr, /Would install shellcheck 0\.11\.0/u);
 });
 
@@ -66,7 +71,7 @@ test('plans the checksum-verified Trivy installation', () => {
   const result = dryRun('trivy');
 
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /trivy-0\.72\.0\/trivy\n$/u);
+  assertToolPath(result.stdout, 'trivy', '0.72.0');
   assert.match(result.stderr, /Would install trivy 0\.72\.0/u);
 });
 
@@ -97,7 +102,11 @@ test('adds the installed directory to GitHub Actions PATH', () => {
     assert.equal(result.status, 0, result.stderr);
     assert.equal(
       readFileSync(githubPath, 'utf8'),
-      `${process.env['XDG_CACHE_HOME'] ?? `${process.env['HOME']}/.cache`}/litmatch-ci-tools/trivy-0.72.0\n`,
+      `${join(
+        process.env['XDG_CACHE_HOME'] ?? join(homedir(), '.cache'),
+        'litmatch-ci-tools',
+        'trivy-0.72.0',
+      )}\n`,
     );
   } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });
