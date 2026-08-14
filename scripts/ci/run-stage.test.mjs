@@ -20,7 +20,10 @@ function runStage(timeoutMs, source) {
         LITMATCH_STAGE_TIMEOUT_MS: String(timeoutMs),
         LITMATCH_STAGE_KILL_GRACE_MS: '100',
       },
-      timeout: 5000,
+      // The child deadline is intentionally longer than the production smoke values below.
+      // Node startup can be delayed by a clean Linux container bind-mounting a Windows
+      // workspace; the test must verify exit classification, not fail because the host is busy.
+      timeout: Math.max(timeoutMs + 5000, 15000),
     },
   );
 }
@@ -45,14 +48,14 @@ function isProcessRunning(pid) {
 }
 
 test('stage runner preserves a real child failure before the deadline', () => {
-  const result = runStage(2000, 'process.exit(7)');
+  const result = runStage(10000, 'process.exit(7)');
 
   assert.equal(result.status, 7, result.stderr);
   assert.doesNotMatch(result.stderr, /TIMED_OUT/u);
 });
 
 test('stage runner does not describe a real child exit 124 as a timeout', () => {
-  const result = runStage(2000, 'process.exit(124)');
+  const result = runStage(10000, 'process.exit(124)');
 
   assert.equal(result.status, 124, result.stderr);
   assert.doesNotMatch(result.stderr, /TIMED_OUT/u);
