@@ -1,4 +1,4 @@
-import { lstatSync, realpathSync } from 'node:fs';
+import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { join, posix, relative } from 'node:path';
 
 export const REQUIRED_SKILL_ADAPTERS = Object.freeze([
@@ -197,6 +197,55 @@ export function assessRepositoryAdapterParity({
   const manifest = buildAdapterManifest(repositoryPaths, requiredSkillNames);
   return {
     ...assessAdapterManifest(manifest, (path) => filesystemState(root, path)),
+    surface: 'worktree',
+  };
+}
+
+function windowsWorktreeState({ root, path, indexEntries, readSymlink }) {
+  const worktree = filesystemState(root, path);
+  if (worktree.kind !== 'file') return worktree;
+
+  const normalized = normalizePath(path);
+  if (indexEntries.get(normalized)?.mode !== '120000') return worktree;
+
+  let target;
+  let materializedTarget;
+  try {
+    target = String(readSymlink(normalized)).trim();
+    materializedTarget = readFileSync(join(root, path), 'utf8').trim();
+  } catch {
+    return worktree;
+  }
+  if (materializedTarget !== target) return worktree;
+
+  const resolvedPath = posix.isAbsolute(target)
+    ? target
+    : normalizePath(
+        posix.normalize(posix.join(posix.dirname(normalized), target)),
+      );
+  try {
+    return {
+      kind: 'symlink',
+      identity: realpathSync(join(root, resolvedPath)),
+      resolvedPath,
+    };
+  } catch {
+    return { kind: 'broken' };
+  }
+}
+
+export function assessWindowsAdapterParity({
+  root,
+  repositoryPaths,
+  indexEntries,
+  readSymlink,
+  requiredSkillNames = REQUIRED_SKILL_ADAPTERS,
+}) {
+  const manifest = buildAdapterManifest(repositoryPaths, requiredSkillNames);
+  return {
+    ...assessAdapterManifest(manifest, (path) =>
+      windowsWorktreeState({ root, path, indexEntries, readSymlink }),
+    ),
     surface: 'worktree',
   };
 }
