@@ -138,6 +138,11 @@ body {
     color 0.3s ease;
 }
 
+/* Native action buttons use the same affordance as the shared Button primitive. */
+button {
+  cursor: pointer;
+}
+
 /* Mobile Safari/Chrome tự phóng to khi input có chữ nhỏ hơn 16px. Giữ nguyên viewport và
    layout khi focus; không khóa pinch-zoom để vẫn bảo toàn khả năng tiếp cận. */
 @media (max-width: 767px) {

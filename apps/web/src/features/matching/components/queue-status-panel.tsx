@@ -227,7 +227,12 @@ export function QueueStatusPanel() {
         />
       );
     }
-    return <MatchTypePicker onJoined={(joined) => setTicketId(joined.id)} />;
+    return (
+      <MatchTypePicker
+        initialMatchType={directMatchType ?? undefined}
+        onJoined={(joined) => setTicketId(joined.id)}
+      />
+    );
   }
 
   if (ticketQuery.isPending) {

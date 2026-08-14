@@ -15,6 +15,16 @@ export const matchingKeys = {
   ticket: (id: string) => ['matching', 'ticket', id] as const,
 };
 
+/**
+ * Keep the optional paid-match flag backwards compatible with an API that
+ * predates the field. The backend defaults a missing value to false, while a
+ * real paid request must still be sent explicitly.
+ */
+export function toJoinQueueRequest(body: JoinQueueForm) {
+  const { useDiamond, ...request } = body;
+  return useDiamond ? { ...request, useDiamond: true } : request;
+}
+
 /** Trạng thái còn chờ ghép. Session được server xác nhận ngay khi có cặp, nên `confirmed`
  * là điểm chuyển màn; giữ `matched` để client cũ vẫn tự hoàn tất được session legacy. */
 export function isPollingStatus(
@@ -32,7 +42,7 @@ export function useJoinQueue() {
     }) => {
       const res = await apiClient.POST('/api/v1/matching/tickets', {
         params: { header: { 'Idempotency-Key': input.idempotencyKey } },
-        body: input.body,
+        body: toJoinQueueRequest(input.body),
       });
       return res.data?.data;
     },

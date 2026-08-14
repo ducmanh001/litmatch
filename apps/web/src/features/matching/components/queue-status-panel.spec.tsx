@@ -98,6 +98,18 @@ describe('QueueStatusPanel', () => {
     searchParams.delete('start');
   });
 
+  it('desktop deeplink with match=voice selects the matching CTA', async () => {
+    searchParams.set('match', 'voice');
+    renderPanel();
+
+    expect(
+      await screen.findByRole('button', {
+        name: /Voice/,
+      }),
+    ).toBeVisible();
+    expect(screen.getByRole('radio', { name: /Voice/ })).toBeChecked();
+  });
+
   it('chưa có ticket — hiển thị form chọn kiểu ghép đôi', async () => {
     renderPanel();
     expect(
@@ -247,7 +259,6 @@ describe('QueueStatusPanel', () => {
       expect.objectContaining({
         body: {
           matchType: 'voice',
-          useDiamond: false,
           genderPreference: 'any',
         },
       }),
