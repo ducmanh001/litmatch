@@ -5,6 +5,7 @@ import { mkdirSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveStagePolicy } from './stage-policy.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
@@ -31,9 +32,14 @@ const securityToolsScript = fileURLToPath(
 const stageRunnerScript = fileURLToPath(
   new URL('./run-stage.mjs', import.meta.url),
 );
-const stageTimeoutMs = Number(
-  process.env['LOCAL_CI_STAGE_TIMEOUT_MS'] ?? 20 * 60 * 1000,
-);
+const configuredStageHardTimeoutMs = process.env['LOCAL_CI_STAGE_TIMEOUT_MS']
+  ? Number(process.env['LOCAL_CI_STAGE_TIMEOUT_MS'])
+  : undefined;
+const configuredStageSoftTimeoutMs = process.env[
+  'LOCAL_CI_STAGE_SOFT_TIMEOUT_MS'
+]
+  ? Number(process.env['LOCAL_CI_STAGE_SOFT_TIMEOUT_MS'])
+  : undefined;
 const localCiNxRoot = join(tmpdir(), 'litmatch-local-ci', String(process.pid));
 const supportedProfiles = new Set([
   'quick',
@@ -136,13 +142,22 @@ function commandText(command) {
   return `${command} [args hidden]`;
 }
 
+function stagePolicy(label, options = {}) {
+  return resolveStagePolicy(label, {
+    hardTimeoutMs:
+      options.timeoutMs ?? configuredStageHardTimeoutMs ?? undefined,
+    softTimeoutMs:
+      options.softTimeoutMs ?? configuredStageSoftTimeoutMs ?? undefined,
+  });
+}
+
 function run(label, command, args, options = {}) {
   console.log(`\n[ci-local] ${label}`);
   console.log(`[ci-local] $ ${commandText(command)}`);
 
   if (dryRun) return 0;
 
-  const timeoutMs = options.timeoutMs ?? stageTimeoutMs;
+  const policy = stagePolicy(label, options);
   const ownsInnerWatchdogs = options.ownsInnerWatchdogs === true;
   const executable = ownsInnerWatchdogs ? command : process.execPath;
   const result = spawnSync(
@@ -156,7 +171,8 @@ function run(label, command, args, options = {}) {
         ...(options.env ?? {}),
         ...(!ownsInnerWatchdogs && {
           LITMATCH_STAGE_LABEL: label,
-          LITMATCH_STAGE_TIMEOUT_MS: String(timeoutMs),
+          LITMATCH_STAGE_TIMEOUT_MS: String(policy.hardTimeoutMs),
+          LITMATCH_STAGE_SOFT_TIMEOUT_MS: String(policy.softTimeoutMs),
         }),
       },
       ...(process.platform === 'win32' && /\.(?:cmd|bat)$/iu.test(executable)
@@ -412,10 +428,15 @@ function runCleanQuality() {
   );
 
   const shellQuote = (value) => `'${value.replaceAll("'", "'\"'\"'")}'`;
-  const stage = (label, command) =>
-    `LITMATCH_STAGE_LABEL=${shellQuote(label)} ` +
-    `LITMATCH_STAGE_TIMEOUT_MS=${stageTimeoutMs} ` +
-    `node scripts/ci/run-stage.mjs bash -lc ${shellQuote(command)}`;
+  const stage = (label, command) => {
+    const policy = stagePolicy(label);
+    return (
+      `LITMATCH_STAGE_LABEL=${shellQuote(label)} ` +
+      `LITMATCH_STAGE_TIMEOUT_MS=${policy.hardTimeoutMs} ` +
+      `LITMATCH_STAGE_SOFT_TIMEOUT_MS=${policy.softTimeoutMs} ` +
+      `node scripts/ci/run-stage.mjs bash -lc ${shellQuote(command)}`
+    );
+  };
   const command = [
     'git config --global --add safe.directory /workspace',
     'corepack enable',
