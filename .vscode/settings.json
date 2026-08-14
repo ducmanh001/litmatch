@@ -17,5 +17,53 @@
     "watchFile": "useFsEvents",
     "watchDirectory": "useFsEvents",
     "fallbackPolling": "dynamicPriority"
+  },
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "terminal.integrated.defaultProfile.windows": "pwsh",
+  "terminal.integrated.profiles.windows": {
+    "pwsh": {
+      "path": "pwsh.exe",
+      "args": [
+        "-NoLogo",
+        "-NoProfile",
+        "-NoExit",
+        "-Command",
+        ". (Join-Path $HOME 'Documents\\PowerShell\\Microsoft.PowerShell_profile.ps1')"
+      ],
+      "icon": "terminal-powershell",
+      "overrideName": true
+    }
+  },
+  "terminal.integrated.fontFamily": "MesloLGM Nerd Font",
+  "terminal.integrated.fontSize": 12,
+  "terminal.integrated.lineHeight": 1.2,
+  "terminal.integrated.cursorStyle": "line",
+  "terminal.integrated.cursorBlinking": true,
+  "terminal.integrated.gpuAcceleration": "on",
+  "terminal.integrated.tabs.enabled": true,
+  "terminal.integrated.tabs.location": "right",
+  "terminal.integrated.defaultLocation": "view",
+  "terminal.integrated.scrollback": 10000,
+  "workbench.colorCustomizations": {
+    "terminal.background": "#1E1E2E",
+    "terminal.foreground": "#CDD6F4",
+    "terminalCursor.foreground": "#F5C2E7",
+    "terminal.border": "#45475A",
+    "terminal.ansiBlack": "#181825",
+    "terminal.ansiRed": "#F38BA8",
+    "terminal.ansiGreen": "#A6E3A1",
+    "terminal.ansiYellow": "#F9E2AF",
+    "terminal.ansiBlue": "#89B4FA",
+    "terminal.ansiMagenta": "#CBA6F7",
+    "terminal.ansiCyan": "#94E2D5",
+    "terminal.ansiWhite": "#BAC2DE",
+    "terminal.ansiBrightBlack": "#585B70",
+    "terminal.ansiBrightRed": "#F38BA8",
+    "terminal.ansiBrightGreen": "#A6E3A1",
+    "terminal.ansiBrightYellow": "#F9E2AF",
+    "terminal.ansiBrightBlue": "#89B4FA",
+    "terminal.ansiBrightMagenta": "#CBA6F7",
+    "terminal.ansiBrightCyan": "#89DCEB",
+    "terminal.ansiBrightWhite": "#CDD6F4"
   }
 }

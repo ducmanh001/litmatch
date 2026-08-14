@@ -30,14 +30,18 @@ describe('isPollingStatus', () => {
 });
 
 describe('join queue request compatibility', () => {
-  it('omits the default false flag for APIs that predate paid matching', () => {
+  it('sends the required paid-match flag when it is false', () => {
     expect(
       toJoinQueueRequest({
         matchType: 'soul',
         useDiamond: false,
         genderPreference: 'any',
       }),
-    ).toEqual({ matchType: 'soul', genderPreference: 'any' });
+    ).toEqual({
+      matchType: 'soul',
+      useDiamond: false,
+      genderPreference: 'any',
+    });
   });
 
   it('keeps an explicit paid request in the payload', () => {

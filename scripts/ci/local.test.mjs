@@ -45,6 +45,12 @@ function dryRunWithCiServices(profile, ...args) {
   });
 }
 
+const posixShellProbe = spawnSync('sh', ['-c', 'exit 0'], {
+  cwd: root,
+  encoding: 'utf8',
+});
+const hasPosixShell = posixShellProbe.status === 0;
+
 test('quick local CI profile resets Nx and runs the quality gate', () => {
   const result = dryRun('quick');
 
@@ -128,15 +134,19 @@ test('commit owns staged guards; push owns the full local CI preflight', () => {
   );
 });
 
-test('Husky hooks remain POSIX-shell compatible', () => {
-  for (const hook of ['.husky/pre-commit', '.husky/pre-push']) {
-    const result = spawnSync('sh', ['-n', hook], {
-      cwd: root,
-      encoding: 'utf8',
-    });
-    assert.equal(result.status, 0, `${hook}: ${result.stderr}`);
-  }
-});
+test(
+  'Husky hooks remain POSIX-shell compatible',
+  { skip: hasPosixShell ? false : 'POSIX sh is not available on this host' },
+  () => {
+    for (const hook of ['.husky/pre-commit', '.husky/pre-push']) {
+      const result = spawnSync('sh', ['-n', hook], {
+        cwd: root,
+        encoding: 'utf8',
+      });
+      assert.equal(result.status, 0, `${hook}: ${result.stderr}`);
+    }
+  },
+);
 
 test('local CI bypass exits cleanly before any stage', () => {
   const result = dryRun('all', '--bypass');

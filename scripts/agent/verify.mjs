@@ -135,6 +135,7 @@ function output(args) {
       NO_COLOR: '1',
       FORCE_COLOR: '0',
     },
+    shell: process.platform === 'win32' && pnpm.endsWith('.cmd'),
     timeout: 45_000,
     killSignal: 'SIGKILL',
   });
