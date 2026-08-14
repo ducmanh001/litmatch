@@ -43,8 +43,18 @@
       }
     },
     "e2e": {
+      "cache": false,
       "// note": "e2e tự khởi core-api riêng qua playwright.config.mts (PORT riêng, không qua nx serve — tránh Nx continuous-task singleton lock khi chạy song song core-api-e2e). Cần migration-run chạy trước vì Nx không tự suy ra phụ thuộc đó (không dùng nx serve).",
       "dependsOn": ["core-api:migration-run"]
+    },
+    "e2e-ci": {
+      "cache": false
+    },
+    "e2e-ci--e2e/login-and-join-matching-queue.spec.ts": {
+      "cache": false
+    },
+    "e2e-ci--merge-reports": {
+      "cache": false
     }
   }
 }

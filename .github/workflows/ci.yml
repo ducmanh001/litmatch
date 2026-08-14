@@ -142,6 +142,8 @@ jobs:
       LOCAL_CI_REDIS_URL: redis://localhost:6379/15
       LOCAL_CI_SERVICES_READY: 'true'
       LOCAL_CI_DATABASE_READY: 'true'
+      LOCAL_CI_DOCKER_BUILDX_CACHE: 'true'
+      LOCAL_CI_DOCKER_CACHE_SCOPE: litmatch-ci
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
@@ -153,6 +155,10 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
+      - name: Expose GitHub Actions cache runtime
+        uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3.1.0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
       - run: pnpm install --frozen-lockfile
       - name: Local-equivalent container preflight
         run: pnpm ci:local:docker

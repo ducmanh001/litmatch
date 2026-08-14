@@ -259,7 +259,6 @@ describe('QueueStatusPanel', () => {
       expect.objectContaining({
         body: {
           matchType: 'voice',
-          useDiamond: false,
           genderPreference: 'any',
         },
       }),
