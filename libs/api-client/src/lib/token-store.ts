@@ -1,7 +1,7 @@
 /**
  * Session token store dùng chung cho mọi frontend (docs/12 § 12.6, ADR 0007): refresh token là
- * cookie httpOnly do core-api set — JS không bao giờ giữ/đọc/persist giá trị đó. Store này chỉ
- * giữ access token (memory-only, mất khi reload) + csrf token (persist ở storage cắm được —
+ * cookie httpOnly do core-api set — JS không bao giờ giữ/đọc/persist giá trị đó. Store này giữ access token
+ * và guest device token (memory-only, mất khi reload) + csrf token (persist ở storage cắm được —
  * browser → localStorage, test → memory) để lần refresh đầu tiên sau reload còn CSRF header
  * hợp lệ gửi kèm trong khi cookie httpOnly vẫn còn sống sót qua reload. Đây là tầng hợp đồng
  * auth, không phải UI — vì vậy sống ở api-client, không phải app.
@@ -10,6 +10,8 @@
 export interface AuthSession {
   accessToken: string;
   csrfToken: string;
+  /** Chỉ có ở guest session; giữ memory-only và gửi riêng cho Matching. */
+  guestDeviceToken?: string;
 }
 
 export interface CsrfTokenStorage {
@@ -63,6 +65,7 @@ export function browserCsrfTokenStorage(storageKey: string): CsrfTokenStorage {
 export interface TokenStore {
   getAccessToken(): string | null;
   getCsrfToken(): string | null;
+  getGuestDeviceToken(): string | null;
   getStatus(): SessionStatus;
   getGeneration(): number;
   /** Ghi session sau login/refresh thành công; `null` = logout/hết hạn (xoá sạch). */
@@ -81,6 +84,7 @@ export interface TokenStore {
 export function createTokenStore(csrfStorage: CsrfTokenStorage): TokenStore {
   let accessToken: string | null = null;
   let csrfToken: string | null = csrfStorage.get();
+  let guestDeviceToken: string | null = null;
   // Có csrfToken persisted từ trước → có thể vẫn còn cookie httpOnly hợp lệ, đáng thử refresh.
   // Không có → chưa từng đăng nhập trên browser này, khỏi tốn round-trip gọi thẳng unauthenticated.
   let status: SessionStatus =
@@ -95,6 +99,7 @@ export function createTokenStore(csrfStorage: CsrfTokenStorage): TokenStore {
       // Tab khác logout — theo ngay, không đợi tự 401.
       accessToken = null;
       csrfToken = null;
+      guestDeviceToken = null;
       status = 'unauthenticated';
     } else {
       // Tab khác rotate — cập nhật csrfToken, KHÔNG đổi accessToken/status của tab này.
@@ -109,6 +114,7 @@ export function createTokenStore(csrfStorage: CsrfTokenStorage): TokenStore {
     generation += 1;
     accessToken = session?.accessToken ?? null;
     csrfToken = session?.csrfToken ?? null;
+    guestDeviceToken = session?.guestDeviceToken ?? null;
     status = session === null ? 'unauthenticated' : 'authenticated';
     csrfStorage.set(csrfToken);
     notify();
@@ -117,6 +123,7 @@ export function createTokenStore(csrfStorage: CsrfTokenStorage): TokenStore {
   return {
     getAccessToken: () => accessToken,
     getCsrfToken: () => csrfToken,
+    getGuestDeviceToken: () => guestDeviceToken,
     getStatus: () => status,
     getGeneration: () => generation,
     setSession,

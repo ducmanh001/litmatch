@@ -80,6 +80,17 @@ export function PostComposer() {
   const [uploadError, setUploadError] = useState<string | undefined>();
   const [isUploading, setIsUploading] = useState(false);
 
+  if (currentUser?.isGuest) {
+    return (
+      <p
+        role="note"
+        className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200"
+      >
+        Tài khoản khách không thể đăng bài viết.
+      </p>
+    );
+  }
+
   const message =
     form.formState.errors.content?.message ??
     form.formState.errors.imageAssetId?.message ??

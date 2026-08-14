@@ -21,6 +21,7 @@ function errorBody(code: string): unknown {
 interface Recorded {
   url: string;
   auth: string | null;
+  guestDeviceToken: string | null;
   csrfHeader: string | null;
   acceptLanguage: string | null;
   credentials: RequestCredentials;
@@ -40,6 +41,7 @@ function fetchStub(queue: Array<Response | Error>): {
     calls.push({
       url: new URL(request.url).pathname,
       auth: request.headers.get('authorization'),
+      guestDeviceToken: request.headers.get('X-Guest-Device-Token'),
       csrfHeader: request.headers.get('x-csrf-token'),
       acceptLanguage: request.headers.get('accept-language'),
       credentials: request.credentials,
@@ -73,6 +75,33 @@ describe('createApiClient', () => {
 
     expect(calls[0].auth).toBe('Bearer access-old');
     expect(res.data).toEqual({ data: { id: 'u1' } });
+  });
+
+  it('gửi guest device token chỉ cho Matching tickets', async () => {
+    const { fetch, calls } = fetchStub([
+      jsonResponse(201, { data: { id: 'ticket-1' } }),
+      jsonResponse(200, { data: { id: 'u1' } }),
+    ]);
+    const store = createTokenStore(memoryCsrfTokenStorage());
+    store.setSession({
+      accessToken: 'guest-access',
+      csrfToken: 'csrf',
+      guestDeviceToken: 'guest-device-token',
+    });
+    const client = createApiClient({
+      baseUrl: BASE_URL,
+      tokenStore: store,
+      fetch,
+    });
+
+    await client.POST('/api/v1/matching/tickets', {
+      params: { header: { 'Idempotency-Key': 'key-1' } },
+      body: { matchType: 'soul' },
+    });
+    await client.GET('/api/v1/users/me');
+
+    expect(calls[0].guestDeviceToken).toBe('guest-device-token');
+    expect(calls[1].guestDeviceToken).toBeNull();
   });
 
   it('MỌI request đều credentials:include — thiếu thì browser bỏ Set-Cookie cross-origin (ADR 0007)', async () => {
