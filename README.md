@@ -53,17 +53,17 @@ Runbook đầy đủ về env ownership, dependency/migration changes, daily wor
 
 ## Lệnh thường dùng
 
-| Mục đích                                 | Lệnh                                                                 |
-| ---------------------------------------- | -------------------------------------------------------------------- |
-| Xem Nx projects/target thật              | `pnpm nx show projects`; `pnpm nx show project <name> --json`        |
-| Build/test/lint một project              | `pnpm nx build <name>`; `pnpm nx test <name>`; `pnpm nx lint <name>` |
-| Route context cho agent                  | `pnpm agent:context <scope>`                                         |
-| Kiểm tra contract/guard repository       | `pnpm agent:check`                                                   |
-| Sinh/kiểm tra docs và contract artifacts | `pnpm docs:generate`; `pnpm docs:check`                              |
-| Đồng bộ OpenAPI + generated client       | `pnpm openapi:sync`; kiểm tra bằng `pnpm openapi:check`              |
-| Kiểm tra format không ghi file           | `pnpm format:check`                                                  |
-| Xem local CI plan                        | `pnpm ci:local:plan`                                                 |
-| Full quality/test/build/E2E preflight trước push | `pnpm ci:preflight`                                             |
+| Mục đích                                         | Lệnh                                                                 |
+| ------------------------------------------------ | -------------------------------------------------------------------- |
+| Xem Nx projects/target thật                      | `pnpm nx show projects`; `pnpm nx show project <name> --json`        |
+| Build/test/lint một project                      | `pnpm nx build <name>`; `pnpm nx test <name>`; `pnpm nx lint <name>` |
+| Route context cho agent                          | `pnpm agent:context <scope>`                                         |
+| Kiểm tra contract/guard repository               | `pnpm agent:check`                                                   |
+| Sinh/kiểm tra docs và contract artifacts         | `pnpm docs:generate`; `pnpm docs:check`                              |
+| Đồng bộ OpenAPI + generated client               | `pnpm openapi:sync`; kiểm tra bằng `pnpm openapi:check`              |
+| Kiểm tra format không ghi file                   | `pnpm format:check`                                                  |
+| Xem local CI plan                                | `pnpm ci:local:plan`                                                 |
+| Full quality/test/build/E2E preflight trước push | `pnpm ci:preflight`                                                  |
 
 `pnpm ci:local:quick` và `pnpm ci:preflight` không tự sửa source. Không chạy full preflight trong shared
 dirty worktree khi chưa phối hợp ownership; dùng target check theo scope trước. Chi tiết:
