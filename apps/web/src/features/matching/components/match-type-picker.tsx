@@ -2,6 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { isApiError } from '@litmatch/api-client';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { useIdempotencyKey } from '../../../shared/idempotency/use-idempotency-key';
@@ -36,13 +37,15 @@ const MATCH_OPTIONS = [
 
 export function MatchTypePicker({
   onJoined,
+  initialMatchType = 'soul',
 }: {
   onJoined: (ticket: TicketDto) => void;
+  initialMatchType?: TicketDto['matchType'];
 }) {
   const form = useForm<JoinQueueForm>({
     resolver: zodResolver(joinQueueSchema),
     defaultValues: {
-      matchType: 'soul',
+      matchType: initialMatchType,
       useDiamond: false,
       genderPreference: 'any',
     },
@@ -51,6 +54,10 @@ export function MatchTypePicker({
   // 1 key cho cả intent "vào hàng đợi" hiện tại — giữ nguyên qua các lần retry lỗi mạng.
   const { key, resetKey } = useIdempotencyKey();
   const selectedMatchType = form.watch('matchType');
+
+  useEffect(() => {
+    form.setValue('matchType', initialMatchType);
+  }, [form, initialMatchType]);
 
   const message = isApiError(joinQueue.error)
     ? joinQueue.error.message
