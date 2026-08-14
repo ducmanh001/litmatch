@@ -25,23 +25,23 @@ pnpm agent:context <scope>
 
 ## Local CI profiles
 
-| Command                  | Hành vi                                                                    |
-| ------------------------ | -------------------------------------------------------------------------- |
-| `pnpm ci:local:plan`     | In plan của full profile, không chạy gate                                  |
-| `pnpm ci:local:quick`    | Install, reset Nx, agent checks/tests, workflow lint, format check và lint |
-| `pnpm ci:local:clean`    | Quality gate check-only trong clean Node 22 Linux container                |
-| `pnpm ci:local`          | Quick quality + DB services + tests/build/E2E                              |
-| `pnpm ci:local:docker`   | Build image, migration và local container smoke                            |
-| `pnpm ci:local:prepush`  | Quality + affected test/build/E2E + OpenAPI check (fast/manual)            |
-| `pnpm ci:preflight`      | Full clean quality + toàn bộ test/build/E2E + container smoke (pre-push)   |
-| `pnpm ci:local:all`      | Clean quality + toàn bộ test/build/E2E + image smoke                       |
-| `pnpm ci:local:security` | Hiện disabled/non-blocking; không được mô tả như security PASS             |
+| Command                  | Hành vi                                                                                         |
+| ------------------------ | ----------------------------------------------------------------------------------------------- |
+| `pnpm ci:local:plan`     | In plan của full profile, không chạy gate                                                       |
+| `pnpm ci:local:quick`    | Install, reuse input-aware Nx cache, agent checks/tests, workflow lint, format check và lint    |
+| `pnpm ci:local:clean`    | Quality gate check-only trong clean Node 22 Linux container                                     |
+| `pnpm ci:local`          | Quick quality + DB services + tests/build/E2E                                                   |
+| `pnpm ci:local:docker`   | Build image, migration và local container smoke                                                 |
+| `pnpm ci:local:prepush`  | Quality + affected test/build/E2E + OpenAPI check (fast/manual)                                 |
+| `pnpm ci:preflight`      | Full clean quality + toàn bộ test/build/E2E + container smoke (pre-push)                        |
+| `pnpm ci:local:all`      | Linux chạy clean quality và test/build song song; Windows có resource guard; sau đó image smoke |
+| `pnpm ci:local:security` | Hiện disabled/non-blocking; không được mô tả như security PASS                                  |
 
 Trên GitHub Actions, `quality` là prerequisite fail-fast. Sau khi job này PASS,
 `test` (test/build/E2E) và `docker` (container smoke) chạy song song; check tổng hợp
 `CI required` chỉ PASS khi cả ba job `quality`, `test` và `docker` đều thành công.
 
-Local CI và `agent:verify` sở hữu watchdog theo từng stage (mặc định lần lượt 20 và 15 phút,
+Local CI và `agent:verify` sở hữu watchdog theo từng stage (mặc định theo workload,
 có thể cấu hình bằng `LOCAL_CI_STAGE_TIMEOUT_MS` / `AGENT_VERIFY_STAGE_TIMEOUT_MS`). Không bọc cả
 profile bằng `timeout 45s`: aggregate gate hợp lệ thường dài hơn 45 giây. Stage quá hạn được ghi
 `TIMED_OUT`, trả exit `124`, gửi `SIGTERM` cho cả process group rồi `SIGKILL` sau grace period;
@@ -50,10 +50,16 @@ phân loại bằng cả marker và exit code. Đây là lỗi hạ tầng/thờ
 `FAIL`. Trước khi retry phải kiểm tra cây process cũ đã dừng. Probe HTTP của container có
 connect/total timeout riêng.
 
-Local runner cô lập task cache và workspace data theo từng process ở thư mục tạm của hệ điều hành
-qua `NX_CACHE_DIRECTORY` và `NX_WORKSPACE_DATA_DIRECTORY`. Vì vậy dev server/Nx Console chạy đồng
-thời không được xoá `terminalOutputs` hoặc project graph của preflight, và formatter không quét
-metadata sinh ra giữa các stage. GitHub Actions dùng cùng cơ chế này trên workspace sạch.
+Local runner giữ task cache và workspace data bền vững theo worktree ở `.nx/local-ci` qua
+`NX_CACHE_DIRECTORY` và `NX_WORKSPACE_DATA_DIRECTORY`. Nx tự hash inputs/outputs để bỏ cache khi
+source, dependency hoặc biến môi trường liên quan thay đổi; `LOCAL_CI_RESET_NX=true` là nút reset
+thủ công khi đổi plugin/config Nx. Clean Linux quality gate dùng các Docker volume có tên riêng cho
+`node_modules`, pnpm store và `.nx`, nên lần chạy sau không phải bootstrap lại từ đầu. Dev server/Nx
+Console vẫn không được chạy cùng preflight trong cùng worktree nếu có thể ghi đè output.
+Trên Linux, `all` chạy clean quality và test/build đồng thời; Windows chạy tuần tự mặc định vì
+Docker Desktop và Vitest dùng chung CPU/RAM có thể tạo flaky timeout dù không có shared file state.
+Có thể bật thử bằng `LOCAL_CI_PARALLEL=true` trên máy đủ tài nguyên hoặc tắt explicit bằng
+`LOCAL_CI_PARALLEL=false`.
 Các secret bắt buộc để bootstrap contract (`JWT`, OTP, guest device và matching guest quota) dùng
 giá trị CI-only xác định trong runner; gate không được phụ thuộc `.env` không tracked của máy dev.
 

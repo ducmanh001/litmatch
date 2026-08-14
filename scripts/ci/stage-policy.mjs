@@ -4,6 +4,11 @@ const MAX_HARD_TIMEOUT_MS = 60 * MINUTE_MS;
 
 const stageProfiles = [
   {
+    name: 'aggregate',
+    pattern: /parallel (?:clean|test) profile/iu,
+    normalMs: 10 * MINUTE_MS,
+  },
+  {
     name: 'dependency-install',
     pattern: /install dependencies/iu,
     normalMs: 3 * MINUTE_MS,

@@ -8,21 +8,25 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const runner = 'scripts/ci/run-stage.mjs';
 
 function runStage(timeoutMs, source, softTimeoutMs) {
+  const environment = {
+    ...process.env,
+    LITMATCH_STAGE_LABEL: 'stage-runner-test',
+    LITMATCH_STAGE_TIMEOUT_MS: String(timeoutMs),
+    LITMATCH_STAGE_KILL_GRACE_MS: '100',
+  };
+  if (softTimeoutMs === undefined) {
+    delete environment.LITMATCH_STAGE_SOFT_TIMEOUT_MS;
+  } else {
+    environment.LITMATCH_STAGE_SOFT_TIMEOUT_MS = String(softTimeoutMs);
+  }
+
   return spawnSync(
     process.execPath,
     [runner, process.execPath, '--input-type=module', '--eval', source],
     {
       cwd: root,
       encoding: 'utf8',
-      env: {
-        ...process.env,
-        LITMATCH_STAGE_LABEL: 'stage-runner-test',
-        LITMATCH_STAGE_TIMEOUT_MS: String(timeoutMs),
-        LITMATCH_STAGE_KILL_GRACE_MS: '100',
-        ...(softTimeoutMs === undefined
-          ? {}
-          : { LITMATCH_STAGE_SOFT_TIMEOUT_MS: String(softTimeoutMs) }),
-      },
+      env: environment,
       // The child deadline is intentionally longer than the production smoke values below.
       // Node startup can be delayed by a clean Linux container bind-mounting a Windows
       // workspace; the test must verify exit classification, not fail because the host is busy.
