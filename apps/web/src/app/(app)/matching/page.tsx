@@ -57,20 +57,29 @@ export default function MatchingPage() {
           </div>
           <MobileMatchActions />
           <div className="hidden flex-wrap gap-3 md:flex md:shrink-0 md:flex-col md:items-stretch">
-            <span className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-aqua to-irisl px-5 py-3 text-sm font-extrabold text-white shadow-md shadow-iris/20">
+            <Link
+              href="/matching?match=soul#match-queue"
+              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-full bg-gradient-to-r from-aqua to-irisl px-5 py-3 text-sm font-extrabold text-white shadow-md shadow-iris/20 transition hover:brightness-105"
+            >
               <MatchIcon width={17} height={17} />
               Nhắn tin ẩn danh
-            </span>
-            <span className="inline-flex items-center justify-center gap-2 rounded-full border border-iris/20 bg-card/70 px-5 py-3 text-sm font-extrabold backdrop-blur dark:border-white/15 dark:bg-white/[0.05] dark:text-white">
+            </Link>
+            <Link
+              href="/matching?match=voice#match-queue"
+              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-full border border-iris/20 bg-card/70 px-5 py-3 text-sm font-extrabold backdrop-blur transition hover:border-iris/35 hover:bg-iris/[0.04] dark:border-white/15 dark:bg-white/[0.05] dark:text-white dark:hover:bg-white/10"
+            >
               <MicIcon width={17} height={17} />
               Kết nối bằng voice
-            </span>
+            </Link>
           </div>
         </div>
       </div>
 
       <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-start">
-        <div className="order-1 min-w-0 rounded-[1.75rem] border border-border bg-card p-5 dark:border-white/10 dark:bg-surf sm:p-6">
+        <div
+          id="match-queue"
+          className="order-1 min-w-0 rounded-[1.75rem] border border-border bg-card p-5 dark:border-white/10 dark:bg-surf sm:p-6"
+        >
           <QueueStatusPanel />
         </div>
 

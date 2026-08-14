@@ -1,4 +1,8 @@
-import { isPollingStatus, MATCHING_TICKET_REFETCH_INTERVAL_MS } from './api';
+import {
+  isPollingStatus,
+  MATCHING_TICKET_REFETCH_INTERVAL_MS,
+  toJoinQueueRequest,
+} from './api';
 import { matchingKeys, useCancelTicket } from './api';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
@@ -22,6 +26,32 @@ describe('isPollingStatus', () => {
     expect(isPollingStatus('expired')).toBe(false);
     expect(isPollingStatus('cancelled')).toBe(false);
     expect(isPollingStatus(undefined)).toBe(false);
+  });
+});
+
+describe('join queue request compatibility', () => {
+  it('omits the default false flag for APIs that predate paid matching', () => {
+    expect(
+      toJoinQueueRequest({
+        matchType: 'soul',
+        useDiamond: false,
+        genderPreference: 'any',
+      }),
+    ).toEqual({ matchType: 'soul', genderPreference: 'any' });
+  });
+
+  it('keeps an explicit paid request in the payload', () => {
+    expect(
+      toJoinQueueRequest({
+        matchType: 'voice',
+        useDiamond: true,
+        genderPreference: 'female',
+      }),
+    ).toEqual({
+      matchType: 'voice',
+      useDiamond: true,
+      genderPreference: 'female',
+    });
   });
 });
 
