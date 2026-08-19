@@ -1,4 +1,10 @@
-import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
+import {
+  HttpStatus,
+  Inject,
+  Injectable,
+  Logger,
+  Optional,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { RealtimeEvents } from '@litmatch/common-dtos';
@@ -20,6 +26,7 @@ import { NotificationService, NotificationType } from '../notification';
 import { PartyRoomService } from '../party-room';
 import { ShortVideoService } from '../short-video';
 import { UserService } from '../user';
+import { ProfileSocialService } from '../friend';
 
 import type { EntityManager } from 'typeorm';
 import type {
@@ -73,6 +80,7 @@ export class GiftService {
     private readonly notificationService: NotificationService,
     private readonly config: ConfigService<CoreApiEnv, true>,
     @Inject(GIFT_REDIS) private readonly redis: Redis,
+    @Optional() private readonly profileSocial?: ProfileSocialService,
   ) {}
 
   /** Catalog quà đang bật — client map asset theo `code`, giá chỉ để hiển thị (§ 2). */
@@ -331,6 +339,118 @@ export class GiftService {
             type: NotificationType.GiftReceived,
             payload: {
               videoId,
+              senderUserId: user.userId,
+              giftCode: gift.code,
+              priceDiamond: gift.priceDiamond,
+            },
+          },
+        );
+      },
+    });
+
+    const giftEvent = await this.giftEventRepo.findOneByOrFail({
+      transactionId: result.transactionId,
+    });
+    if (!result.replayed && notification) {
+      await this.notificationService.sendPush(notification);
+    }
+    return { giftEvent, gift, replayed: result.replayed };
+  }
+
+  /**
+   * Tặng quà để mở chat trực tiếp từ profile. Unlike room/video, context người nhận
+   * suy từ URL và conversation được tạo trong cùng transaction Economy với ledger +
+   * GiftEvent; retry idempotent trả lại event cũ và không tạo unlock thứ hai.
+   */
+  async sendProfileGift(
+    user: AuthenticatedUser,
+    profileUserId: string,
+    giftId: string,
+    idempotencyKey: string,
+  ): Promise<SendGiftResult> {
+    if (profileUserId === user.userId) {
+      throw new DomainException(
+        GiftErrors.SELF_GIFT_FORBIDDEN,
+        'Không tự tặng quà cho chính mình',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    if (!this.profileSocial) {
+      throw new Error('ProfileSocialService chưa được cấu hình cho GiftModule');
+    }
+    const profileSocial = this.profileSocial;
+    await profileSocial.assertNotBlocked(user.userId, profileUserId);
+
+    const gift = await this.giftRepo.findOneBy({ id: giftId, active: true });
+    if (!gift) {
+      throw new DomainException(
+        GiftErrors.GIFT_NOT_FOUND,
+        'Quà không tồn tại hoặc đã ngừng bán',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    const receiver = await this.userService.getByIdOrThrow(profileUserId);
+    const ratePercent = this.config.getOrThrow('GIFT_POINTS_RATE_PERCENT', {
+      infer: true,
+    });
+    const pointsAwarded = receiver.isGuest
+      ? 0
+      : Math.floor((gift.priceDiamond * ratePercent) / 100);
+
+    let notification: Notification | undefined;
+    const result = await this.economy.sendGift({
+      senderUserId: user.userId,
+      receiverUserId: profileUserId,
+      priceDiamond: gift.priceDiamond,
+      pointsAwarded,
+      idempotencyKey: giftSendIdempotencyKey(user.userId, idempotencyKey),
+      metadata: {
+        giftId: gift.id,
+        giftCode: gift.code,
+        profileUserId,
+        pointsRatePercent: ratePercent,
+        receiverIsGuest: receiver.isGuest,
+      },
+      withinTransaction: async (manager, transactionId) => {
+        // Re-check trong transaction-owned side effect để block phát sinh sau precheck
+        // không biến gift thành đường bypass Safety.
+        await profileSocial.assertNotBlocked(user.userId, profileUserId);
+        // Đồng bộ với free profile chat để lượt first-contact thứ N+1 không
+        // bị vượt ngưỡng bởi hai request khác nhau chạy đồng thời.
+        await profileSocial.lockProfileForChatInManager(manager, profileUserId);
+        await manager.save(
+          manager.create(GiftEvent, {
+            giftId: gift.id,
+            roomId: null,
+            videoId: null,
+            profileUserId,
+            senderUserId: user.userId,
+            receiverUserId: profileUserId,
+            priceDiamond: gift.priceDiamond,
+            pointsAwarded,
+            pointsRatePercent: ratePercent,
+            transactionId,
+          }),
+        );
+        const { created } = await profileSocial.ensureConversationInManager(
+          manager,
+          user.userId,
+          profileUserId,
+        );
+        if (created) {
+          await profileSocial.ensureProfileChatContactInManager(
+            manager,
+            profileUserId,
+            user.userId,
+          );
+        }
+        notification = await this.notificationService.createWithManager(
+          manager,
+          {
+            userId: profileUserId,
+            type: NotificationType.GiftReceived,
+            payload: {
+              profileUserId,
               senderUserId: user.userId,
               giftCode: gift.code,
               priceDiamond: gift.priceDiamond,

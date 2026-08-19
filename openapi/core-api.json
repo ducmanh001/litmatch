@@ -1703,6 +1703,138 @@
         "tags": ["friends"]
       }
     },
+    "/api/v1/profiles/{profileUserId}/actions": {
+      "get": {
+        "operationId": "ProfileSocialController_getActions",
+        "parameters": [
+          {
+            "name": "profileUserId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ProfileActionsDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Trạng thái follow và quyền nhắn tin từ profile",
+        "tags": ["profiles"]
+      }
+    },
+    "/api/v1/profiles/{profileUserId}/follow": {
+      "post": {
+        "operationId": "ProfileSocialController_follow",
+        "parameters": [
+          {
+            "name": "profileUserId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/ProfileFollowDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Theo dõi một profile",
+        "tags": ["profiles"]
+      },
+      "delete": {
+        "operationId": "ProfileSocialController_unfollow",
+        "parameters": [
+          {
+            "name": "profileUserId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/ProfileFollowDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Bỏ theo dõi một profile",
+        "tags": ["profiles"]
+      }
+    },
+    "/api/v1/profiles/{profileUserId}/conversation": {
+      "post": {
+        "operationId": "ProfileSocialController_openConversation",
+        "parameters": [
+          {
+            "name": "profileUserId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/ConversationDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Mở chat trực tiếp từ profile; có thể yêu cầu tặng quà nếu profile quá hot",
+        "tags": ["profiles"]
+      }
+    },
     "/api/v1/soul-match/sessions/{id}": {
       "get": {
         "operationId": "SoulMatchController_getSession",
@@ -2656,6 +2788,54 @@
         },
         "security": [{ "bearer": [] }],
         "summary": "Tặng quà cho tác giả video — người nhận suy từ video; cùng chốt tiền/idempotency với quà trong phòng",
+        "tags": ["gift"]
+      }
+    },
+    "/api/v1/profiles/{profileUserId}/gifts": {
+      "post": {
+        "operationId": "GiftController_sendProfileGift",
+        "parameters": [
+          {
+            "name": "profileUserId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SendProfileGiftDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/GiftEventDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Tặng quà để mở chat trực tiếp từ profile — ledger, GiftEvent và conversation atomic",
         "tags": ["gift"]
       }
     },
@@ -7086,6 +7266,36 @@
           "imageAssetId": { "type": "string" }
         }
       },
+      "ProfileActionsDto": {
+        "type": "object",
+        "properties": {
+          "isFollowing": { "type": "boolean" },
+          "conversationId": { "type": "string", "nullable": true },
+          "messageAvailable": { "type": "boolean" },
+          "requiresGift": { "type": "boolean" },
+          "dailyFirstChatCount": {
+            "type": "number",
+            "description": "Số người lần đầu mở chat trực tiếp với profile trong ngày UTC"
+          },
+          "firstChatThreshold": {
+            "type": "number",
+            "description": "Từ người thứ N+1 trong ngày UTC cần tặng quà để mở chat"
+          }
+        },
+        "required": [
+          "isFollowing",
+          "conversationId",
+          "messageAvailable",
+          "requiresGift",
+          "dailyFirstChatCount",
+          "firstChatThreshold"
+        ]
+      },
+      "ProfileFollowDto": {
+        "type": "object",
+        "properties": { "following": { "type": "boolean" } },
+        "required": ["following"]
+      },
       "SoulSessionViewDto": {
         "type": "object",
         "properties": {
@@ -7407,6 +7617,7 @@
           "giftCode": { "type": "string" },
           "roomId": { "type": "string", "nullable": true },
           "videoId": { "type": "string", "nullable": true },
+          "profileUserId": { "type": "string", "nullable": true },
           "senderUserId": { "type": "string" },
           "receiverUserId": { "type": "string" },
           "priceDiamond": { "type": "number" },
@@ -7430,6 +7641,11 @@
         ]
       },
       "SendVideoGiftDto": {
+        "type": "object",
+        "properties": { "giftId": { "type": "string" } },
+        "required": ["giftId"]
+      },
+      "SendProfileGiftDto": {
         "type": "object",
         "properties": { "giftId": { "type": "string" } },
         "required": ["giftId"]

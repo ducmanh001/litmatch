@@ -12,6 +12,7 @@ import { NotificationModule } from '../notification';
 import { PartyRoomModule } from '../party-room';
 import { ShortVideoModule } from '../short-video';
 import { UserModule } from '../user';
+import { FriendModule } from '../friend';
 
 import type Redis from 'ioredis';
 
@@ -22,6 +23,7 @@ import type Redis from 'ioredis';
     PartyRoomModule, // validate membership phòng + danh sách fanout realtime
     ShortVideoModule, // suy người nhận từ video khi tặng quà cho tác giả video
     UserModule, // check người nhận là guest (không nhận PTS — docs/06 § Gift)
+    FriendModule, // unlock conversation atomically khi tặng quà từ profile
     NotificationModule, // in-app notification gift_received (docs/services/notification-service.md § 3)
   ],
   controllers: [GiftController],
