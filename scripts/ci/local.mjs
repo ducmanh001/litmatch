@@ -741,8 +741,17 @@ function waitForHealthEndpoints() {
   );
 }
 
-function runContainerSmoke(reuseValidatedBuilds = false) {
+function runContainerSmoke(
+  reuseValidatedBuilds = false,
+  { skipUnsupportedPlatform = false } = {},
+) {
   if (process.platform !== 'linux' && !dryRun) {
+    if (skipUnsupportedPlatform) {
+      console.log(
+        '\n[ci-local] Container smoke skipped on native Windows; Docker host networking is validated by the Linux/WSL runner.',
+      );
+      return;
+    }
     throw new Error(
       'Container smoke dùng Docker host networking giống GitHub Actions; chạy lệnh này trên Linux/WSL.',
     );
@@ -1087,7 +1096,7 @@ async function runProfile() {
   }
 
   await runIndependentAllStages();
-  runContainerSmoke(true);
+  runContainerSmoke(true, { skipUnsupportedPlatform: true });
 }
 
 try {

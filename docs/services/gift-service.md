@@ -28,8 +28,8 @@ client map asset/animation. `GET /gifts` chỉ trả quà `active`.
 
 ## 3. Ngữ cảnh tặng
 
-`gift_events` mang ĐÚNG 1 context/1 event (CHECK `chk_gift_events_context`): `room_id` hoặc
-`video_id`.
+`gift_events` mang ĐÚNG 1 context/1 event (CHECK `chk_gift_events_context`): `room_id`,
+`video_id` hoặc `profile_user_id`.
 
 - Tặng trong Party Room: `POST /party/rooms/:roomId/gifts` (header `Idempotency-Key` bắt buộc).
   Người tặng VÀ người nhận phải là member active của phòng active (qua
@@ -40,8 +40,11 @@ client map asset/animation. `GET /gifts` chỉ trả quà `active`.
   thấy được với người tặng (`ShortVideoService.getVideoOrThrow`). Cùng chốt tiền/idempotency
   với quà phòng; KHÔNG có fanout realtime phòng — người nhận biết qua notification
   `gift_received` (payload mang `videoId`).
-- **Ngoài scope** (mở khi nghiệp vụ cần, sửa spec này trước): tặng trong chat 1-1/call,
-  gift combo/lucky gift.
+- Tặng để mở chat profile: `POST /profiles/:profileUserId/gifts` — người nhận suy từ URL;
+  cùng transaction với ledger + GiftEvent tạo Conversation profile và ghi `ProfileChatContact`
+  nếu đây là lần đầu bắt chuyện. Đây là quà mở chat một lần cho cặp, không phải phí trên từng
+  message; người nhận không cần chấp nhận Match.
+- **Ngoài scope**: tặng trong chat 1-1/call, gift combo/lucky gift.
 
 ## 4. Guest & chống lạm dụng ([06-domain-rules.md](../06-domain-rules.md))
 

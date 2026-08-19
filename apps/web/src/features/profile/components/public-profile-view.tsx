@@ -2,17 +2,36 @@
 
 import { isApiError } from '@litmatch/api-client';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
+import { useIdempotencyKey } from '../../../shared/idempotency/use-idempotency-key';
 import { PlaceholderAvatar } from '../../../shared/ui/placeholder-avatar';
 import { useCreateInvite } from '../../matching/invite-api';
-import { usePublicPresence, usePublicProfile } from '../api';
+import {
+  useFollowProfile,
+  useOpenProfileConversation,
+  useProfileActions,
+  useProfileGiftCatalog,
+  usePublicPresence,
+  usePublicProfile,
+  useSendProfileGift,
+} from '../api';
 import { showToast } from '../../../shared/lib/toast-store';
 
 import type { PublicProfileDto } from '../api';
 
 export function PublicProfileView({ userId }: { userId: string }) {
+  const router = useRouter();
   const profile = usePublicProfile(userId);
   const presence = usePublicPresence(userId);
+  const actions = useProfileActions(userId);
+  const followProfile = useFollowProfile(userId);
+  const openConversation = useOpenProfileConversation(userId);
+  const sendProfileGift = useSendProfileGift(userId);
+  const giftCatalog = useProfileGiftCatalog(
+    actions.data?.requiresGift === true,
+  );
+  const { key: giftIdempotencyKey, resetKey } = useIdempotencyKey();
   const createInvite = useCreateInvite();
 
   if (profile.isPending) {
@@ -41,6 +60,49 @@ export function PublicProfileView({ userId }: { userId: string }) {
         onError: (error) =>
           showToast(
             isApiError(error) ? error.message : 'Không thể gửi lời mời.',
+            'warn',
+          ),
+      },
+    );
+  };
+
+  const openChat = () => {
+    openConversation.mutate(undefined, {
+      onSuccess: () => router.push(`/chat/${profileData.id}`),
+      onError: (error) =>
+        showToast(
+          isApiError(error) ? error.message : 'Không thể mở cuộc trò chuyện.',
+          'warn',
+        ),
+    });
+  };
+
+  const toggleFollow = () => {
+    followProfile.mutate(actions.data?.isFollowing !== true, {
+      onSuccess: (result) =>
+        showToast(
+          result?.following === true ? 'Đã theo dõi hồ sơ.' : 'Đã bỏ theo dõi.',
+        ),
+      onError: (error) =>
+        showToast(
+          isApiError(error) ? error.message : 'Không thể cập nhật theo dõi.',
+          'warn',
+        ),
+    });
+  };
+
+  const sendGiftToOpenChat = (giftId: string, giftName: string) => {
+    sendProfileGift.mutate(
+      { giftId, idempotencyKey: giftIdempotencyKey },
+      {
+        onSuccess: () => {
+          resetKey();
+          showToast(`Đã tặng ${giftName}. Chat đã được mở.`);
+          router.push(`/chat/${profileData.id}`);
+        },
+        onError: (error) =>
+          showToast(
+            isApiError(error) ? error.message : 'Không thể tặng quà.',
             'warn',
           ),
       },
@@ -90,6 +152,74 @@ export function PublicProfileView({ userId }: { userId: string }) {
           </div>
         )}
         <div className="mt-6 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            disabled={followProfile.isPending}
+            onClick={toggleFollow}
+            className="rounded-2xl border border-iris/30 bg-iris/10 px-4 py-3 text-sm font-bold text-irisl disabled:opacity-50 dark:text-white"
+          >
+            {actions.data?.isFollowing === true
+              ? '✓ Đang theo dõi'
+              : '♡ Theo dõi'}
+          </button>
+          <button
+            type="button"
+            disabled={openConversation.isPending}
+            onClick={openChat}
+            className="rounded-2xl bg-iris px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
+          >
+            {openConversation.isPending ? 'Đang mở…' : '💬 Nhắn tin'}
+          </button>
+        </div>
+
+        {actions.data?.requiresGift === true && (
+          <div className="mt-4 rounded-2xl border border-amber-300/50 bg-amber-50 p-4 dark:border-amber-200/20 dark:bg-amber-400/10">
+            <p className="text-sm font-bold">
+              Hồ sơ đang nhận được nhiều sự quan tâm
+            </p>
+            <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-white/70">
+              Đã có {actions.data.dailyFirstChatCount} người mới bắt chuyện hôm
+              nay. Từ người thứ {actions.data.firstChatThreshold + 1} trở đi,
+              hãy tặng một món quà để tạo dấu ấn và mở chat trực tiếp.
+            </p>
+            {giftCatalog.isPending && (
+              <p className="mt-3 text-xs text-slate-500">
+                Đang tải danh sách quà…
+              </p>
+            )}
+            {giftCatalog.data !== undefined && giftCatalog.data.length > 0 && (
+              <div className="mt-3 flex gap-2 overflow-x-auto">
+                {giftCatalog.data.map((gift) => (
+                  <button
+                    key={gift.id}
+                    type="button"
+                    disabled={sendProfileGift.isPending}
+                    onClick={() => sendGiftToOpenChat(gift.id, gift.name)}
+                    className="flex min-w-20 flex-col items-center gap-1 rounded-xl bg-white px-3 py-2 text-[11px] font-bold shadow-sm disabled:opacity-50 dark:bg-surf2"
+                  >
+                    <span aria-hidden>🎁</span>
+                    <span className="max-w-16 truncate">{gift.name}</span>
+                    <span className="text-sky-600 dark:text-diamond">
+                      {gift.priceDiamond} 💎
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {giftCatalog.data?.length === 0 && (
+              <p className="mt-3 text-xs text-slate-500">
+                Hiện chưa có quà để mở chat.
+              </p>
+            )}
+          </div>
+        )}
+
+        <p className="mt-5 text-xs text-slate-500 dark:text-slate-400">
+          Nhắn tin trực tiếp từ profile — không cần gửi yêu cầu match và chờ
+          đồng ý.
+        </p>
+
+        <div className="mt-3 grid grid-cols-2 gap-3">
           <button
             type="button"
             disabled={createInvite.isPending}

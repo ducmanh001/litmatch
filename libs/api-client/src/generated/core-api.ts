@@ -830,6 +830,58 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/profiles/{profileUserId}/actions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Trạng thái follow và quyền nhắn tin từ profile */
+    get: operations['ProfileSocialController_getActions'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/profiles/{profileUserId}/follow': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Theo dõi một profile */
+    post: operations['ProfileSocialController_follow'];
+    /** Bỏ theo dõi một profile */
+    delete: operations['ProfileSocialController_unfollow'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/profiles/{profileUserId}/conversation': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Mở chat trực tiếp từ profile; có thể yêu cầu tặng quà nếu profile quá hot */
+    post: operations['ProfileSocialController_openConversation'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/soul-match/sessions/{id}': {
     parameters: {
       query?: never;
@@ -1218,6 +1270,23 @@ export interface paths {
     put?: never;
     /** Tặng quà cho tác giả video — người nhận suy từ video; cùng chốt tiền/idempotency với quà trong phòng */
     post: operations['GiftController_sendVideoGift'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/profiles/{profileUserId}/gifts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Tặng quà để mở chat trực tiếp từ profile — ledger, GiftEvent và conversation atomic */
+    post: operations['GiftController_sendProfileGift'];
     delete?: never;
     options?: never;
     head?: never;
@@ -3186,6 +3255,19 @@ export interface components {
       content?: string;
       imageAssetId?: string;
     };
+    ProfileActionsDto: {
+      isFollowing: boolean;
+      conversationId: string | null;
+      messageAvailable: boolean;
+      requiresGift: boolean;
+      /** @description Số người lần đầu mở chat trực tiếp với profile trong ngày UTC */
+      dailyFirstChatCount: number;
+      /** @description Từ người thứ N+1 trong ngày UTC cần tặng quà để mở chat */
+      firstChatThreshold: number;
+    };
+    ProfileFollowDto: {
+      following: boolean;
+    };
     SoulSessionViewDto: {
       sessionId: string;
       /** @enum {string} */
@@ -3351,6 +3433,7 @@ export interface components {
       giftCode: string;
       roomId?: string | null;
       videoId?: string | null;
+      profileUserId?: string | null;
       senderUserId: string;
       receiverUserId: string;
       priceDiamond: number;
@@ -3361,6 +3444,9 @@ export interface components {
       replayed: boolean;
     };
     SendVideoGiftDto: {
+      giftId: string;
+    };
+    SendProfileGiftDto: {
       giftId: string;
     };
     CreateUploadIntentDto: {
@@ -5392,6 +5478,110 @@ export interface operations {
       };
     };
   };
+  ProfileSocialController_getActions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        profileUserId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['ProfileActionsDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  ProfileSocialController_follow: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        profileUserId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['ProfileFollowDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  ProfileSocialController_unfollow: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        profileUserId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['ProfileFollowDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  ProfileSocialController_openConversation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        profileUserId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['ConversationDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
   SoulMatchController_getSession: {
     parameters: {
       query?: never;
@@ -6078,6 +6268,39 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': components['schemas']['SendVideoGiftDto'];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['GiftEventDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  GiftController_sendProfileGift: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10) */
+        'Idempotency-Key': string;
+      };
+      path: {
+        profileUserId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SendProfileGiftDto'];
       };
     };
     responses: {

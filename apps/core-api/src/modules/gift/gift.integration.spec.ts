@@ -21,6 +21,9 @@ import { PartyRoomLivekitUrl1753500000000 } from '../../database/migrations/1753
 import { PartyRoomHostDisconnectGrace1753900000000 } from '../../database/migrations/1753900000000-party-room-host-disconnect-grace';
 import { PartyRoomCategory1755200000000 } from '../../database/migrations/1755200000000-party-room-category';
 import { GiftEventVideo1755700000000 } from '../../database/migrations/1755700000000-gift-event-video';
+import { ProfileFollow1757400000000 } from '../../database/migrations/1757400000000-profile-follow';
+import { ProfileChatContact1757600000000 } from '../../database/migrations/1757600000000-profile-chat-contact';
+import { ProfileGiftContext1757500000000 } from '../../database/migrations/1757500000000-profile-gift-context';
 import { MessageAttachment1754400000000 } from '../../database/migrations/1754400000000-message-attachment';
 import { PartyRoomSpeakerInvite1756500000000 } from '../../database/migrations/1756500000000-party-room-speaker-invite';
 import { PartyRoomPresenceChat1756800000000 } from '../../database/migrations/1756800000000-party-room-presence-chat';
@@ -28,6 +31,12 @@ import { PartyRoomPresenceChat1756800000000 } from '../../database/migrations/17
 import { GiftService } from './gift.service';
 import { Gift } from './entities/gift.entity';
 import { GiftEvent } from './entities/gift-event.entity';
+import {
+  Conversation,
+  ProfileChatContact,
+  ProfileFollow,
+  ProfileSocialService,
+} from '../friend';
 import { PartyRoomService } from '../party-room/party-room.service';
 import { PartyRoom } from '../party-room/entities/party-room.entity';
 import { PartyRoomMember } from '../party-room/entities/party-room-member.entity';
@@ -99,6 +108,7 @@ d('Gift integration (Postgres thật)', () => {
   let economy: EconomyService;
   let party: PartyRoomService;
   let gift: GiftService;
+  let profileSocial: ProfileSocialService;
   let notification: NotificationService;
   /** Mọi publish realtime (cả party.* lẫn gift.sent) — filter theo event khi assert. */
   const published: Array<{ channel: string; event: string }> = [];
@@ -214,6 +224,9 @@ d('Gift integration (Postgres thật)', () => {
         VipPlan,
         OutboxEvent,
         Notification,
+        Conversation,
+        ProfileChatContact,
+        ProfileFollow,
       ],
       migrations: [
         InitAuthUser1751900000000,
@@ -235,6 +248,9 @@ d('Gift integration (Postgres thật)', () => {
         PartyRoomHostDisconnectGrace1753900000000,
         PartyRoomCategory1755200000000,
         GiftEventVideo1755700000000,
+        ProfileFollow1757400000000,
+        ProfileGiftContext1757500000000,
+        ProfileChatContact1757600000000,
         MessageAttachment1754400000000,
         PartyRoomSpeakerInvite1756500000000,
         PartyRoomPresenceChat1756800000000,
@@ -286,6 +302,15 @@ d('Gift integration (Postgres thật)', () => {
     notification = new NotificationService(ds.getRepository(Notification), {
       send: async () => undefined,
     } as never);
+    profileSocial = new ProfileSocialService(
+      ds.getRepository(ProfileFollow),
+      ds.getRepository(ProfileChatContact),
+      ds.getRepository(Conversation),
+      ds.getRepository(User),
+      userService,
+      { isBlocked: async () => false } as never,
+      configStub,
+    );
     gift = new GiftService(
       ds.getRepository(Gift),
       ds.getRepository(GiftEvent),
@@ -306,6 +331,7 @@ d('Gift integration (Postgres thật)', () => {
       notification,
       configStub,
       redisStub,
+      profileSocial,
     );
   });
 
@@ -427,6 +453,57 @@ d('Gift integration (Postgres thật)', () => {
     ).toBe(1);
     // realtime chỉ bắn cho lần ghi sổ thật (3 member × 1 lần), replay không bắn lại
     expect(giftSentCount()).toBe(3);
+  });
+
+  it('profile gift: ledger + GiftEvent context + Conversation unlock cùng transaction, retry không trừ lần 2', async () => {
+    const [sender, receiver] = await Promise.all([
+      createUser('profile-gift-sender'),
+      createUser('profile-gift-receiver'),
+    ]);
+    await fund(sender.id);
+    const rose = await giftByCode('rose');
+
+    const first = await gift.sendProfileGift(
+      auth(sender.id),
+      receiver.id,
+      rose.id,
+      'profile-unlock-key',
+    );
+    expect(first.replayed).toBe(false);
+    expect(first.giftEvent).toMatchObject({
+      profileUserId: receiver.id,
+      roomId: null,
+      videoId: null,
+      senderUserId: sender.id,
+      receiverUserId: receiver.id,
+    });
+
+    const [low, high] =
+      sender.id < receiver.id
+        ? [sender.id, receiver.id]
+        : [receiver.id, sender.id];
+    expect(
+      await ds.getRepository(Conversation).countBy({
+        userLowId: low,
+        userHighId: high,
+      }),
+    ).toBe(1);
+    expect(
+      await ds
+        .getRepository(ProfileChatContact)
+        .countBy({ profileUserId: receiver.id }),
+    ).toBe(1);
+    expect((await walletOf(sender.id)).balance).toBe(1199);
+
+    const replay = await gift.sendProfileGift(
+      auth(sender.id),
+      receiver.id,
+      rose.id,
+      'profile-unlock-key',
+    );
+    expect(replay.replayed).toBe(true);
+    expect(replay.giftEvent.id).toBe(first.giftEvent.id);
+    expect((await walletOf(sender.id)).balance).toBe(1199);
   });
 
   it('atomicity: side effect trong withinTransaction fail → KHÔNG trừ DIA, KHÔNG cộng PTS, không GiftEvent', async () => {

@@ -97,6 +97,14 @@
   logic. Inbox re-check hidden-set ở mỗi lần đọc và DTO chỉ compose `PublicProfileDto` tối thiểu
   của inviter để invitee có đủ thông tin đồng ý; không lộ ngày sinh/region/trust/status. Chi tiết:
   [services/matching-service.md § 9](./services/matching-service.md#9-invite-cta-mời-voicesoul-match-w4).
+- **Profile social actions**: public profile luôn có CTA `follow` và mở chat trực tiếp; không cần
+  gửi Match Invite rồi chờ đối phương chấp nhận. Server lưu `ProfileFollow` độc lập với chat.
+  Server chỉ ghi `ProfileChatContact` khi một cặp lần đầu mở chat trực tiếp; số người có
+  `firstContactDate` là ngày UTC hiện tại mới được dùng làm popularity gate. Từ người thứ
+  `PROFILE_DIRECT_MESSAGE_DAILY_FIRST_CHAT_THRESHOLD` + 1 (mặc định 10 người đầu được miễn),
+  lần mở chat đầu tiên phải tặng một món quà; Gift được ghi qua Economy, `GiftEvent`,
+  `Conversation` và `ProfileChatContact` trong cùng transaction. Conversation đã tồn tại thì
+  không thu lại quà cho các tin nhắn sau; block 2 chiều vẫn chặn tại thời điểm action.
 - **Voice Match có thể tạo Friendship bằng "Yêu thích" ngay trong hoặc sau cuộc gọi**: mỗi bên có
   đúng một lượt immutable; chỉ khi **cả hai** đã thích thì server tạo `Friendship` và
   `Conversation` trong cùng transaction. Danh tính chỉ được reveal qua chat sau mutual like; khi

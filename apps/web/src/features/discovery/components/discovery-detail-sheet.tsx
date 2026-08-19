@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
+import Link from 'next/link';
 
 import { placeholderAvatarUrl } from '../../../shared/lib/placeholder-avatar';
 import { MicIcon, ProfileIcon } from '../../../shared/ui/icons';
@@ -235,8 +236,8 @@ export function DiscoveryDetailSheet({
                 Mở lời theo cách bạn thấy tự nhiên
               </p>
               <p className="mt-1 text-xs leading-5 text-muted-foreground dark:text-white/75">
-                Chọn trò chuyện hoặc voice. Kết nối chỉ tiếp tục khi đối phương
-                chấp nhận lời mời của bạn.
+                Bạn có thể nhắn tin trực tiếp trên hồ sơ mà không cần chờ chấp
+                nhận Match. Voice và Soul Match vẫn là các lựa chọn riêng.
               </p>
             </div>
 
@@ -263,6 +264,22 @@ export function DiscoveryDetailSheet({
                 </div>
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-1">
+                  <Link
+                    href={`/users/${card.profile.id}`}
+                    className="flex min-h-16 items-center gap-3 rounded-2xl border border-primary/25 bg-primary/10 px-4 text-left transition hover:bg-primary/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring dark:border-rose-300/25 dark:bg-rose-300/10 dark:text-white dark:hover:bg-rose-300/15"
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/15 dark:bg-rose-300/15">
+                      <MessageIcon />
+                    </span>
+                    <span>
+                      <span className="block text-sm font-extrabold">
+                        Mở profile & nhắn tin
+                      </span>
+                      <span className="block text-[11px] text-muted-foreground dark:text-white/70">
+                        Follow hoặc nhắn trực tiếp
+                      </span>
+                    </span>
+                  </Link>
                   <button
                     type="button"
                     aria-label="Mời Soul Match"

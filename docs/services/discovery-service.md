@@ -69,11 +69,14 @@ composition, KHÔNG sửa DTO gốc. `ageBucket` tính từ `birthDate` theo m�
 
 ## 6. CTA sau khi thấy user — xem profile + mời Voice/Soul Match (W4)
 
-Repo KHÔNG có friend-request/"say hi" — chat chỉ mở khi đã là bạn qua Soul/Voice Match (double-
-like). W1 chỉ cho xem profile; **W4 bổ sung CTA "mời Voice/Soul Match"** — directed invite tái
-dùng nguyên pipeline `MatchTicket`/`MatchSession` sẵn có, KHÔNG phải friend-request flow mới. Đây
-là mitigation chính cho rủi ro graph bạn bè sparse (browse/nearby chỉ xem profile là ngõ cụt cho
-dating app). Thiết kế chi tiết, state machine, rate-limit chống spam: xem
+Profile có Follow và Nhắn tin trực tiếp; không yêu cầu Match Invite hoặc sự đồng ý của đối phương
+để bắt đầu chat. Sau N người đầu tiên mở chat trực tiếp trong ngày UTC, CTA Nhắn tin chuyển sang
+Tặng quà để mở chat cho người tiếp theo — logic và transaction thuộc Friend/Gift, không thuộc
+Discovery. Follow không làm tăng bộ đếm này. **CTA mời
+Voice/Soul Match** vẫn tồn tại như một lựa chọn riêng, tái dùng nguyên pipeline `MatchTicket`/
+`MatchSession`, KHÔNG phải friend-request flow mới. Đây là mitigation chính cho rủi ro graph bạn
+bè sparse (browse/nearby không còn là ngõ cụt khi có profile chat). Thiết kế invite, state machine,
+rate-limit chống spam: xem
 [matching-service.md § Invite](./matching-service.md#9-invite-cta-mời-voicesoul-match-w4) —
 Discovery/Nearby chỉ là nơi UI lấy
 `inviteeUserId`, không sở hữu logic invite.

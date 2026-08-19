@@ -63,6 +63,10 @@ Trên Linux, `all` chạy clean quality và test/build đồng thời; Windows c
 Docker Desktop và Vitest dùng chung CPU/RAM có thể tạo flaky timeout dù không có shared file state.
 Có thể bật thử bằng `LOCAL_CI_PARALLEL=true` trên máy đủ tài nguyên hoặc tắt explicit bằng
 `LOCAL_CI_PARALLEL=false`.
+Trên Windows native, `all` vẫn chạy toàn bộ quality, test/build và E2E, sau đó ghi rõ container smoke
+được skip vì Docker host networking phải chạy trên Linux/WSL; job `docker` trên GitHub Actions vẫn
+là gate bắt buộc. Lệnh `pnpm ci:local:docker` chạy trực tiếp trên Windows tiếp tục báo lỗi để không
+đánh dấu một container smoke chưa chạy là PASS.
 GitHub Docker job tạo Buildx builder và dùng GHA cache (`LOCAL_CI_DOCKER_BUILDX_CACHE=true`) cho
 các layer image. Local Docker vẫn dùng layer cache mặc định; không cần cấu hình thêm.
 

@@ -129,6 +129,7 @@ export interface CoreApiEnv {
   SOUL_RATING_WINDOW_SECONDS: number;
   SOUL_CHAT_MESSAGE_MAX_LENGTH: number;
   FRIEND_MESSAGE_MAX_LENGTH: number;
+  PROFILE_DIRECT_MESSAGE_DAILY_FIRST_CHAT_THRESHOLD: number;
   STREAK_MILESTONE_DAYS: string;
   STREAK_WARNING_HOURS: number;
   STREAK_WARNING_CHECK_INTERVAL_MS: number;
@@ -465,6 +466,13 @@ export const coreApiEnvSchema = Joi.object({
     .min(1)
     .max(4000)
     .default(2000),
+
+  // Profile social actions — từ người bắt chuyện đầu tiên thứ N+1 trong ngày UTC,
+  // mở chat trực tiếp cần một Gift để tạo khác biệt cho profile được quan tâm nhiều.
+  PROFILE_DIRECT_MESSAGE_DAILY_FIRST_CHAT_THRESHOLD: Joi.number()
+    .integer()
+    .min(1)
+    .default(10),
 
   // Streak trò chuyện (docs/services/streak-service.md, mở rộng module friend — W2)
   // Mốc ngày chạm milestone (realtime + notification), phân tách dấu phẩy, tăng dần

@@ -21,6 +21,13 @@ export class SendVideoGiftDto {
   giftId!: string;
 }
 
+/** Quà để mở chat trực tiếp từ profile — người nhận suy từ URL, không gửi trong body. */
+export class SendProfileGiftDto {
+  @ApiProperty()
+  @IsUUID()
+  giftId!: string;
+}
+
 export class GiftDto {
   @ApiProperty() id!: string;
   @ApiProperty() code!: string;
@@ -45,6 +52,8 @@ export class GiftEventDto {
   roomId!: string | null;
   @ApiPropertyOptional({ nullable: true, type: String })
   videoId!: string | null;
+  @ApiPropertyOptional({ nullable: true, type: String })
+  profileUserId!: string | null;
   @ApiProperty() senderUserId!: string;
   @ApiProperty() receiverUserId!: string;
   @ApiProperty() priceDiamond!: number;
@@ -65,6 +74,7 @@ export class GiftEventDto {
     dto.giftCode = giftCode;
     dto.roomId = event.roomId;
     dto.videoId = event.videoId;
+    dto.profileUserId = event.profileUserId;
     dto.senderUserId = event.senderUserId;
     dto.receiverUserId = event.receiverUserId;
     dto.priceDiamond = event.priceDiamond;

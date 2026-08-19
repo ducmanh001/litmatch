@@ -20,14 +20,17 @@ export class GiftEvent {
   giftId!: string;
 
   /**
-   * Context tặng — ĐÚNG 1 trong 2 (CHECK `chk_gift_events_context`): trong Party Room
-   * (`roomId`) hoặc cho tác giả video (`videoId`).
+   * Context tặng — ĐÚNG 1 trong 3 (CHECK `chk_gift_events_context`): trong Party Room
+   * (`roomId`), cho tác giả video (`videoId`) hoặc để mở chat profile (`profileUserId`).
    */
   @Column({ type: 'uuid', nullable: true })
   roomId!: string | null;
 
   @Column({ type: 'uuid', nullable: true })
   videoId!: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  profileUserId!: string | null;
 
   @Column({ type: 'uuid' })
   senderUserId!: string;

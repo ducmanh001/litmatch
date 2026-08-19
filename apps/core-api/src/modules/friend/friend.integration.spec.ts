@@ -15,6 +15,8 @@ import { ConversationStreak1754200000000 } from '../../database/migrations/17542
 import { MessageAttachment1754400000000 } from '../../database/migrations/1754400000000-message-attachment';
 import { ConversationMemberState1755600000000 } from '../../database/migrations/1755600000000-conversation-member-state';
 import { MatchingDailyEntitlements1757100000000 } from '../../database/migrations/1757100000000-matching-daily-entitlements';
+import { ProfileFollow1757400000000 } from '../../database/migrations/1757400000000-profile-follow';
+import { ProfileChatContact1757600000000 } from '../../database/migrations/1757600000000-profile-chat-contact';
 
 import { FriendService } from './friend.service';
 import { FriendErrors } from './friend.errors';
@@ -23,7 +25,10 @@ import { ConversationMemberState } from './entities/conversation-member-state.en
 import { ConversationStreak } from './entities/conversation-streak.entity';
 import { Friendship, FriendshipSource } from './entities/friendship.entity';
 import { Message } from './entities/message.entity';
+import { ProfileFollow } from './entities/profile-follow.entity';
+import { ProfileChatContact } from './entities/profile-chat-contact.entity';
 import { ConversationService } from './services/conversation.service';
+import { ProfileSocialService } from './services/profile-social.service';
 import { StreakService } from './services/streak.service';
 import { MatchSession } from '../matching/entities/match-session.entity';
 import { MatchTicket } from '../matching/entities/match-ticket.entity';
@@ -65,6 +70,7 @@ const CONFIG: Record<string, unknown> = {
   STREAK_MILESTONE_DAYS: '3,7,14',
   // 0 — test không phụ thuộc giờ thật lúc CI chạy (findConversationsNeedingWarning so UTC hour)
   STREAK_WARNING_HOURS: 0,
+  PROFILE_DIRECT_MESSAGE_DAILY_FIRST_CHAT_THRESHOLD: 2,
 };
 const configStub = {
   getOrThrow: (key: string) => {
@@ -78,6 +84,7 @@ d('Friend integration (Postgres thật)', () => {
   let friend: FriendService;
   let safety: SafetyService;
   let streakService: StreakService;
+  let profileSocial: ProfileSocialService;
   const notificationCreateSpy = jest.fn(async () => ({ id: 'notif-stub' }));
 
   async function createUser(nickname: string): Promise<User> {
@@ -149,6 +156,8 @@ d('Friend integration (Postgres thật)', () => {
         ConversationMemberState,
         Message,
         ConversationStreak,
+        ProfileFollow,
+        ProfileChatContact,
         Report,
         Block,
       ],
@@ -166,6 +175,8 @@ d('Friend integration (Postgres thật)', () => {
         ConversationStreak1754200000000,
         MessageAttachment1754400000000,
         ConversationMemberState1755600000000,
+        ProfileFollow1757400000000,
+        ProfileChatContact1757600000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -209,6 +220,15 @@ d('Friend integration (Postgres thật)', () => {
       configStub,
       // stub publish — realtime end-to-end đã test ở suite signaling-gateway
       { publish: async () => 1 } as never,
+    );
+    profileSocial = new ProfileSocialService(
+      ds.getRepository(ProfileFollow),
+      ds.getRepository(ProfileChatContact),
+      ds.getRepository(Conversation),
+      ds.getRepository(User),
+      userServiceStub,
+      safety,
+      configStub,
     );
   });
 
@@ -273,6 +293,68 @@ d('Friend integration (Postgres thật)', () => {
         .getRepository(Conversation)
         .countBy({ userLowId: low, userHighId: high }),
     ).toBe(1);
+  });
+
+  it('profile follow không tính vào gate; người thứ N+1 mở chat phải tặng quà', async () => {
+    const [viewer, target, follower, secondViewer, busyViewer] =
+      await Promise.all([
+        createUser('profile-viewer'),
+        createUser('profile-target'),
+        createUser('profile-follower'),
+        createUser('profile-second-viewer'),
+        createUser('profile-busy-viewer'),
+      ]);
+
+    await profileSocial.follow(follower.id, target.id);
+    const followerActions = await profileSocial.getActions(
+      follower.id,
+      target.id,
+    );
+    expect(followerActions).toMatchObject({
+      isFollowing: true,
+      dailyFirstChatCount: 0,
+      requiresGift: false,
+      messageAvailable: false,
+    });
+    const freeConversation = await profileSocial.openConversation(
+      viewer.id,
+      target.id,
+    );
+    expect(freeConversation.id).toEqual(expect.any(String));
+    await expect(
+      profileSocial.openConversation(secondViewer.id, target.id),
+    ).resolves.toEqual(expect.objectContaining({ id: expect.any(String) }));
+
+    const busyActions = await profileSocial.getActions(
+      busyViewer.id,
+      target.id,
+    );
+    expect(busyActions).toMatchObject({
+      dailyFirstChatCount: 2,
+      requiresGift: true,
+      messageAvailable: false,
+    });
+    await expect(
+      profileSocial.openConversation(busyViewer.id, target.id),
+    ).rejects.toMatchObject({
+      code: 'PROFILE_SOCIAL_MESSAGE_GIFT_REQUIRED',
+      httpStatus: 402,
+    });
+    const [low, high] =
+      busyViewer.id < target.id
+        ? [busyViewer.id, target.id]
+        : [target.id, busyViewer.id];
+    expect(
+      await ds.getRepository(Conversation).countBy({
+        userLowId: low,
+        userHighId: high,
+      }),
+    ).toBe(0);
+    expect(
+      await ds
+        .getRepository(ProfileChatContact)
+        .countBy({ profileUserId: target.id }),
+    ).toBe(2);
   });
 
   it('getConversationWithFriend: đúng bạn → trả conversation; không phải bạn/tự mình → 404 NOT_FRIEND', async () => {
