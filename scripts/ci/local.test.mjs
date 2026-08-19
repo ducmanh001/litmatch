@@ -433,6 +433,27 @@ test('all local CI profile plans quality, test, and Docker smoke stages', () => 
   assert.doesNotMatch(result.stdout, /redis:\/\/localhost:6379\/15/u);
 });
 
+test('Windows all profile skips only the Linux-only container smoke stage', () => {
+  const localCi = readFileSync('scripts/ci/local.mjs', 'utf8');
+
+  assert.match(
+    localCi,
+    /function runContainerSmoke\([\s\S]*?skipUnsupportedPlatform = false[\s\S]*?Container smoke skipped on native Windows/u,
+  );
+  assert.match(
+    localCi,
+    /runContainerSmoke\(true, \{ skipUnsupportedPlatform: true \}\)/u,
+  );
+  assert.match(
+    localCi,
+    /if \(skipUnsupportedPlatform\)[\s\S]*?return;[\s\S]*?throw new Error\(/u,
+  );
+  assert.match(
+    localCi,
+    /if \(profile === 'docker'\) \{[\s\S]*?runContainerSmoke\(\);/u,
+  );
+});
+
 test('CI-provided services are reused without creating a local database', () => {
   const result = dryRunWithCiServices('ci');
 
