@@ -4,22 +4,27 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { closeCoreRedisClient } from '../../common/redis/core-redis-client';
 import { FriendController } from './friend.controller';
 import { FriendService } from './friend.service';
+import { ProfileSocialController } from './controllers/profile-social.controller';
 import { Conversation } from './entities/conversation.entity';
 import { ConversationMemberState } from './entities/conversation-member-state.entity';
 import { ConversationStreak } from './entities/conversation-streak.entity';
 import { Friendship } from './entities/friendship.entity';
 import { Message } from './entities/message.entity';
+import { ProfileFollow } from './entities/profile-follow.entity';
+import { ProfileChatContact } from './entities/profile-chat-contact.entity';
 import { StreakWarningJob } from './jobs/streak-warning.job';
 import {
   FRIEND_REDIS,
   friendRedisProvider,
 } from './redis/friend-redis.provider';
 import { ConversationService } from './services/conversation.service';
+import { ProfileSocialService } from './services/profile-social.service';
 import { StreakService } from './services/streak.service';
 import { NotificationModule } from '../notification';
 import { SafetyModule } from '../safety';
 import { UserModule } from '../user';
 import { MediaModule } from '../media';
+import { User } from '../user';
 
 import type Redis from 'ioredis';
 
@@ -37,21 +42,25 @@ import type Redis from 'ioredis';
       ConversationMemberState,
       Message,
       ConversationStreak,
+      ProfileFollow,
+      ProfileChatContact,
+      User,
     ]),
     UserModule,
     SafetyModule,
     NotificationModule,
     MediaModule,
   ],
-  controllers: [FriendController],
+  controllers: [FriendController, ProfileSocialController],
   providers: [
     FriendService,
     ConversationService,
+    ProfileSocialService,
     StreakService,
     StreakWarningJob,
     friendRedisProvider,
   ],
-  exports: [FriendService],
+  exports: [FriendService, ProfileSocialService],
 })
 export class FriendModule implements OnApplicationShutdown {
   constructor(@Inject(FRIEND_REDIS) private readonly redis: Redis) {}

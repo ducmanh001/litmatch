@@ -20,6 +20,7 @@ import { GiftService } from './gift.service';
 import {
   GiftDto,
   GiftEventDto,
+  SendProfileGiftDto,
   SendGiftDto,
   SendVideoGiftDto,
 } from './dto/gift.dtos';
@@ -92,6 +93,31 @@ export class GiftController {
       body.giftId,
       idempotencyKey,
     );
+    return GiftEventDto.from(giftEvent, gift.code, replayed);
+  }
+
+  @Post('profiles/:profileUserId/gifts')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 30, ttl: minutes(1) } })
+  @ApiIdempotencyKeyHeader()
+  @ApiOperation({
+    summary:
+      'Tặng quà để mở chat trực tiếp từ profile — ledger, GiftEvent và conversation atomic',
+  })
+  @ApiOkResponse({ type: GiftEventDto })
+  async sendProfileGift(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('profileUserId', ParseUUIDPipe) profileUserId: string,
+    @Body() body: SendProfileGiftDto,
+    @IdempotencyKey() idempotencyKey: string,
+  ): Promise<GiftEventDto> {
+    const { giftEvent, gift, replayed } =
+      await this.giftService.sendProfileGift(
+        user,
+        profileUserId,
+        body.giftId,
+        idempotencyKey,
+      );
     return GiftEventDto.from(giftEvent, gift.code, replayed);
   }
 }

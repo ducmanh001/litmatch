@@ -1,10 +1,11 @@
 # Friend Service (module `friend` trong `core-api`) — Friendship + Chat 1-1 lâu dài
 
-> Phạm vi: mục cuối Giai đoạn 2 "Friend + Chat 1-1". `Friendship` đã có từ slice Soul Match
+> Phạm vi: Friendship + profile social actions + Chat 1-1. `Friendship` đã có từ slice Soul Match
 > ([soul-match-service.md § 3](./soul-match-service.md)) — file này thêm `Conversation`/
-> `Message`, chat 1-1 lâu dài giữa 2 user **đã là bạn**, KHÁC chat ẩn danh tạm thời của Soul
-> Match (docs/02). **Ngoài phạm vi**: unfriend/remove friendship (chưa có trong roadmap), Party
-> Room group chat. Block/report chặn chat ĐÃ áp dụng từ Giai đoạn 4 — xem § 6.
+> `Message`, chat 1-1 lâu dài giữa 2 user; ngoài Friendship, profile có thể mở conversation
+> trực tiếp hoặc bằng Gift khi profile đã có đủ first-contact trong ngày. Khác chat ẩn danh tạm thời của Soul Match
+> (docs/02). **Ngoài phạm vi**: unfriend/remove friendship (chưa có trong roadmap), Party Room
+> group chat. Block/report chặn chat ĐÃ áp dụng từ Giai đoạn 4 — xem § 6.
 
 ## 1. Quan hệ Friendship ↔ Conversation — tạo cùng lúc, cùng transaction
 
@@ -19,9 +20,10 @@ INSERT INTO conversations (...) VALUES (...) ON CONFLICT DO NOTHING;
 ```
 
 Cả 2 câu lệnh cùng 1 transaction Postgres của caller (Soul Match rating, sau này Voice Match).
-**Bất biến**: tồn tại `Friendship` cho 1 cặp ⟺ tồn tại `Conversation` cho đúng cặp đó — nhờ
-vậy mọi thao tác chat chỉ cần kiểm tra `Conversation` tồn tại + caller là thành viên, không
-cần gọi thêm `areFriends`.
+**Bất biến**: tồn tại `Friendship` cho 1 cặp ⇒ tồn tại `Conversation` cho đúng cặp đó. Ngoài
+ra, `ProfileSocialService` có thể tạo một `Conversation` profile trước Friendship; mọi thao tác
+chat vẫn chỉ cần kiểm tra `Conversation` tồn tại + caller là thành viên, không dùng client làm
+nguồn sự thật về quyền.
 
 Khi một flow chat ẩn danh đạt mutual-like, caller truyền `FriendMessageSeed[]` trung lập vào
 `ensureFriendship`. Friend ghi seed vào `messages` theo đúng sender/nội dung/thời điểm và key
@@ -31,6 +33,20 @@ dòng chat ẩn danh append-only cho T&S.
 
 Không có API "unfriend" ở slice này — `Friendship`/`Conversation` là quan hệ vĩnh viễn khi đã
 tạo.
+
+## 1.1 Profile follow và mở chat trực tiếp
+
+- `POST /profiles/:profileUserId/follow` và `DELETE .../follow` là follow một chiều, upsert
+  idempotent theo cặp; unfollow chỉ tắt `active`, không xoá lịch sử thời điểm quan tâm.
+- `GET /profiles/:profileUserId/actions` trả `isFollowing`, conversation hiện có và trạng thái
+  `requiresGift`; count/threshold do server tính theo số người lần đầu mở chat trực tiếp trong
+  ngày UTC (`ProfileChatContact`), không theo follower.
+- `POST /profiles/:profileUserId/conversation` mở chat ngay nếu dưới ngưỡng hoặc conversation
+  đã tồn tại. Nếu đã có đủ N first-contact trong ngày, trả
+  `PROFILE_SOCIAL_MESSAGE_GIFT_REQUIRED` (402) và không tạo conversation/contact.
+- `POST /profiles/:profileUserId/gifts` dùng catalog server-side; `EconomyService.sendGift`
+  ghi ledger, `GiftEvent` context `profileUserId`, conversation và first-contact trong cùng
+  transaction. Quà mở chat một lần cho cặp; retry dùng idempotency key của transaction.
 
 ## 2. Message — khác Soul Match ở điểm nào
 
@@ -62,7 +78,7 @@ cùng nguyên tắc đã áp dụng ở Soul Match/Calling).
 | Endpoint                                  | Idempotency-Key       | Mô tả                                                                                                                                                                                                          |
 | ----------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /friends`                            | không                 | Danh sách bạn: profile công khai + `conversationId` + `friendSince` + `unreadCount`/`lastMessagePreview`/`muted` (per-caller), sort theo `conversation.lastMessageAt` (bạn mới chưa chat → sort `friendSince`) |
-| `GET /friends/:friendUserId/conversation` | không                 | Conversation với đúng 1 bạn cụ thể — dùng để nhảy thẳng từ màn hình unlock-profile (Soul Match) sang chat mà không cần load lại toàn bộ danh sách bạn                                                          |
+| `GET /friends/:friendUserId/conversation` | không                 | Conversation của một cặp đã có conversation — dùng cho Friend Chat và cả profile chat đã unlock                                                                                                                |
 | `GET /conversations/:id/messages`         | không                 | List message, cursor theo `seq`                                                                                                                                                                                |
 | `POST /conversations/:id/messages`        | có                    | Gửi message                                                                                                                                                                                                    |
 | `POST /conversations/:id/read`            | không (tự idempotent) | Đánh dấu đã đọc tới hiện tại — upsert `conversation_member_states.last_read_at`, gọi lặp chỉ đẩy mốc tiến lên                                                                                                  |
