@@ -56,8 +56,7 @@ export class CallingController {
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 20, ttl: minutes(1) } })
   @ApiOperation({
-    summary:
-      'Mở/lấy voice call lâu dài với người đã là bạn sau mutual Voice Match like',
+    summary: 'Mở/lấy voice call lâu dài khi hai bên follow nhau',
   })
   @ApiOkResponse({ type: JoinCallDto })
   async joinFriend(

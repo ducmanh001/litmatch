@@ -16,3 +16,10 @@ export {
   type PushDeliveryResult,
   type PushNotificationMessage,
 } from './push-notification.port';
+export { WebPushNotificationAdapter } from './web-push-notification.adapter';
+export {
+  WebPushNotificationPort,
+  type WebPushDeliveryResult,
+  type WebPushNotificationMessage,
+  type WebPushSubscriptionMessage,
+} from './web-push-notification.port';

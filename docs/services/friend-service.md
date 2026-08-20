@@ -1,6 +1,6 @@
-# Friend Service (module `friend` trong `core-api`) — Friendship + Chat 1-1 lâu dài
+# Friend Service (module `friend` trong `core-api`) — Follow + Friendship + Chat 1-1 lâu dài
 
-> Phạm vi: Friendship + profile social actions + Chat 1-1. `Friendship` đã có từ slice Soul Match
+> Phạm vi: profile follow + Friendship + Chat 1-1. `Friendship` đã có từ slice Soul Match
 > ([soul-match-service.md § 3](./soul-match-service.md)) — file này thêm `Conversation`/
 > `Message`, chat 1-1 lâu dài giữa 2 user; ngoài Friendship, profile có thể mở conversation
 > trực tiếp hoặc bằng Gift khi profile đã có đủ first-contact trong ngày. Khác chat ẩn danh tạm thời của Soul Match
@@ -23,7 +23,8 @@ Cả 2 câu lệnh cùng 1 transaction Postgres của caller (Soul Match rating,
 **Bất biến**: tồn tại `Friendship` cho 1 cặp ⇒ tồn tại `Conversation` cho đúng cặp đó. Ngoài
 ra, `ProfileSocialService` có thể tạo một `Conversation` profile trước Friendship; mọi thao tác
 chat vẫn chỉ cần kiểm tra `Conversation` tồn tại + caller là thành viên, không dùng client làm
-nguồn sự thật về quyền.
+nguồn sự thật về quyền. Friendship là quan hệ match hai chiều; follow là quan hệ một chiều và
+không phải điều kiện để nhắn tin.
 
 Khi một flow chat ẩn danh đạt mutual-like, caller truyền `FriendMessageSeed[]` trung lập vào
 `ensureFriendship`. Friend ghi seed vào `messages` theo đúng sender/nội dung/thời điểm và key
@@ -50,7 +51,7 @@ tạo.
 
 ## 2. Message — khác Soul Match ở điểm nào
 
-- **Không ẩn danh**: 2 bên đã là bạn (đã unlock profile qua Soul/Voice Match) nên
+- **Không ẩn danh**: 2 bên đã mở chat (qua Friendship hoặc profile direct chat) nên
   `MessageDto` trả thẳng `senderUserId`, không cần vai trò tương đối `me|partner` như chat ẩn
   danh Soul Match.
 - **Không có deadline/phase**: chat mở vĩnh viễn, không derive theo giờ server như Soul Match.
@@ -75,14 +76,14 @@ cùng nguyên tắc đã áp dụng ở Soul Match/Calling).
 
 ## 4. API (`api/v1/friends`)
 
-| Endpoint                                  | Idempotency-Key       | Mô tả                                                                                                                                                                                                          |
-| ----------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /friends`                            | không                 | Danh sách bạn: profile công khai + `conversationId` + `friendSince` + `unreadCount`/`lastMessagePreview`/`muted` (per-caller), sort theo `conversation.lastMessageAt` (bạn mới chưa chat → sort `friendSince`) |
-| `GET /friends/:friendUserId/conversation` | không                 | Conversation của một cặp đã có conversation — dùng cho Friend Chat và cả profile chat đã unlock                                                                                                                |
-| `GET /conversations/:id/messages`         | không                 | List message, cursor theo `seq`                                                                                                                                                                                |
-| `POST /conversations/:id/messages`        | có                    | Gửi message                                                                                                                                                                                                    |
-| `POST /conversations/:id/read`            | không (tự idempotent) | Đánh dấu đã đọc tới hiện tại — upsert `conversation_member_states.last_read_at`, gọi lặp chỉ đẩy mốc tiến lên                                                                                                  |
-| `POST /conversations/:id/mute`            | không (tự idempotent) | Bật/tắt thông báo hội thoại (body `{muted}`) — chỉ tắt kênh notification `friend_message` (cả in-app lẫn push); message, realtime và unread vẫn hoạt động                                                      |
+| Endpoint                                  | Idempotency-Key       | Mô tả                                                                                                                                                                                                       |
+| ----------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /friends`                            | không                 | Danh sách mọi conversation: profile công khai + `conversationId` + `friendSince` + `unreadCount`/`lastMessagePreview`/`muted` + `isFriend` + `canCall` (per-caller), sort theo `conversation.lastMessageAt` |
+| `GET /friends/:friendUserId/conversation` | không                 | Conversation của một cặp đã mở chat — dùng cho Friend Chat và profile chat trực tiếp                                                                                                                        |
+| `GET /conversations/:id/messages`         | không                 | List message, cursor theo `seq`                                                                                                                                                                             |
+| `POST /conversations/:id/messages`        | có                    | Gửi message                                                                                                                                                                                                 |
+| `POST /conversations/:id/read`            | không (tự idempotent) | Đánh dấu đã đọc tới hiện tại — upsert `conversation_member_states.last_read_at`, gọi lặp chỉ đẩy mốc tiến lên                                                                                               |
+| `POST /conversations/:id/mute`            | không (tự idempotent) | Bật/tắt thông báo hội thoại (body `{muted}`) — chỉ tắt kênh notification `friend_message` (cả in-app lẫn push); message, realtime và unread vẫn hoạt động                                                   |
 
 ### Trạng thái cá nhân theo thành viên — `conversation_member_states`
 
@@ -94,9 +95,13 @@ conversation thay vì quét toàn bộ lịch sử chat. Khi người nhận đa
 `FriendService.sendMessage` bỏ qua bước tạo notification (best-effort cuối luồng) — không ảnh
 hưởng persist message/streak/realtime.
 
-`GET /friends/:friendUserId/conversation`: nếu `friendUserId` không phải bạn của caller →
-404 (tra theo cặp canonical, không tồn tại nghĩa là chưa/không phải bạn — không phân biệt
-"chưa từng là bạn" với "user không tồn tại", tránh oracle dò userId qua API này).
+`GET /friends/:friendUserId/conversation`: nếu chưa có conversation với `friendUserId` → 404
+(tra theo cặp canonical, không phân biệt "chưa mở chat" với "user không tồn tại", tránh oracle
+dò userId qua API này). `POST /conversations/:id/messages` vẫn chỉ guard membership của
+conversation, nên người chưa follow vẫn nhắn tin được sau khi mở chat.
+
+`canCall` chỉ true khi cả hai bản ghi `ProfileFollow` active tồn tại theo hai chiều. Đây là
+metadata UX; endpoint Calling vẫn kiểm tra lại điều kiện ở server tại thời điểm mở phòng.
 
 ## 5. Realtime (tái dùng hạ tầng — [realtime-gateway.md](./realtime-gateway.md))
 

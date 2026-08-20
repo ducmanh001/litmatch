@@ -16,6 +16,8 @@ import type { CoreApiEnv } from '../../../config/env.validation';
 
 export interface ProfileActionsView {
   isFollowing: boolean;
+  followerCount: number;
+  followingCount: number;
   conversationId: string | null;
   messageAvailable: boolean;
   requiresGift: boolean;
@@ -83,6 +85,42 @@ export class ProfileSocialService {
     return false;
   }
 
+  /** Quyền gọi lâu dài: follow phải tồn tại và còn active theo cả hai chiều. */
+  async areMutuallyFollowing(
+    userAId: string,
+    userBId: string,
+  ): Promise<boolean> {
+    if (userAId === userBId) return false;
+    const [aFollowsB, bFollowsA] = await Promise.all([
+      this.followRepo.exists({
+        where: {
+          followerUserId: userAId,
+          followeeUserId: userBId,
+          active: true,
+        },
+      }),
+      this.followRepo.exists({
+        where: {
+          followerUserId: userBId,
+          followeeUserId: userAId,
+          active: true,
+        },
+      }),
+    ]);
+    return aFollowsB && bFollowsA;
+  }
+
+  /** Quyền gọi thực tế: block 2 chiều được kiểm tra lại ngay trước khi mint token. */
+  async canCall(userAId: string, userBId: string): Promise<boolean> {
+    if (userAId === userBId) return false;
+    const [blockedByA, blockedByB] = await Promise.all([
+      this.safetyService.isBlocked(userAId, userBId),
+      this.safetyService.isBlocked(userBId, userAId),
+    ]);
+    if (blockedByA || blockedByB) return false;
+    return this.areMutuallyFollowing(userAId, userBId);
+  }
+
   async getActions(
     viewerUserId: string,
     profileUserId: string,
@@ -90,20 +128,31 @@ export class ProfileSocialService {
     await this.assertTarget(viewerUserId, profileUserId);
     await this.assertNotBlocked(viewerUserId, profileUserId);
 
-    const [follow, conversation] = await Promise.all([
-      this.followRepo.findOneBy({
-        followerUserId: viewerUserId,
-        followeeUserId: profileUserId,
-        active: true,
-      }),
-      this.findConversation(viewerUserId, profileUserId),
-    ]);
+    const [follow, conversation, followerCount, followingCount] =
+      await Promise.all([
+        this.followRepo.findOneBy({
+          followerUserId: viewerUserId,
+          followeeUserId: profileUserId,
+          active: true,
+        }),
+        this.findConversation(viewerUserId, profileUserId),
+        this.followRepo.countBy({
+          followeeUserId: profileUserId,
+          active: true,
+        }),
+        this.followRepo.countBy({
+          followerUserId: profileUserId,
+          active: true,
+        }),
+      ]);
     const dailyFirstChatCount = await this.countDailyFirstChats(profileUserId);
     const firstChatThreshold = this.firstChatThreshold();
     const messageAvailable = conversation !== null;
 
     return {
       isFollowing: follow !== null,
+      followerCount,
+      followingCount,
       conversationId: conversation?.id ?? null,
       messageAvailable,
       requiresGift:

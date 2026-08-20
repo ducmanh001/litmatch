@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 
 import { AuthGate } from '../../shared/auth/auth-gate';
+import { RealtimeNotificationBridge } from '../../features/notification/components/realtime-notification-bridge';
 import { useTranslation } from '../../shared/i18n/messages';
 import {
   connectRealtime,
@@ -112,13 +113,19 @@ function AppChrome({ children }: { children: ReactNode }) {
     pathname === href || pathname.startsWith(`${href}/`);
 
   if (IMMERSIVE_SESSION_PATTERN.test(pathname)) {
-    return <ImmersiveSessionChrome>{children}</ImmersiveSessionChrome>;
+    return (
+      <ImmersiveSessionChrome>
+        <RealtimeNotificationBridge />
+        {children}
+      </ImmersiveSessionChrome>
+    );
   }
 
   const fullBleed = FULL_BLEED_CONTENT_PATTERN.test(pathname);
 
   return (
     <div className="md:bg-slate-100 dark:md:bg-ink">
+      <RealtimeNotificationBridge />
       <div className="md:grid md:min-h-screen md:grid-cols-[5rem_minmax(0,1fr)] lg:grid-cols-[15rem_minmax(0,1fr)]">
         <nav
           className="hidden md:sticky md:top-0 md:z-40 md:flex md:h-screen md:w-full md:flex-col md:gap-1.5 md:overflow-y-auto md:border-r md:border-black/5 md:bg-white/80 md:px-3 md:py-8 md:backdrop-blur lg:px-4 dark:md:border-white/5 dark:md:bg-[#110d14]/55"

@@ -10,7 +10,12 @@ import { EntityManager, Repository } from 'typeorm';
 
 import { NotificationErrors } from './notification.errors';
 import { Notification, NotificationType } from './entities/notification.entity';
-import { AnalyticsPort, PushNotificationPort } from '../../common/platform';
+import {
+  AnalyticsPort,
+  PushNotificationPort,
+  WebPushNotificationPort,
+} from '../../common/platform';
+import { WebPushSubscriptionService } from './services/web-push-subscription.service';
 
 import type { AnalyticsEvent } from '../../common/platform';
 
@@ -42,6 +47,9 @@ export class NotificationService {
     private readonly notificationRepo: Repository<Notification>,
     private readonly pushPort: PushNotificationPort,
     @Optional() private readonly analyticsPort?: AnalyticsPort,
+    @Optional()
+    private readonly webPushSubscriptions?: WebPushSubscriptionService,
+    @Optional() private readonly webPushPort?: WebPushNotificationPort,
   ) {}
 
   async createWithManager(
@@ -98,6 +106,40 @@ export class NotificationService {
       }
     } catch {
       this.logger.warn('Push provider failed; in-app notification retained');
+    }
+
+    if (
+      this.webPushSubscriptions === undefined ||
+      this.webPushPort === undefined
+    )
+      return;
+    const webPushPort = this.webPushPort;
+    const webPushSubscriptions = this.webPushSubscriptions;
+    try {
+      const subscriptions = await webPushSubscriptions.listForUser(
+        notification.userId,
+      );
+      await Promise.all(
+        subscriptions.map(async (subscription) => {
+          const result = await webPushPort.send({
+            notificationId: notification.id,
+            recipientId: notification.userId,
+            type: notification.type,
+            payload: notification.payload,
+            subscription: {
+              endpoint: subscription.endpoint,
+              keys: { p256dh: subscription.p256dh, auth: subscription.auth },
+            },
+          });
+          if (result.removeSubscription)
+            await webPushSubscriptions.removeById(subscription.id);
+        }),
+      );
+    } catch {
+      // Browser push is best-effort; the in-app notification row remains the source of truth.
+      this.logger.warn(
+        'Web push provider failed; in-app notification retained',
+      );
     }
   }
 

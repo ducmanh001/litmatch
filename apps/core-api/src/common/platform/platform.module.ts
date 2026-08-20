@@ -17,6 +17,8 @@ import {
   selectPushNotificationProvider,
 } from './provider-factory';
 import { PushNotificationPort } from './push-notification.port';
+import { WebPushNotificationAdapter } from './web-push-notification.adapter';
+import { WebPushNotificationPort } from './web-push-notification.port';
 
 import type { CoreApiEnv } from '../../config/env.validation';
 
@@ -27,6 +29,7 @@ import type { CoreApiEnv } from '../../config/env.validation';
     DisabledPushNotificationAdapter,
     FcmPushNotificationAdapter,
     ApnsPushNotificationAdapter,
+    WebPushNotificationAdapter,
     DisabledAnalyticsAdapter,
     PostHogAnalyticsAdapter,
     {
@@ -68,7 +71,11 @@ import type { CoreApiEnv } from '../../config/env.validation';
           { posthog, disabled },
         ),
     },
+    {
+      provide: WebPushNotificationPort,
+      useExisting: WebPushNotificationAdapter,
+    },
   ],
-  exports: [PushNotificationPort, AnalyticsPort],
+  exports: [PushNotificationPort, AnalyticsPort, WebPushNotificationPort],
 })
 export class PlatformModule {}

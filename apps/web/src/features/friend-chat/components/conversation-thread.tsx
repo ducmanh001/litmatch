@@ -21,7 +21,7 @@ import {
   usePartnerProfile,
   useReportUser,
 } from '../api';
-import { useCreateInvite } from '../../matching/invite-api';
+import { useJoinFriendCall } from '../../voice-match/api';
 import { FriendAvatar } from './friend-avatar';
 import { MessageComposer } from './message-composer';
 import { MessageList } from './message-list';
@@ -45,8 +45,8 @@ export function ConversationThread({
   const router = useRouter();
   const blockUser = useBlockUser();
   const reportUser = useReportUser();
-  const createInvite = useCreateInvite();
   const friends = useFriends();
+  const friendCall = useJoinFriendCall(friendUserId);
   const { mutate: markReadMutate } = useMarkConversationRead();
   const muteConversation = useMuteConversation();
   // Route theo friendUserId (không phải conversationId) — conversation rỗng tin nhắn thì
@@ -254,19 +254,30 @@ export function ConversationThread({
     });
   };
 
-  const handleVoiceInvite = () => {
-    createInvite.mutate(
-      { inviteeUserId: partnerData.id, matchType: 'voice' },
-      {
-        onSuccess: () =>
-          showToast(`Đã mời ${partnerData.nickname} tham gia Voice Match`),
-        onError: (error) =>
-          showToast(
-            isApiError(error) ? error.message : 'Không thể gửi lời mời.',
-            'warn',
-          ),
+  const contact = friends.data?.find(
+    (entry) => entry.profile.id === partnerData.id,
+  );
+  const canCall = contact?.canCall === true;
+
+  const handleCall = () => {
+    if (!canCall) {
+      showToast('Hai bạn cần follow nhau để gọi voice.', 'warn');
+      return;
+    }
+    friendCall.mutate(undefined, {
+      onSuccess: (joined) => {
+        if (joined?.call === undefined) {
+          showToast('Không thể mở cuộc gọi lúc này.', 'warn');
+          return;
+        }
+        router.push(`/chat/${partnerData.id}/call`);
       },
-    );
+      onError: (error) =>
+        showToast(
+          isApiError(error) ? error.message : 'Không thể mở cuộc gọi lúc này.',
+          'warn',
+        ),
+    });
   };
 
   return (
@@ -336,10 +347,15 @@ export function ConversationThread({
         </div>
         <button
           type="button"
-          disabled={createInvite.isPending}
-          onClick={handleVoiceInvite}
-          aria-label="Mời Voice Match"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-aqua/20 via-iris/15 to-irisl/25 text-irisl transition hover:brightness-110 disabled:opacity-50"
+          disabled={friendCall.isPending}
+          onClick={handleCall}
+          aria-label={canCall ? 'Gọi voice' : 'Follow nhau để gọi'}
+          title={canCall ? 'Gọi voice' : 'Follow nhau để gọi'}
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition hover:brightness-110 disabled:opacity-50 ${
+            canCall
+              ? 'bg-gradient-to-br from-aqua/20 via-iris/15 to-irisl/25 text-irisl'
+              : 'bg-slate-100 text-slate-400 dark:bg-surf2 dark:text-white/40'
+          }`}
         >
           <MicIcon width={16} height={16} />
         </button>

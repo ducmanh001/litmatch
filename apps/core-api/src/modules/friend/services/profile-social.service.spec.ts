@@ -56,6 +56,10 @@ function createService(options: {
   );
   const followRepo = {
     findOneBy: jest.fn(async () => null),
+    exists: jest.fn(async () => false),
+    countBy: jest.fn(async (where: { followerUserId?: string }) =>
+      where.followerUserId === PROFILE ? 7 : 12,
+    ),
     update: jest.fn(async () => undefined),
     createQueryBuilder: jest.fn(() => followBuilder),
     manager: { transaction, ...manager },
@@ -81,20 +85,37 @@ function createService(options: {
     safetyService as unknown as SafetyService,
     config as unknown as ConfigService<CoreApiEnv, true>,
   );
-  return { service, followRepo, conversationRepo, userService, manager };
+  return {
+    service,
+    followRepo,
+    conversationRepo,
+    userService,
+    manager,
+    safetyService,
+  };
 }
 
 describe('ProfileSocialService', () => {
   it('trả trạng thái yêu cầu quà khi profile đã đủ lượt first-chat trong ngày', async () => {
-    const { service } = createService({ dailyFirstChatCount: 2 });
+    const { service, followRepo } = createService({ dailyFirstChatCount: 2 });
 
     await expect(service.getActions(VIEWER, PROFILE)).resolves.toMatchObject({
       isFollowing: false,
+      followerCount: 12,
+      followingCount: 7,
       conversationId: null,
       messageAvailable: false,
       requiresGift: true,
       dailyFirstChatCount: 2,
       firstChatThreshold: 2,
+    });
+    expect(followRepo.countBy).toHaveBeenNthCalledWith(1, {
+      followeeUserId: PROFILE,
+      active: true,
+    });
+    expect(followRepo.countBy).toHaveBeenNthCalledWith(2, {
+      followerUserId: PROFILE,
+      active: true,
     });
   });
 
@@ -136,5 +157,37 @@ describe('ProfileSocialService', () => {
       { followerUserId: VIEWER, followeeUserId: PROFILE },
       { active: false },
     );
+  });
+
+  it('chỉ cho gọi khi follow active theo cả hai chiều', async () => {
+    const { service, followRepo } = createService({ dailyFirstChatCount: 0 });
+    followRepo.exists.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+
+    await expect(service.areMutuallyFollowing(VIEWER, PROFILE)).resolves.toBe(
+      false,
+    );
+    expect(followRepo.exists).toHaveBeenNthCalledWith(1, {
+      where: {
+        followerUserId: VIEWER,
+        followeeUserId: PROFILE,
+        active: true,
+      },
+    });
+
+    followRepo.exists.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
+    await expect(service.areMutuallyFollowing(VIEWER, PROFILE)).resolves.toBe(
+      true,
+    );
+  });
+
+  it('chặn gọi nếu một chiều đang block dù follow vẫn còn active', async () => {
+    const { service, followRepo, safetyService } = createService({
+      dailyFirstChatCount: 0,
+    });
+    followRepo.exists.mockResolvedValue(true);
+    safetyService.isBlocked.mockResolvedValueOnce(true);
+
+    await expect(service.canCall(VIEWER, PROFILE)).resolves.toBe(false);
+    expect(followRepo.exists).not.toHaveBeenCalled();
   });
 });

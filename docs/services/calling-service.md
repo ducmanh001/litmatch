@@ -96,7 +96,7 @@ tim được giữ sau refetch/reload; trước mutual like `friendUserId` luôn
 | Endpoint                                   | Mô tả                                                                           |
 | ------------------------------------------ | ------------------------------------------------------------------------------- |
 | `POST /calling/match-sessions/:id/join`    | Tạo/lấy call + mint token (idempotent tự nhiên theo unique session)             |
-| `POST /calling/friends/:friendUserId/join` | Tạo/lấy friend call sau mutual-like; không giới hạn 7 phút                      |
+| `POST /calling/friends/:friendUserId/join` | Tạo/lấy friend call sau reciprocal follow; không giới hạn 7 phút                |
 | `GET /calling/calls/:id`                   | Trạng thái call (poll fallback) — chỉ member                                    |
 | `POST /calling/calls/:id/end`              | Member chủ động kết thúc                                                        |
 | `POST /calling/calls/:id/like`             | Like immutable khi call `active`/`ended`; mutual like tạo Friend + Conversation |
@@ -117,7 +117,9 @@ không thay được đường media WebRTC: môi trường public phải expose
 TURN/TLS theo cấu hình SFU; nếu không hai thiết bị khác mạng có thể vào room nhưng không có tiếng.
 
 Quyết định sản phẩm: mọi Voice Match đều kết thúc ở mốc 7 phút, không phân biệt regular/VIP/SVIP.
-Nếu hai bên mutual-like, server tạo `Friendship` + `Conversation` atomically; từ đó gọi qua
-`/calling/friends/:friendUserId/join` là friend call bền vững, không dùng `MatchSession` và không
-đi qua quota/thời lượng Voice Match. Nếu không mutual-like, Voice Match kết thúc là chấm dứt
-quan hệ ẩn danh; không có đường gọi lại friend.
+Nhắn tin profile không yêu cầu follow. Khi mở `/calling/friends/:friendUserId/join`, server
+phải kiểm tra `ProfileFollow(viewer → target)` và `ProfileFollow(target → viewer)` đều active;
+thiếu một chiều trả cùng 404 và không tạo/mint token. Khi đủ hai chiều, đây là friend call bền
+vững, không dùng `MatchSession` và không đi qua quota/thời lượng Voice Match. Mutual-like trong
+Voice Match vẫn có thể tạo `Friendship` + `Conversation` atomically cho quan hệ bạn bè, nhưng
+không thay thế điều kiện reciprocal follow để gọi lại.

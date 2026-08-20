@@ -170,6 +170,10 @@ export interface CoreApiEnv {
   NOTIFICATION_APNS_PRIVATE_KEY: string;
   NOTIFICATION_APNS_BUNDLE_ID: string;
   NOTIFICATION_APNS_ENVIRONMENT: 'sandbox' | 'production';
+  WEB_PUSH_ENABLED: boolean;
+  WEB_PUSH_SUBJECT: string;
+  WEB_PUSH_PUBLIC_KEY: string;
+  WEB_PUSH_PRIVATE_KEY: string;
   MOVIE_MATCH_URL_MAX_LENGTH: number;
   MOVIE_MATCH_ALLOWED_VIDEO_HOSTS: string;
   MOVIE_MATCH_ANON_VIDEO_URLS: string;
@@ -587,6 +591,11 @@ export const coreApiEnvSchema = Joi.object({
   NOTIFICATION_APNS_ENVIRONMENT: Joi.string()
     .valid('sandbox', 'production')
     .default('sandbox'),
+  // Browser Web Push — tắt mặc định; khi bật production phải có đủ VAPID credentials.
+  WEB_PUSH_ENABLED: Joi.boolean().default(false),
+  WEB_PUSH_SUBJECT: Joi.string().allow('').default(''),
+  WEB_PUSH_PUBLIC_KEY: Joi.string().allow('').default(''),
+  WEB_PUSH_PRIVATE_KEY: Joi.string().allow('').default(''),
 
   // Movie Match — Giai đoạn 5 (docs/services/movie-match-service.md § 8)
   MOVIE_MATCH_URL_MAX_LENGTH: Joi.number().integer().min(1).default(2048),

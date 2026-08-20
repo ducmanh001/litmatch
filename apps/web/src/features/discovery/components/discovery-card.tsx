@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Link from 'next/link';
 
 import { placeholderAvatarUrl } from '../../../shared/lib/placeholder-avatar';
 import { ProfileIcon } from '../../../shared/ui/icons';
@@ -18,18 +19,15 @@ function cardMeta(card: DiscoveryCardDto | NearbyCardDto): string | undefined {
  * age/distance bucket. Không suy đoán trạng thái online, ý định hẹn hò hay vị trí chính xác. */
 export function DiscoveryCard({
   card,
-  onClick,
 }: {
   card: DiscoveryCardDto | NearbyCardDto;
-  onClick: () => void;
 }) {
   const meta = cardMeta(card);
   const [imageFailed, setImageFailed] = useState(false);
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <Link
+      href={`/users/${card.profile.id}`}
       aria-label={`Xem hồ sơ ${card.profile.nickname}${meta === undefined ? '' : `, ${meta}`}`}
       className="group relative aspect-[4/5] min-h-52 w-full overflow-hidden rounded-[1.4rem] border border-border bg-muted text-left shadow-sm shadow-black/5 transition duration-200 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring dark:border-white/10 dark:bg-surf2 dark:shadow-none dark:hover:border-rose-300/30 dark:hover:shadow-none"
     >
@@ -65,9 +63,9 @@ export function DiscoveryCard({
           {card.profile.nickname}
         </span>
         <span className="mt-0.5 block text-[11px] font-semibold text-white/85 md:text-xs">
-          Xem hồ sơ và chọn cách mở lời
+          Mở profile đầy đủ
         </span>
       </span>
-    </button>
+    </Link>
   );
 }

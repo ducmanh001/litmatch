@@ -60,6 +60,10 @@ export interface FriendListEntry {
   lastMessagePreview: string | null;
   /** Caller đang tắt thông báo hội thoại này. */
   muted: boolean;
+  /** Cặp đã được tạo Friendship (mutual Voice/Soul Match). */
+  isFriend: boolean;
+  /** Cả caller và đối phương đang follow nhau. */
+  canCall: boolean;
 }
 
 /** Trạng thái cá nhân caller trong 1 conversation — trả về từ mark-read/mute. */
@@ -200,69 +204,20 @@ export class FriendService {
     );
   }
 
-  /** Danh sách bạn sort theo chat gần nhất (bạn mới, chưa chat lần nào → sort theo friendSince). */
+  /** Danh sách mọi conversation sort theo chat gần nhất; Friendship chỉ là metadata quan hệ. */
   async listFriends(userId: string): Promise<FriendListEntry[]> {
-    const rows = await this.friendshipRepo
-      .createQueryBuilder('f')
-      .innerJoin(
-        'conversations',
-        'c',
-        'c.user_low_id = f.user_low_id AND c.user_high_id = f.user_high_id',
-      )
-      // Trạng thái đọc/mute là CÁ NHÂN caller — lazy row, vắng = chưa đọc gì và không mute.
-      .leftJoin(
-        'conversation_member_states',
-        's',
-        's.conversation_id = c.id AND s.user_id = :userId',
-        { userId },
-      )
-      .select([
-        'f.user_low_id AS user_low_id',
-        'f.user_high_id AS user_high_id',
-        'f.created_at AS friend_since',
-        'c.id AS conversation_id',
-        'c.last_message_at AS last_message_at',
-        's.muted_at IS NOT NULL AS muted',
-      ])
-      // Unread đếm theo message ĐỐI PHƯƠNG sau mốc đã đọc; preview là message mới nhất 2 chiều.
-      // Hai subquery dùng lần lượt covering index (conversation_id, created_at) và index
-      // (conversation_id, seq); list bạn bè đã có hard limit nên không tăng query vô hạn.
-      .addSelect(
-        `(SELECT count(*) FROM messages m
-           WHERE m.conversation_id = c.id
-             AND m.sender_user_id <> :userId
-             AND m.created_at > COALESCE(s.last_read_at, 'epoch'::timestamptz))`,
-        'unread_count',
-      )
-      .addSelect(
-        `(SELECT m.content FROM messages m
-           WHERE m.conversation_id = c.id
-           ORDER BY m.seq DESC LIMIT 1)`,
-        'last_message_preview',
-      )
-      .where('f.user_low_id = :userId OR f.user_high_id = :userId', { userId })
-      .orderBy('c.last_message_at', 'DESC', 'NULLS LAST')
-      .addOrderBy('f.created_at', 'DESC')
-      .limit(FRIEND_GRAPH_READ_LIMIT)
-      .getRawMany<{
-        user_low_id: string;
-        user_high_id: string;
-        friend_since: Date;
-        conversation_id: string;
-        last_message_at: Date | null;
-        muted: boolean;
-        unread_count: string;
-        last_message_preview: string | null;
-      }>();
+    const rows = await this.conversationService.listForUser(userId);
 
-    return rows.map((r) => ({
-      partnerId: r.user_low_id === userId ? r.user_high_id : r.user_low_id,
-      conversationId: r.conversation_id,
-      friendSince: r.friend_since,
-      lastMessageAt: r.last_message_at,
-      unreadCount: Number(r.unread_count),
-      lastMessagePreview: r.last_message_preview,
-      muted: r.muted,
+    return rows.map((row) => ({
+      partnerId: row.partnerId,
+      conversationId: row.conversationId,
+      friendSince: row.relationshipSince,
+      lastMessageAt: row.lastMessageAt,
+      unreadCount: row.unreadCount,
+      lastMessagePreview: row.lastMessagePreview,
+      muted: row.muted,
+      isFriend: row.isFriend,
+      canCall: row.canCall,
     }));
   }
 
@@ -319,11 +274,7 @@ export class FriendService {
     };
   }
 
-  /**
-   * Conversation với đúng 1 bạn cụ thể — dùng để nhảy thẳng từ unlock-profile (Soul Match)
-   * sang chat (spec § 4). `friendUserId` không phải bạn → 404 (không phân biệt
-   * "chưa từng là bạn" với "user không tồn tại" — chống oracle dò userId).
-   */
+  /** Conversation của một cặp đã mở chat — dùng cho Friendship và profile direct chat. */
   async getConversationWithFriend(
     userId: string,
     friendUserId: string,
@@ -342,7 +293,7 @@ export class FriendService {
     if (!conversation) {
       throw new DomainException(
         FriendErrors.NOT_FRIEND,
-        'Không phải bạn của bạn',
+        'Chưa có cuộc trò chuyện với profile này',
         HttpStatus.NOT_FOUND,
       );
     }

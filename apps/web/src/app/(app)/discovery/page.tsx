@@ -9,14 +9,12 @@ import {
   useSetNearbyVisible,
 } from '../../../features/discovery/api';
 import { DiscoveryCard } from '../../../features/discovery/components/discovery-card';
-import { DiscoveryDetailSheet } from '../../../features/discovery/components/discovery-detail-sheet';
 import {
   DiscoveryFilters,
   DiscoveryModeToggle,
   getDiscoveryAgeBounds,
 } from '../../../features/discovery/components/discovery-filters';
 import { NearbyOptIn } from '../../../features/discovery/components/nearby-opt-in';
-import { useCreateInvite } from '../../../features/matching/invite-api';
 import { MicIcon } from '../../../shared/ui/icons';
 import {
   EYEBROW_ICON_GRADIENT_ID,
@@ -106,9 +104,6 @@ export default function DiscoveryPage() {
   const [mode, setMode] = useState<'browse' | 'nearby'>('browse');
   const [gender, setGender] = useState<Gender | undefined>(undefined);
   const [ageRange, setAgeRange] = useState<DiscoveryAgeRange>('all');
-  const [selected, setSelected] = useState<
-    DiscoveryCardDto | NearbyCardDto | null
-  >(null);
 
   const filter = { gender, ...getDiscoveryAgeBounds(ageRange) };
   // Chỉ gọi API của nhánh đang active — nearby luôn 403 khi chưa bật nearbyVisible, gọi cả 2
@@ -118,7 +113,6 @@ export default function DiscoveryPage() {
     enabled: mode === 'nearby',
   });
 
-  const createInvite = useCreateInvite();
   const setNearbyVisible = useSetNearbyVisible();
 
   // Hai query có shape item khác nhau (DiscoveryCardDto vs NearbyCardDto) — không gộp vào 1
@@ -173,7 +167,6 @@ export default function DiscoveryPage() {
               mode={mode}
               onModeChange={(nextMode) => {
                 setMode(nextMode);
-                setSelected(null);
               }}
               className="mt-5"
             />
@@ -220,7 +213,6 @@ export default function DiscoveryPage() {
               onEnabled={() => void nearbyQuery.refetch()}
               onExploreBrowse={() => {
                 setMode('browse');
-                setSelected(null);
               }}
             />
           ) : (
@@ -298,14 +290,7 @@ export default function DiscoveryPage() {
               {items.length > 0 && (
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4">
                   {items.map((card) => (
-                    <DiscoveryCard
-                      key={card.profile.id}
-                      card={card}
-                      onClick={() => {
-                        setSelected(card);
-                        createInvite.reset();
-                      }}
-                    />
+                    <DiscoveryCard key={card.profile.id} card={card} />
                   ))}
                 </div>
               )}
@@ -375,7 +360,6 @@ export default function DiscoveryPage() {
                   onClick={() =>
                     setNearbyVisible.mutate(false, {
                       onSuccess: () => {
-                        setSelected(null);
                         void nearbyQuery.refetch();
                       },
                     })
@@ -398,29 +382,6 @@ export default function DiscoveryPage() {
           </section>
         </aside>
       </div>
-
-      {selected !== null && (
-        <DiscoveryDetailSheet
-          card={selected}
-          onClose={() => setSelected(null)}
-          onInvite={(matchType) =>
-            createInvite.mutate({
-              inviteeUserId: selected.profile.id,
-              matchType,
-            })
-          }
-          inviteId={createInvite.data?.id}
-          isInviting={createInvite.isPending}
-          inviteError={
-            isApiError(createInvite.error)
-              ? createInvite.error.message
-              : createInvite.isError
-                ? 'Có lỗi xảy ra, thử lại.'
-                : undefined
-          }
-          invitedMatchType={createInvite.data?.matchType}
-        />
-      )}
     </div>
   );
 }

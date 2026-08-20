@@ -65,6 +65,8 @@ describe('FriendsList', () => {
         unreadCount: 3,
         lastMessagePreview: 'Hẹn gặp cuối tuần nhé',
         muted: false,
+        isFriend: true,
+        canCall: true,
       },
     ];
     vi.spyOn(apiClient, 'GET').mockResolvedValue({
@@ -99,6 +101,8 @@ describe('FriendsList', () => {
         unreadCount: 0,
         lastMessagePreview: null,
         muted: false,
+        isFriend: false,
+        canCall: false,
       },
     ];
     vi.spyOn(apiClient, 'GET').mockResolvedValue({
@@ -106,9 +110,10 @@ describe('FriendsList', () => {
     } as never);
     renderList();
 
-    expect(await screen.findByText('Bạn bè')).toBeVisible();
-    expect(await screen.findByText('Bạn Mới')).toBeVisible();
-    expect(screen.queryByText('Hội thoại')).not.toBeInTheDocument();
+    expect(await screen.findByText('Kết nối')).toBeVisible();
+    expect(await screen.findAllByText('Bạn Mới')).toHaveLength(2);
+    expect(await screen.findAllByText('Tin nhắn')).toHaveLength(2);
+    expect(screen.getByText('Chưa có tin nhắn')).toBeVisible();
   });
 
   // it('dialog mode — chọn bạn mở thread trong sheet thay vì điều hướng route', async () => {

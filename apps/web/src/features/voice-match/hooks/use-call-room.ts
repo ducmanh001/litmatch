@@ -7,17 +7,22 @@ import {
   connectMediaRoom,
   disconnectMediaRoom,
 } from '../../../shared/media/livekit';
-import { useJoinCall } from '../api';
+import { useJoinCall, useJoinFriendCall } from '../api';
 
 import type { Room } from 'livekit-client';
 
 /**
  * Sở hữu lifecycle LiveKit cho voice call (docs/12 § 12.5) — component chỉ consume
  * `room`, không tự connect/disconnect. `connect()` gọi lại được nhiều lần (trước khi call
- * `ended`) — server upsert idempotent theo matchSessionId nên re-join sau rớt mạng hợp lệ.
+ * `ended`) — server upsert idempotent theo match session hoặc canonical friend pair.
  */
-export function useCallRoom(matchSessionId: string) {
-  const joinCall = useJoinCall(matchSessionId);
+export function useCallRoom(input: string | { friendUserId: string }) {
+  const isFriendCall = typeof input !== 'string';
+  const joinCall = useJoinCall(typeof input === 'string' ? input : '');
+  const joinFriendCall = useJoinFriendCall(
+    typeof input === 'string' ? '' : input.friendUserId,
+  );
+  const joinMutation = isFriendCall ? joinFriendCall : joinCall;
   const [room, setRoom] = useState<Room | null>(null);
   const [callId, setCallId] = useState<string | null>(null);
   const [roomDisconnected, setRoomDisconnected] = useState(false);
@@ -35,7 +40,7 @@ export function useCallRoom(matchSessionId: string) {
   const disposedRef = useRef(false);
   const microphoneRequestRef = useRef(0);
 
-  const { mutate: joinCallMutate } = joinCall;
+  const { mutate: joinCallMutate } = joinMutation;
   const setMicrophoneEnabled = useCallback(async (enabled: boolean) => {
     const current = roomRef.current;
     if (current === null) return;
@@ -165,7 +170,7 @@ export function useCallRoom(matchSessionId: string) {
     roomDisconnected,
     microphoneEnabled,
     setMicrophoneEnabled,
-    isConnecting: joinCall.isPending,
-    error: joinCall.error ?? mediaError,
+    isConnecting: joinMutation.isPending,
+    error: joinMutation.error ?? mediaError,
   };
 }

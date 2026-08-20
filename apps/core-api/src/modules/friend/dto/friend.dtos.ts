@@ -105,6 +105,10 @@ export class FriendDto {
   @ApiProperty({ nullable: true, type: String })
   lastMessagePreview!: string | null;
   @ApiProperty() muted!: boolean;
+  @ApiProperty({ description: 'Cặp đã có Friendship hai chiều' })
+  isFriend!: boolean;
+  @ApiProperty({ description: 'Caller và đối phương follow nhau' })
+  canCall!: boolean;
 
   static from(entry: FriendListEntry, profile: PublicProfileDto): FriendDto {
     const dto = new FriendDto();
@@ -115,6 +119,8 @@ export class FriendDto {
     dto.unreadCount = entry.unreadCount;
     dto.lastMessagePreview = entry.lastMessagePreview;
     dto.muted = entry.muted;
+    dto.isFriend = entry.isFriend;
+    dto.canCall = entry.canCall;
     return dto;
   }
 }

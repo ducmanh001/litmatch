@@ -26,7 +26,11 @@ import { VoiceMatchReaction } from './entities/voice-match-reaction.entity';
 import { LivekitRoomPort } from './ports/livekit-room';
 import { CALLING_REDIS } from './redis/calling-redis.provider';
 import { MatchSessionStatus, MatchType, MatchingService } from '../matching';
-import { FriendService, FriendshipSource } from '../friend';
+import {
+  FriendService,
+  FriendshipSource,
+  ProfileSocialService,
+} from '../friend';
 import { UserService } from '../user';
 
 import type {
@@ -77,6 +81,7 @@ export class CallingService {
     private readonly reactionRepo: Repository<VoiceMatchReaction>,
     private readonly matchingService: MatchingService,
     private readonly friendService: FriendService,
+    private readonly profileSocialService: ProfileSocialService,
     private readonly livekit: LivekitRoomPort,
     private readonly config: ConfigService<CoreApiEnv, true>,
     private readonly userService: UserService,
@@ -195,18 +200,15 @@ export class CallingService {
     };
   }
 
-  /** Tạo/lấy một friend call; không có free timer và không liên quan MatchSession. */
+  /** Tạo/lấy một call khi hai bên follow nhau và không bị block; không có free timer/MatchSession. */
   async joinFriendCall(
     user: AuthenticatedUser,
     friendUserId: string,
   ): Promise<JoinCallResult> {
-    if (
-      user.userId === friendUserId ||
-      !(await this.friendService.areFriends(user.userId, friendUserId))
-    ) {
+    if (!(await this.profileSocialService.canCall(user.userId, friendUserId))) {
       throw new DomainException(
         CallingErrors.SESSION_NOT_FOUND,
-        'Chỉ bạn bè sau mutual like mới được gọi voice lâu dài',
+        'Hai bạn cần follow nhau để gọi voice lâu dài',
         HttpStatus.NOT_FOUND,
       );
     }

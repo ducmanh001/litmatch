@@ -31,6 +31,7 @@ describe('ConversationService (unit — mock repo)', () => {
   let conversationRepo: {
     findOneBy: jest.Mock;
     update: jest.Mock;
+    createQueryBuilder: jest.Mock;
   };
   let messageRepo: {
     save: jest.Mock;
@@ -44,6 +45,26 @@ describe('ConversationService (unit — mock repo)', () => {
     conversationRepo = {
       findOneBy: jest.fn(async () => null),
       update: jest.fn(async () => undefined),
+      createQueryBuilder: jest.fn(() => {
+        const builder = {
+          leftJoin: jest.fn(),
+          select: jest.fn(),
+          addSelect: jest.fn(),
+          where: jest.fn(),
+          orderBy: jest.fn(),
+          addOrderBy: jest.fn(),
+          take: jest.fn(),
+          getRawMany: jest.fn(async () => []),
+        };
+        builder.leftJoin.mockReturnValue(builder);
+        builder.select.mockReturnValue(builder);
+        builder.addSelect.mockReturnValue(builder);
+        builder.where.mockReturnValue(builder);
+        builder.orderBy.mockReturnValue(builder);
+        builder.addOrderBy.mockReturnValue(builder);
+        builder.take.mockReturnValue(builder);
+        return builder;
+      }),
     };
     messageRepo = {
       save: jest.fn(async (m) =>
@@ -74,6 +95,41 @@ describe('ConversationService (unit — mock repo)', () => {
         userLowId: USER_A,
         userHighId: USER_B,
       });
+    });
+  });
+
+  describe('listForUser', () => {
+    it('map mọi conversation và derive canCall từ reciprocal follow join', async () => {
+      const builder = conversationRepo.createQueryBuilder();
+      conversationRepo.createQueryBuilder.mockReturnValue(builder);
+      builder.getRawMany.mockResolvedValue([
+        {
+          user_low_id: USER_A,
+          user_high_id: USER_B,
+          conversation_id: 'conv-direct',
+          relationship_since: new Date('2026-08-20T00:00:00Z'),
+          last_message_at: null,
+          muted: false,
+          is_friend: false,
+          can_call: 'true',
+          unread_count: '0',
+          last_message_preview: null,
+        },
+      ]);
+
+      await expect(service.listForUser(USER_A)).resolves.toEqual([
+        expect.objectContaining({
+          partnerId: USER_B,
+          conversationId: 'conv-direct',
+          isFriend: false,
+          canCall: true,
+          unreadCount: 0,
+        }),
+      ]);
+      expect(builder.where).toHaveBeenCalledWith(
+        'c.user_low_id = :userId OR c.user_high_id = :userId',
+        { userId: USER_A },
+      );
     });
   });
 

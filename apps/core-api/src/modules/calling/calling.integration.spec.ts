@@ -337,6 +337,10 @@ d('Calling integration (Postgres thật)', () => {
           friendPairs.has([a, b].sort().join(':')),
         ensureFriendship: async () => ({ created: true }),
       } as never,
+      {
+        canCall: async (a: string, b: string) =>
+          friendPairs.has([a, b].sort().join(':')),
+      } as never,
       livekitStub,
       configStub,
       userService,
