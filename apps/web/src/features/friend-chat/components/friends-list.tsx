@@ -11,8 +11,6 @@ import { useTranslation } from '../../../shared/i18n/messages';
 import { useFriends } from '../api';
 import { FriendAvatar } from './friend-avatar';
 
-import type { FriendDto } from '../api';
-
 export function FriendsList() {
   const friends = useFriends();
   const locale = useLocale();
@@ -82,10 +80,8 @@ export function FriendsList() {
       .toLocaleLowerCase('vi-VN')
       .includes(normalizedSearch),
   );
-  const conversations = list.filter(
-    (friend): friend is FriendDto & { lastMessageAt: string } =>
-      friend.lastMessageAt !== null,
-  );
+  // Inbox gồm cả chat trực tiếp chưa phải Friendship và conversation mới chưa có message.
+  const conversations = list;
   const unreadCount = conversations.reduce(
     (total, friend) => total + friend.unreadCount,
     0,
@@ -199,13 +195,17 @@ export function FriendsList() {
                           : 'text-slate-500'
                       }`}
                     >
-                      {/* preview '' = message chỉ có ảnh (content rỗng); null = chưa chat */}
-                      {friend.lastMessagePreview || t('friends.photo')}
+                      {/* preview '' = message chỉ có ảnh; null = conversation mới chưa chat */}
+                      {friend.lastMessagePreview === null
+                        ? t('friends.noMessages')
+                        : friend.lastMessagePreview || t('friends.photo')}
                     </p>
                   </div>
                   <span className="flex shrink-0 flex-col items-end gap-1">
                     <span className="text-xs text-slate-400">
-                      {formatRelativeTime(friend.lastMessageAt, locale)}
+                      {friend.lastMessageAt === null
+                        ? t('friends.newConversation')
+                        : formatRelativeTime(friend.lastMessageAt, locale)}
                     </span>
                     {friend.unreadCount > 0 && (
                       <span

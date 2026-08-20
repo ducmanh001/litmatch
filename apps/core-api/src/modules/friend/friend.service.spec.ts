@@ -42,6 +42,7 @@ describe('FriendService (unit — mock repo/conversationService/redis)', () => {
   let conversationService: {
     findByPair: jest.Mock;
     findById: jest.Mock;
+    listForUser: jest.Mock;
     sendMessage: jest.Mock;
     listMessages: jest.Mock;
   };
@@ -69,6 +70,7 @@ describe('FriendService (unit — mock repo/conversationService/redis)', () => {
     conversationService = {
       findByPair: jest.fn(async () => makeConversation()),
       findById: jest.fn(async () => makeConversation()),
+      listForUser: jest.fn(async () => []),
       sendMessage: jest.fn(async (_conv, senderUserId, content) =>
         Object.assign(new Message(), {
           id: 'msg-1',

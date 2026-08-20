@@ -1420,6 +1420,44 @@
         "tags": ["notifications"]
       }
     },
+    "/api/v1/notifications/web-push/subscription": {
+      "post": {
+        "operationId": "NotificationController_upsertWebPushSubscription",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertWebPushSubscriptionDto"
+              }
+            }
+          }
+        },
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Đăng ký hoặc cập nhật browser push subscription",
+        "tags": ["notifications"]
+      },
+      "delete": {
+        "operationId": "NotificationController_deleteWebPushSubscription",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteWebPushSubscriptionDto"
+              }
+            }
+          }
+        },
+        "responses": { "204": { "description": "" } },
+        "security": [{ "bearer": [] }],
+        "summary": "Huỷ browser push subscription của chính user",
+        "tags": ["notifications"]
+      }
+    },
     "/api/v1/notifications/{notificationId}/read": {
       "post": {
         "operationId": "NotificationController_markRead",
@@ -1462,7 +1500,7 @@
           }
         },
         "security": [{ "bearer": [] }],
-        "summary": "Danh sách bạn (profile + conversationId), sort theo chat gần nhất",
+        "summary": "Danh sách mọi conversation (profile + conversationId), sort theo chat gần nhất",
         "tags": ["friends"]
       }
     },
@@ -1495,7 +1533,7 @@
           }
         },
         "security": [{ "bearer": [] }],
-        "summary": "Conversation với 1 bạn cụ thể — nhảy thẳng từ unlock-profile sang chat",
+        "summary": "Conversation với 1 profile đã mở chat — nhảy thẳng từ profile sang chat",
         "tags": ["friends"]
       }
     },
@@ -2118,7 +2156,7 @@
           }
         },
         "security": [{ "bearer": [] }],
-        "summary": "Mở/lấy voice call lâu dài với người đã là bạn sau mutual Voice Match like",
+        "summary": "Mở/lấy voice call lâu dài khi hai bên follow nhau",
         "tags": ["calling"]
       }
     },
@@ -7152,6 +7190,28 @@
         "properties": { "count": { "type": "number" } },
         "required": ["count"]
       },
+      "WebPushSubscriptionKeysDto": {
+        "type": "object",
+        "properties": {
+          "p256dh": { "type": "string", "minLength": 1, "maxLength": 255 },
+          "auth": { "type": "string", "minLength": 1, "maxLength": 255 }
+        },
+        "required": ["p256dh", "auth"]
+      },
+      "UpsertWebPushSubscriptionDto": {
+        "type": "object",
+        "properties": {
+          "endpoint": { "type": "string", "maxLength": 2048 },
+          "expirationTime": { "type": "number", "nullable": true },
+          "keys": { "$ref": "#/components/schemas/WebPushSubscriptionKeysDto" }
+        },
+        "required": ["endpoint", "keys"]
+      },
+      "DeleteWebPushSubscriptionDto": {
+        "type": "object",
+        "properties": { "endpoint": { "type": "string", "maxLength": 2048 } },
+        "required": ["endpoint"]
+      },
       "FriendDto": {
         "type": "object",
         "properties": {
@@ -7165,7 +7225,15 @@
           },
           "unreadCount": { "type": "number" },
           "lastMessagePreview": { "type": "string", "nullable": true },
-          "muted": { "type": "boolean" }
+          "muted": { "type": "boolean" },
+          "isFriend": {
+            "type": "boolean",
+            "description": "Cặp đã có Friendship hai chiều"
+          },
+          "canCall": {
+            "type": "boolean",
+            "description": "Caller và đối phương follow nhau"
+          }
         },
         "required": [
           "profile",
@@ -7174,7 +7242,9 @@
           "lastMessageAt",
           "unreadCount",
           "lastMessagePreview",
-          "muted"
+          "muted",
+          "isFriend",
+          "canCall"
         ]
       },
       "ConversationDto": {
@@ -7270,6 +7340,14 @@
         "type": "object",
         "properties": {
           "isFollowing": { "type": "boolean" },
+          "followerCount": {
+            "type": "number",
+            "description": "Tổng số người đang theo dõi profile"
+          },
+          "followingCount": {
+            "type": "number",
+            "description": "Tổng số profile mà user đang theo dõi"
+          },
           "conversationId": { "type": "string", "nullable": true },
           "messageAvailable": { "type": "boolean" },
           "requiresGift": { "type": "boolean" },
@@ -7284,6 +7362,8 @@
         },
         "required": [
           "isFollowing",
+          "followerCount",
+          "followingCount",
           "conversationId",
           "messageAvailable",
           "requiresGift",

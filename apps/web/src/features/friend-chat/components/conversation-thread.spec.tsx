@@ -27,7 +27,10 @@ function renderThread() {
   );
 }
 
-function mockPartnerAndConversation(onGet: (path: string) => unknown): void {
+function mockPartnerAndConversation(
+  onGet: (path: string) => unknown,
+  friends: unknown[] = [],
+): void {
   vi.spyOn(apiClient, 'GET').mockImplementation(async (path: string) => {
     if (path === '/api/v1/users/me') {
       return {
@@ -53,7 +56,7 @@ function mockPartnerAndConversation(onGet: (path: string) => unknown): void {
       return { data: { data: { items: [], meta: {} } } } as never;
     }
     if (path === '/api/v1/friends') {
-      return { data: { data: [] } } as never;
+      return { data: { data: friends } } as never;
     }
     return onGet(path);
   });
@@ -182,5 +185,49 @@ describe('ConversationThread', () => {
         params: { path: { id: 'conv-1' } },
       }),
     );
+  });
+
+  it('chỉ mở voice call khi server trả canCall=true', async () => {
+    mockPartnerAndConversation(
+      (path) => {
+        throw new Error(`unexpected GET ${path}`);
+      },
+      [
+        {
+          profile: {
+            id: 'partner-1',
+            nickname: 'Bạn B',
+            gender: 'unknown',
+            avatarId: 'a1',
+          },
+          conversationId: 'conv-1',
+          friendSince: new Date().toISOString(),
+          lastMessageAt: null,
+          unreadCount: 0,
+          lastMessagePreview: null,
+          muted: false,
+          isFriend: false,
+          canCall: true,
+        },
+      ],
+    );
+    const postSpy = vi.spyOn(apiClient, 'POST').mockResolvedValue({
+      data: {
+        data: { call: { id: 'call-1' }, token: 'tok', livekitUrl: 'ws://x' },
+      },
+    } as never);
+    const user = userEvent.setup();
+
+    renderThread();
+
+    await user.click(await screen.findByRole('button', { name: 'Gọi voice' }));
+
+    await waitFor(() =>
+      expect(postSpy).toHaveBeenCalledWith(
+        '/api/v1/calling/friends/{friendUserId}/join',
+        { params: { path: { friendUserId: 'partner-1' } } },
+      ),
+    );
+    expect(routerPush).toHaveBeenCalledWith('/chat/partner-1/call');
   });
 });

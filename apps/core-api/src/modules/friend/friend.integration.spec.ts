@@ -312,6 +312,8 @@ d('Friend integration (Postgres thật)', () => {
     );
     expect(followerActions).toMatchObject({
       isFollowing: true,
+      followerCount: 1,
+      followingCount: 0,
       dailyFirstChatCount: 0,
       requiresGift: false,
       messageAvailable: false,
@@ -321,6 +323,21 @@ d('Friend integration (Postgres thật)', () => {
       target.id,
     );
     expect(freeConversation.id).toEqual(expect.any(String));
+    const directContactBeforeMutualFollow = (
+      await friend.listFriends(viewer.id)
+    ).find((entry) => entry.partnerId === target.id);
+    expect(directContactBeforeMutualFollow).toMatchObject({
+      conversationId: freeConversation.id,
+      isFriend: false,
+      canCall: false,
+    });
+    await profileSocial.follow(viewer.id, target.id);
+    await profileSocial.follow(target.id, viewer.id);
+    expect(
+      (await friend.listFriends(viewer.id)).find(
+        (entry) => entry.partnerId === target.id,
+      ),
+    ).toMatchObject({ canCall: true });
     await expect(
       profileSocial.openConversation(secondViewer.id, target.id),
     ).resolves.toEqual(expect.objectContaining({ id: expect.any(String) }));

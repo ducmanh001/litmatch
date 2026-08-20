@@ -47,39 +47,21 @@ describe('DiscoveryPage', () => {
     expect(await screen.findByText(/Chưa có ai phù hợp lúc này/)).toBeVisible();
   });
 
-  it('có card — bấm vào mở sheet, mời Voice Match gọi đúng API', async () => {
+  it('có card — bấm vào đi thẳng tới profile đầy đủ, không mở sheet trung gian', async () => {
     const card = cardFixture();
     vi.spyOn(apiClient, 'GET').mockResolvedValue({
       data: { data: { items: [card], nextCursor: null } },
-    } as never);
-    const post = vi.spyOn(apiClient, 'POST').mockResolvedValue({
-      data: {
-        data: {
-          id: 'invite-1',
-          inviterUserId: 'me',
-          inviteeUserId: 'user-1',
-          matchType: 'voice',
-          status: 'pending',
-          expiresAt: new Date().toISOString(),
-          sessionId: null,
-          createdAt: new Date().toISOString(),
-        },
-      },
     } as never);
 
     renderPage();
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Khám phá phù hợp' }));
-    await user.click(await screen.findByText('Chi'));
-    await user.click(screen.getByRole('button', { name: 'Mời Voice Match' }));
+    const profileLink = await screen.findByRole('link', {
+      name: 'Xem hồ sơ Chi, 20-24 tuổi',
+    });
 
-    expect(post).toHaveBeenCalledWith(
-      '/api/v1/matching/invites',
-      expect.objectContaining({
-        body: { inviteeUserId: 'user-1', matchType: 'voice' },
-      }),
-    );
-    expect(await screen.findByText(/Đã gửi lời mời Voice Match/)).toBeVisible();
+    expect(profileLink).toHaveAttribute('href', '/users/user-1');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('lọc giới tính và khoảng tuổi bằng tham số API thật', async () => {

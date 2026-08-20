@@ -22,6 +22,28 @@ export const notificationKeys = {
   unreadCount: ['notifications', 'unread-count'] as const,
 };
 
+export type WebPushSubscriptionInput = {
+  endpoint: string;
+  expirationTime?: number | null;
+  keys: { p256dh: string; auth: string };
+};
+
+export async function registerWebPushSubscription(
+  subscription: WebPushSubscriptionInput,
+): Promise<void> {
+  await apiClient.POST('/api/v1/notifications/web-push/subscription', {
+    body: subscription,
+  });
+}
+
+export async function unregisterWebPushSubscription(
+  endpoint: string,
+): Promise<void> {
+  await apiClient.DELETE('/api/v1/notifications/web-push/subscription', {
+    body: { endpoint },
+  });
+}
+
 export function useUnreadNotificationCount() {
   return useQuery({
     queryKey: notificationKeys.unreadCount,

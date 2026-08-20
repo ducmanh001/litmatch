@@ -82,6 +82,7 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
     create: jest.Mock;
     findOneBy: jest.Mock;
     findOneByOrFail: jest.Mock;
+    createQueryBuilder: jest.Mock;
   };
   let reactionRepo: { findOneBy: jest.Mock; existsBy: jest.Mock };
   let matchingService: {
@@ -90,6 +91,7 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
     endVoiceSessionForCall: jest.Mock;
   };
   let friendService: { areFriends: jest.Mock; ensureFriendship: jest.Mock };
+  let profileSocialService: { canCall: jest.Mock };
   let livekit: {
     mintJoinToken: jest.Mock;
     deleteRoom: jest.Mock;
@@ -109,6 +111,16 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
       create: jest.fn((input) => Object.assign(new CallSession(), input)),
       findOneBy: jest.fn(async () => null),
       findOneByOrFail: jest.fn(),
+      createQueryBuilder: jest.fn(() => {
+        const builder = {
+          where: jest.fn(),
+          andWhere: jest.fn(),
+          getOne: jest.fn(async () => null),
+        };
+        builder.where.mockReturnValue(builder);
+        builder.andWhere.mockReturnValue(builder);
+        return builder;
+      }),
     };
     reactionRepo = {
       findOneBy: jest.fn(async () => null),
@@ -123,6 +135,7 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
       areFriends: jest.fn(async () => false),
       ensureFriendship: jest.fn(async () => ({ created: true })),
     };
+    profileSocialService = { canCall: jest.fn(async () => false) };
     livekit = {
       mintJoinToken: jest.fn(async (room, id) => `tok:${room}:${id}`),
       deleteRoom: jest.fn(async () => undefined),
@@ -149,6 +162,7 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
       reactionRepo as unknown as Repository<VoiceMatchReaction>,
       matchingService as never,
       friendService as never,
+      profileSocialService as never,
       livekit as unknown as LivekitRoomPort,
       configStub,
       userService as never,
@@ -251,6 +265,32 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
         created.matchSessionId,
         created.userAId,
         created.userBId,
+      );
+    });
+  });
+
+  describe('joinFriendCall — reciprocal follow gate', () => {
+    it('chặn caller chưa được follow lại bằng cùng lỗi 404', async () => {
+      await expect(
+        service.joinFriendCall(me, PARTNER_ID),
+      ).rejects.toMatchObject({ code: CallingErrors.SESSION_NOT_FOUND });
+      expect(callRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('follow hai chiều mới tạo/lấy được friend call lâu dài', async () => {
+      profileSocialService.canCall.mockResolvedValue(true);
+
+      const result = await service.joinFriendCall(me, PARTNER_ID);
+
+      expect(result.call.callKind).toBe('friend');
+      expect(profileSocialService.canCall).toHaveBeenCalledWith(
+        me.userId,
+        PARTNER_ID,
+      );
+      expect(livekit.mintJoinToken).toHaveBeenCalledWith(
+        result.call.roomName,
+        me.userId,
+        120,
       );
     });
   });

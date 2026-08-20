@@ -710,6 +710,24 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/notifications/web-push/subscription': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Đăng ký hoặc cập nhật browser push subscription */
+    post: operations['NotificationController_upsertWebPushSubscription'];
+    /** Huỷ browser push subscription của chính user */
+    delete: operations['NotificationController_deleteWebPushSubscription'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/notifications/{notificationId}/read': {
     parameters: {
       query?: never;
@@ -734,7 +752,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Danh sách bạn (profile + conversationId), sort theo chat gần nhất */
+    /** Danh sách mọi conversation (profile + conversationId), sort theo chat gần nhất */
     get: operations['FriendController_listFriends'];
     put?: never;
     post?: never;
@@ -751,7 +769,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Conversation với 1 bạn cụ thể — nhảy thẳng từ unlock-profile sang chat */
+    /** Conversation với 1 profile đã mở chat — nhảy thẳng từ profile sang chat */
     get: operations['FriendController_getConversationWithFriend'];
     put?: never;
     post?: never;
@@ -994,7 +1012,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Mở/lấy voice call lâu dài với người đã là bạn sau mutual Voice Match like */
+    /** Mở/lấy voice call lâu dài khi hai bên follow nhau */
     post: operations['CallingController_joinFriend'];
     delete?: never;
     options?: never;
@@ -3202,6 +3220,18 @@ export interface components {
     UnreadCountDto: {
       count: number;
     };
+    WebPushSubscriptionKeysDto: {
+      p256dh: string;
+      auth: string;
+    };
+    UpsertWebPushSubscriptionDto: {
+      endpoint: string;
+      expirationTime?: number | null;
+      keys: components['schemas']['WebPushSubscriptionKeysDto'];
+    };
+    DeleteWebPushSubscriptionDto: {
+      endpoint: string;
+    };
     FriendDto: {
       profile: components['schemas']['PublicProfileDto'];
       conversationId: string;
@@ -3212,6 +3242,10 @@ export interface components {
       unreadCount: number;
       lastMessagePreview: string | null;
       muted: boolean;
+      /** @description Cặp đã có Friendship hai chiều */
+      isFriend: boolean;
+      /** @description Caller và đối phương follow nhau */
+      canCall: boolean;
     };
     ConversationDto: {
       id: string;
@@ -3257,6 +3291,10 @@ export interface components {
     };
     ProfileActionsDto: {
       isFollowing: boolean;
+      /** @description Tổng số người đang theo dõi profile */
+      followerCount: number;
+      /** @description Tổng số profile mà user đang theo dõi */
+      followingCount: number;
       conversationId: string | null;
       messageAvailable: boolean;
       requiresGift: boolean;
@@ -5260,6 +5298,48 @@ export interface operations {
             };
           };
         };
+      };
+    };
+  };
+  NotificationController_upsertWebPushSubscription: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpsertWebPushSubscriptionDto'];
+      };
+    };
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  NotificationController_deleteWebPushSubscription: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['DeleteWebPushSubscriptionDto'];
+      };
+    };
+    responses: {
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
     };
   };

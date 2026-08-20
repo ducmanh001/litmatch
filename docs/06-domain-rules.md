@@ -10,8 +10,10 @@
 - Không match lại người vừa report/block trong X ngày gần nhất.
 - Voice Match có giới hạn cứng **7 phút cho mọi tài khoản** (regular/VIP/SVIP) — hết giờ server tự
   kết thúc. Không có gia hạn, gói phút hoặc trừ Diamond theo phút.
-- Nếu mutual-like trong Voice Match, server tạo Friendship + Conversation bền vững; hai người được
-  gọi lại không giới hạn thời lượng qua Friend call. Không mutual-like thì không có quyền gọi lại.
+- Nhắn tin profile không cần follow. Friend call trong mục Tin nhắn chỉ được mở khi `ProfileFollow`
+  active theo cả hai chiều; server kiểm tra lại ở endpoint join, không tin cờ UI. Mutual-like trong
+  Voice Match vẫn tạo Friendship + Conversation bền vững, nhưng Friendship không thay thế điều kiện
+  reciprocal follow để gọi lại.
 - Trust score giảm khi bị report nhiều → giảm priority trong matching.
 - VIP tier ảnh hưởng: quota matching, giá speed-up (regular 50, VIP 40, SVIP 30 DIA), badge hiển thị.
 - Speed-up không giới hạn số lần theo giờ/ngày; mỗi lần vẫn cần đủ Diamond và ticket còn queued.

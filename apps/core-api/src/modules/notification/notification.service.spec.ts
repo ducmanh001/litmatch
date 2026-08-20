@@ -28,6 +28,8 @@ describe('NotificationService (unit — mock repo/pushPort)', () => {
     manager: unknown;
   };
   let pushPort: { send: jest.Mock };
+  let webPushSubscriptions: { listForUser: jest.Mock; removeById: jest.Mock };
+  let webPushPort: { send: jest.Mock };
   let service: NotificationService;
 
   function expectDomainError(err: unknown, code: string): void {
@@ -48,9 +50,17 @@ describe('NotificationService (unit — mock repo/pushPort)', () => {
       },
     };
     pushPort = { send: jest.fn(async () => undefined) };
+    webPushSubscriptions = {
+      listForUser: jest.fn(async () => []),
+      removeById: jest.fn(async () => undefined),
+    };
+    webPushPort = { send: jest.fn(async () => ({ status: 'delivered' })) };
     service = new NotificationService(
       notificationRepo as unknown as Repository<Notification>,
       pushPort as unknown as PushPort,
+      undefined,
+      webPushSubscriptions as never,
+      webPushPort as never,
     );
   });
 
@@ -89,6 +99,35 @@ describe('NotificationService (unit — mock repo/pushPort)', () => {
       await expect(
         service.sendPush(makeNotification()),
       ).resolves.toBeUndefined();
+    });
+
+    it('endpoint hết hạn → gửi web push và xoá subscription 404/410', async () => {
+      const subscription = {
+        id: 'sub-1',
+        endpoint: 'https://push.example/sub-1',
+        p256dh: 'p256dh',
+        auth: 'auth',
+      };
+      webPushSubscriptions.listForUser.mockResolvedValue([subscription]);
+      webPushPort.send.mockResolvedValue({
+        status: 'failed',
+        removeSubscription: true,
+      });
+      const n = makeNotification({ payload: { preview: 'hello' } });
+
+      await service.sendPush(n);
+
+      expect(webPushPort.send).toHaveBeenCalledWith({
+        notificationId: n.id,
+        recipientId: n.userId,
+        type: n.type,
+        payload: n.payload,
+        subscription: {
+          endpoint: subscription.endpoint,
+          keys: { p256dh: subscription.p256dh, auth: subscription.auth },
+        },
+      });
+      expect(webPushSubscriptions.removeById).toHaveBeenCalledWith('sub-1');
     });
   });
 

@@ -558,14 +558,16 @@ const MESSAGES = {
     vi: 'Không tìm thấy người bạn nào.',
     en: 'No friends found.',
   },
-  'friends.sectionFriends': { vi: 'Bạn bè', en: 'Friends' },
-  'friends.sectionConversations': { vi: 'Hội thoại', en: 'Conversations' },
+  'friends.sectionFriends': { vi: 'Kết nối', en: 'Connections' },
+  'friends.sectionConversations': { vi: 'Tin nhắn', en: 'Messages' },
   'friends.unread': {
     vi: (params: { count: number }) => `${params.count} chưa đọc`,
     en: (params: { count: number }) => `${params.count} unread`,
   },
   'friends.muted': { vi: 'Đã tắt thông báo', en: 'Notifications muted' },
   'friends.photo': { vi: '📷 Ảnh', en: '📷 Photo' },
+  'friends.noMessages': { vi: 'Chưa có tin nhắn', en: 'No messages yet' },
+  'friends.newConversation': { vi: 'Mới', en: 'New' },
   'friends.unreadMessages': {
     vi: (params: { count: number }) => `${params.count} tin nhắn chưa đọc`,
     en: (params: { count: number }) => `${params.count} unread messages`,
@@ -584,6 +586,18 @@ const MESSAGES = {
     en: 'No notifications yet.',
   },
   'notifications.close': { vi: 'Đóng thông báo', en: 'Close notifications' },
+  'notifications.enableBrowserPush': {
+    vi: 'Bật thông báo trên trình duyệt',
+    en: 'Enable browser notifications',
+  },
+  'notifications.browserPushEnabled': {
+    vi: 'Thông báo trình duyệt đang bật',
+    en: 'Browser notifications are on',
+  },
+  'notifications.browserPushDenied': {
+    vi: 'Thông báo đang bị chặn trong cài đặt trình duyệt',
+    en: 'Notifications are blocked in browser settings',
+  },
   'wallet.loading': { vi: 'Đang tải ví…', en: 'Loading wallet…' },
   'wallet.noData': {
     vi: 'Không có dữ liệu ví.',

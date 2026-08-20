@@ -26,7 +26,7 @@ import type Redis from 'ioredis';
   imports: [
     TypeOrmModule.forFeature([CallSession, VoiceMatchReaction]),
     MatchingModule, // đọc MatchSession qua MatchingService (read-only — cùng pattern Soul Match)
-    FriendModule, // Voice Match mutual like tạo Friendship + Conversation atomically
+    FriendModule, // follow/friend graph + Voice Match mutual like tạo Friendship atomically
     UserModule, // đọc User.region để chọn LiveKit URL theo region (GĐ7 — ADR 0005)
   ],
   controllers: [CallingController, LivekitWebhookController],

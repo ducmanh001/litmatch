@@ -53,7 +53,7 @@ export class FriendController {
   @Get('friends')
   @ApiOperation({
     summary:
-      'Danh sách bạn (profile + conversationId), sort theo chat gần nhất',
+      'Danh sách mọi conversation (profile + conversationId), sort theo chat gần nhất',
   })
   @ApiOkResponse({ type: [FriendDto] })
   async listFriends(
@@ -82,7 +82,7 @@ export class FriendController {
   @Get('friends/:friendUserId/conversation')
   @ApiOperation({
     summary:
-      'Conversation với 1 bạn cụ thể — nhảy thẳng từ unlock-profile sang chat',
+      'Conversation với 1 profile đã mở chat — nhảy thẳng từ profile sang chat',
   })
   @ApiOkResponse({ type: ConversationDto })
   async getConversationWithFriend(

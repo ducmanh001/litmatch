@@ -46,13 +46,19 @@ production; `disabled` chỉ bỏ external push nên row in-app vẫn được p
 device token, payload hay user id. Lỗi provider trả trạng thái thất bại/bị nuốt ở boundary và không
 được làm hỏng transaction chính.
 
-Adapter nhận device token khi caller có token. Luồng đăng ký/rotate token native chưa thuộc scope
-này; các call site hiện tại không có token nên vẫn giữ fallback in-app/dev/disabled như trước.
+Adapter nhận device token khi caller có token. Với web, `WebPushSubscriptionService` lưu endpoint
+VAPID của từng user qua `POST /notifications/web-push/subscription`; Service Worker nhận payload
+khi tab đã đóng và mở đúng `/chat/:senderUserId` khi click. Endpoint 404/410 bị xoá tự động.
+Web push tắt mặc định; chỉ bật khi có đủ `WEB_PUSH_SUBJECT`, `WEB_PUSH_PUBLIC_KEY` và
+`WEB_PUSH_PRIVATE_KEY`. Luồng đăng ký/rotate token native vẫn chưa thuộc scope này.
 
 Config provider: `NOTIFICATION_PUSH_PROVIDER` (`dev` | `fcm` | `apns` | `disabled`, default `dev`),
 `NOTIFICATION_PUSH_HTTP_TIMEOUT_MS` và credential tương ứng `NOTIFICATION_FCM_*` hoặc
 `NOTIFICATION_APNS_*`. Production không có credential/token phải chọn `disabled`, không fallback về
 `dev`.
+
+Web Push config: `WEB_PUSH_ENABLED` (default `false`), `WEB_PUSH_SUBJECT`,
+`WEB_PUSH_PUBLIC_KEY`, `WEB_PUSH_PRIVATE_KEY` và frontend `NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY`.
 
 ## 5. Analytics — optional PostHog adapter
 
@@ -68,6 +74,8 @@ Config: `ANALYTICS_ENABLED`, `ANALYTICS_PROVIDER` (`posthog` | `disabled`), `POS
 
 - `GET /notifications` — cursor, mới nhất trước.
 - `GET /notifications/unread-count` — badge số chưa đọc.
+- `POST /notifications/web-push/subscription` — đăng ký/cập nhật browser endpoint.
+- `DELETE /notifications/web-push/subscription` — huỷ browser endpoint của chính user.
 - `POST /notifications/:id/read` — đánh dấu đã đọc, idempotent, chỉ chủ sở hữu.
 
 ## 7. Ngoài scope GĐ4

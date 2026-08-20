@@ -1,5 +1,7 @@
 import {
+  Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -18,6 +20,11 @@ import { CursorPageQueryDto } from '@litmatch/common-dtos';
 
 import { NotificationService } from './notification.service';
 import { NotificationsPageDto, UnreadCountDto } from './dto/notification.dtos';
+import {
+  DeleteWebPushSubscriptionDto,
+  UpsertWebPushSubscriptionDto,
+} from './dto/web-push.dtos';
+import { WebPushSubscriptionService } from './services/web-push-subscription.service';
 import { ApiCursorPageQuery } from '../../common/decorators/cursor-page-query.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -27,7 +34,10 @@ import type { AuthenticatedUser } from '../../common/decorators/current-user.dec
 @ApiBearerAuth()
 @Controller('notifications')
 export class NotificationController {
-  constructor(private readonly notificationService: NotificationService) {}
+  constructor(
+    private readonly notificationService: NotificationService,
+    private readonly webPushSubscriptions: WebPushSubscriptionService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Danh sách notification, mới nhất trước' })
@@ -50,6 +60,26 @@ export class NotificationController {
   ): Promise<UnreadCountDto> {
     const count = await this.notificationService.unreadCount(user.userId);
     return { count };
+  }
+
+  @Post('web-push/subscription')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Đăng ký hoặc cập nhật browser push subscription' })
+  async upsertWebPushSubscription(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: UpsertWebPushSubscriptionDto,
+  ): Promise<void> {
+    await this.webPushSubscriptions.upsert(user.userId, dto);
+  }
+
+  @Delete('web-push/subscription')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Huỷ browser push subscription của chính user' })
+  async deleteWebPushSubscription(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: DeleteWebPushSubscriptionDto,
+  ): Promise<void> {
+    await this.webPushSubscriptions.remove(user.userId, dto.endpoint);
   }
 
   @Post(':notificationId/read')

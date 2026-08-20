@@ -4,6 +4,10 @@ import type { ProfileActionsView } from '../services/profile-social.service';
 
 export class ProfileActionsDto {
   @ApiProperty() isFollowing!: boolean;
+  @ApiProperty({ description: 'Tổng số người đang theo dõi profile' })
+  followerCount!: number;
+  @ApiProperty({ description: 'Tổng số profile mà user đang theo dõi' })
+  followingCount!: number;
   @ApiProperty({ nullable: true, type: String }) conversationId!: string | null;
   @ApiProperty() messageAvailable!: boolean;
   @ApiProperty() requiresGift!: boolean;

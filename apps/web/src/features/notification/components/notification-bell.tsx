@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { BellIcon } from '../../../shared/ui/icons';
 import { formatRelativeTime } from '../../../shared/lib/format-relative-time';
@@ -13,6 +13,9 @@ import {
   useUnreadNotificationCount,
 } from '../api';
 import { presentNotification } from '../notification-copy';
+import { enableWebPush, getWebPushStatus } from '../web-push';
+
+import type { WebPushStatus } from '../web-push';
 
 import type { NotificationDto } from '../api';
 
@@ -92,6 +95,7 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
       <p className="border-b border-black/5 px-4 py-3 text-sm font-extrabold dark:border-white/5">
         {t('notifications.title')}
       </p>
+      <BrowserPushControl />
 
       {isPending && (
         <div className="space-y-3 p-4">
@@ -148,6 +152,56 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
         </button>
       )}
     </div>
+  );
+}
+
+function BrowserPushControl() {
+  const t = useTranslation();
+  const [status, setStatus] = useState<WebPushStatus>('checking');
+
+  useEffect(() => {
+    let mounted = true;
+    void getWebPushStatus().then((next) => {
+      if (mounted) setStatus(next);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  if (
+    status === 'checking' ||
+    status === 'unsupported' ||
+    status === 'unconfigured'
+  )
+    return null;
+  if (status === 'enabled') {
+    return (
+      <p className="border-b border-black/5 px-4 py-2 text-[11px] font-semibold text-emerald-600 dark:border-white/5 dark:text-emerald-300">
+        ✓ {t('notifications.browserPushEnabled')}
+      </p>
+    );
+  }
+  if (status === 'denied') {
+    return (
+      <p className="border-b border-black/5 px-4 py-2 text-[11px] text-muted-foreground dark:border-white/5 dark:text-white/55">
+        {t('notifications.browserPushDenied')}
+      </p>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        void enableWebPush()
+          .then(setStatus)
+          .catch(() => setStatus('default'));
+      }}
+      className="flex w-full items-center gap-2 border-b border-black/5 px-4 py-2.5 text-left text-xs font-bold text-irisl hover:bg-iris/5 dark:border-white/5"
+    >
+      🔔 {t('notifications.enableBrowserPush')}
+    </button>
   );
 }
 

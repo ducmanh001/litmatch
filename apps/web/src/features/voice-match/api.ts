@@ -43,6 +43,27 @@ export function useJoinCall(matchSessionId: string) {
   });
 }
 
+/** Mở/lấy friend call lâu dài; server chỉ cấp token khi follow active hai chiều. */
+export function useJoinFriendCall(friendUserId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.POST(
+        '/api/v1/calling/friends/{friendUserId}/join',
+        { params: { path: { friendUserId } } },
+      );
+      return res.data?.data;
+    },
+    onSuccess: (joined) => {
+      if (joined?.call === undefined) return;
+      queryClient.setQueryData(
+        voiceMatchKeys.call(joined.call.id),
+        joined.call,
+      );
+    },
+  });
+}
+
 export function useCall(callId: string | null) {
   return useQuery({
     queryKey: voiceMatchKeys.call(callId ?? 'none'),

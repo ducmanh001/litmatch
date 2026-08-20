@@ -17,6 +17,8 @@ const envSchema = z
     NEXT_PUBLIC_SOCKET_URL: z.url(),
     /** URL LiveKit SFU (ws://). */
     NEXT_PUBLIC_LIVEKIT_URL: z.url(),
+    /** Public VAPID key for browser Web Push; empty disables subscription UI. */
+    NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY: z.string().optional(),
     /** Compatibility fallback khi backend cũ chưa có capability endpoint. */
     NEXT_PUBLIC_AUTH_GOOGLE_CLIENT_ID: z.string().optional(),
     /** Compatibility fallback khi backend cũ chưa có capability endpoint. */
@@ -63,6 +65,8 @@ export const env = envSchema.parse({
   NEXT_PUBLIC_API_URL: process.env['NEXT_PUBLIC_API_URL'],
   NEXT_PUBLIC_SOCKET_URL: process.env['NEXT_PUBLIC_SOCKET_URL'],
   NEXT_PUBLIC_LIVEKIT_URL: process.env['NEXT_PUBLIC_LIVEKIT_URL'],
+  NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY:
+    process.env['NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY'] || undefined,
   NEXT_PUBLIC_AUTH_GOOGLE_CLIENT_ID:
     process.env['NEXT_PUBLIC_AUTH_GOOGLE_CLIENT_ID'] || undefined,
   NEXT_PUBLIC_AUTH_APPLE_CLIENT_ID:

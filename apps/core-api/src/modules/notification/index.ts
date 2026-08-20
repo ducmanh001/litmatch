@@ -8,6 +8,8 @@ export type {
   BroadcastNotificationInput,
 } from './notification.service';
 export { Notification, NotificationType } from './entities/notification.entity';
+export { WebPushSubscription } from './entities/web-push-subscription.entity';
+export { WebPushSubscriptionService } from './services/web-push-subscription.service';
 export {
   PushNotificationPort,
   type PushDeliveryResult,
