@@ -21,6 +21,8 @@ function dryRun(profile, ...args) {
     LOCAL_CI_INTEGRATION_DB_URL: _integrationDatabaseUrl,
     LOCAL_CI_SERVICES_READY: _servicesReady,
     LOCAL_CI_DATABASE_READY: _databaseReady,
+    LOCAL_CI_RESET_NX: _resetNx,
+    LOCAL_CI_STRICT_CLEAN: _strictClean,
     CI: _ci,
     GITHUB_ACTIONS: _githubActions,
     ...testEnvironment
