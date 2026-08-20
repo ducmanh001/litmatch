@@ -3,7 +3,7 @@
 # Media Server (LiveKit) có compose riêng: apps/media-server/docker-compose.yml
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     container_name: litmatch-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-litmatch}
