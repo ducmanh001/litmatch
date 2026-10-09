@@ -91,7 +91,7 @@ describe('MiniGameService (unit — mock repo/dataSource/friendService/redis)', 
       create: jest.fn((_entity: unknown, input: unknown) => input),
       save: jest.fn(async (input) => ({ id: 'sess-1', ...(input as object) })),
       insert: jest.fn(async () => undefined),
-      update: jest.fn(async () => undefined),
+      update: jest.fn(async () => ({ affected: 1 })),
       delete: jest.fn(async () => undefined),
       createQueryBuilder: jest.fn(() => updateQueryBuilder),
       getRepository: jest.fn(() => reloadedRepo),
@@ -389,12 +389,40 @@ describe('MiniGameService (unit — mock repo/dataSource/friendService/redis)', 
       expect(result.status).toBe(MiniGameSessionStatus.Cancelled);
       expect(manager.update).toHaveBeenCalledWith(
         MiniGameSession,
-        { id: 'sess-1' },
+        { id: 'sess-1', status: MiniGameSessionStatus.WaitingMoves },
         { status: MiniGameSessionStatus.Cancelled },
       );
       expect(manager.delete).toHaveBeenCalledWith(MiniGameActiveParticipant, {
         sessionId: 'sess-1',
       });
+    });
+
+    it('thua race: ván vừa được resolve giữa lúc đọc và ghi → 409, KHÔNG ghi đè resolved', async () => {
+      sessionRepo.findOneBy
+        .mockResolvedValueOnce(makeSession())
+        .mockResolvedValueOnce(
+          makeSession({ status: MiniGameSessionStatus.Resolved }),
+        );
+      manager.update.mockResolvedValueOnce({ affected: 0 });
+
+      const err = await service.cancelSession(USER_A, 'sess-1').catch((e) => e);
+
+      expectDomainError(err, MiniGameErrors.NOT_CANCELLABLE);
+      expect(manager.delete).not.toHaveBeenCalled();
+    });
+
+    it('thua race: bên kia vừa huỷ → trả trạng thái cancelled (idempotent), không xoá lần nữa', async () => {
+      sessionRepo.findOneBy
+        .mockResolvedValueOnce(makeSession())
+        .mockResolvedValueOnce(
+          makeSession({ status: MiniGameSessionStatus.Cancelled }),
+        );
+      manager.update.mockResolvedValueOnce({ affected: 0 });
+
+      const result = await service.cancelSession(USER_A, 'sess-1');
+
+      expect(result.status).toBe(MiniGameSessionStatus.Cancelled);
+      expect(manager.delete).not.toHaveBeenCalled();
     });
   });
 

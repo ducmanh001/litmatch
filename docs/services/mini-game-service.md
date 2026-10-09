@@ -58,6 +58,10 @@ giải phóng unique slot). IDOR: mọi endpoint theo `id` chỉ chấp nhận p
 `MINI_GAME_SESSION_NOT_FOUND` cho không tồn tại/không phải thành viên. Ván đã `resolved`/
 `cancelled` → 409 khi thao tác nộp move.
 
+Huỷ là conditional UPDATE `WHERE status = 'waiting_moves'`: nếu `submitMove` resolve ván giữa lúc đọc và
+ghi, lệnh huỷ khớp 0 hàng và trả 409 `MINI_GAME_NOT_CANCELLABLE` thay vì ghi đè `resolved` (kết quả đã
+công bố) thành `cancelled`; nếu bên kia vừa huỷ thì trả nguyên trạng `cancelled` (idempotent).
+
 ## 5. Realtime (tái dùng hạ tầng — [realtime-gateway.md](./realtime-gateway.md))
 
 Event mới: `minigame.session.started` (khi tạo), `minigame.session.resolved` (kèm `lowMove`,
