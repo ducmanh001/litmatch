@@ -45,12 +45,17 @@ describe('coreApiEnvSchema invariants', () => {
     expect(schema.validate('memcached').error).toBeDefined();
   });
 
-  it('JWT_SECRET_PREVIOUS tắt theo mặc định, đủ dài và không được trùng khoá hiện tại', () => {
+  it('JWT_SECRET_PREVIOUS tắt theo mặc định, đủ dài và không trùng khoá hiện tại hay khoá guest device', () => {
     const current = 'c'.repeat(40);
+    const guest = 'g'.repeat(40);
     const previousError = (value: unknown) =>
       coreApiEnvSchema
         .validate(
-          { JWT_SECRET: current, JWT_SECRET_PREVIOUS: value },
+          {
+            JWT_SECRET: current,
+            AUTH_GUEST_DEVICE_TOKEN_SECRET: guest,
+            JWT_SECRET_PREVIOUS: value,
+          },
           { abortEarly: false, allowUnknown: true },
         )
         .error?.details.find((d) => d.path[0] === 'JWT_SECRET_PREVIOUS');
@@ -60,6 +65,7 @@ describe('coreApiEnvSchema invariants', () => {
     expect(previousError('p'.repeat(40))).toBeUndefined();
     expect(previousError('p'.repeat(31))).toBeDefined();
     expect(previousError(current)).toBeDefined();
+    expect(previousError(guest)).toBeDefined();
   });
 
   it('verifier store bắt buộc có ECONOMY_APPLE_BUNDLE_ID, các chế độ khác thì cho rỗng', () => {
