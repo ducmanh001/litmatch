@@ -68,12 +68,14 @@ describe('coreApiEnvSchema invariants', () => {
     expect(previousError(guest)).toBeDefined();
   });
 
-  it('verifier store bắt buộc có ECONOMY_APPLE_BUNDLE_ID, các chế độ khác thì cho rỗng', () => {
+  it('ECONOMY_APPLE_BUNDLE_ID bắt buộc khi IAP verifier=store hoặc khi webhook store có Apple Root CA', () => {
     const bundleIdError = (env: Record<string, unknown>) =>
       coreApiEnvSchema
         .validate(env, { abortEarly: false, allowUnknown: true })
         .error?.details.find((d) => d.path[0] === 'ECONOMY_APPLE_BUNDLE_ID');
+    const CA = '-----BEGIN CERTIFICATE-----';
 
+    // IAP store: luôn bắt buộc
     expect(bundleIdError({ ECONOMY_IAP_VERIFIER: 'store' })).toBeDefined();
     expect(
       bundleIdError({
@@ -87,13 +89,41 @@ describe('coreApiEnvSchema invariants', () => {
         ECONOMY_APPLE_BUNDLE_ID: 'com.litmatch.app',
       }),
     ).toBeUndefined();
-    expect(bundleIdError({ ECONOMY_IAP_VERIFIER: 'dev' })).toBeUndefined();
+
+    // IAP tắt nhưng webhook Apple thật (store + Root CA): vẫn bắt buộc
     expect(
       bundleIdError({
         ECONOMY_IAP_VERIFIER: 'disabled',
+        ECONOMY_APPLE_WEBHOOK_VERIFIER: 'store',
+        ECONOMY_APPLE_ROOT_CA_PEM: CA,
         ECONOMY_APPLE_BUNDLE_ID: '',
       }),
+    ).toBeDefined();
+    expect(
+      bundleIdError({
+        ECONOMY_IAP_VERIFIER: 'disabled',
+        ECONOMY_APPLE_WEBHOOK_VERIFIER: 'store',
+        ECONOMY_APPLE_ROOT_CA_PEM: CA,
+        ECONOMY_APPLE_BUNDLE_ID: 'com.litmatch.app',
+      }),
     ).toBeUndefined();
+
+    // webhook chưa thể xác thực chữ ký (không có Root CA) hoặc ở chế độ dev: cho rỗng
+    expect(
+      bundleIdError({
+        ECONOMY_IAP_VERIFIER: 'disabled',
+        ECONOMY_APPLE_WEBHOOK_VERIFIER: 'store',
+        ECONOMY_APPLE_ROOT_CA_PEM: '',
+      }),
+    ).toBeUndefined();
+    expect(
+      bundleIdError({
+        ECONOMY_IAP_VERIFIER: 'disabled',
+        ECONOMY_APPLE_WEBHOOK_VERIFIER: 'dev',
+        ECONOMY_APPLE_ROOT_CA_PEM: CA,
+      }),
+    ).toBeUndefined();
+    expect(bundleIdError({ ECONOMY_IAP_VERIFIER: 'dev' })).toBeUndefined();
     expect(bundleIdError({})).toBeUndefined();
   });
 
