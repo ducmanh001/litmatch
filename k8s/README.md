@@ -114,18 +114,23 @@ rồi `kubectl apply -k k8s/overlays/production`. `media-server` dùng image Liv
 ## Xoay JWT_SECRET
 
 Access token (TTL `JWT_ACCESS_TTL_SECONDS`, mặc định 900 giây) là JWT HS256 ký bằng `JWT_SECRET`; core-api
-và signaling-gateway dùng CHUNG khoá này. Đổi thẳng khoá sẽ vô hiệu mọi token đang sống. Để xoay êm,
-hai app nhận thêm `JWT_SECRET_PREVIOUS` (khoá cũ, chỉ để VERIFY; token luôn được ký bằng `JWT_SECRET`):
+và signaling-gateway dùng CHUNG khoá này. Đổi thẳng khoá làm mọi token đang sống bị từ chối, và trong lúc
+rollout (pod cũ và mới chạy song song) token do pod mới ký sẽ bị pod cũ từ chối. Vì vậy xoay theo 3 bước,
+mỗi bước là một lần rollout đầy đủ của CẢ HAI app (thứ tự giữa hai app không quan trọng).
+`JWT_SECRET_PREVIOUS` là khoá PHỤ chỉ để VERIFY (token luôn được ký bằng `JWT_SECRET`); nó phải khác
+`JWT_SECRET` và khác `AUTH_GUEST_DEVICE_TOKEN_SECRET`.
 
-1. Tạo khoá mới (≥ 32 ký tự). `JWT_SECRET_PREVIOUS` phải khác `JWT_SECRET`.
-2. **Gateway trước:** đặt `JWT_SECRET` = khoá mới, `JWT_SECRET_PREVIOUS` = khoá cũ trong
-   `signaling-gateway-secrets`, rollout xong. Gateway cần chấp nhận khoá mới trước khi core-api bắt đầu ký bằng nó.
-3. **Rồi core-api:** cùng cặp giá trị trong `core-api-secrets`, rollout. Từ đây token mới ký bằng khoá mới.
-4. Chờ ít nhất `JWT_ACCESS_TTL_SECONDS` (cộng dư), rồi xoá `JWT_SECRET_PREVIOUS` ở cả hai app.
+1. **Phân phối khoá mới:** `JWT_SECRET` = khoá cũ, `JWT_SECRET_PREVIOUS` = khoá MỚI. Từ đây mọi pod verify
+   được cả hai khoá, nhưng vẫn ký bằng khoá cũ.
+2. **Chuyển sang ký bằng khoá mới:** `JWT_SECRET` = khoá mới, `JWT_SECRET_PREVIOUS` = khoá cũ. Pod cũ còn
+   sót lại ở bước này vẫn verify được token mới nhờ khoá phụ, và token cũ còn sống vẫn được chấp nhận.
+3. Chờ ít nhất `JWT_ACCESS_TTL_SECONDS` (cộng dư) sau khi bước 2 rollout xong, rồi xoá
+   `JWT_SECRET_PREVIOUS` ở cả hai app.
 
 Refresh token là chuỗi opaque lưu DB và guest device token dùng `AUTH_GUEST_DEVICE_TOKEN_SECRET` riêng, nên
-không bị ảnh hưởng. Nếu khoá cũ nghi bị lộ thì KHÔNG dùng cửa sổ này: đổi `JWT_SECRET`, để trống
-`JWT_SECRET_PREVIOUS` và chấp nhận mọi người phải đăng nhập lại. Rollback = đảo hai giá trị rồi rollout lại theo thứ tự trên.
+không bị ảnh hưởng. Nếu khoá cũ nghi bị lộ thì KHÔNG dùng quy trình này: đổi `JWT_SECRET`, để trống
+`JWT_SECRET_PREVIOUS` và chấp nhận mọi người phải đăng nhập lại. Rollback = quay về giá trị của bước trước
+rồi rollout lại cả hai app.
 
 ## Resource sizing — vì sao core-api và signaling-gateway khác nhau
 

@@ -280,10 +280,12 @@ export const coreApiEnvSchema = Joi.object({
     .default(250),
 
   JWT_SECRET: Joi.string().min(32).required(),
+  // Không được trùng khoá hiện tại và cũng không được trùng khoá của guest device token: nếu trùng, token
+  // guest-device (sống nhiều ngày) sẽ verify được như access token của người dùng thật.
   JWT_SECRET_PREVIOUS: Joi.string()
     .min(32)
     .allow('')
-    .invalid(Joi.ref('JWT_SECRET'))
+    .invalid(Joi.ref('JWT_SECRET'), Joi.ref('AUTH_GUEST_DEVICE_TOKEN_SECRET'))
     .default(''),
   JWT_ACCESS_TTL_SECONDS: Joi.number().integer().min(60).default(900),
 
