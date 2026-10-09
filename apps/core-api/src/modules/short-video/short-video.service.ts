@@ -99,6 +99,16 @@ export class ShortVideoService {
           HttpStatus.CONFLICT,
         );
       }
+      // Chỉ cấp lại URL upload khi video còn `uploading`. Sau đó object không được ghi lại nữa: video đã
+      // published/pending_review mà nhận URL mới thì tác giả thay được file đã qua kiểm duyệt, còn video
+      // `failed` đã bị sweeper dọn thì object upload muộn thành rác vĩnh viễn.
+      if (video.status !== VideoStatus.Uploading) {
+        throw new DomainException(
+          ShortVideoErrors.VIDEO_INVALID_TRANSITION,
+          `Video đang '${video.status}', chỉ cấp lại URL upload khi đang 'uploading'; dùng Idempotency-Key mới để upload lại`,
+          HttpStatus.CONFLICT,
+        );
+      }
     }
     const uploadUrl = await this.storagePort.issueUploadUrl(video.storageKey);
     return { video, uploadUrl };

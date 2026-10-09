@@ -40,6 +40,10 @@ tiến lên phía sau, không lặp lại 200 hàng cũ nhất và không đói 
   `VideoStoragePort.issueUploadUrl(storageKey)`. `storageKey` sinh TRƯỚC (pure,
   `generateStorageKey`), tách khỏi bước có I/O (`issueUploadUrl`) — cho phép replay idempotent
   reissue ĐÚNG URL cho storageKey đã tạo, không phải bịa storageKey mới không ai đọc.
+  Replay chỉ cấp lại URL khi video còn `uploading`; sau đó trả 409 `SHORT_VIDEO_INVALID_TRANSITION` (dùng
+  Idempotency-Key mới để upload lại). Cấp URL mới cho video đã `published`/`pending_review` sẽ cho tác giả
+  thay file đã qua kiểm duyệt, còn cho video `failed` (object đã bị sweeper dọn) thì object upload muộn
+  thành rác vĩnh viễn.
 - `POST /videos/:id/finalize`: client báo đã upload xong lên storage → `uploading→processing` →
   gọi `VideoTranscodePort.transcode()` → `processing→pending_review|published` tuỳ
   `VIDEO_MODERATION_MODE`. Dev port đồng bộ (trả kết quả ngay) nên toàn bộ chuỗi chạy trong 1 lần

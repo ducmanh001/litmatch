@@ -282,6 +282,28 @@ describe('ShortVideoService (unit — mock repo/ports/dataSource)', () => {
       expect(result.video).toBe(existing);
     });
 
+    it.each([
+      VideoStatus.Failed,
+      VideoStatus.Processing,
+      VideoStatus.PendingReview,
+      VideoStatus.Published,
+    ])(
+      'replay khi video đã %s → 409 VIDEO_INVALID_TRANSITION, KHÔNG cấp lại URL upload',
+      async (status) => {
+        videoRepo.save.mockRejectedValueOnce({ code: '23505' });
+        videoRepo.findOneByOrFail.mockResolvedValue(
+          makeVideo({ status, caption: 'hello' }),
+        );
+
+        await expect(
+          service.createUploadIntent(author, { caption: 'hello' }, 'k1'),
+        ).rejects.toMatchObject({
+          code: ShortVideoErrors.VIDEO_INVALID_TRANSITION,
+        });
+        expect(storagePort.issueUploadUrl).not.toHaveBeenCalled();
+      },
+    );
+
     it('replay nhưng caption khác → VIDEO_UPLOAD_IDEMPOTENCY_CONFLICT', async () => {
       videoRepo.save.mockRejectedValueOnce({ code: '23505' });
       videoRepo.findOneByOrFail.mockResolvedValue(

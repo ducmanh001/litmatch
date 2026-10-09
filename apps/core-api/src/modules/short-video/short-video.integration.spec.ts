@@ -237,6 +237,26 @@ d('short-video integration (Postgres thật)', () => {
     ).toBe(1);
   });
 
+  it('upload-intent replay sau khi video đã finalize → 409, không cấp lại URL (không thay được file đã duyệt)', async () => {
+    const author = await createUser('video-author-replay-late');
+    const { video: created } = await video.createUploadIntent(
+      auth(author.id),
+      { caption: 'late replay' },
+      'late-replay-key',
+    );
+    await video.finalizeUpload(auth(author.id), created.id);
+
+    await expect(
+      video.createUploadIntent(
+        auth(author.id),
+        { caption: 'late replay' },
+        'late-replay-key',
+      ),
+    ).rejects.toMatchObject({
+      code: ShortVideoErrors.VIDEO_INVALID_TRANSITION,
+    });
+  });
+
   it('người ngoài không xem được video pending_review (oracle-safe), tác giả xem được', async () => {
     const author = await createUser('video-author-hidden');
     const stranger = await createUser('video-stranger-hidden');
@@ -294,6 +314,53 @@ d('short-video integration (Postgres thật)', () => {
         .getRepository(VideoView)
         .countBy({ videoId: published.id, viewerId: viewer.id }),
     ).toBe(1);
+  });
+
+  it('view: request vượt ngưỡng chờ khoá hàng của giao dịch đang qualify rồi không cộng lần nữa (FOR UPDATE)', async () => {
+    const author = await createUser('video-author-view-lock');
+    const viewer = await createUser('video-viewer-lock');
+    const published = await uploadAndPublish(author.id);
+    await video.recordView(auth(viewer.id), published.id, 500); // tạo hàng, chưa qualified
+    const viewRow = await ds
+      .getRepository(VideoView)
+      .findOneByOrFail({ videoId: published.id, viewerId: viewer.id });
+
+    let releaseA!: () => void;
+    const holdA = new Promise<void>((resolve) => {
+      releaseA = resolve;
+    });
+    let lockedByA!: () => void;
+    const aHoldsLock = new Promise<void>((resolve) => {
+      lockedByA = resolve;
+    });
+    // Giao dịch A: khoá hàng view, qualify + cộng viewCount, giữ khoá cho tới khi test cho commit.
+    const txA = ds.transaction(async (manager) => {
+      await manager.findOneOrFail(VideoView, {
+        where: { id: viewRow.id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      lockedByA();
+      await holdA;
+      await manager.update(
+        VideoView,
+        { id: viewRow.id },
+        { qualified: true, watchTimeMs: 5_000 },
+      );
+      await manager.increment(Video, { id: published.id }, 'viewCount', 1);
+    });
+    await aHoldsLock;
+
+    // Request B cũng vượt ngưỡng. Có FOR UPDATE thì B chờ A, rồi thấy qualified=true và KHÔNG cộng.
+    // Thiếu khoá thì B đọc qualified=false (đọc thường không bị chặn), chờ ở UPDATE rồi cộng thêm → 2.
+    const txB = video.recordView(auth(viewer.id), published.id, 5_000);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    releaseA();
+    await Promise.all([txA, txB]);
+
+    const reloaded = await ds
+      .getRepository(Video)
+      .findOneByOrFail({ id: published.id });
+    expect(reloaded.viewCount).toBe(1);
   });
 
   it('like/unlike idempotent, likeCount atomic', async () => {
