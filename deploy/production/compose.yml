@@ -62,6 +62,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:?required}
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:?required}
+      JWT_SECRET_PREVIOUS: ${JWT_SECRET_PREVIOUS:-}
       AUTH_OTP_PEPPER: ${AUTH_OTP_PEPPER:?required}
       AUTH_GUEST_DEVICE_TOKEN_SECRET: ${AUTH_GUEST_DEVICE_TOKEN_SECRET:?required}
       AUTH_PHONE_OTP_ENABLED: 'true'
@@ -124,6 +125,7 @@ services:
       SIGNALING_PORT: 3001
       CORS_ORIGINS: https://app.${DOMAIN},https://admin.${DOMAIN}
       JWT_SECRET: ${JWT_SECRET:?required}
+      JWT_SECRET_PREVIOUS: ${JWT_SECRET_PREVIOUS:-}
       REDIS_URL: redis://redis:6379
       OBSERVABILITY_REQUIRED: 'true'
       SENTRY_DSN: ${SENTRY_SIGNALING_DSN:?required}

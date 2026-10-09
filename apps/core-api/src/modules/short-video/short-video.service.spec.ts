@@ -88,6 +88,8 @@ describe('ShortVideoService (unit — mock repo/ports/dataSource)', () => {
   let safetyService: { reportVideo: jest.Mock };
   let manager: {
     findOne: jest.Mock;
+    findOneOrFail: jest.Mock;
+    createQueryBuilder: jest.Mock;
     save: jest.Mock;
     update: jest.Mock;
     increment: jest.Mock;
@@ -97,6 +99,13 @@ describe('ShortVideoService (unit — mock repo/ports/dataSource)', () => {
     getRepository: jest.Mock;
   };
   let dataSource: { transaction: jest.Mock };
+  let insertViewBuilder: {
+    insert: jest.Mock;
+    into: jest.Mock;
+    values: jest.Mock;
+    orIgnore: jest.Mock;
+    execute: jest.Mock;
+  };
   let service: ShortVideoService;
 
   beforeEach(() => {
@@ -152,8 +161,17 @@ describe('ShortVideoService (unit — mock repo/ports/dataSource)', () => {
         distinctReporterCount: 1,
       })),
     };
+    insertViewBuilder = {
+      insert: jest.fn().mockReturnThis(),
+      into: jest.fn().mockReturnThis(),
+      values: jest.fn().mockReturnThis(),
+      orIgnore: jest.fn().mockReturnThis(),
+      execute: jest.fn(async () => ({ identifiers: [], raw: [] })),
+    };
     manager = {
       findOne: jest.fn(),
+      findOneOrFail: jest.fn(),
+      createQueryBuilder: jest.fn(() => insertViewBuilder),
       save: jest.fn(async (t) => t),
       update: jest.fn(async () => ({ affected: 1 })),
       increment: jest.fn(async () => ({
@@ -263,6 +281,28 @@ describe('ShortVideoService (unit — mock repo/ports/dataSource)', () => {
       );
       expect(result.video).toBe(existing);
     });
+
+    it.each([
+      VideoStatus.Failed,
+      VideoStatus.Processing,
+      VideoStatus.PendingReview,
+      VideoStatus.Published,
+    ])(
+      'replay khi video đã %s → 409 VIDEO_INVALID_TRANSITION, KHÔNG cấp lại URL upload',
+      async (status) => {
+        videoRepo.save.mockRejectedValueOnce({ code: '23505' });
+        videoRepo.findOneByOrFail.mockResolvedValue(
+          makeVideo({ status, caption: 'hello' }),
+        );
+
+        await expect(
+          service.createUploadIntent(author, { caption: 'hello' }, 'k1'),
+        ).rejects.toMatchObject({
+          code: ShortVideoErrors.VIDEO_INVALID_TRANSITION,
+        });
+        expect(storagePort.issueUploadUrl).not.toHaveBeenCalled();
+      },
+    );
 
     it('replay nhưng caption khác → VIDEO_UPLOAD_IDEMPOTENCY_CONFLICT', async () => {
       videoRepo.save.mockRejectedValueOnce({ code: '23505' });
@@ -376,29 +416,79 @@ describe('ShortVideoService (unit — mock repo/ports/dataSource)', () => {
       expect(dataSource.transaction).not.toHaveBeenCalled();
     });
 
+    const existingView = (over: object = {}) => ({
+      id: 'view-1',
+      videoId: 'video-1',
+      viewerId: viewer.userId,
+      watchTimeMs: 0,
+      qualified: false,
+      ...over,
+    });
+
     it('watchTime vượt ngưỡng lần đầu → cộng viewCount đúng 1 lần', async () => {
       videoRepo.findOneBy.mockResolvedValue(makeVideo());
-      manager.findOne.mockResolvedValue(null);
+      manager.findOneOrFail.mockResolvedValue(existingView());
       await service.recordView(viewer, 'video-1', 5_000);
+      expect(manager.increment).toHaveBeenCalledTimes(1);
       expect(manager.increment).toHaveBeenCalledWith(
         Video,
         { id: 'video-1' },
         'viewCount',
         1,
       );
+      expect(manager.update).toHaveBeenCalledWith(
+        VideoView,
+        { id: 'view-1' },
+        { watchTimeMs: 5_000, qualified: true },
+      );
+    });
+
+    it('tạo hàng bằng ON CONFLICT DO NOTHING rồi khoá hàng trước khi quyết định cộng', async () => {
+      videoRepo.findOneBy.mockResolvedValue(makeVideo());
+      manager.findOneOrFail.mockResolvedValue(existingView());
+      await service.recordView(viewer, 'video-1', 5_000);
+      expect(insertViewBuilder.orIgnore).toHaveBeenCalledTimes(1);
+      expect(insertViewBuilder.values).toHaveBeenCalledWith(
+        expect.objectContaining({
+          videoId: 'video-1',
+          viewerId: viewer.userId,
+          qualified: false,
+        }),
+      );
+      expect(manager.findOneOrFail).toHaveBeenCalledWith(
+        VideoView,
+        expect.objectContaining({ lock: { mode: 'pessimistic_write' } }),
+      );
+      // không còn đường save()+bắt unique violation trong transaction (Postgres huỷ transaction đó)
+      expect(manager.save).not.toHaveBeenCalled();
     });
 
     it('đã qualified từ trước → không cộng viewCount lần nữa', async () => {
       videoRepo.findOneBy.mockResolvedValue(makeVideo());
-      manager.findOne.mockResolvedValue({
-        id: 'view-1',
-        videoId: 'video-1',
-        viewerId: viewer.userId,
-        watchTimeMs: 5000,
-        qualified: true,
-      });
+      manager.findOneOrFail.mockResolvedValue(
+        existingView({ watchTimeMs: 5_000, qualified: true }),
+      );
       await service.recordView(viewer, 'video-1', 8_000);
       expect(manager.increment).not.toHaveBeenCalled();
+      expect(manager.update).toHaveBeenCalledWith(
+        VideoView,
+        { id: 'view-1' },
+        { watchTimeMs: 8_000, qualified: true },
+      );
+    });
+
+    it('chưa tới ngưỡng → chỉ ghi watchTime lớn nhất, không cộng viewCount', async () => {
+      videoRepo.findOneBy.mockResolvedValue(makeVideo());
+      manager.findOneOrFail.mockResolvedValue(
+        existingView({ watchTimeMs: 900 }),
+      );
+      await service.recordView(viewer, 'video-1', 400);
+      expect(manager.increment).not.toHaveBeenCalled();
+      expect(manager.update).toHaveBeenCalledWith(
+        VideoView,
+        { id: 'view-1' },
+        { watchTimeMs: 900, qualified: false },
+      );
     });
   });
 

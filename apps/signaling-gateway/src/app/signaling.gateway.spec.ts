@@ -1,5 +1,7 @@
 import { EventEmitter } from 'node:events';
 
+import { JwtService as RealJwtService } from '@nestjs/jwt';
+
 import { SignalingGateway } from './signaling.gateway';
 
 import type { ConfigService } from '@nestjs/config';
@@ -9,7 +11,10 @@ import type { Socket } from 'socket.io';
 import type { SignalingEnv } from '../config/env.validation';
 import type { ConnectionQuotaService } from './connection-quota.service';
 
-function makeGateway(verifyImpl?: jest.Mock): {
+function makeGateway(
+  verifyImpl?: jest.Mock,
+  previousSecret = '',
+): {
   gateway: SignalingGateway;
   connectionQuota: ConnectionQuotaService;
   emit: jest.Mock;
@@ -24,6 +29,8 @@ function makeGateway(verifyImpl?: jest.Mock): {
       if (key === 'REDIS_URL') return 'redis://localhost:6379';
       throw new Error(`missing config ${key}`);
     },
+    get: (key: string) =>
+      key === 'JWT_SECRET_PREVIOUS' ? previousSecret : undefined,
   } as unknown as ConfigService<SignalingEnv, true>;
   const connectionQuota = {
     leaseMs: 90_000,
@@ -37,8 +44,9 @@ function makeGateway(verifyImpl?: jest.Mock): {
   const gateway = new SignalingGateway(jwtService, config, connectionQuota);
   const emit = jest.fn();
   const to = jest.fn(() => ({ emit }));
-  // gán server mock (bình thường do @WebSocketServer inject sau afterInit)
-  Object.assign(gateway, { server: { to } });
+  // gán server mock (bình thường do @WebSocketServer inject sau afterInit). Relay chỉ được đi qua
+  // `server.local` — mock không có `server.to` để một lần quay lại emit toàn cụm sẽ fail ngay.
+  Object.assign(gateway, { server: { local: { to } } });
   return { gateway, connectionQuota, emit, to };
 }
 
@@ -95,8 +103,44 @@ describe('SignalingGateway (unit — fanout thuần, không business logic)', ()
     });
   });
 
+  describe('authenticate — xoay khoá JWT_SECRET', () => {
+    const CURRENT = 'current-secret-0123456789abcdef0123456789abcdef';
+    const PREVIOUS = 'previous-secret-0123456789abcdef0123456789abcde';
+    const realJwt = new RealJwtService({ secret: CURRENT });
+    const verifyReal = (): jest.Mock =>
+      jest.fn((token: string, options?: object) =>
+        realJwt.verifyAsync(token, options),
+      );
+    const tokenSignedBy = (secret: string): Promise<string> =>
+      new RealJwtService({ secret }).signAsync(
+        { sub: 'user-7', isGuest: false },
+        { expiresIn: '5m' },
+      );
+
+    it('token ký bằng khoá hiện tại → hợp lệ', async () => {
+      const { gateway } = makeGateway(verifyReal(), PREVIOUS);
+      const socket = makeSocket(await tokenSignedBy(CURRENT));
+      await gateway.authenticate(socket);
+      expect((socket.data as { userId?: string }).userId).toBe('user-7');
+    });
+
+    it('token ký bằng khoá cũ → hợp lệ khi có JWT_SECRET_PREVIOUS', async () => {
+      const { gateway } = makeGateway(verifyReal(), PREVIOUS);
+      const socket = makeSocket(await tokenSignedBy(PREVIOUS));
+      await gateway.authenticate(socket);
+      expect((socket.data as { userId?: string }).userId).toBe('user-7');
+    });
+
+    it('token ký bằng khoá cũ → UNAUTHORIZED khi không có JWT_SECRET_PREVIOUS', async () => {
+      const { gateway } = makeGateway(verifyReal());
+      await expect(
+        gateway.authenticate(makeSocket(await tokenSignedBy(PREVIOUS))),
+      ).rejects.toThrow('UNAUTHORIZED');
+    });
+  });
+
   describe('relay — Redis pmessage → đúng room user, payload nguyên văn', () => {
-    it('channel realtime:user:{id} → emit(event, data) vào room user:{id}', () => {
+    it('channel realtime:user:{id} → emit(event, data) vào room user:{id} CỦA POD NÀY (server.local)', () => {
       const { gateway, emit, to } = makeGateway();
       gateway.relay(
         'realtime:user:user-9',

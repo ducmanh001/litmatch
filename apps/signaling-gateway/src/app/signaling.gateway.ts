@@ -19,6 +19,7 @@ import { randomUUID } from 'node:crypto';
 import Redis from 'ioredis';
 
 import { ConnectionQuotaService } from './connection-quota.service';
+import { verifyJwtWithRotation } from './jwt-rotation';
 import { signalingRedisClientOptions } from './redis-client-options';
 import type { Namespace, Socket } from 'socket.io';
 import type {
@@ -65,11 +66,17 @@ export class SignalingGateway
   @WebSocketServer()
   private readonly server!: Namespace;
 
+  /** Khoá cũ trong cửa sổ xoay `JWT_SECRET`; undefined khi không xoay. */
+  private readonly previousJwtSecret: string | undefined;
+
   constructor(
     private readonly jwtService: JwtService,
     private readonly config: ConfigService<SignalingEnv, true>,
     private readonly connectionQuota: ConnectionQuotaService,
-  ) {}
+  ) {
+    this.previousJwtSecret =
+      config.get('JWT_SECRET_PREVIOUS', { infer: true }) || undefined;
+  }
 
   afterInit(server: Namespace): void {
     this.stopQuotaUnavailableListener = this.connectionQuota.onUnavailable(() =>
@@ -204,8 +211,11 @@ export class SignalingGateway
       throw new Error(RealtimeConnectionErrors.Unauthorized);
     }
     try {
-      const payload =
-        await this.jwtService.verifyAsync<AccessTokenPayload>(token);
+      const payload = await verifyJwtWithRotation<AccessTokenPayload>(
+        this.jwtService,
+        token,
+        this.previousJwtSecret,
+      );
       if (typeof payload.sub !== 'string' || payload.sub === '') {
         throw new Error('missing sub');
       }
@@ -301,7 +311,13 @@ export class SignalingGateway
     }
   }
 
-  /** Relay Redis → socket room của đúng user; payload không đọc/sửa (public để unit test). */
+  /**
+   * Relay Redis → socket room của đúng user; payload không đọc/sửa (public để unit test).
+   *
+   * Mọi pod đều PSUBSCRIBE `realtime:user:*` nên mọi pod đều nhận (và relay) cùng một event; vì vậy
+   * chỉ emit cho room CỤC BỘ của pod này (`server.local`). Với Redis cluster adapter, một broadcast
+   * không-local còn được chuyển tiếp sang các pod khác → socket nhận N bản (N = số pod).
+   */
   relay(channel: string, raw: string): void {
     const userId = parseRealtimeUserChannel(channel);
     if (!userId) return; // channel lạ — bỏ qua
@@ -313,7 +329,7 @@ export class SignalingGateway
       return;
     }
     if (typeof envelope?.event !== 'string') return;
-    this.server.to(userRoom(userId)).emit(envelope.event, envelope.data);
+    this.server.local.to(userRoom(userId)).emit(envelope.event, envelope.data);
   }
 
   private ensureSubscribed(): void {

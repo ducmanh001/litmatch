@@ -172,6 +172,26 @@ d('Socket.IO cluster adapter — 2 instance gateway độc lập (Redis thật)'
     expect(received).toEqual([{ from: 'instance-b' }]);
   });
 
+  it('relay ở CẢ 2 instance (như PSUBSCRIBE thật giao cho mọi pod) chỉ giao đúng 1 bản cho socket', async () => {
+    const userId = `relay-once-${Date.now()}`;
+    const clientOnA = await connectedClient(instanceA, userId);
+    const received: unknown[] = [];
+    clientOnA.on('relay.once', (data) => received.push(data));
+
+    // Redis PSUBSCRIBE giao cùng một message cho mọi pod nên mọi pod cùng gọi relay(). Relay chỉ
+    // được emit cho room cục bộ; nếu dùng broadcast toàn cụm thì cluster adapter nhân bản N lần.
+    const { SignalingGateway } = await import('./signaling.gateway');
+    const raw = JSON.stringify({ event: 'relay.once', data: { n: 1 } });
+    for (const instance of [instanceA, instanceB]) {
+      instance.app
+        .get<SignalingGateway>(SignalingGateway)
+        .relay(`realtime:user:${userId}`, raw);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(received).toEqual([{ n: 1 }]);
+  });
+
   it('quota per-user atomic xuyên 2 instance và trả slot sau disconnect/reconnect', async () => {
     const userId = `quota-${Date.now()}`;
     const first = await connectedClient(instanceA, userId);

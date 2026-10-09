@@ -99,6 +99,16 @@ export class ShortVideoService {
           HttpStatus.CONFLICT,
         );
       }
+      // Chỉ cấp lại URL upload khi video còn `uploading`. Sau đó object không được ghi lại nữa: video đã
+      // published/pending_review mà nhận URL mới thì tác giả thay được file đã qua kiểm duyệt, còn video
+      // `failed` đã bị sweeper dọn thì object upload muộn thành rác vĩnh viễn.
+      if (video.status !== VideoStatus.Uploading) {
+        throw new DomainException(
+          ShortVideoErrors.VIDEO_INVALID_TRANSITION,
+          `Video đang '${video.status}', chỉ cấp lại URL upload khi đang 'uploading'; dùng Idempotency-Key mới để upload lại`,
+          HttpStatus.CONFLICT,
+        );
+      }
     }
     const uploadUrl = await this.storagePort.issueUploadUrl(video.storageKey);
     return { video, uploadUrl };
@@ -256,27 +266,25 @@ export class ShortVideoService {
     const nowQualifies = watchTimeMs >= qualifiedMinMs;
 
     await this.dataSource.transaction(async (manager) => {
-      let view = await manager.findOne(VideoView, {
+      // Tạo hàng nếu chưa có bằng ON CONFLICT DO NOTHING: không ném unique violation nên transaction
+      // không bị Postgres huỷ (LRN-2026-002). Rồi KHOÁ hàng: hai request đồng thời của cùng viewer
+      // chạy tuần tự, request sau thấy `qualified=true` của request trước và không cộng viewCount lần nữa.
+      await manager
+        .createQueryBuilder()
+        .insert()
+        .into(VideoView)
+        .values({
+          videoId,
+          viewerId: user.userId,
+          watchTimeMs: 0,
+          qualified: false,
+        })
+        .orIgnore()
+        .execute();
+      const view = await manager.findOneOrFail(VideoView, {
         where: { videoId, viewerId: user.userId },
+        lock: { mode: 'pessimistic_write' },
       });
-      if (!view) {
-        try {
-          view = await manager.save(
-            manager.create(VideoView, {
-              videoId,
-              viewerId: user.userId,
-              watchTimeMs,
-              qualified: false,
-            }),
-          );
-        } catch (err) {
-          if (!isUniqueViolation(err)) throw err;
-          view = await manager.findOneByOrFail(VideoView, {
-            videoId,
-            viewerId: user.userId,
-          });
-        }
-      }
       const shouldQualifyNow = nowQualifies && !view.qualified;
       await manager.update(
         VideoView,

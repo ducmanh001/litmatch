@@ -24,6 +24,8 @@ export interface CoreApiEnv {
   SWAGGER_ENABLED: boolean;
   CAPABILITY_MAINTENANCE_FEATURES: string;
   DATABASE_URL: string;
+  DATABASE_POOL_MAX: number;
+  DATABASE_POOL_ACQUIRE_TIMEOUT_MS: number;
   REDIS_URL: string;
   KAFKA_BROKERS: string;
   EVENT_BUS_KAFKA_REQUEST_TIMEOUT_MS: number;
@@ -31,6 +33,8 @@ export interface CoreApiEnv {
   EVENT_BUS_CONSUMER_MAX_ATTEMPTS: number;
   EVENT_BUS_CONSUMER_RETRY_DELAY_MS: number;
   JWT_SECRET: string;
+  /** Khoá cũ, CHỈ để verify token đã phát trước lúc xoay khoá; rỗng = tắt. Luôn ký bằng JWT_SECRET. */
+  JWT_SECRET_PREVIOUS: string;
   JWT_ACCESS_TTL_SECONDS: number;
   AUTH_REFRESH_TTL_DAYS: number;
   AUTH_OTP_TTL_SECONDS: number;
@@ -212,6 +216,7 @@ export interface CoreApiEnv {
   VIDEO_RANKING_JOB_INTERVAL_MS: number;
   THROTTLE_TTL_SECONDS: number;
   THROTTLE_LIMIT: number;
+  THROTTLE_STORAGE: 'memory' | 'redis';
 }
 
 /**
@@ -243,6 +248,17 @@ export const coreApiEnvSchema = Joi.object({
   DATABASE_URL: Joi.string()
     .uri({ scheme: ['postgres', 'postgresql'] })
     .required(),
+  // Số kết nối tối đa MỖI pod tới Postgres (pg-pool). Mặc định 10 = mặc định của driver pg. Tổng kết nối
+  // = số pod core-api × giá trị này (+ migration/job) và phải nằm dưới max_connections của Postgres.
+  // Sàn 5: mỗi job nền singleton (ManagedInterval) giữ 1 kết nối cho advisory lock suốt lúc chạy và task
+  // của nó cần thêm 1 kết nối nữa, nên pool nhỏ hơn dễ bị job tự chiếm hết.
+  DATABASE_POOL_MAX: Joi.number().integer().min(5).max(100).default(10),
+  // Thời hạn chờ lấy một kết nối khi pool đã đầy; hết hạn thì lỗi thay vì chờ vô hạn.
+  DATABASE_POOL_ACQUIRE_TIMEOUT_MS: Joi.number()
+    .integer()
+    .min(1000)
+    .max(120_000)
+    .default(10_000),
   REDIS_URL: Joi.string()
     .uri({ scheme: ['redis', 'rediss'] })
     .default('redis://localhost:6379'),
@@ -264,6 +280,13 @@ export const coreApiEnvSchema = Joi.object({
     .default(250),
 
   JWT_SECRET: Joi.string().min(32).required(),
+  // Không được trùng khoá hiện tại và cũng không được trùng khoá của guest device token: nếu trùng, token
+  // guest-device (sống nhiều ngày) sẽ verify được như access token của người dùng thật.
+  JWT_SECRET_PREVIOUS: Joi.string()
+    .min(32)
+    .allow('')
+    .invalid(Joi.ref('JWT_SECRET'), Joi.ref('AUTH_GUEST_DEVICE_TOKEN_SECRET'))
+    .default(''),
   JWT_ACCESS_TTL_SECONDS: Joi.number().integer().min(60).default(900),
 
   AUTH_REFRESH_TTL_DAYS: Joi.number().integer().min(1).default(30),
@@ -410,7 +433,24 @@ export const coreApiEnvSchema = Joi.object({
   ECONOMY_APPLE_ISSUER_ID: Joi.string().allow('').default(''),
   ECONOMY_APPLE_KEY_ID: Joi.string().allow('').default(''),
   ECONOMY_APPLE_PRIVATE_KEY: Joi.string().allow('').default(''),
-  ECONOMY_APPLE_BUNDLE_ID: Joi.string().allow('').default(''),
+  // Webhook Apple chỉ chứng minh "Apple ký", bundleId mới chứng minh "ký cho app này"; để trống thì kiểm tra
+  // này bị bỏ qua (mọi app dùng chung chuỗi chứng chỉ Apple). Bắt buộc khi IAP verifier là `store`, hoặc khi
+  // webhook verifier là `store` và đã cấu hình Apple Root CA (tức webhook có thể thật sự xác thực chữ ký).
+  ECONOMY_APPLE_BUNDLE_ID: Joi.string().when('ECONOMY_IAP_VERIFIER', {
+    is: 'store',
+    then: Joi.required(),
+    otherwise: Joi.string()
+      .allow('')
+      .default('')
+      .when('ECONOMY_APPLE_WEBHOOK_VERIFIER', {
+        is: 'store',
+        then: Joi.when('ECONOMY_APPLE_ROOT_CA_PEM', {
+          is: Joi.string().min(1).required(),
+          // invalid('') thắng allow('') của nhánh ngoài
+          then: Joi.string().invalid('').required(),
+        }),
+      }),
+  }),
   ECONOMY_APPLE_SERVER_API_ENV: Joi.string()
     .valid('sandbox', 'production')
     .default('sandbox'),
@@ -712,6 +752,9 @@ export const coreApiEnvSchema = Joi.object({
 
   THROTTLE_TTL_SECONDS: Joi.number().integer().min(1).default(60),
   THROTTLE_LIMIT: Joi.number().integer().min(1).default(100),
+  // memory: bộ đếm theo từng process (đủ cho 1 pod/dev). redis: bộ đếm dùng chung mọi pod, lỗi Redis
+  // thì tạm quay về bộ nhớ của pod. Đặt redis khi chạy nhiều replica (mỗi request tốn 1 lệnh Redis).
+  THROTTLE_STORAGE: Joi.string().valid('memory', 'redis').default('memory'),
 });
 
 export const validateCoreApiEnv = createConfigValidator(coreApiEnvSchema);

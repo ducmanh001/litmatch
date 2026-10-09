@@ -21,6 +21,112 @@ describe('coreApiEnvSchema invariants', () => {
     expect(schema.validate('https://redis.example').error).toBeDefined();
   });
 
+  it('pool Postgres mỗi pod mặc định 10, sàn 5 và nằm trong khoảng hữu hạn', () => {
+    const schema = coreApiEnvSchema.extract('DATABASE_POOL_MAX');
+    expect(schema.validate(undefined).value).toBe(10);
+    expect(schema.validate(25).error).toBeUndefined();
+    expect(schema.validate(5).error).toBeUndefined();
+    expect(schema.validate(4).error).toBeDefined();
+    expect(schema.validate(101).error).toBeDefined();
+    expect(schema.validate(10.5).error).toBeDefined();
+  });
+
+  it('thời hạn chờ kết nối pool có mặc định hữu hạn và không nhận giá trị quá thấp', () => {
+    const schema = coreApiEnvSchema.extract('DATABASE_POOL_ACQUIRE_TIMEOUT_MS');
+    expect(schema.validate(undefined).value).toBe(10_000);
+    expect(schema.validate(999).error).toBeDefined();
+    expect(schema.validate(120_001).error).toBeDefined();
+  });
+
+  it('throttle storage mặc định memory và chỉ nhận memory hoặc redis', () => {
+    const schema = coreApiEnvSchema.extract('THROTTLE_STORAGE');
+    expect(schema.validate(undefined).value).toBe('memory');
+    expect(schema.validate('redis').error).toBeUndefined();
+    expect(schema.validate('memcached').error).toBeDefined();
+  });
+
+  it('JWT_SECRET_PREVIOUS tắt theo mặc định, đủ dài và không trùng khoá hiện tại hay khoá guest device', () => {
+    const current = 'c'.repeat(40);
+    const guest = 'g'.repeat(40);
+    const previousError = (value: unknown) =>
+      coreApiEnvSchema
+        .validate(
+          {
+            JWT_SECRET: current,
+            AUTH_GUEST_DEVICE_TOKEN_SECRET: guest,
+            JWT_SECRET_PREVIOUS: value,
+          },
+          { abortEarly: false, allowUnknown: true },
+        )
+        .error?.details.find((d) => d.path[0] === 'JWT_SECRET_PREVIOUS');
+
+    expect(previousError(undefined)).toBeUndefined();
+    expect(previousError('')).toBeUndefined();
+    expect(previousError('p'.repeat(40))).toBeUndefined();
+    expect(previousError('p'.repeat(31))).toBeDefined();
+    expect(previousError(current)).toBeDefined();
+    expect(previousError(guest)).toBeDefined();
+  });
+
+  it('ECONOMY_APPLE_BUNDLE_ID bắt buộc khi IAP verifier=store hoặc khi webhook store có Apple Root CA', () => {
+    const bundleIdError = (env: Record<string, unknown>) =>
+      coreApiEnvSchema
+        .validate(env, { abortEarly: false, allowUnknown: true })
+        .error?.details.find((d) => d.path[0] === 'ECONOMY_APPLE_BUNDLE_ID');
+    const CA = '-----BEGIN CERTIFICATE-----';
+
+    // IAP store: luôn bắt buộc
+    expect(bundleIdError({ ECONOMY_IAP_VERIFIER: 'store' })).toBeDefined();
+    expect(
+      bundleIdError({
+        ECONOMY_IAP_VERIFIER: 'store',
+        ECONOMY_APPLE_BUNDLE_ID: '',
+      }),
+    ).toBeDefined();
+    expect(
+      bundleIdError({
+        ECONOMY_IAP_VERIFIER: 'store',
+        ECONOMY_APPLE_BUNDLE_ID: 'com.litmatch.app',
+      }),
+    ).toBeUndefined();
+
+    // IAP tắt nhưng webhook Apple thật (store + Root CA): vẫn bắt buộc
+    expect(
+      bundleIdError({
+        ECONOMY_IAP_VERIFIER: 'disabled',
+        ECONOMY_APPLE_WEBHOOK_VERIFIER: 'store',
+        ECONOMY_APPLE_ROOT_CA_PEM: CA,
+        ECONOMY_APPLE_BUNDLE_ID: '',
+      }),
+    ).toBeDefined();
+    expect(
+      bundleIdError({
+        ECONOMY_IAP_VERIFIER: 'disabled',
+        ECONOMY_APPLE_WEBHOOK_VERIFIER: 'store',
+        ECONOMY_APPLE_ROOT_CA_PEM: CA,
+        ECONOMY_APPLE_BUNDLE_ID: 'com.litmatch.app',
+      }),
+    ).toBeUndefined();
+
+    // webhook chưa thể xác thực chữ ký (không có Root CA) hoặc ở chế độ dev: cho rỗng
+    expect(
+      bundleIdError({
+        ECONOMY_IAP_VERIFIER: 'disabled',
+        ECONOMY_APPLE_WEBHOOK_VERIFIER: 'store',
+        ECONOMY_APPLE_ROOT_CA_PEM: '',
+      }),
+    ).toBeUndefined();
+    expect(
+      bundleIdError({
+        ECONOMY_IAP_VERIFIER: 'disabled',
+        ECONOMY_APPLE_WEBHOOK_VERIFIER: 'dev',
+        ECONOMY_APPLE_ROOT_CA_PEM: CA,
+      }),
+    ).toBeUndefined();
+    expect(bundleIdError({ ECONOMY_IAP_VERIFIER: 'dev' })).toBeUndefined();
+    expect(bundleIdError({})).toBeUndefined();
+  });
+
   it('cookie production chỉ nhận policy SameSite đã review', () => {
     const schema = coreApiEnvSchema.extract('AUTH_COOKIE_SAME_SITE');
     expect(schema.validate(undefined).value).toBe('strict');

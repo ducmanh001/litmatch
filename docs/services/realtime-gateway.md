@@ -71,7 +71,8 @@ Mỗi module publish bằng Redis client riêng của mình (docs/05 § 5.3) qua
   dùng chung với lệnh khác); channel lạ/payload rác → bỏ qua + log, không chết.
 - Socket chết được dọn bởi ping/pong mặc định của Socket.IO (`pingTimeout`) — chưa cần timer
   riêng vì gateway không giữ room state nghiệp vụ (docs/10 § Calling/Signaling).
-- Config Joi: `JWT_SECRET` (bắt buộc, cùng core-api), `REDIS_URL`.
+- Config Joi: `JWT_SECRET` (bắt buộc, cùng core-api), `JWT_SECRET_PREVIOUS` (tuỳ chọn, chỉ trong cửa sổ
+  xoay khoá — khoá phụ chỉ để verify khi chữ ký không khớp `JWT_SECRET`; quy trình 3 bước ở `k8s/README.md`), `REDIS_URL`.
 
 ## 6. Cluster adapter cho Socket.IO (Giai đoạn 6 — horizontal scale)
 
@@ -87,6 +88,20 @@ Giá trị mang lại: gọi `server.to(room).emit()` ở 1 instance giờ tới
 qua Redis pub/sub rồi chỉ emit cho room cục bộ của mình) vốn KHÔNG cần tới cluster adapter để hoạt
 động đúng, nhưng cluster adapter mở đường cho các tính năng Socket.IO xuyên instance sau này
 (broadcast toàn cụm, `fetchSockets()`...) mà không phải thiết kế lại tầng transport.
+
+**Hệ quả bắt buộc cho relay:** vì mọi pod đều relay cùng một event, `relay()` phải emit qua
+`server.local.to(room).emit()`. Một broadcast không-local còn được cluster adapter chuyển tiếp sang
+các pod khác, nên socket sẽ nhận N bản (N = số pod). Guard: `signaling.relay-cluster.spec.ts` chạy
+mã thật của `@socket.io/redis-adapter` trên bus pub/sub giả với 2 pod (không cần Redis) và
+`signaling.horizontal-scale.integration.spec.ts` kiểm lại trên Redis thật. Tính năng xuyên instance
+mới (không phải relay theo user) mới dùng broadcast toàn cụm, và phải tự bảo đảm không bị relay
+nhân bản.
+
+Đánh đổi đã chấp nhận: relay cục bộ nghĩa là mỗi pod chỉ giao event qua subscription của chính nó. Pod mất
+PSUBSCRIBE (readiness `redisSubscription: down`) thì socket đang nối vào pod đó không nhận event cho tới
+khi subscription phục hồi hoặc client reconnect sang pod khác; trước đây pod khác vô tình bù được qua
+adapter. Phù hợp với Redis Pub/Sub at-most-once: client phải khôi phục trạng thái bền khi reconnect, và nên
+có alert khi `redisSubscription` down kéo dài.
 
 Verify: `signaling.horizontal-scale.integration.spec.ts` boot 2 Nest app instance thật (2 port
 khác nhau, cùng Redis thật), 1 client chỉ connect vào instance A, gọi thẳng `server.to(room).emit()`

@@ -53,3 +53,4 @@ and response path in [19 § 19.4](../19-project-lifecycle-and-learning.md#194-er
 - [2026-08-01 — privacy visibility settings plan](./2026-08-01-privacy-visibility-settings-plan.md)
 - [2026-08-06 — economy payment provider verification](./2026-08-06-economy-payment-provider-verify.md)
 - [2026-08-12 — Matching capability boundary verification](./2026-08-12-matching-capability-boundary-verify.md)
+- [2026-10-08 — capacity và lộ trình scale từ vài user tới vài tỷ](./2026-10-08-capacity-and-scaling-plan.md)

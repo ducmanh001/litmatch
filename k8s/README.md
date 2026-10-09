@@ -111,6 +111,27 @@ rồi `kubectl apply -k k8s/overlays/production`. `media-server` dùng image Liv
   cluster thật — công cụ quản lý secret cụ thể **chưa chốt** ở thay đổi này, chỉ khai đúng tên key
   cần có.
 
+## Xoay JWT_SECRET
+
+Access token (TTL `JWT_ACCESS_TTL_SECONDS`, mặc định 900 giây) là JWT HS256 ký bằng `JWT_SECRET`; core-api
+và signaling-gateway dùng CHUNG khoá này. Đổi thẳng khoá làm mọi token đang sống bị từ chối, và trong lúc
+rollout (pod cũ và mới chạy song song) token do pod mới ký sẽ bị pod cũ từ chối. Vì vậy xoay theo 3 bước,
+mỗi bước là một lần rollout đầy đủ của CẢ HAI app (thứ tự giữa hai app không quan trọng).
+`JWT_SECRET_PREVIOUS` là khoá PHỤ chỉ để VERIFY (token luôn được ký bằng `JWT_SECRET`); nó phải khác
+`JWT_SECRET` và khác `AUTH_GUEST_DEVICE_TOKEN_SECRET`.
+
+1. **Phân phối khoá mới:** `JWT_SECRET` = khoá cũ, `JWT_SECRET_PREVIOUS` = khoá MỚI. Từ đây mọi pod verify
+   được cả hai khoá, nhưng vẫn ký bằng khoá cũ.
+2. **Chuyển sang ký bằng khoá mới:** `JWT_SECRET` = khoá mới, `JWT_SECRET_PREVIOUS` = khoá cũ. Pod cũ còn
+   sót lại ở bước này vẫn verify được token mới nhờ khoá phụ, và token cũ còn sống vẫn được chấp nhận.
+3. Chờ ít nhất `JWT_ACCESS_TTL_SECONDS` (cộng dư) sau khi bước 2 rollout xong, rồi xoá
+   `JWT_SECRET_PREVIOUS` ở cả hai app.
+
+Refresh token là chuỗi opaque lưu DB và guest device token dùng `AUTH_GUEST_DEVICE_TOKEN_SECRET` riêng, nên
+không bị ảnh hưởng. Nếu khoá cũ nghi bị lộ thì KHÔNG dùng quy trình này: đổi `JWT_SECRET`, để trống
+`JWT_SECRET_PREVIOUS` và chấp nhận mọi người phải đăng nhập lại. Rollback = quay về giá trị của bước trước
+rồi rollout lại cả hai app.
+
 ## Resource sizing — vì sao core-api và signaling-gateway khác nhau
 
 Theo `docs/03-architecture.md § 3.3`: signaling-gateway scale theo **số kết nối đồng thời**
@@ -138,6 +159,43 @@ queue depth, số connection Socket.IO hiện tại — đo bằng Prometheus me
 làm song song ở nhánh khác) cần cài `prometheus-adapter` để expose Custom/External Metrics API cho
 HPA dùng `type: Pods` hoặc `type: External`. Không tự bịa cấu hình `prometheus-adapter` ở đây vì
 chưa có metric thật để kiểm chứng tên/label/ngưỡng.
+
+## Ngân sách kết nối Postgres
+
+Mỗi pod core-api giữ tối đa `DATABASE_POOL_MAX` kết nối tới Postgres (mặc định 10, sàn 5). Hai điều cần nhớ:
+
+- Mỗi job nền singleton (`ManagedInterval` với `clusterSingleton`, hiện có hơn 10 job) giữ 1 kết nối cho
+  advisory lock suốt lúc chạy, và task của nó cần thêm 1 kết nối nữa. Pool quá nhỏ có thể bị job tự chiếm
+  hết, vì vậy có sàn 5 và `DATABASE_POOL_ACQUIRE_TIMEOUT_MS` (mặc định 10 giây): hết hạn thì request/job
+  lỗi thay vì chờ vô hạn (driver pg mặc định không có timeout).
+- Tổng kết nối ≈ số pod tối đa (kể cả pod surge lúc rollout) × `DATABASE_POOL_MAX` + migration/công cụ
+  vận hành. Ví dụ: base `maxReplicas: 10` + `maxSurge: 1` = 11 pod × 10 = 110; overlay production và
+  production-region-b `maxReplicas: 15` → 16 × 10 = 160. Postgres mặc định `max_connections = 100` và dành 3
+  cho superuser (`superuser_reserved_connections`), chỉ còn 97 cho ứng dụng: với cấu hình mặc định, HPA có
+  thể chạm giới hạn kết nối trước khi đạt `maxReplicas`.
+
+Trước khi nâng `maxReplicas`:
+
+1. Lấy `max_connections` thật của managed Postgres, trừ phần cho superuser, migration, admin và client khác.
+2. Chọn `DATABASE_POOL_MAX` (không dưới 5) sao cho `(maxReplicas + maxSurge) × DATABASE_POOL_MAX` nằm
+   dưới phần còn lại, hoặc nâng `max_connections` của plan Postgres.
+3. Nếu vẫn không đủ, đặt PgBouncer ở giữa. Các advisory lock trong code đều là mức transaction
+   (`pg_advisory_xact_lock`, `pg_try_advisory_xact_lock`) nên không phụ thuộc session; việc chạy
+   qua PgBouncer thật chưa được kiểm chứng trong repo, cần thử trên staging trước.
+
+## Rate limit dùng chung giữa các pod
+
+`@nestjs/throttler` mặc định đếm trong bộ nhớ từng process: với N replica hạn mức thực tế gấp N lần
+và bị reset mỗi lần deploy. `k8s/base/core-api/configmap.yaml` đặt `THROTTLE_STORAGE: 'redis'` để mọi
+pod dùng chung bộ đếm (1 lệnh Redis mỗi request). Redis lỗi thì pod tạm dùng bộ đếm trong bộ nhớ
+của chính nó và thử lại Redis sau vài giây, request không bị lỗi. Profile một pod hoặc Redis có hạn
+mức lệnh thấp (hosted-free) giữ `memory`.
+
+Bộ đếm khoá theo `req.ip` nên `HTTP_TRUST_PROXY_HOPS` phải đúng số proxy tin cậy (base đặt `'1'` cho
+nginx-ingress). Nếu để `0` sau ingress thì `req.ip` là IP của proxy và MỌI người dùng đi qua cùng một
+proxy chia chung MỘT bucket cho mỗi route; core-api ghi cảnh báo lúc boot khi gặp tổ hợp redis + production
+
+- hops 0. Quota guest theo mạng cũng dùng `req.ip`, nên giá trị này ảnh hưởng cả hai.
 
 ## media-server (LiveKit) — vì sao KHÔNG có HPA, vì sao replicas: 1
 

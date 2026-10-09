@@ -257,14 +257,29 @@ export class MiniGameService {
       );
     }
 
-    await this.dataSource.transaction(async (manager) => {
-      await manager.update(
+    // Conditional UPDATE theo trạng thái đã đọc: nếu submitMove resolve ván giữa lúc đọc và ghi, lệnh
+    // này khớp 0 hàng thay vì ghi đè `resolved` (kết quả đã công bố) thành `cancelled`.
+    const cancelled = await this.dataSource.transaction(async (manager) => {
+      const result = await manager.update(
         MiniGameSession,
-        { id: sessionId },
+        { id: sessionId, status: MiniGameSessionStatus.WaitingMoves },
         { status: MiniGameSessionStatus.Cancelled },
       );
+      if ((result.affected ?? 0) === 0) return false;
       await manager.delete(MiniGameActiveParticipant, { sessionId });
+      return true;
     });
+
+    if (!cancelled) {
+      // thua race: bên kia huỷ trước (idempotent) hoặc ván vừa có kết quả (không huỷ ngược)
+      const current = await this.getSessionForParticipant(userId, sessionId);
+      if (current.status === MiniGameSessionStatus.Cancelled) return current;
+      throw new DomainException(
+        MiniGameErrors.NOT_CANCELLABLE,
+        'Ván đã có kết quả, không thể huỷ',
+        HttpStatus.CONFLICT,
+      );
+    }
 
     return { ...session, status: MiniGameSessionStatus.Cancelled };
   }
