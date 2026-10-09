@@ -84,6 +84,7 @@ data:
   ECONOMY_GOOGLE_RTDN_SERVICE_ACCOUNT_EMAIL: ''
   ECONOMY_APPLE_ISSUER_ID: ''
   ECONOMY_APPLE_KEY_ID: ''
+  # BẮT BUỘC khi ECONOMY_IAP_VERIFIER='store' (env.validation.ts từ chối boot nếu để trống)
   ECONOMY_APPLE_BUNDLE_ID: ''
   ECONOMY_APPLE_SERVER_API_ENV: 'production'
   ECONOMY_REFUND_POLL_ENABLED: 'false'

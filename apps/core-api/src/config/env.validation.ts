@@ -422,7 +422,13 @@ export const coreApiEnvSchema = Joi.object({
   ECONOMY_APPLE_ISSUER_ID: Joi.string().allow('').default(''),
   ECONOMY_APPLE_KEY_ID: Joi.string().allow('').default(''),
   ECONOMY_APPLE_PRIVATE_KEY: Joi.string().allow('').default(''),
-  ECONOMY_APPLE_BUNDLE_ID: Joi.string().allow('').default(''),
+  // Bắt buộc khi verifier là `store`: webhook Apple chỉ chứng minh "Apple ký", bundleId mới chứng minh
+  // "ký cho app này"; để trống thì kiểm tra này bị bỏ qua (mọi app dùng chung chuỗi chứng chỉ Apple).
+  ECONOMY_APPLE_BUNDLE_ID: Joi.string().when('ECONOMY_IAP_VERIFIER', {
+    is: 'store',
+    then: Joi.required(),
+    otherwise: Joi.string().allow('').default(''),
+  }),
   ECONOMY_APPLE_SERVER_API_ENV: Joi.string()
     .valid('sandbox', 'production')
     .default('sandbox'),
