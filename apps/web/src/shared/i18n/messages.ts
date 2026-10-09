@@ -146,7 +146,6 @@ const MESSAGES = {
   'nav.video': { vi: 'Video', en: 'Video' },
   'nav.party': { vi: 'Party', en: 'Party' },
   'nav.feed': { vi: 'Bảng tin', en: 'Feed' },
-  'nav.friends': { vi: 'Bạn bè', en: 'Friends' },
   'nav.messages': { vi: 'Tin nhắn', en: 'Messages' },
   'nav.profile': { vi: 'Cá nhân', en: 'Profile' },
   'nav.more': { vi: 'Thêm', en: 'More' },
