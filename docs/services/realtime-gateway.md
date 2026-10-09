@@ -97,6 +97,12 @@ mã thật của `@socket.io/redis-adapter` trên bus pub/sub giả với 2 pod 
 mới (không phải relay theo user) mới dùng broadcast toàn cụm, và phải tự bảo đảm không bị relay
 nhân bản.
 
+Đánh đổi đã chấp nhận: relay cục bộ nghĩa là mỗi pod chỉ giao event qua subscription của chính nó. Pod mất
+PSUBSCRIBE (readiness `redisSubscription: down`) thì socket đang nối vào pod đó không nhận event cho tới
+khi subscription phục hồi hoặc client reconnect sang pod khác; trước đây pod khác vô tình bù được qua
+adapter. Phù hợp với Redis Pub/Sub at-most-once: client phải khôi phục trạng thái bền khi reconnect, và nên
+có alert khi `redisSubscription` down kéo dài.
+
 Verify: `signaling.horizontal-scale.integration.spec.ts` boot 2 Nest app instance thật (2 port
 khác nhau, cùng Redis thật), 1 client chỉ connect vào instance A, gọi thẳng `server.to(room).emit()`
 ở instance B — client vẫn nhận được event. Test cũng mở quota xuyên cả hai instance, từ chối socket
