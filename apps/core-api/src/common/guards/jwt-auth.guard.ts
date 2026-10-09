@@ -4,11 +4,14 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { verifyJwtWithRotation } from './jwt-rotation';
 
+import type { CoreApiEnv } from '../../config/env.validation';
 import type { AuthenticatedUser } from '../decorators/current-user.decorator';
 import type { AccessTokenPayload } from '@litmatch/common-dtos';
 import type { Request } from 'express';
@@ -20,10 +23,17 @@ import type { Request } from 'express';
  */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
+  /** Khoá cũ trong cửa sổ xoay `JWT_SECRET`; undefined khi không xoay. */
+  private readonly previousSecret: string | undefined;
+
   constructor(
     private readonly jwtService: JwtService,
     private readonly reflector: Reflector,
-  ) {}
+    config: ConfigService<CoreApiEnv, true>,
+  ) {
+    this.previousSecret =
+      config.get('JWT_SECRET_PREVIOUS', { infer: true }) || undefined;
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
@@ -41,8 +51,10 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     try {
-      const payload = await this.jwtService.verifyAsync<AccessTokenPayload>(
+      const payload = await verifyJwtWithRotation<AccessTokenPayload>(
+        this.jwtService,
         authHeader.slice('Bearer '.length),
+        this.previousSecret,
       );
       req.user = {
         userId: payload.sub,

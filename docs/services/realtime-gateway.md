@@ -71,7 +71,8 @@ Mỗi module publish bằng Redis client riêng của mình (docs/05 § 5.3) qua
   dùng chung với lệnh khác); channel lạ/payload rác → bỏ qua + log, không chết.
 - Socket chết được dọn bởi ping/pong mặc định của Socket.IO (`pingTimeout`) — chưa cần timer
   riêng vì gateway không giữ room state nghiệp vụ (docs/10 § Calling/Signaling).
-- Config Joi: `JWT_SECRET` (bắt buộc, cùng core-api), `REDIS_URL`.
+- Config Joi: `JWT_SECRET` (bắt buộc, cùng core-api), `JWT_SECRET_PREVIOUS` (tuỳ chọn, chỉ trong cửa sổ
+  xoay khoá — verify thử khoá cũ khi chữ ký không khớp khoá hiện tại; quy trình ở `k8s/README.md`), `REDIS_URL`.
 
 ## 6. Cluster adapter cho Socket.IO (Giai đoạn 6 — horizontal scale)
 

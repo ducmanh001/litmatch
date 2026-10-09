@@ -21,6 +21,68 @@ describe('coreApiEnvSchema invariants', () => {
     expect(schema.validate('https://redis.example').error).toBeDefined();
   });
 
+  it('pool Postgres mỗi pod mặc định 10 và nằm trong khoảng hữu hạn', () => {
+    const schema = coreApiEnvSchema.extract('DATABASE_POOL_MAX');
+    expect(schema.validate(undefined).value).toBe(10);
+    expect(schema.validate(25).error).toBeUndefined();
+    expect(schema.validate(0).error).toBeDefined();
+    expect(schema.validate(101).error).toBeDefined();
+    expect(schema.validate(1.5).error).toBeDefined();
+  });
+
+  it('throttle storage mặc định memory và chỉ nhận memory hoặc redis', () => {
+    const schema = coreApiEnvSchema.extract('THROTTLE_STORAGE');
+    expect(schema.validate(undefined).value).toBe('memory');
+    expect(schema.validate('redis').error).toBeUndefined();
+    expect(schema.validate('memcached').error).toBeDefined();
+  });
+
+  it('JWT_SECRET_PREVIOUS tắt theo mặc định, đủ dài và không được trùng khoá hiện tại', () => {
+    const current = 'c'.repeat(40);
+    const previousError = (value: unknown) =>
+      coreApiEnvSchema
+        .validate(
+          { JWT_SECRET: current, JWT_SECRET_PREVIOUS: value },
+          { abortEarly: false, allowUnknown: true },
+        )
+        .error?.details.find((d) => d.path[0] === 'JWT_SECRET_PREVIOUS');
+
+    expect(previousError(undefined)).toBeUndefined();
+    expect(previousError('')).toBeUndefined();
+    expect(previousError('p'.repeat(40))).toBeUndefined();
+    expect(previousError('p'.repeat(31))).toBeDefined();
+    expect(previousError(current)).toBeDefined();
+  });
+
+  it('verifier store bắt buộc có ECONOMY_APPLE_BUNDLE_ID, các chế độ khác thì cho rỗng', () => {
+    const bundleIdError = (env: Record<string, unknown>) =>
+      coreApiEnvSchema
+        .validate(env, { abortEarly: false, allowUnknown: true })
+        .error?.details.find((d) => d.path[0] === 'ECONOMY_APPLE_BUNDLE_ID');
+
+    expect(bundleIdError({ ECONOMY_IAP_VERIFIER: 'store' })).toBeDefined();
+    expect(
+      bundleIdError({
+        ECONOMY_IAP_VERIFIER: 'store',
+        ECONOMY_APPLE_BUNDLE_ID: '',
+      }),
+    ).toBeDefined();
+    expect(
+      bundleIdError({
+        ECONOMY_IAP_VERIFIER: 'store',
+        ECONOMY_APPLE_BUNDLE_ID: 'com.litmatch.app',
+      }),
+    ).toBeUndefined();
+    expect(bundleIdError({ ECONOMY_IAP_VERIFIER: 'dev' })).toBeUndefined();
+    expect(
+      bundleIdError({
+        ECONOMY_IAP_VERIFIER: 'disabled',
+        ECONOMY_APPLE_BUNDLE_ID: '',
+      }),
+    ).toBeUndefined();
+    expect(bundleIdError({})).toBeUndefined();
+  });
+
   it('cookie production chỉ nhận policy SameSite đã review', () => {
     const schema = coreApiEnvSchema.extract('AUTH_COOKIE_SAME_SITE');
     expect(schema.validate(undefined).value).toBe('strict');
