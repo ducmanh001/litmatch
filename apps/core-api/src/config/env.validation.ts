@@ -32,6 +32,8 @@ export interface CoreApiEnv {
   EVENT_BUS_CONSUMER_MAX_ATTEMPTS: number;
   EVENT_BUS_CONSUMER_RETRY_DELAY_MS: number;
   JWT_SECRET: string;
+  /** Khoá cũ, CHỈ để verify token đã phát trước lúc xoay khoá; rỗng = tắt. Luôn ký bằng JWT_SECRET. */
+  JWT_SECRET_PREVIOUS: string;
   JWT_ACCESS_TTL_SECONDS: number;
   AUTH_REFRESH_TTL_DAYS: number;
   AUTH_OTP_TTL_SECONDS: number;
@@ -269,6 +271,11 @@ export const coreApiEnvSchema = Joi.object({
     .default(250),
 
   JWT_SECRET: Joi.string().min(32).required(),
+  JWT_SECRET_PREVIOUS: Joi.string()
+    .min(32)
+    .allow('')
+    .invalid(Joi.ref('JWT_SECRET'))
+    .default(''),
   JWT_ACCESS_TTL_SECONDS: Joi.number().integer().min(60).default(900),
 
   AUTH_REFRESH_TTL_DAYS: Joi.number().integer().min(1).default(30),

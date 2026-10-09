@@ -15,6 +15,8 @@ export interface SignalingEnv {
   CORS_ORIGINS: string;
   /** CÙNG secret với core-api — gateway chỉ VERIFY access token, không bao giờ ký. */
   JWT_SECRET: string;
+  /** Khoá cũ, CHỈ để verify token đã phát trước lúc xoay khoá; rỗng = tắt. Phải khớp core-api. */
+  JWT_SECRET_PREVIOUS: string;
   /** Cùng Redis với core-api — subscribe channel realtime:user:* (docs/services/realtime-gateway.md). */
   REDIS_URL: string;
   /** Quota socket của một user, enforce atomic bằng Redis trên toàn bộ gateway replica. */
@@ -30,6 +32,11 @@ export const signalingEnvSchema = Joi.object({
   SIGNALING_PORT: Joi.number().port().default(3001),
   CORS_ORIGINS: Joi.string().allow('').default(''),
   JWT_SECRET: Joi.string().min(32).required(),
+  JWT_SECRET_PREVIOUS: Joi.string()
+    .min(32)
+    .allow('')
+    .invalid(Joi.ref('JWT_SECRET'))
+    .default(''),
   REDIS_URL: Joi.string()
     .uri({ scheme: ['redis', 'rediss'] })
     .default('redis://localhost:6379'),

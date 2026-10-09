@@ -111,6 +111,22 @@ rồi `kubectl apply -k k8s/overlays/production`. `media-server` dùng image Liv
   cluster thật — công cụ quản lý secret cụ thể **chưa chốt** ở thay đổi này, chỉ khai đúng tên key
   cần có.
 
+## Xoay JWT_SECRET
+
+Access token (TTL `JWT_ACCESS_TTL_SECONDS`, mặc định 900 giây) là JWT HS256 ký bằng `JWT_SECRET`; core-api
+và signaling-gateway dùng CHUNG khoá này. Đổi thẳng khoá sẽ vô hiệu mọi token đang sống. Để xoay êm,
+hai app nhận thêm `JWT_SECRET_PREVIOUS` (khoá cũ, chỉ để VERIFY; token luôn được ký bằng `JWT_SECRET`):
+
+1. Tạo khoá mới (≥ 32 ký tự). `JWT_SECRET_PREVIOUS` phải khác `JWT_SECRET`.
+2. **Gateway trước:** đặt `JWT_SECRET` = khoá mới, `JWT_SECRET_PREVIOUS` = khoá cũ trong
+   `signaling-gateway-secrets`, rollout xong. Gateway cần chấp nhận khoá mới trước khi core-api bắt đầu ký bằng nó.
+3. **Rồi core-api:** cùng cặp giá trị trong `core-api-secrets`, rollout. Từ đây token mới ký bằng khoá mới.
+4. Chờ ít nhất `JWT_ACCESS_TTL_SECONDS` (cộng dư), rồi xoá `JWT_SECRET_PREVIOUS` ở cả hai app.
+
+Refresh token là chuỗi opaque lưu DB và guest device token dùng `AUTH_GUEST_DEVICE_TOKEN_SECRET` riêng, nên
+không bị ảnh hưởng. Nếu khoá cũ nghi bị lộ thì KHÔNG dùng cửa sổ này: đổi `JWT_SECRET`, để trống
+`JWT_SECRET_PREVIOUS` và chấp nhận mọi người phải đăng nhập lại. Rollback = đảo hai giá trị rồi rollout lại theo thứ tự trên.
+
 ## Resource sizing — vì sao core-api và signaling-gateway khác nhau
 
 Theo `docs/03-architecture.md § 3.3`: signaling-gateway scale theo **số kết nối đồng thời**
