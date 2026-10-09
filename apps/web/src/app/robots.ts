@@ -13,6 +13,7 @@ export default function robots(): MetadataRoute.Robots {
           '/feed',
           '/matching',
           '/friends',
+          '/messages',
           '/chat',
           '/party',
           '/discovery',

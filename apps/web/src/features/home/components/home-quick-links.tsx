@@ -13,13 +13,13 @@ import {
 const QUICK_LINKS = [
   { href: '/party', Icon: PartyIcon },
   { href: '/feed', Icon: FeedIcon },
-  { href: '/friends', Icon: FriendsIcon },
+  { href: '/messages', Icon: FriendsIcon },
   { href: '/video', Icon: VideoIcon },
 ] as const;
 
 export function HomeQuickLinks() {
   const t = useTranslation();
-  const titles = ['Party', t('nav.feed'), t('nav.friends'), 'Video'];
+  const titles = ['Party', t('nav.feed'), t('nav.messages'), 'Video'];
   const descriptions = [
     t('home.quickPartyDescription'),
     t('home.quickFeedDescription'),

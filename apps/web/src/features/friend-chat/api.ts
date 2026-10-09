@@ -10,6 +10,7 @@ import { apiClient } from '../../shared/api/client';
 import type { ApiSchema } from '@litmatch/api-client';
 
 export type FriendDto = ApiSchema<'FriendDto'>;
+export type FriendConnectionDto = ApiSchema<'FriendConnectionDto'>;
 export type MessageDto = ApiSchema<'MessageDto'>;
 
 const MESSAGES_PAGE_LIMIT = 30;
@@ -18,6 +19,7 @@ export const FRIEND_MESSAGES_REFETCH_INTERVAL_MS = 5_000;
 
 export const friendChatKeys = {
   friends: ['friend-chat', 'friends'] as const,
+  connections: ['friend-chat', 'connections'] as const,
   conversation: (friendUserId: string) =>
     ['friend-chat', 'conversation', friendUserId] as const,
   partnerProfile: (friendUserId: string) =>
@@ -31,6 +33,20 @@ export function useFriends() {
     queryKey: friendChatKeys.friends,
     queryFn: async () => {
       const res = await apiClient.GET('/api/v1/friends');
+      return res.data?.data;
+    },
+  });
+}
+
+/**
+ * Bạn bè = cùng "Thích" lúc ghép đôi hoặc follow nhau hai chiều. Khác `useFriends` (inbox mọi
+ * hội thoại): không cần có chat, nên người mới follow chéo cũng có mặt.
+ */
+export function useFriendConnections() {
+  return useQuery({
+    queryKey: friendChatKeys.connections,
+    queryFn: async () => {
+      const res = await apiClient.GET('/api/v1/friends/connections');
       return res.data?.data;
     },
   });

@@ -762,6 +762,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/friends/connections': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Danh sách bạn bè: cùng "Thích" lúc ghép đôi hoặc follow nhau hai chiều (không cần có chat) */
+    get: operations['FriendController_listConnections'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/friends/{friendUserId}/conversation': {
     parameters: {
       query?: never;
@@ -842,6 +859,57 @@ export interface paths {
     put?: never;
     /** Bật/tắt thông báo hội thoại — chỉ tắt kênh notification, message vẫn nhận */
     post: operations['FriendController_setMuted'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/profiles/{profileUserId}/follow-counts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Số người theo dõi và đang theo dõi của một profile (gồm cả chính mình) */
+    get: operations['ProfileSocialController_getFollowCounts'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/profiles/{profileUserId}/followers': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Danh sách người theo dõi profile (cursor, mới theo dõi nhất trước) */
+    get: operations['ProfileSocialController_listFollowers'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/profiles/{profileUserId}/following': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Danh sách profile mà user đang theo dõi (cursor, mới theo dõi nhất trước) */
+    get: operations['ProfileSocialController_listFollowing'];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -3247,6 +3315,18 @@ export interface components {
       /** @description Caller và đối phương follow nhau */
       canCall: boolean;
     };
+    FriendConnectionDto: {
+      profile: components['schemas']['PublicProfileDto'];
+      /** @description Cùng "Thích" lúc ghép đôi (Friendship) */
+      isFriend: boolean;
+      /** @description Hai bên đang theo dõi nhau */
+      isMutualFollow: boolean;
+      /**
+       * Format: date-time
+       * @description Thời điểm kết nối gần nhất
+       */
+      since: string;
+    };
     ConversationDto: {
       id: string;
     };
@@ -3288,6 +3368,28 @@ export interface components {
     SendFriendMessageDto: {
       content?: string;
       imageAssetId?: string;
+    };
+    FollowCountsDto: {
+      /** @description Tổng số người đang theo dõi profile */
+      followerCount: number;
+      /** @description Tổng số profile mà user đang theo dõi */
+      followingCount: number;
+    };
+    FollowListItemDto: {
+      profile: components['schemas']['PublicProfileDto'];
+      /**
+       * Format: date-time
+       * @description Lần theo dõi gần nhất
+       */
+      followedAt: string;
+      /** @description Người xem đang theo dõi profile này */
+      isFollowing: boolean;
+    };
+    FollowListPageDto: {
+      items: components['schemas']['FollowListItemDto'][];
+      meta: {
+        nextCursor?: string | null;
+      };
     };
     ProfileActionsDto: {
       isFollowing: boolean;
@@ -5386,6 +5488,30 @@ export interface operations {
       };
     };
   };
+  FriendController_listConnections: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['FriendConnectionDto'][];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
   FriendController_getConversationWithFriend: {
     parameters: {
       query?: never;
@@ -5550,6 +5676,94 @@ export interface operations {
         content: {
           'application/json': {
             data: components['schemas']['ConversationMemberStateDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  ProfileSocialController_getFollowCounts: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        profileUserId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['FollowCountsDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  ProfileSocialController_listFollowers: {
+    parameters: {
+      query?: {
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
+      header?: never;
+      path: {
+        profileUserId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['FollowListPageDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  ProfileSocialController_listFollowing: {
+    parameters: {
+      query?: {
+        /** @description Số item tối đa mỗi trang (1-100, mặc định 20) */
+        limit?: number;
+        /** @description Cursor opaque từ `meta.nextCursor` của trang trước */
+        cursor?: string;
+      };
+      header?: never;
+      path: {
+        profileUserId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['FollowListPageDto'];
             meta?: {
               [key: string]: unknown;
             };

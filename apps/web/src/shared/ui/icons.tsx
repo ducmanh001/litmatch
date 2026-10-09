@@ -66,6 +66,17 @@ export function FriendsIcon(props: IconProps) {
   );
 }
 
+/** Hai người — danh sách bạn bè/người theo dõi (khác `FriendsIcon` là phong bì của Tin nhắn). */
+export function UsersIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx={9} cy={8.5} r={3.3} />
+      <path d="M3 19.5a6 6 0 0 1 12 0" />
+      <path d="M16 5.4a3.3 3.3 0 0 1 0 6.2M17.5 14.1a6 6 0 0 1 3.5 5.4" />
+    </svg>
+  );
+}
+
 export function PartyIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>

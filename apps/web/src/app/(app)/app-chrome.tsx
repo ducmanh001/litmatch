@@ -23,6 +23,7 @@ import {
   MoreIcon,
   PartyIcon,
   ProfileIcon,
+  UsersIcon,
   VideoIcon,
 } from '../../shared/ui/icons';
 import { ToastStack } from '../../shared/ui/toast-stack';
@@ -51,6 +52,12 @@ const NAV_ITEMS = [
   {
     href: '/friends',
     labelKey: 'nav.friends',
+    Icon: UsersIcon,
+    mobile: true,
+  },
+  {
+    href: '/messages',
+    labelKey: 'nav.messages',
     Icon: FriendsIcon,
     mobile: true,
   },

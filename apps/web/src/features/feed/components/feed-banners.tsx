@@ -58,7 +58,7 @@ const BANNERS: ReadonlyArray<{
     gradient: 'from-diamond to-irisl',
   },
   {
-    href: '/friends',
+    href: '/messages',
     Icon: FriendsIcon,
     label: 'Tin nhắn',
     sub: 'Trò chuyện cùng bạn bè',

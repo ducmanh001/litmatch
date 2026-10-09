@@ -38,7 +38,7 @@ export function presentNotification(
       return {
         title: 'Tin nhắn mới',
         body: readString(payload, 'preview'),
-        href: senderUserId ? `/chat/${senderUserId}` : '/friends',
+        href: senderUserId ? `/chat/${senderUserId}` : '/messages',
       };
     }
     case 'gift_received': {
@@ -71,13 +71,13 @@ export function presentNotification(
       return {
         title: 'Chuỗi trò chuyện đạt mốc mới 🔥',
         body: 'Tiếp tục giữ nhịp trò chuyện mỗi ngày nhé.',
-        href: '/friends',
+        href: '/messages',
       };
     case 'streak_at_risk':
       return {
         title: 'Chuỗi trò chuyện sắp bị mất',
         body: 'Nhắn một câu hôm nay để giữ chuỗi 🔥.',
-        href: '/friends',
+        href: '/messages',
       };
     case 'match_invite_received':
       return {

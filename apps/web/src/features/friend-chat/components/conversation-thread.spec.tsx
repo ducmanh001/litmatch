@@ -142,7 +142,7 @@ describe('ConversationThread', () => {
       );
     });
     expect(await screen.findByText('Đã chặn Bạn B')).toBeVisible();
-    expect(routerPush).toHaveBeenCalledWith('/friends');
+    expect(routerPush).toHaveBeenCalledWith('/messages');
   });
 
   it('menu "..." → tắt thông báo → POST mute persist server + toast', async () => {

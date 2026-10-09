@@ -66,6 +66,13 @@ export function PublicProfileView({ userId }: { userId: string }) {
   const isFollowPending = followProfile.isPending || actions.isPending;
   const isMessagePending = openConversation.isPending;
 
+  // Hồ sơ mở từ nhiều nơi (bạn bè, danh sách theo dõi, discovery…) nên quay lại đúng nơi đã đến;
+  // chỉ khi mở thẳng bằng link (không có lịch sử) mới rơi về danh sách bạn bè.
+  const goBack = () => {
+    if (window.history.length > 1) router.back();
+    else router.push('/friends');
+  };
+
   const openChat = () => {
     if (actionsUnavailable || requiresGift) return;
 
@@ -123,13 +130,14 @@ export function PublicProfileView({ userId }: { userId: string }) {
         <span className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/15 blur-3xl" />
         <span className="pointer-events-none absolute -bottom-20 left-1/3 h-48 w-48 rounded-full bg-rose-300/20 blur-3xl" />
         <div className="relative flex items-center justify-between">
-          <Link
-            href="/friends"
+          <button
+            type="button"
+            onClick={goBack}
             aria-label="Quay lại"
             className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/15 text-2xl backdrop-blur transition hover:bg-white/25 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           >
             ‹
-          </Link>
+          </button>
           <span className="rounded-full border border-white/20 bg-black/10 px-3 py-1.5 text-[10px] font-extrabold tracking-[0.18em] text-white/90 backdrop-blur">
             HỒ SƠ ĐỐI PHƯƠNG
           </span>
@@ -228,10 +236,12 @@ export function PublicProfileView({ userId }: { userId: string }) {
             <SocialStat
               value={actions.data?.followerCount}
               label="Người theo dõi"
+              href={`/users/${profileData.id}/followers`}
             />
             <SocialStat
               value={actions.data?.followingCount}
               label="Đang theo dõi"
+              href={`/users/${profileData.id}/following`}
             />
           </div>
         </section>
@@ -386,19 +396,24 @@ function ProfileDetail({
 function SocialStat({
   value,
   label,
+  href,
 }: {
   value: number | undefined;
   label: string;
+  href: string;
 }) {
   return (
-    <div className="px-3 text-center first:pl-1 last:pr-1">
+    <Link
+      href={href}
+      className="block rounded-xl px-3 text-center transition first:pl-1 last:pr-1 hover:bg-iris/[0.06] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-iris"
+    >
       <p className="text-xl font-black tracking-tight text-foreground">
         {value === undefined ? '—' : value.toLocaleString('vi-VN')}
       </p>
       <p className="mt-1 text-[11px] font-semibold text-muted-foreground dark:text-white/60">
         {label}
       </p>
-    </div>
+    </Link>
   );
 }
 

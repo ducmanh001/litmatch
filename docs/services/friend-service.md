@@ -42,6 +42,18 @@ tạo.
 - `GET /profiles/:profileUserId/actions` trả `isFollowing`, conversation hiện có và trạng thái
   `requiresGift`; count/threshold do server tính theo số người lần đầu mở chat trực tiếp trong
   ngày UTC (`ProfileChatContact`), không theo follower.
+- `GET /profiles/:profileUserId/followers` và `.../following` trả danh sách cursor (mới theo dõi
+  nhất trước) `{ profile, followedAt }`. Xem được hồ sơ của chính mình lẫn người khác — số đếm
+  vốn đã công khai ở `actions`. Cursor keyset `(last_followed_at, id)` mang timestamp dạng text
+  của Postgres để không mất microsecond (cắt về mili-giây làm dòng cuối trang lặp ở trang sau).
+  Chỉ trả follow còn `active`, user `active` và không có block 2 chiều với người xem; hồ sơ bị
+  block 2 chiều với người xem → 404 `PROFILE_SOCIAL_PROFILE_NOT_AVAILABLE`, cursor sai →
+  400 `FRIEND_CURSOR_INVALID`. Index `idx_profile_follows_followee_daily` phục vụ followers,
+  `idx_profile_follows_follower_recent` phục vụ following.
+- Mỗi dòng followers/following kèm `isFollowing` (người xem đang theo dõi người đó) để UI hiện
+  nút theo dõi / theo dõi lại / bỏ theo dõi ngay trong danh sách.
+- `GET /profiles/:profileUserId/follow-counts` trả `{ followerCount, followingCount }` và dùng
+  được cho chính mình (khác `actions` từ chối self) để màn Cá nhân hiển thị số.
 - `POST /profiles/:profileUserId/conversation` mở chat ngay nếu dưới ngưỡng hoặc conversation
   đã tồn tại. Nếu đã có đủ N first-contact trong ngày, trả
   `PROFILE_SOCIAL_MESSAGE_GIFT_REQUIRED` (402) và không tạo conversation/contact.
@@ -76,14 +88,15 @@ cùng nguyên tắc đã áp dụng ở Soul Match/Calling).
 
 ## 4. API (`api/v1/friends`)
 
-| Endpoint                                  | Idempotency-Key       | Mô tả                                                                                                                                                                                                       |
-| ----------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /friends`                            | không                 | Danh sách mọi conversation: profile công khai + `conversationId` + `friendSince` + `unreadCount`/`lastMessagePreview`/`muted` + `isFriend` + `canCall` (per-caller), sort theo `conversation.lastMessageAt` |
-| `GET /friends/:friendUserId/conversation` | không                 | Conversation của một cặp đã mở chat — dùng cho Friend Chat và profile chat trực tiếp                                                                                                                        |
-| `GET /conversations/:id/messages`         | không                 | List message, cursor theo `seq`                                                                                                                                                                             |
-| `POST /conversations/:id/messages`        | có                    | Gửi message                                                                                                                                                                                                 |
-| `POST /conversations/:id/read`            | không (tự idempotent) | Đánh dấu đã đọc tới hiện tại — upsert `conversation_member_states.last_read_at`, gọi lặp chỉ đẩy mốc tiến lên                                                                                               |
-| `POST /conversations/:id/mute`            | không (tự idempotent) | Bật/tắt thông báo hội thoại (body `{muted}`) — chỉ tắt kênh notification `friend_message` (cả in-app lẫn push); message, realtime và unread vẫn hoạt động                                                   |
+| Endpoint                                  | Idempotency-Key       | Mô tả                                                                                                                                                                                                                                    |
+| ----------------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /friends`                            | không                 | Danh sách mọi conversation: profile công khai + `conversationId` + `friendSince` + `unreadCount`/`lastMessagePreview`/`muted` + `isFriend` + `canCall` (per-caller), sort theo `conversation.lastMessageAt`                              |
+| `GET /friends/connections`                | không                 | Danh sách **bạn bè** = Friendship (cùng "Thích" lúc ghép đôi) ∪ follow active hai chiều, gộp 1 dòng/người: profile + `isFriend` + `isMutualFollow` + `since`; không cần có conversation; loại user bị khoá và block 2 chiều (tối đa 500) |
+| `GET /friends/:friendUserId/conversation` | không                 | Conversation của một cặp đã mở chat — dùng cho Friend Chat và profile chat trực tiếp                                                                                                                                                     |
+| `GET /conversations/:id/messages`         | không                 | List message, cursor theo `seq`                                                                                                                                                                                                          |
+| `POST /conversations/:id/messages`        | có                    | Gửi message                                                                                                                                                                                                                              |
+| `POST /conversations/:id/read`            | không (tự idempotent) | Đánh dấu đã đọc tới hiện tại — upsert `conversation_member_states.last_read_at`, gọi lặp chỉ đẩy mốc tiến lên                                                                                                                            |
+| `POST /conversations/:id/mute`            | không (tự idempotent) | Bật/tắt thông báo hội thoại (body `{muted}`) — chỉ tắt kênh notification `friend_message` (cả in-app lẫn push); message, realtime và unread vẫn hoạt động                                                                                |
 
 ### Trạng thái cá nhân theo thành viên — `conversation_member_states`
 
