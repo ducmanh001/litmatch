@@ -37,8 +37,9 @@ function makeGateway(verifyImpl?: jest.Mock): {
   const gateway = new SignalingGateway(jwtService, config, connectionQuota);
   const emit = jest.fn();
   const to = jest.fn(() => ({ emit }));
-  // gán server mock (bình thường do @WebSocketServer inject sau afterInit)
-  Object.assign(gateway, { server: { to } });
+  // gán server mock (bình thường do @WebSocketServer inject sau afterInit). Relay chỉ được đi qua
+  // `server.local` — mock không có `server.to` để một lần quay lại emit toàn cụm sẽ fail ngay.
+  Object.assign(gateway, { server: { local: { to } } });
   return { gateway, connectionQuota, emit, to };
 }
 
@@ -96,7 +97,7 @@ describe('SignalingGateway (unit — fanout thuần, không business logic)', ()
   });
 
   describe('relay — Redis pmessage → đúng room user, payload nguyên văn', () => {
-    it('channel realtime:user:{id} → emit(event, data) vào room user:{id}', () => {
+    it('channel realtime:user:{id} → emit(event, data) vào room user:{id} CỦA POD NÀY (server.local)', () => {
       const { gateway, emit, to } = makeGateway();
       gateway.relay(
         'realtime:user:user-9',

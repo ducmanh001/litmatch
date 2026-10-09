@@ -301,7 +301,13 @@ export class SignalingGateway
     }
   }
 
-  /** Relay Redis → socket room của đúng user; payload không đọc/sửa (public để unit test). */
+  /**
+   * Relay Redis → socket room của đúng user; payload không đọc/sửa (public để unit test).
+   *
+   * Mọi pod đều PSUBSCRIBE `realtime:user:*` nên mọi pod đều nhận (và relay) cùng một event; vì vậy
+   * chỉ emit cho room CỤC BỘ của pod này (`server.local`). Với Redis cluster adapter, một broadcast
+   * không-local còn được chuyển tiếp sang các pod khác → socket nhận N bản (N = số pod).
+   */
   relay(channel: string, raw: string): void {
     const userId = parseRealtimeUserChannel(channel);
     if (!userId) return; // channel lạ — bỏ qua
@@ -313,7 +319,7 @@ export class SignalingGateway
       return;
     }
     if (typeof envelope?.event !== 'string') return;
-    this.server.to(userRoom(userId)).emit(envelope.event, envelope.data);
+    this.server.local.to(userRoom(userId)).emit(envelope.event, envelope.data);
   }
 
   private ensureSubscribed(): void {

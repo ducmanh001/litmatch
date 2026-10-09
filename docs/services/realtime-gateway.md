@@ -88,6 +88,14 @@ qua Redis pub/sub rồi chỉ emit cho room cục bộ của mình) vốn KHÔNG
 động đúng, nhưng cluster adapter mở đường cho các tính năng Socket.IO xuyên instance sau này
 (broadcast toàn cụm, `fetchSockets()`...) mà không phải thiết kế lại tầng transport.
 
+**Hệ quả bắt buộc cho relay:** vì mọi pod đều relay cùng một event, `relay()` phải emit qua
+`server.local.to(room).emit()`. Một broadcast không-local còn được cluster adapter chuyển tiếp sang
+các pod khác, nên socket sẽ nhận N bản (N = số pod). Guard: `signaling.relay-cluster.spec.ts` chạy
+mã thật của `@socket.io/redis-adapter` trên bus pub/sub giả với 2 pod (không cần Redis) và
+`signaling.horizontal-scale.integration.spec.ts` kiểm lại trên Redis thật. Tính năng xuyên instance
+mới (không phải relay theo user) mới dùng broadcast toàn cụm, và phải tự bảo đảm không bị relay
+nhân bản.
+
 Verify: `signaling.horizontal-scale.integration.spec.ts` boot 2 Nest app instance thật (2 port
 khác nhau, cùng Redis thật), 1 client chỉ connect vào instance A, gọi thẳng `server.to(room).emit()`
 ở instance B — client vẫn nhận được event. Test cũng mở quota xuyên cả hai instance, từ chối socket
