@@ -103,6 +103,13 @@ mockup: search → watch → rating → result. Plan chi tiết + bảng giả �
 - **Queue/matcher**: `movie_match_queue_entries` (PK user_id) + advisory transaction lock
   (`litmatch:movie-match:pairing`) + PK `movie_session_active_participants.user_id` — cùng kỹ
   thuật Palm Match. `SafetyService.canPair` re-check ĐÚNG LÚC ghép.
+  **Giới hạn đã biết:** mọi lượt vào/ra hàng đợi (của Movie Match ẩn danh và của Palm Match, mỗi
+  bên một khoá) xếp hàng qua MỘT khoá toàn cục, nên việc ghép tuần tự hoá trên toàn hệ thống. Đổi
+  lại có FIFO đúng, không ghép trùng người và code đơn giản; đủ cho tải pilot. Khi số đo thật cho
+  thấy thời gian chờ khoá hoặc độ trễ `enqueue` vượt SLO đã chốt thì mới đổi: chuyển hàng đợi sang
+  Redis shard như Matching chính (chia nhỏ pool ghép là đánh đổi cần quyết định sản phẩm). Không chia
+  khoá theo bucket trước khi có tiêu chí ghép (vùng/tuổi) để bucket có nghĩa, vì bucket tuỳ ý chỉ làm
+  hai người không bao giờ gặp nhau.
 - **Session**: tái dùng `movie_sessions` với cột additive `mode`
   (`friend|anonymous`), `expires_at` (deadline, lazy expiry → mở phase rating),
   `watch_ended_at` ("Kết thúc"/hết giờ), `low_rating`/`high_rating`

@@ -54,3 +54,7 @@ docs/06) — không cần guard đăng ký thật.
 ## 5. Config (Joi + `.env.example`)
 
 `PALM_MATCH_TARGET_NAME_MAX_LENGTH` (mặc định 50).
+
+Hàng đợi ghép ẩn danh dùng cùng kỹ thuật với Movie Match: một khoá advisory transaction toàn cục
+(`PALM_MATCH_ADVISORY_LOCK_KEY`). Giới hạn đã biết và điều kiện để đổi: xem mục Queue/matcher của
+[movie-match-service.md](./movie-match-service.md).
