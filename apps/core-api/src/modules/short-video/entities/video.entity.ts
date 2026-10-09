@@ -33,6 +33,10 @@ export class Video extends BaseAppEntity {
   @Column({ type: 'varchar', length: 512 })
   storageKey!: string;
 
+  /** Sweeper đã xoá object trên storage của video `failed`; NULL = còn phải dọn. */
+  @Column({ type: 'timestamptz', nullable: true })
+  storageCleanedAt!: Date | null;
+
   @Column({ type: 'varchar', length: 2048, nullable: true })
   playbackUrl!: string | null;
 

@@ -20,8 +20,12 @@ const VIDEO_SWEEP_BATCH = 200;
 
 /**
  * Dọn video kẹt ở `uploading` quá lâu (client bỏ dở/crash giữa chừng — docs/services/
- * short-video-service.md § 1) → `failed`. Conditional UPDATE, không lock — cùng pattern
- * `ticket-sweeper.service.ts`.
+ * short-video-service.md § 1) → `failed`, rồi xoá object trên storage của video `failed`.
+ * Conditional UPDATE, không lock — cùng pattern `ticket-sweeper.service.ts`.
+ *
+ * Hàng đã xoá xong object được đánh dấu `storage_cleaned_at` nên rời hàng đợi dọn; hàng xoá lỗi được
+ * đẩy `updated_at` về cuối hàng đợi. Nhờ vậy mỗi tick luôn tiến lên phía sau thay vì lặp lại 200
+ * hàng cũ nhất (đói các hàng mới hơn khi có > 200 video failed).
  */
 @Injectable()
 export class VideoSweeperService
@@ -83,7 +87,7 @@ export class VideoSweeperService
       const failed = (await this.dataSource.query(
         `SELECT id, storage_key
            FROM videos
-          WHERE status = $1
+          WHERE status = $1 AND storage_cleaned_at IS NULL
           ORDER BY updated_at ASC, id ASC
           LIMIT $2`,
         [VideoStatus.Failed, VIDEO_SWEEP_BATCH],
@@ -95,13 +99,32 @@ export class VideoSweeperService
       for (const video of cleanupTargets.values()) {
         try {
           await this.storagePort.delete(video.storage_key);
+          await this.dataSource.query(
+            `UPDATE videos SET storage_cleaned_at = now()
+              WHERE id = $1 AND status = $2 AND storage_cleaned_at IS NULL`,
+            [video.id, VideoStatus.Failed],
+          );
         } catch (error) {
           this.logger.warn(
             `Không cleanup được video object ${video.id}; sẽ retry ở tick sau: ${error instanceof Error ? error.message : String(error)}`,
           );
+          await this.deferRetry(video.id);
         }
       }
       return expired.length;
     }, 0);
+  }
+
+  /** Đẩy hàng lỗi về cuối hàng đợi (best-effort) để không chặn các hàng phía sau. */
+  private async deferRetry(videoId: string): Promise<void> {
+    try {
+      await this.dataSource.query(
+        `UPDATE videos SET updated_at = now()
+          WHERE id = $1 AND status = $2 AND storage_cleaned_at IS NULL`,
+        [videoId, VideoStatus.Failed],
+      );
+    } catch {
+      // retry vẫn xảy ra ở tick sau; chỉ mất việc xoay hàng đợi
+    }
   }
 }

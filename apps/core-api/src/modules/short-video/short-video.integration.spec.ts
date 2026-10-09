@@ -10,6 +10,7 @@ import { Safety1752800000000 } from '../../database/migrations/1752800000000-saf
 import { ReportStatus1753800000000 } from '../../database/migrations/1753800000000-report-status';
 import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
 import { ShortVideo1754800000000 } from '../../database/migrations/1754800000000-short-video';
+import { VideoStorageCleanupMarker1757800000000 } from '../../database/migrations/1757800000000-video-storage-cleanup-marker';
 
 import { ShortVideoService } from './short-video.service';
 import { ShortVideoErrors } from './short-video.errors';
@@ -154,6 +155,7 @@ d('short-video integration (Postgres thật)', () => {
         ReportTargetVideo1754900000000,
         ReportStatus1753800000000,
         ShortVideo1754800000000,
+        VideoStorageCleanupMarker1757800000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -269,6 +271,29 @@ d('short-video integration (Postgres thật)', () => {
       .getRepository(Video)
       .findOneByOrFail({ id: published.id });
     expect(reloaded.viewCount).toBe(1);
+  });
+
+  it('view: nhiều request đồng thời của cùng viewer chỉ cộng viewCount 1 lần và không lỗi', async () => {
+    const author = await createUser('video-author-view-race');
+    const viewer = await createUser('video-viewer-race');
+    const published = await uploadAndPublish(author.id);
+
+    // cả lần đầu tiên (chưa có hàng video_views) lẫn khi hàng đã tồn tại đều phải an toàn
+    await Promise.all(
+      Array.from({ length: 6 }, () =>
+        video.recordView(auth(viewer.id), published.id, 5_000),
+      ),
+    );
+
+    const reloaded = await ds
+      .getRepository(Video)
+      .findOneByOrFail({ id: published.id });
+    expect(reloaded.viewCount).toBe(1);
+    expect(
+      await ds
+        .getRepository(VideoView)
+        .countBy({ videoId: published.id, viewerId: viewer.id }),
+    ).toBe(1);
   });
 
   it('like/unlike idempotent, likeCount atomic', async () => {
