@@ -24,6 +24,7 @@ export interface CoreApiEnv {
   SWAGGER_ENABLED: boolean;
   CAPABILITY_MAINTENANCE_FEATURES: string;
   DATABASE_URL: string;
+  DATABASE_POOL_MAX: number;
   REDIS_URL: string;
   KAFKA_BROKERS: string;
   EVENT_BUS_KAFKA_REQUEST_TIMEOUT_MS: number;
@@ -212,6 +213,7 @@ export interface CoreApiEnv {
   VIDEO_RANKING_JOB_INTERVAL_MS: number;
   THROTTLE_TTL_SECONDS: number;
   THROTTLE_LIMIT: number;
+  THROTTLE_STORAGE: 'memory' | 'redis';
 }
 
 /**
@@ -243,6 +245,9 @@ export const coreApiEnvSchema = Joi.object({
   DATABASE_URL: Joi.string()
     .uri({ scheme: ['postgres', 'postgresql'] })
     .required(),
+  // Số kết nối tối đa MỖI pod tới Postgres (pg-pool). Mặc định 10 = mặc định của driver pg. Tổng kết nối
+  // = số pod core-api × giá trị này (+ migration/job) và phải nằm dưới max_connections của Postgres.
+  DATABASE_POOL_MAX: Joi.number().integer().min(1).max(100).default(10),
   REDIS_URL: Joi.string()
     .uri({ scheme: ['redis', 'rediss'] })
     .default('redis://localhost:6379'),
@@ -712,6 +717,9 @@ export const coreApiEnvSchema = Joi.object({
 
   THROTTLE_TTL_SECONDS: Joi.number().integer().min(1).default(60),
   THROTTLE_LIMIT: Joi.number().integer().min(1).default(100),
+  // memory: bộ đếm theo từng process (đủ cho 1 pod/dev). redis: bộ đếm dùng chung mọi pod, lỗi Redis
+  // thì tạm quay về bộ nhớ của pod. Đặt redis khi chạy nhiều replica (mỗi request tốn 1 lệnh Redis).
+  THROTTLE_STORAGE: Joi.string().valid('memory', 'redis').default('memory'),
 });
 
 export const validateCoreApiEnv = createConfigValidator(coreApiEnvSchema);

@@ -24,6 +24,9 @@ data:
   # Điểm mở: điền domain FE thật (admin/web) khi có — KHÔNG dùng '*' (docs/05 § 5, security posture)
   CORS_ORIGINS: ''
   SWAGGER_ENABLED: 'false'
+  # Kết nối Postgres tối đa MỖI pod. Ngân sách: số pod tối đa (HPA maxReplicas) × giá trị này + job/migration
+  # phải < max_connections của Postgres (hoặc đặt PgBouncer ở giữa) — xem k8s/README.md mục "Ngân sách kết nối Postgres".
+  DATABASE_POOL_MAX: '10'
 
   # KAFKA_BROKERS không chứa credential (SASL nếu bật thì phải chuyển sang Secret) — trỏ managed
   # Kafka ngoài cluster, giả định theo yêu cầu task (không deploy Kafka trong k8s manifest này).
@@ -180,3 +183,5 @@ data:
   # --- throttle mặc định toàn cục ---
   THROTTLE_TTL_SECONDS: '60'
   THROTTLE_LIMIT: '100'
+  # Nhiều replica (HPA 2–10): hạn mức phải dùng chung qua Redis, nếu không mỗi pod đếm riêng.
+  THROTTLE_STORAGE: 'redis'

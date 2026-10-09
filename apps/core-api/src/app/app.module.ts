@@ -16,6 +16,8 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { ResponseEnvelopeInterceptor } from '../common/interceptors/response-envelope.interceptor';
 import { MetricsModule } from '../common/metrics/metrics.module';
+import { createCoreRedisClient } from '../common/redis/core-redis-client';
+import { RedisThrottlerStorage } from '../common/throttle/redis-throttler-storage';
 import { EventsModule } from '../common/events';
 import { AdminModule } from '../modules/admin';
 import { AuthModule } from '../modules/auth';
@@ -65,6 +67,8 @@ import { CapabilitiesService } from './capabilities.service';
       useFactory: (config: ConfigService<CoreApiEnv, true>) => ({
         type: 'postgres' as const,
         url: config.getOrThrow('DATABASE_URL', { infer: true }),
+        // Trần kết nối của MỖI pod: tổng = số pod × giá trị này (k8s/README.md, ngân sách kết nối).
+        poolSize: config.getOrThrow('DATABASE_POOL_MAX', { infer: true }),
         autoLoadEntities: true,
         synchronize: false, // schema chỉ đổi qua migration (docs/04)
         namingStrategy: new SnakeNamingStrategy(),
@@ -80,6 +84,16 @@ import { CapabilitiesService } from './capabilities.service';
             limit: config.getOrThrow('THROTTLE_LIMIT', { infer: true }),
           },
         ],
+        // Nhiều replica: hạn mức phải dùng chung qua Redis, không đếm riêng từng pod.
+        ...(config.getOrThrow('THROTTLE_STORAGE', { infer: true }) === 'redis'
+          ? {
+              storage: new RedisThrottlerStorage(
+                createCoreRedisClient(
+                  config.getOrThrow('REDIS_URL', { infer: true }),
+                ),
+              ),
+            }
+          : {}),
       }),
     }),
     ScheduleModule.forRoot(),

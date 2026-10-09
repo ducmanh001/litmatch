@@ -139,6 +139,27 @@ làm song song ở nhánh khác) cần cài `prometheus-adapter` để expose Cu
 HPA dùng `type: Pods` hoặc `type: External`. Không tự bịa cấu hình `prometheus-adapter` ở đây vì
 chưa có metric thật để kiểm chứng tên/label/ngưỡng.
 
+## Ngân sách kết nối Postgres
+
+Mỗi pod core-api giữ tối đa `DATABASE_POOL_MAX` kết nối tới Postgres (mặc định 10, đúng mặc định
+của driver). Tổng kết nối ≈ số pod tối đa × `DATABASE_POOL_MAX` + job/migration/công cụ vận hành.
+Với `base/core-api/hpa.yaml` (`maxReplicas: 10`) và pool 10, trần là 100 kết nối, bằng
+`max_connections` mặc định của Postgres. Trước khi nâng `maxReplicas`:
+
+1. Lấy `max_connections` thật của managed Postgres, trừ phần cho migration, admin và client khác.
+2. Chọn `DATABASE_POOL_MAX` sao cho `maxReplicas × DATABASE_POOL_MAX` nằm dưới phần còn lại.
+3. Nếu vẫn không đủ, đặt PgBouncer ở giữa. Các advisory lock trong code đều là mức transaction
+   (`pg_advisory_xact_lock`, `pg_try_advisory_xact_lock`) nên không phụ thuộc session; việc chạy
+   qua PgBouncer thật chưa được kiểm chứng trong repo, cần thử trên staging trước.
+
+## Rate limit dùng chung giữa các pod
+
+`@nestjs/throttler` mặc định đếm trong bộ nhớ từng process: với N replica hạn mức thực tế gấp N lần
+và bị reset mỗi lần deploy. `k8s/base/core-api/configmap.yaml` đặt `THROTTLE_STORAGE: 'redis'` để mọi
+pod dùng chung bộ đếm (1 lệnh Redis mỗi request). Redis lỗi thì pod tạm dùng bộ đếm trong bộ nhớ
+của chính nó và thử lại Redis sau vài giây, request không bị lỗi. Profile một pod hoặc Redis có hạn
+mức lệnh thấp (hosted-free) giữ `memory`.
+
 ## media-server (LiveKit) — vì sao KHÔNG có HPA, vì sao replicas: 1
 
 Đọc kỹ `docs/03-architecture.md § 3.5` trước khi đổi phần này:
