@@ -17,7 +17,7 @@ describe('presentNotification', () => {
 
   it('friend_message thiếu senderUserId → rơi về danh sách tin nhắn', () => {
     const result = presentNotification(make('friend_message', {}));
-    expect(result.href).toBe('/friends');
+    expect(result.href).toBe('/messages');
   });
 
   it('post_liked/post_commented link tới chi tiết bài viết', () => {

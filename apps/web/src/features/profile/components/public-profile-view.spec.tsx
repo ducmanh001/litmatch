@@ -112,6 +112,13 @@ describe('PublicProfileView', () => {
     expect(screen.getByText('12')).toBeVisible();
     expect(screen.getByText('Người theo dõi')).toBeVisible();
     expect(screen.getByText('7')).toBeVisible();
+    // Hai số đếm là lối vào danh sách follower/following của hồ sơ này.
+    expect(
+      screen.getByRole('link', { name: /12\s*Người theo dõi/ }),
+    ).toHaveAttribute('href', '/users/u-public/followers');
+    expect(
+      screen.getByRole('link', { name: /7\s*Đang theo dõi/ }),
+    ).toHaveAttribute('href', '/users/u-public/following');
     expect(
       await screen.findByText(
         'Một ngày thật đẹp để bắt đầu một câu chuyện mới.',

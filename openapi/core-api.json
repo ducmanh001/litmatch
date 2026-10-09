@@ -1504,6 +1504,37 @@
         "tags": ["friends"]
       }
     },
+    "/api/v1/friends/connections": {
+      "get": {
+        "operationId": "FriendController_listConnections",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/FriendConnectionDto"
+                      }
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Danh sách bạn bè: cùng \"Thích\" lúc ghép đôi hoặc follow nhau hai chiều (không cần có chat)",
+        "tags": ["friends"]
+      }
+    },
     "/api/v1/friends/{friendUserId}/conversation": {
       "get": {
         "operationId": "FriendController_getConversationWithFriend",
@@ -1739,6 +1770,137 @@
         "security": [{ "bearer": [] }],
         "summary": "Bật/tắt thông báo hội thoại — chỉ tắt kênh notification, message vẫn nhận",
         "tags": ["friends"]
+      }
+    },
+    "/api/v1/profiles/{profileUserId}/follow-counts": {
+      "get": {
+        "operationId": "ProfileSocialController_getFollowCounts",
+        "parameters": [
+          {
+            "name": "profileUserId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/FollowCountsDto" },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Số người theo dõi và đang theo dõi của một profile (gồm cả chính mình)",
+        "tags": ["profiles"]
+      }
+    },
+    "/api/v1/profiles/{profileUserId}/followers": {
+      "get": {
+        "operationId": "ProfileSocialController_listFollowers",
+        "parameters": [
+          {
+            "name": "profileUserId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/FollowListPageDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Danh sách người theo dõi profile (cursor, mới theo dõi nhất trước)",
+        "tags": ["profiles"]
+      }
+    },
+    "/api/v1/profiles/{profileUserId}/following": {
+      "get": {
+        "operationId": "ProfileSocialController_listFollowing",
+        "parameters": [
+          {
+            "name": "profileUserId",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số item tối đa mỗi trang (1-100, mặc định 20)",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor opaque từ `meta.nextCursor` của trang trước",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/FollowListPageDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Danh sách profile mà user đang theo dõi (cursor, mới theo dõi nhất trước)",
+        "tags": ["profiles"]
       }
     },
     "/api/v1/profiles/{profileUserId}/actions": {
@@ -7247,6 +7409,26 @@
           "canCall"
         ]
       },
+      "FriendConnectionDto": {
+        "type": "object",
+        "properties": {
+          "profile": { "$ref": "#/components/schemas/PublicProfileDto" },
+          "isFriend": {
+            "type": "boolean",
+            "description": "Cùng \"Thích\" lúc ghép đôi (Friendship)"
+          },
+          "isMutualFollow": {
+            "type": "boolean",
+            "description": "Hai bên đang theo dõi nhau"
+          },
+          "since": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Thời điểm kết nối gần nhất"
+          }
+        },
+        "required": ["profile", "isFriend", "isMutualFollow", "since"]
+      },
       "ConversationDto": {
         "type": "object",
         "properties": { "id": { "type": "string" } },
@@ -7335,6 +7517,52 @@
           "content": { "type": "string", "maxLength": 4000 },
           "imageAssetId": { "type": "string" }
         }
+      },
+      "FollowCountsDto": {
+        "type": "object",
+        "properties": {
+          "followerCount": {
+            "type": "number",
+            "description": "Tổng số người đang theo dõi profile"
+          },
+          "followingCount": {
+            "type": "number",
+            "description": "Tổng số profile mà user đang theo dõi"
+          }
+        },
+        "required": ["followerCount", "followingCount"]
+      },
+      "FollowListItemDto": {
+        "type": "object",
+        "properties": {
+          "profile": { "$ref": "#/components/schemas/PublicProfileDto" },
+          "followedAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Lần theo dõi gần nhất"
+          },
+          "isFollowing": {
+            "type": "boolean",
+            "description": "Người xem đang theo dõi profile này"
+          }
+        },
+        "required": ["profile", "followedAt", "isFollowing"]
+      },
+      "FollowListPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/FollowListItemDto" }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "nextCursor": { "type": "string", "nullable": true }
+            }
+          }
+        },
+        "required": ["items", "meta"]
       },
       "ProfileActionsDto": {
         "type": "object",

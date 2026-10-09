@@ -11,7 +11,7 @@ import { useTranslation } from '../../../shared/i18n/messages';
 import { useFriends } from '../api';
 import { FriendAvatar } from './friend-avatar';
 
-export function FriendsList() {
+export function ConversationInbox() {
   const friends = useFriends();
   const locale = useLocale();
   const t = useTranslation();

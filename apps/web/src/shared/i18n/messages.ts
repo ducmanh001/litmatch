@@ -146,7 +146,8 @@ const MESSAGES = {
   'nav.video': { vi: 'Video', en: 'Video' },
   'nav.party': { vi: 'Party', en: 'Party' },
   'nav.feed': { vi: 'Bảng tin', en: 'Feed' },
-  'nav.friends': { vi: 'Tin nhắn', en: 'Messages' },
+  'nav.friends': { vi: 'Bạn bè', en: 'Friends' },
+  'nav.messages': { vi: 'Tin nhắn', en: 'Messages' },
   'nav.profile': { vi: 'Cá nhân', en: 'Profile' },
   'nav.more': { vi: 'Thêm', en: 'More' },
   'nav.primary': { vi: 'Điều hướng chính', en: 'Primary navigation' },
@@ -571,6 +572,73 @@ const MESSAGES = {
   'friends.unreadMessages': {
     vi: (params: { count: number }) => `${params.count} tin nhắn chưa đọc`,
     en: (params: { count: number }) => `${params.count} unread messages`,
+  },
+  'friendsPage.title': { vi: 'Bạn bè', en: 'Friends' },
+  'friendsPage.eyebrow': {
+    vi: 'Những người đã kết nối',
+    en: 'People you connected with',
+  },
+  'friendsPage.shortcuts': {
+    vi: 'Lối tắt kết nối',
+    en: 'Connection shortcuts',
+  },
+  'friendsPage.messages': { vi: 'Tin nhắn', en: 'Messages' },
+  'friendsPage.followers': { vi: 'Người theo dõi', en: 'Followers' },
+  'friendsPage.following': { vi: 'Đang theo dõi', en: 'Following' },
+  'friendsPage.loading': {
+    vi: 'Đang tải danh sách bạn bè…',
+    en: 'Loading your friends…',
+  },
+  'friendsPage.count': {
+    vi: (params: { count: number }) => `${params.count} người bạn`,
+    en: (params: { count: number }) =>
+      `${params.count} ${params.count === 1 ? 'friend' : 'friends'}`,
+  },
+  'friendsPage.emptyTitle': {
+    vi: 'Bạn chưa có người bạn nào',
+    en: 'You have no friends yet',
+  },
+  'friendsPage.emptyDescription': {
+    vi: 'Người cùng chọn “Thích” sau Ghép đôi, hoặc theo dõi nhau hai chiều, sẽ xuất hiện ở đây.',
+    en: 'People you both liked after a match, or who follow you back, will show up here.',
+  },
+  'friendsPage.viaMatch': { vi: 'Kết bạn qua ghép đôi', en: 'Matched' },
+  'friendsPage.viaFollow': { vi: 'Theo dõi nhau', en: 'Follow each other' },
+  'friendsPage.openError': {
+    vi: 'Không thể mở cuộc trò chuyện lúc này.',
+    en: 'Could not open the conversation right now.',
+  },
+  'friendsPage.message': { vi: 'Nhắn tin', en: 'Message' },
+  'friendsPage.messageTo': {
+    vi: (params: { name: string }) => `Nhắn tin cho ${params.name}`,
+    en: (params: { name: string }) => `Message ${params.name}`,
+  },
+  'friendsPage.viewProfile': {
+    vi: (params: { name: string }) => `Xem hồ sơ ${params.name}`,
+    en: (params: { name: string }) => `View ${params.name}'s profile`,
+  },
+  'follow.followers': { vi: 'Người theo dõi', en: 'Followers' },
+  'follow.following': { vi: 'Đang theo dõi', en: 'Following' },
+  'follow.tabs': { vi: 'Danh sách theo dõi', en: 'Follow lists' },
+  'follow.back': { vi: 'Quay lại hồ sơ', en: 'Back to profile' },
+  'follow.loading': { vi: 'Đang tải danh sách…', en: 'Loading list…' },
+  'follow.loadMore': { vi: 'Xem thêm', en: 'Load more' },
+  'follow.loadingMore': { vi: 'Đang tải thêm…', en: 'Loading more…' },
+  'follow.emptyFollowers': {
+    vi: 'Chưa có ai theo dõi.',
+    en: 'No followers yet.',
+  },
+  'follow.emptyFollowing': {
+    vi: 'Chưa theo dõi ai.',
+    en: 'Not following anyone yet.',
+  },
+  'follow.you': { vi: 'Bạn', en: 'You' },
+  'follow.follow': { vi: 'Theo dõi', en: 'Follow' },
+  'follow.followBack': { vi: 'Theo dõi lại', en: 'Follow back' },
+  'follow.followingNow': { vi: 'Đang theo dõi', en: 'Following' },
+  'follow.updateError': {
+    vi: 'Không thể cập nhật theo dõi lúc này.',
+    en: 'Could not update follow right now.',
   },
   'notifications.title': { vi: 'Thông báo', en: 'Notifications' },
   'notifications.unread': {

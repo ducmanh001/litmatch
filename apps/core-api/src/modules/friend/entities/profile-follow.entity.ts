@@ -12,6 +12,11 @@ import { BaseAppEntity } from '../../../common/entities/base.entity';
   'active',
   'lastFollowedAt',
 ])
+@Index('idx_profile_follows_follower_recent', [
+  'followerUserId',
+  'active',
+  'lastFollowedAt',
+])
 export class ProfileFollow extends BaseAppEntity {
   @Column({ type: 'uuid' })
   followerUserId!: string;

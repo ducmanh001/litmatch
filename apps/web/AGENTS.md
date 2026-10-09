@@ -29,7 +29,9 @@ Env: copy `.env.example` → `.env.local` (đã có sẵn cho local). Đọc env
 | `/home`                                                                  | `(app)`    | Sau `AuthGate`; layout connect realtime khi mount            |
 | `/feed`, `/feed/[postId]`                                                | `(app)`    | Bảng tin: đăng bài, like, comment (module Feed)              |
 | `/matching`, `/matching/soul/[sessionId]`, `/matching/voice/[sessionId]` | `(app)`    | Ghép đôi Soul/Voice Match                                    |
-| `/friends`, `/chat/[friendUserId]`                                       | `(app)`    | Danh sách bạn bè + chat 1-1                                  |
+| `/friends`                                                               | `(app)`    | Danh sách bạn bè (`isFriend`) + lối tắt Tin nhắn/theo dõi    |
+| `/messages`, `/chat/[friendUserId]`                                      | `(app)`    | Inbox mọi hội thoại + chat 1-1                               |
+| `/users/[id]/followers`, `/users/[id]/following`                         | `(app)`    | Danh sách người theo dõi / đang theo dõi                     |
 | `/party`, `/party/[roomId]`                                              | `(app)`    | Party Room                                                   |
 | `/discovery`                                                             | `(app)`    | Browse/Nearby + direct match invite                          |
 | `/movie-match`, `/movie-match/[sessionId]`                               | `(app)`    | Movie session giữa hai user đã là bạn                        |

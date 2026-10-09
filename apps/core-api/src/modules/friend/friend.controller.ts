@@ -19,6 +19,8 @@ import {
 import { CursorPageQueryDto } from '@litmatch/common-dtos';
 
 import { FriendService } from './friend.service';
+import { FriendConnectionDto } from './dto/profile-social.dtos';
+import { ProfileSocialService } from './services/profile-social.service';
 import {
   ConversationDto,
   ConversationMemberStateDto,
@@ -46,6 +48,7 @@ import type { AuthenticatedUser } from '../../common/decorators/current-user.dec
 export class FriendController {
   constructor(
     private readonly friendService: FriendService,
+    private readonly profileSocial: ProfileSocialService,
     private readonly userService: UserService,
     private readonly mediaService: MediaService,
   ) {}
@@ -76,6 +79,30 @@ export class FriendController {
       if (!profile)
         throw new Error(`Missing friend profile ${entry.partnerId}`);
       return FriendDto.from(entry, PublicProfileDto.from(profile));
+    });
+  }
+
+  @Get('friends/connections')
+  @ApiOperation({
+    summary:
+      'Danh sách bạn bè: cùng "Thích" lúc ghép đôi hoặc follow nhau hai chiều (không cần có chat)',
+  })
+  @ApiOkResponse({ type: [FriendConnectionDto] })
+  async listConnections(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<FriendConnectionDto[]> {
+    const entries = await this.profileSocial.listConnections(user.userId);
+    const profiles = await this.userService.findByIds(
+      entries.map((entry) => entry.partnerId),
+    );
+    const profileById = new Map(
+      profiles.map((profile) => [profile.id, profile]),
+    );
+    return entries.flatMap((entry) => {
+      const profile = profileById.get(entry.partnerId);
+      return profile
+        ? [FriendConnectionDto.from(entry, PublicProfileDto.from(profile))]
+        : [];
     });
   }
 

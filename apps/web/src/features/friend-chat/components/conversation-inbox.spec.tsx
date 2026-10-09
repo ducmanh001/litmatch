@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 
-import { FriendsList } from './friends-list';
+import { ConversationInbox } from './conversation-inbox';
 import { apiClient } from '../../../shared/api/client';
 
 import type { FriendDto } from '../api';
@@ -14,12 +14,12 @@ function renderList() {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <FriendsList />
+      <ConversationInbox />
     </QueryClientProvider>,
   );
 }
 
-describe('FriendsList', () => {
+describe('ConversationInbox', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('empty — hiển thị hướng dẫn thật, không có hội thoại giả', async () => {
@@ -142,7 +142,7 @@ describe('FriendsList', () => {
   //   });
   //   render(
   //     <QueryClientProvider client={queryClient}>
-  //       <FriendsList onConversationOpen={onConversationOpen} />
+  //       <ConversationInbox onConversationOpen={onConversationOpen} />
   //     </QueryClientProvider>,
   //   );
 

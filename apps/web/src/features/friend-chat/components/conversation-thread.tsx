@@ -198,7 +198,7 @@ export function ConversationThread({
         try {
           await blockUser.mutateAsync(partnerData.id);
           showToast(`Đã chặn ${partnerData.nickname}`, 'warn');
-          router.push('/friends');
+          router.push('/messages');
         } catch (error) {
           showToast(
             isApiError(error) ? error.message : 'Có lỗi xảy ra, thử lại.',
@@ -289,8 +289,8 @@ export function ConversationThread({
       <div className="bg-paper/90 dark:bg-ink/90 sticky top-0 z-10 flex items-center gap-3 border-b border-black/5 px-5 pb-3 pt-2 backdrop-blur dark:border-white/10">
         {onBack === undefined ? (
           <Link
-            href="/friends"
-            aria-label="Quay lại danh sách bạn bè"
+            href="/messages"
+            aria-label="Quay lại tin nhắn"
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-surf2"
           >
             <svg
@@ -313,7 +313,7 @@ export function ConversationThread({
           <button
             type="button"
             onClick={onBack}
-            aria-label="Quay lại danh sách bạn bè"
+            aria-label="Quay lại tin nhắn"
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-surf2"
           >
             <svg

@@ -17,6 +17,7 @@ import { ConversationMemberState1755600000000 } from '../../database/migrations/
 import { MatchingDailyEntitlements1757100000000 } from '../../database/migrations/1757100000000-matching-daily-entitlements';
 import { ProfileFollow1757400000000 } from '../../database/migrations/1757400000000-profile-follow';
 import { ProfileChatContact1757600000000 } from '../../database/migrations/1757600000000-profile-chat-contact';
+import { ProfileFollowFollowingIndex1757900000000 } from '../../database/migrations/1757900000000-profile-follow-following-index';
 
 import { FriendService } from './friend.service';
 import { FriendErrors } from './friend.errors';
@@ -37,7 +38,7 @@ import { Block } from '../safety/entities/block.entity';
 import { Report } from '../safety/entities/report.entity';
 import { SoulChatMessage } from '../soul-match/entities/soul-chat-message.entity';
 import { SoulMatchRating } from '../soul-match/entities/soul-match-rating.entity';
-import { Gender, User } from '../user';
+import { Gender, User, UserStatus } from '../user';
 
 import type { UserService } from '../user';
 
@@ -177,6 +178,7 @@ d('Friend integration (Postgres thật)', () => {
         ConversationMemberState1755600000000,
         ProfileFollow1757400000000,
         ProfileChatContact1757600000000,
+        ProfileFollowFollowingIndex1757900000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -293,6 +295,129 @@ d('Friend integration (Postgres thật)', () => {
         .getRepository(Conversation)
         .countBy({ userLowId: low, userHighId: high }),
     ).toBe(1);
+  });
+
+  it('danh sách follower/following: mới nhất trước, phân trang không lặp, lọc block và user banned', async () => {
+    const [owner, a, b, c, banned, d2] = await Promise.all([
+      createUser('follow-list-owner'),
+      createUser('follow-list-a'),
+      createUser('follow-list-b'),
+      createUser('follow-list-c'),
+      createUser('follow-list-banned'),
+      createUser('follow-list-d'),
+    ]);
+    // Tuần tự (mỗi lần một transaction) để last_followed_at khác nhau: a < b < c < banned < d2.
+    for (const follower of [a, b, c, banned, d2]) {
+      await profileSocial.follow(follower.id, owner.id);
+    }
+    await ds
+      .getRepository(User)
+      .update({ id: banned.id }, { status: UserStatus.Banned });
+    await safety.block(owner.id, c.id);
+
+    const first = await profileSocial.listFollowers(owner.id, owner.id, 2);
+    expect(first.items.map((item) => item.userId)).toEqual([d2.id, b.id]);
+    expect(first.meta.nextCursor).not.toBeNull();
+    const second = await profileSocial.listFollowers(
+      owner.id,
+      owner.id,
+      2,
+      first.meta.nextCursor as string,
+    );
+    expect(second.items.map((item) => item.userId)).toEqual([a.id]);
+    expect(second.meta.nextCursor).toBeNull();
+
+    // Unfollow tắt `active` nên rời khỏi danh sách; count chỉ đếm quan hệ còn active.
+    await profileSocial.unfollow(a.id, owner.id);
+    const afterUnfollow = await profileSocial.listFollowers(
+      owner.id,
+      owner.id,
+      20,
+    );
+    expect(afterUnfollow.items.map((item) => item.userId)).toEqual([
+      d2.id,
+      b.id,
+    ]);
+    // `followerCount` đếm cả user banned/bị block (4 active: b, c, banned, d2) — chỉ danh sách lọc.
+    await expect(
+      profileSocial.getFollowCounts(owner.id, owner.id),
+    ).resolves.toEqual({ followerCount: 4, followingCount: 0 });
+
+    // Following: owner theo dõi a rồi b → b trước.
+    await profileSocial.follow(owner.id, a.id);
+    await profileSocial.follow(owner.id, b.id);
+    const following = await profileSocial.listFollowing(owner.id, owner.id, 20);
+    expect(following.items.map((item) => item.userId)).toEqual([b.id, a.id]);
+    // Cờ "tôi đang theo dõi" cho từng dòng danh sách (d2 chưa được owner theo dõi).
+    await expect(
+      profileSocial.filterFollowedIds(owner.id, [a.id, b.id, d2.id]),
+    ).resolves.toEqual(new Set([a.id, b.id]));
+
+    // Người xem bị block 2 chiều với profile → 404, không lộ danh sách.
+    await expect(
+      profileSocial.listFollowers(c.id, owner.id, 20),
+    ).rejects.toMatchObject({
+      code: 'PROFILE_SOCIAL_PROFILE_NOT_AVAILABLE',
+      httpStatus: 404,
+    });
+    await expect(
+      profileSocial.listFollowers(owner.id, owner.id, 20, 'khong-phai-cursor'),
+    ).rejects.toMatchObject({ code: FriendErrors.CURSOR_INVALID });
+  });
+
+  it('danh sách bạn bè = Friendship ∪ follow 2 chiều: gộp 1 dòng/người, loại block, banned và follow 1 chiều', async () => {
+    const [me, matched, mutual, both, oneWay, blocked, banned] =
+      await Promise.all([
+        createUser('conn-me'),
+        createUser('conn-matched'),
+        createUser('conn-mutual'),
+        createUser('conn-both'),
+        createUser('conn-one-way'),
+        createUser('conn-blocked'),
+        createUser('conn-banned'),
+      ]);
+    await ensureFriendship(me, matched);
+    await ensureFriendship(me, both);
+    for (const other of [mutual, both, blocked, banned]) {
+      await profileSocial.follow(me.id, other.id);
+      await profileSocial.follow(other.id, me.id);
+    }
+    await profileSocial.follow(me.id, oneWay.id); // chỉ một chiều → không phải bạn
+    await safety.block(me.id, blocked.id);
+    await ds
+      .getRepository(User)
+      .update({ id: banned.id }, { status: UserStatus.Banned });
+
+    const connections = await profileSocial.listConnections(me.id);
+    const byId = new Map(connections.map((entry) => [entry.partnerId, entry]));
+    expect([...byId.keys()].sort()).toEqual(
+      [matched.id, mutual.id, both.id].sort(),
+    );
+    expect(byId.get(matched.id)).toMatchObject({
+      isFriend: true,
+      isMutualFollow: false,
+    });
+    expect(byId.get(mutual.id)).toMatchObject({
+      isFriend: false,
+      isMutualFollow: true,
+    });
+    expect(byId.get(both.id)).toMatchObject({
+      isFriend: true,
+      isMutualFollow: true,
+    });
+    expect(connections.map((entry) => entry.partnerId)).toHaveLength(3);
+
+    // Bỏ follow một chiều → hết follow 2 chiều → rời danh sách; Friendship thì còn.
+    await profileSocial.unfollow(mutual.id, me.id);
+    await profileSocial.unfollow(both.id, me.id);
+    const after = await profileSocial.listConnections(me.id);
+    expect(after.map((entry) => entry.partnerId).sort()).toEqual(
+      [matched.id, both.id].sort(),
+    );
+    expect(after.find((entry) => entry.partnerId === both.id)).toMatchObject({
+      isFriend: true,
+      isMutualFollow: false,
+    });
   });
 
   it('profile follow không tính vào gate; người thứ N+1 mở chat phải tặng quà', async () => {
