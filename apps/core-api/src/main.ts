@@ -86,8 +86,8 @@ async function bootstrap(): Promise<void> {
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
   if (
-    config.getOrThrow('SWAGGER_ENABLED', { infer: true }) &&
-    config.get('NODE_ENV', { infer: true }) !== 'production'
+    config.getOrThrow('SWAGGER_ENABLED', { infer: true })
+    // && config.get('NODE_ENV', { infer: true }) !== 'production'
   ) {
     SwaggerModule.setup('docs', app, buildOpenApiDocument(app));
   }
