@@ -140,6 +140,52 @@ domain docs thắng khi mockup mâu thuẫn.
    chỉ giữ quyết định và bước tiếp theo.
 5. Thay đổi durable architecture cần ADR; roadmap không có quyền tự nới invariant.
 
+## 7.3 Lộ trình quy mô từ vài user tới vài tỷ
+
+Giai đoạn 0–7 ở trên là **lộ trình capability/delivery**. S0–S8 dưới đây là **lộ trình quy mô**;
+hai trục không tương đương. Có source của Giai đoạn 6 không có nghĩa đã vận hành ở S6.
+
+**Vị trí hiện tại theo evidence trong checkout:** có nền tảng và scaffold scale của Giai đoạn 6,
+đang cần hoàn tất các gate vận hành ở Giai đoạn 7. Bước kiểm chứng quy mô tiếp theo là pilot
+S0 → S1; chưa có capacity report được dẫn tại đây để chứng nhận một mốc CCU/RPS production.
+Số user thực tế và deployment đang chạy cần telemetry, không suy ra từ source/manifest.
+
+Trong bảng, user là **tài khoản tích lũy**. CCU là người online đồng thời, khác số socket và
+request/giây. Cột CCU chỉ minh họa kịch bản `DAU = 20% user`, `peak CCU = 5% DAU`, tức khoảng
+`1% user`; ở pilot dùng một nhóm nhỏ online cùng lúc. Đây là giả định lập kế hoạch, không phải
+benchmark, dự báo tăng trưởng hay threshold bắt buộc đổi kiến trúc.
+
+| Mốc | User tích lũy tham khảo | Peak CCU minh họa | Mô hình cần đánh giá                                                         | Điều kiện mở công việc tiếp theo                                           |
+| --- | ----------------------- | ----------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| S0  | Vài–100                 | Vài–10            | Development/pilot, một topology nhỏ với ba backend hiện hành                 | Luồng thật và recovery cơ bản được kiểm chứng; có baseline tải             |
+| S1  | 100–1.000               | 1–10              | Alpha hosted-free hoặc single-node theo ADR hiện hành                        | Quota, availability hoặc latency của profile cản trở pilot; cần HA         |
+| S2  | 1.000–10.000            | 10–100            | Một region, nhiều replica API/signaling khi cần, DB/Redis được bảo vệ        | Load qua LB, reconnect và failover đạt mục tiêu; xác định bottleneck       |
+| S3  | 10.000–100.000          | 100–1.000         | HA theo các miền lỗi trong một region; scale riêng API/signaling/media       | Số liệu DB, queue, socket và media đòi hỏi tối ưu riêng từng lớp           |
+| S4  | 100.000–1 triệu         | 1.000–10.000      | Tối ưu đường đọc và lifecycle dữ liệu; replica/cache/partition có chọn lọc   | Primary DB, storage hoặc fanout đạt giới hạn đã benchmark                  |
+| S5  | 1–10 triệu              | 10.000–100.000    | Capacity theo region; DR/region thứ hai hoặc DB sharding nếu số liệu yêu cầu | Latency địa lý, recovery hoặc write capacity cần boundary mới + ADR        |
+| S6  | 10–100 triệu            | 100.000–1 triệu   | Đề xuất các cụm độc lập (cell), placement và ownership dữ liệu rõ            | Một cụm không đáp ứng capacity/phạm vi lỗi; migration cell được kiểm chứng |
+| S7  | 100 triệu–1 tỷ          | 1–10 triệu        | Đề xuất nhiều region/cell, vận hành và phân phối nội dung toàn cầu           | Capacity, chi phí và recovery chứng minh khả năng mở thêm từng cell        |
+| S8  | 1–vài tỷ                | 10–vài chục triệu | Kịch bản quy mô toàn cầu; mở rộng bằng các đơn vị đã benchmark               | Chỉ cam kết tải cụ thể sau báo cáo capacity, dữ liệu và ngân sách thực tế  |
+
+Không có lịch cố định cho các mốc. Có thể cần HA hoặc region thứ hai sớm vì yêu cầu availability,
+hoặc tiếp tục dùng PostgreSQL/modular monolith lâu hơn khi vẫn đáp ứng SLO. S6–S8 là hướng nghiên
+cứu có điều kiện, chưa phải quyết định kiến trúc được accept. Mọi mô hình vẫn giữ ba loại backend;
+deployable thứ tư, DB sharding/cross-region ownership hoặc cell isolation cần ADR phù hợp. Riêng
+`LIVEKIT_REGION_URLS` hiện trỏ cùng một cụm chung Redis: media cell độc lập cần ADR thay boundary này.
+
+Chi tiết kỹ thuật từng mốc, trục **hàng tỷ bản ghi** và kịch bản **hàng tỷ CCU**, giả định tính tải,
+gate chuyển giai đoạn và backlog gần nhất nằm trong
+[capacity/scaling plan ngày 2026-10-08](./plans/2026-10-08-capacity-and-scaling-plan.md).
+Đây là bản phân tích có ngày hỗ trợ roadmap; architecture/ADR/runbook vẫn giữ thẩm quyền hiện hành.
+
+Ưu tiên ngay: chốt workload pilot và owner → xác minh provider theo feature bật → đo API,
+Socket.IO và media thật → diễn tập restore/reconnect → lưu capacity report cùng SHA. Production
+promotion tiếp tục theo [reliability gate](./runbooks/reliability-slo-and-evidence.md), không được
+thay bằng bảng mốc user này.
+
+`review-module: N/A` cho mục 7.3 — chỉ lập lộ trình tài liệu, không thay đổi business flow,
+schema, topology triển khai hay trạng thái capability.
+
 ---
 
 [← 06 · Domain rules](./06-domain-rules.md) · [08 · Working with agents →](./08-working-with-agents.md)

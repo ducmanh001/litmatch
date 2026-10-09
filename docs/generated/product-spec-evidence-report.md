@@ -118,7 +118,7 @@ The service catalog names every top-level Core API module and links module-speci
 - Status: `implemented`
 - Owner: core-api/gift
 - Contracts: `openapi/core-api.json`, `docs/services/gift-service.md`, `docs/services/economy-service.md`
-- Implementation evidence: `apps/core-api/src/modules/gift/gift.controller.ts:37` — contains `export class GiftController`
+- Implementation evidence: `apps/core-api/src/modules/gift/gift.controller.ts:38` — contains `export class GiftController`
 - Verification evidence (automated-test-source): `apps/core-api/src/modules/gift/gift.integration.spec.ts:16` — contains `Gift`
 
 ### Friendship, direct chat and streak
@@ -135,7 +135,7 @@ The service catalog names every top-level Core API module and links module-speci
 - Owner: core-api/feed
 - Contracts: `openapi/core-api.json`, `docs/services/feed-service.md`
 - Implementation evidence: `apps/core-api/src/modules/feed/feed.controller.ts:45` — contains `@Controller('feed')`; `apps/core-api/src/modules/feed/controllers/story.controller.ts:38` — contains `@Controller('stories')`
-- Verification evidence (automated-test-source): `apps/core-api/src/modules/feed/feed.integration.spec.ts:13` — contains `Feed`
+- Verification evidence (automated-test-source): `apps/core-api/src/modules/feed/feed.integration.spec.ts:14` — contains `Feed`
 
 ### Report, block and trust-safety decisions
 
@@ -158,7 +158,7 @@ The service catalog names every top-level Core API module and links module-speci
 - Status: `implemented`
 - Owner: core-api/notification
 - Contracts: `openapi/core-api.json`, `docs/services/notification-service.md`
-- Implementation evidence: `apps/core-api/src/modules/notification/notification.controller.ts:28` — contains `@Controller('notifications')`
+- Implementation evidence: `apps/core-api/src/modules/notification/notification.controller.ts:35` — contains `@Controller('notifications')`
 - Verification evidence (automated-test-source): `apps/core-api/src/modules/notification/notification.service.spec.ts:3` — contains `NotificationService`; `apps/core-api/src/common/platform/platform.adapters.spec.ts:34` — contains `disabled feature/provider selects no-op adapters`
 
 ### Idempotent support tickets with customer tracking and staff workflow
@@ -266,7 +266,7 @@ The service catalog names every top-level Core API module and links module-speci
 
 - Result: PASS on 2026-07-24: agent check; 76 agent/tool tests; OpenAPI and formatting; lint/build for core-api, web, admin and api-client; core 551, web 230, admin 52 and api-client 23 tests
 - Command: `pnpm agent:check; pnpm agent:test; pnpm openapi:check; pnpm format:check; NX_DAEMON=false nx run-many -t lint build test -p core-api web admin api-client --skip-nx-cache`
-- Source evidence: `package.json:39` — contains `"agent:check":`; `scripts/agent/verify.mjs:26` — contains `requiredTargets: ['lint', 'test', 'build']`
+- Source evidence: `package.json:39` — contains `"agent:check":`; `scripts/agent/verify.mjs:34` — contains `requiredTargets: ['lint', 'test', 'build']`
 - Caveat: The core unit command intentionally skipped 16 integration suites without a shared integration URL. The changed short-video PostgreSQL integration suite is recorded separately. Canonical verify wrappers exceeded the mandatory 45-second shell budget, so their underlying commands were run separately and passed.
 
 ## Review-module verification
@@ -279,9 +279,9 @@ The service catalog names every top-level Core API module and links module-speci
 | --- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
 | 1   | Backend authorization and validation do not depend on a visible web button; a custom authenticated client may call the endpoint directly. | A caller invokes the API without any web confirmation flow.              | `apps/core-api/src/app/app.module.ts:117` — contains `{ provide: APP_GUARD, useClass: JwtAuthGuard }`; `apps/core-api/src/modules/short-video/short-video.controller.ts:129` — contains `await this.videoService.reportVideo(user, id, dto.reason, dto.description);`                 | PASS    |
 | 2   | A caller cannot create report evidence for a video that does not exist or is not visible to that caller.                                  | A guessed, stale, or unauthorized video UUID is submitted.               | `apps/core-api/src/modules/short-video/short-video.service.ts:481` — contains `Chốt target tồn tại/visible trước khi ghi report`; `apps/core-api/src/modules/short-video/short-video.service.spec.ts:430` — contains `validate video tồn tại trước khi gọi Safety`                    | PASS    |
-| 3   | Retry or rapid double-submit by one reporter does not inflate the distinct-reporter count.                                                | The same user repeats or races the request.                              | `apps/core-api/src/database/migrations/1754900000000-report-target-video.ts:31` — contains `CREATE UNIQUE INDEX uq_reports_video_reporter`; `apps/core-api/src/modules/safety/safety.service.ts:163` — contains `if (!isUniqueViolation(err)) throw err;`                             | PASS    |
+| 3   | Retry or rapid double-submit by one reporter does not inflate the distinct-reporter count.                                                | The same user repeats or races the request.                              | `apps/core-api/src/database/migrations/1754900000000-report-target-video.ts:31` — contains `CREATE UNIQUE INDEX uq_reports_video_reporter`; `apps/core-api/src/modules/safety/safety.service.ts:171` — contains `if (!isUniqueViolation(err)) throw err;`                             | PASS    |
 | 4   | The client cannot choose the moderation threshold or force an arbitrary status transition.                                                | A forged body claims a higher report count or requests removal directly. | `apps/core-api/src/modules/short-video/short-video.service.ts:492` — contains `if (distinctReporterCount >= threshold)`; `apps/core-api/src/modules/short-video/short-video.service.ts:499` — contains `return this.transition(videoId, VideoStatus.Published, VideoStatus.Removed);` | PASS    |
-| 5   | Reporting a video must not reduce the author's personal trust score.                                                                      | Content moderation is incorrectly treated as a user report.              | `apps/core-api/src/modules/safety/safety.service.ts:159` — contains `trustPenaltyApplied: 0`; `apps/core-api/src/modules/short-video/short-video.integration.spec.ts:318` — contains `report vượt VIDEO_REPORT_AUTOHIDE_THRESHOLD`                                                    | PASS    |
+| 5   | Reporting a video must not reduce the author's personal trust score.                                                                      | Content moderation is incorrectly treated as a user report.              | `apps/core-api/src/modules/safety/safety.service.ts:167` — contains `trustPenaltyApplied: 0`; `apps/core-api/src/modules/short-video/short-video.integration.spec.ts:318` — contains `report vượt VIDEO_REPORT_AUTOHIDE_THRESHOLD`                                                    | PASS    |
 
 Checklist:
 
