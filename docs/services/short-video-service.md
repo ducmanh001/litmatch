@@ -29,6 +29,11 @@ tranh chấp gay gắt như matching ticket (không có 2 phía cùng ghép 1 l�
 thừa; conditional UPDATE đủ an toàn và đơn giản hơn nhiều — cùng pattern
 `TicketSweeperService`/`InviteSweeperService` đã dùng cho các sweeper trước đó.
 
+Sweeper cũng xoá object trên storage của video `failed`. Hàng đã xoá xong được đánh dấu
+`videos.storage_cleaned_at` (hàng đợi dọn = `status='failed' AND storage_cleaned_at IS NULL`, index
+`idx_videos_failed_uncleaned`); hàng xoá lỗi bị đẩy `updated_at` về cuối hàng đợi. Nhờ vậy mỗi tick
+tiến lên phía sau, không lặp lại 200 hàng cũ nhất và không đói các hàng mới hơn.
+
 ## 2. Upload — presigned URL, body video không chạm NestJS
 
 - `POST /videos/upload-intent` (Idempotency-Key bắt buộc): tạo `Video{status: uploading}` +
@@ -54,6 +59,11 @@ thừa; conditional UPDATE đủ an toàn và đơn giản hơn nhiều — cùn
 ATOMIC đúng lúc đó (cùng transaction với update `VideoView.qualified`) — các lần cập nhật
 watch-time sau (video xem tiếp) không cộng lại. Self-view (tác giả tự xem video mình) không bao
 giờ ghi `VideoView`.
+
+Cộng đúng 1 lần phải đúng cả khi nhiều request của cùng viewer chạy đồng thời: transaction tạo hàng
+bằng `INSERT ... ON CONFLICT DO NOTHING` (không ném unique violation nên Postgres không huỷ
+transaction), rồi `SELECT ... FOR UPDATE` hàng đó trước khi đọc `qualified`. Request sau chờ khoá, thấy
+`qualified=true` của request trước và không cộng `viewCount` lần nữa.
 
 ## 3b. Feed "Đang theo dõi" (video.html)
 
