@@ -433,12 +433,23 @@ export const coreApiEnvSchema = Joi.object({
   ECONOMY_APPLE_ISSUER_ID: Joi.string().allow('').default(''),
   ECONOMY_APPLE_KEY_ID: Joi.string().allow('').default(''),
   ECONOMY_APPLE_PRIVATE_KEY: Joi.string().allow('').default(''),
-  // Bắt buộc khi verifier là `store`: webhook Apple chỉ chứng minh "Apple ký", bundleId mới chứng minh
-  // "ký cho app này"; để trống thì kiểm tra này bị bỏ qua (mọi app dùng chung chuỗi chứng chỉ Apple).
+  // Webhook Apple chỉ chứng minh "Apple ký", bundleId mới chứng minh "ký cho app này"; để trống thì kiểm tra
+  // này bị bỏ qua (mọi app dùng chung chuỗi chứng chỉ Apple). Bắt buộc khi IAP verifier là `store`, hoặc khi
+  // webhook verifier là `store` và đã cấu hình Apple Root CA (tức webhook có thể thật sự xác thực chữ ký).
   ECONOMY_APPLE_BUNDLE_ID: Joi.string().when('ECONOMY_IAP_VERIFIER', {
     is: 'store',
     then: Joi.required(),
-    otherwise: Joi.string().allow('').default(''),
+    otherwise: Joi.string()
+      .allow('')
+      .default('')
+      .when('ECONOMY_APPLE_WEBHOOK_VERIFIER', {
+        is: 'store',
+        then: Joi.when('ECONOMY_APPLE_ROOT_CA_PEM', {
+          is: Joi.string().min(1).required(),
+          // invalid('') thắng allow('') của nhánh ngoài
+          then: Joi.string().invalid('').required(),
+        }),
+      }),
   }),
   ECONOMY_APPLE_SERVER_API_ENV: Joi.string()
     .valid('sandbox', 'production')
