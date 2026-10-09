@@ -25,6 +25,7 @@ export interface CoreApiEnv {
   CAPABILITY_MAINTENANCE_FEATURES: string;
   DATABASE_URL: string;
   DATABASE_POOL_MAX: number;
+  DATABASE_POOL_ACQUIRE_TIMEOUT_MS: number;
   REDIS_URL: string;
   KAFKA_BROKERS: string;
   EVENT_BUS_KAFKA_REQUEST_TIMEOUT_MS: number;
@@ -249,7 +250,15 @@ export const coreApiEnvSchema = Joi.object({
     .required(),
   // Số kết nối tối đa MỖI pod tới Postgres (pg-pool). Mặc định 10 = mặc định của driver pg. Tổng kết nối
   // = số pod core-api × giá trị này (+ migration/job) và phải nằm dưới max_connections của Postgres.
-  DATABASE_POOL_MAX: Joi.number().integer().min(1).max(100).default(10),
+  // Sàn 5: mỗi job nền singleton (ManagedInterval) giữ 1 kết nối cho advisory lock suốt lúc chạy và task
+  // của nó cần thêm 1 kết nối nữa, nên pool nhỏ hơn dễ bị job tự chiếm hết.
+  DATABASE_POOL_MAX: Joi.number().integer().min(5).max(100).default(10),
+  // Thời hạn chờ lấy một kết nối khi pool đã đầy; hết hạn thì lỗi thay vì chờ vô hạn.
+  DATABASE_POOL_ACQUIRE_TIMEOUT_MS: Joi.number()
+    .integer()
+    .min(1000)
+    .max(120_000)
+    .default(10_000),
   REDIS_URL: Joi.string()
     .uri({ scheme: ['redis', 'rediss'] })
     .default('redis://localhost:6379'),

@@ -21,12 +21,17 @@ data:
   NODE_ENV: 'production'
   LOG_LEVEL: 'info'
   PORT: '3000'
+  # Số proxy tin cậy trước pod: nginx-ingress = 1 (ADR 0004; ADR 0006 cấu hình real-IP ngay ở ingress khi có
+  # Cloudflare). Thêm LB/CDN tin cậy phía trước ingress thì tăng tương ứng. Đặt sai (0) làm req.ip là IP proxy:
+  # rate limit và quota theo IP/mạng gộp mọi người dùng vào một bucket. Đặt quá lớn thì client giả mạo được X-Forwarded-For.
+  HTTP_TRUST_PROXY_HOPS: '1'
   # Điểm mở: điền domain FE thật (admin/web) khi có — KHÔNG dùng '*' (docs/05 § 5, security posture)
   CORS_ORIGINS: ''
   SWAGGER_ENABLED: 'false'
   # Kết nối Postgres tối đa MỖI pod. Ngân sách: số pod tối đa (HPA maxReplicas) × giá trị này + job/migration
   # phải < max_connections của Postgres (hoặc đặt PgBouncer ở giữa) — xem k8s/README.md mục "Ngân sách kết nối Postgres".
   DATABASE_POOL_MAX: '10'
+  DATABASE_POOL_ACQUIRE_TIMEOUT_MS: '10000'
 
   # KAFKA_BROKERS không chứa credential (SASL nếu bật thì phải chuyển sang Secret) — trỏ managed
   # Kafka ngoài cluster, giả định theo yêu cầu task (không deploy Kafka trong k8s manifest này).

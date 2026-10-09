@@ -1,4 +1,4 @@
-import { Module, RequestMethod } from '@nestjs/common';
+import { Logger, Module, RequestMethod } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -69,6 +69,14 @@ import { CapabilitiesService } from './capabilities.service';
         url: config.getOrThrow('DATABASE_URL', { infer: true }),
         // Trần kết nối của MỖI pod: tổng = số pod × giá trị này (k8s/README.md, ngân sách kết nối).
         poolSize: config.getOrThrow('DATABASE_POOL_MAX', { infer: true }),
+        // Hết kết nối trong pool thì request/job lỗi sau thời hạn này thay vì chờ vô hạn (pg mặc định không
+        // timeout). Job singleton giữ 1 kết nối suốt lúc chạy nên pool nhỏ có thể tự khoá nếu không có hạn này.
+        connectTimeoutMS: config.getOrThrow(
+          'DATABASE_POOL_ACQUIRE_TIMEOUT_MS',
+          {
+            infer: true,
+          },
+        ),
         autoLoadEntities: true,
         synchronize: false, // schema chỉ đổi qua migration (docs/04)
         namingStrategy: new SnakeNamingStrategy(),
@@ -76,25 +84,41 @@ import { CapabilitiesService } from './capabilities.service';
     }),
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService<CoreApiEnv, true>) => ({
-        throttlers: [
-          {
-            ttl:
-              config.getOrThrow('THROTTLE_TTL_SECONDS', { infer: true }) * 1000,
-            limit: config.getOrThrow('THROTTLE_LIMIT', { infer: true }),
-          },
-        ],
-        // Nhiều replica: hạn mức phải dùng chung qua Redis, không đếm riêng từng pod.
-        ...(config.getOrThrow('THROTTLE_STORAGE', { infer: true }) === 'redis'
-          ? {
-              storage: new RedisThrottlerStorage(
-                createCoreRedisClient(
-                  config.getOrThrow('REDIS_URL', { infer: true }),
+      useFactory: (config: ConfigService<CoreApiEnv, true>) => {
+        const sharedStorage =
+          config.getOrThrow('THROTTLE_STORAGE', { infer: true }) === 'redis';
+        if (
+          sharedStorage &&
+          config.getOrThrow('NODE_ENV', { infer: true }) === 'production' &&
+          config.getOrThrow('HTTP_TRUST_PROXY_HOPS', { infer: true }) === 0
+        ) {
+          // Bộ đếm dùng chung nhưng khoá theo req.ip: sau ingress/LB mà không tin proxy thì req.ip là IP
+          // của proxy, nên mọi người dùng cùng đi qua một proxy chia chung MỘT bucket cho mỗi route.
+          new Logger('ThrottlerConfig').warn(
+            'THROTTLE_STORAGE=redis nhưng HTTP_TRUST_PROXY_HOPS=0: nếu có ingress/LB phía trước thì req.ip là IP proxy và mọi người dùng chung một bucket rate limit. Đặt HTTP_TRUST_PROXY_HOPS đúng số proxy tin cậy.',
+          );
+        }
+        return {
+          throttlers: [
+            {
+              ttl:
+                config.getOrThrow('THROTTLE_TTL_SECONDS', { infer: true }) *
+                1000,
+              limit: config.getOrThrow('THROTTLE_LIMIT', { infer: true }),
+            },
+          ],
+          // Nhiều replica: hạn mức phải dùng chung qua Redis, không đếm riêng từng pod.
+          ...(sharedStorage
+            ? {
+                storage: new RedisThrottlerStorage(
+                  createCoreRedisClient(
+                    config.getOrThrow('REDIS_URL', { infer: true }),
+                  ),
                 ),
-              ),
-            }
-          : {}),
-      }),
+              }
+            : {}),
+        };
+      },
     }),
     ScheduleModule.forRoot(),
     MetricsModule,

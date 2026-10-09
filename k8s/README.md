@@ -157,13 +157,23 @@ chưa có metric thật để kiểm chứng tên/label/ngưỡng.
 
 ## Ngân sách kết nối Postgres
 
-Mỗi pod core-api giữ tối đa `DATABASE_POOL_MAX` kết nối tới Postgres (mặc định 10, đúng mặc định
-của driver). Tổng kết nối ≈ số pod tối đa × `DATABASE_POOL_MAX` + job/migration/công cụ vận hành.
-Với `base/core-api/hpa.yaml` (`maxReplicas: 10`) và pool 10, trần là 100 kết nối, bằng
-`max_connections` mặc định của Postgres. Trước khi nâng `maxReplicas`:
+Mỗi pod core-api giữ tối đa `DATABASE_POOL_MAX` kết nối tới Postgres (mặc định 10, sàn 5). Hai điều cần nhớ:
 
-1. Lấy `max_connections` thật của managed Postgres, trừ phần cho migration, admin và client khác.
-2. Chọn `DATABASE_POOL_MAX` sao cho `maxReplicas × DATABASE_POOL_MAX` nằm dưới phần còn lại.
+- Mỗi job nền singleton (`ManagedInterval` với `clusterSingleton`, hiện có hơn 10 job) giữ 1 kết nối cho
+  advisory lock suốt lúc chạy, và task của nó cần thêm 1 kết nối nữa. Pool quá nhỏ có thể bị job tự chiếm
+  hết, vì vậy có sàn 5 và `DATABASE_POOL_ACQUIRE_TIMEOUT_MS` (mặc định 10 giây): hết hạn thì request/job
+  lỗi thay vì chờ vô hạn (driver pg mặc định không có timeout).
+- Tổng kết nối ≈ số pod tối đa (kể cả pod surge lúc rollout) × `DATABASE_POOL_MAX` + migration/công cụ
+  vận hành. Ví dụ: base `maxReplicas: 10` + `maxSurge: 1` = 11 pod × 10 = 110; overlay production và
+  production-region-b `maxReplicas: 15` → 16 × 10 = 160. Postgres mặc định `max_connections = 100` và dành 3
+  cho superuser (`superuser_reserved_connections`), chỉ còn 97 cho ứng dụng: với cấu hình mặc định, HPA có
+  thể chạm giới hạn kết nối trước khi đạt `maxReplicas`.
+
+Trước khi nâng `maxReplicas`:
+
+1. Lấy `max_connections` thật của managed Postgres, trừ phần cho superuser, migration, admin và client khác.
+2. Chọn `DATABASE_POOL_MAX` (không dưới 5) sao cho `(maxReplicas + maxSurge) × DATABASE_POOL_MAX` nằm
+   dưới phần còn lại, hoặc nâng `max_connections` của plan Postgres.
 3. Nếu vẫn không đủ, đặt PgBouncer ở giữa. Các advisory lock trong code đều là mức transaction
    (`pg_advisory_xact_lock`, `pg_try_advisory_xact_lock`) nên không phụ thuộc session; việc chạy
    qua PgBouncer thật chưa được kiểm chứng trong repo, cần thử trên staging trước.
@@ -175,6 +185,12 @@ và bị reset mỗi lần deploy. `k8s/base/core-api/configmap.yaml` đặt `TH
 pod dùng chung bộ đếm (1 lệnh Redis mỗi request). Redis lỗi thì pod tạm dùng bộ đếm trong bộ nhớ
 của chính nó và thử lại Redis sau vài giây, request không bị lỗi. Profile một pod hoặc Redis có hạn
 mức lệnh thấp (hosted-free) giữ `memory`.
+
+Bộ đếm khoá theo `req.ip` nên `HTTP_TRUST_PROXY_HOPS` phải đúng số proxy tin cậy (base đặt `'1'` cho
+nginx-ingress). Nếu để `0` sau ingress thì `req.ip` là IP của proxy và MỌI người dùng đi qua cùng một
+proxy chia chung MỘT bucket cho mỗi route; core-api ghi cảnh báo lúc boot khi gặp tổ hợp redis + production
+
+- hops 0. Quota guest theo mạng cũng dùng `req.ip`, nên giá trị này ảnh hưởng cả hai.
 
 ## media-server (LiveKit) — vì sao KHÔNG có HPA, vì sao replicas: 1
 

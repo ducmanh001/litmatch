@@ -21,13 +21,21 @@ describe('coreApiEnvSchema invariants', () => {
     expect(schema.validate('https://redis.example').error).toBeDefined();
   });
 
-  it('pool Postgres mỗi pod mặc định 10 và nằm trong khoảng hữu hạn', () => {
+  it('pool Postgres mỗi pod mặc định 10, sàn 5 và nằm trong khoảng hữu hạn', () => {
     const schema = coreApiEnvSchema.extract('DATABASE_POOL_MAX');
     expect(schema.validate(undefined).value).toBe(10);
     expect(schema.validate(25).error).toBeUndefined();
-    expect(schema.validate(0).error).toBeDefined();
+    expect(schema.validate(5).error).toBeUndefined();
+    expect(schema.validate(4).error).toBeDefined();
     expect(schema.validate(101).error).toBeDefined();
-    expect(schema.validate(1.5).error).toBeDefined();
+    expect(schema.validate(10.5).error).toBeDefined();
+  });
+
+  it('thời hạn chờ kết nối pool có mặc định hữu hạn và không nhận giá trị quá thấp', () => {
+    const schema = coreApiEnvSchema.extract('DATABASE_POOL_ACQUIRE_TIMEOUT_MS');
+    expect(schema.validate(undefined).value).toBe(10_000);
+    expect(schema.validate(999).error).toBeDefined();
+    expect(schema.validate(120_001).error).toBeDefined();
   });
 
   it('throttle storage mặc định memory và chỉ nhận memory hoặc redis', () => {
