@@ -23,6 +23,7 @@ import {
   MoreIcon,
   PartyIcon,
   ProfileIcon,
+  UsersIcon,
   VideoIcon,
 } from '../../shared/ui/icons';
 import { ToastStack } from '../../shared/ui/toast-stack';
