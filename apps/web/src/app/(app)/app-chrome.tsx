@@ -50,12 +50,6 @@ const NAV_ITEMS = [
   { href: '/party', labelKey: 'nav.party', Icon: PartyIcon, mobile: false },
   { href: '/feed', labelKey: 'nav.feed', Icon: FeedIcon, mobile: false },
   {
-    href: '/friends',
-    labelKey: 'nav.friends',
-    Icon: UsersIcon,
-    mobile: true,
-  },
-  {
     href: '/messages',
     labelKey: 'nav.messages',
     Icon: FriendsIcon,
