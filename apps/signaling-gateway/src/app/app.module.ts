@@ -12,6 +12,7 @@ import { ConnectionQuotaService } from './connection-quota.service';
 import { METRICS_METER } from './metrics.constants';
 import { SignalingRedisAdapterService } from './redis-adapter.service';
 import { SignalingGateway } from './signaling.gateway';
+import { SignalingMetrics } from './signaling.metrics';
 
 import type { SignalingEnv } from '../config/env.validation';
 
@@ -41,6 +42,7 @@ import type { SignalingEnv } from '../config/env.validation';
     SignalingGateway,
     ConnectionQuotaService,
     SignalingRedisAdapterService,
+    SignalingMetrics,
     {
       provide: METRICS_METER,
       useFactory: () => createMetricsMeter({ appName: 'signaling-gateway' }),

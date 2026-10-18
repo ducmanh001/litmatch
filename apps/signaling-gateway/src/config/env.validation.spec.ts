@@ -9,6 +9,37 @@ describe('signalingEnvSchema invariants', () => {
     expect(schema.validate('https://redis.example').error).toBeDefined();
   });
 
+  it('fanout mặc định theo user, một shard Redis, gia hạn lease = lease/3', () => {
+    expect(
+      signalingEnvSchema.extract('WS_FANOUT_MODE').validate(undefined).value,
+    ).toBe('user');
+    expect(
+      signalingEnvSchema.extract('WS_FANOUT_MODE').validate('pattern').error,
+    ).toBeUndefined();
+    expect(
+      signalingEnvSchema.extract('WS_FANOUT_MODE').validate('broadcast').error,
+    ).toBeDefined();
+    expect(
+      signalingEnvSchema.extract('REALTIME_REDIS_URLS').validate(undefined)
+        .value,
+    ).toBe('');
+    expect(
+      signalingEnvSchema
+        .extract('REALTIME_REDIS_URLS')
+        .validate('redis://a:6379,redis://b:6379').error,
+    ).toBeUndefined();
+    expect(
+      signalingEnvSchema
+        .extract('REALTIME_REDIS_URLS')
+        .validate('redis://a:6379,redis://a:6379').error,
+    ).toBeDefined();
+    expect(
+      signalingEnvSchema
+        .extract('WS_CONNECTION_LEASE_REFRESH_MS')
+        .validate(undefined).value,
+    ).toBe(0);
+  });
+
   it('quota connection có default an toàn và từ chối lease quá ngắn', () => {
     expect(
       signalingEnvSchema

@@ -33,7 +33,7 @@ import type {
   GiftSentEventData,
   RealtimeEnvelope,
 } from '@litmatch/common-dtos';
-import type Redis from 'ioredis';
+import type { RealtimePublisherPort } from '../../common/realtime/realtime-publisher.port';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import type { CoreApiEnv } from '../../config/env.validation';
 import type { Notification } from '../notification';
@@ -79,7 +79,7 @@ export class GiftService {
     private readonly userService: UserService,
     private readonly notificationService: NotificationService,
     private readonly config: ConfigService<CoreApiEnv, true>,
-    @Inject(GIFT_REDIS) private readonly redis: Redis,
+    @Inject(GIFT_REDIS) private readonly redis: RealtimePublisherPort,
     @Optional() private readonly profileSocial?: ProfileSocialService,
   ) {}
 

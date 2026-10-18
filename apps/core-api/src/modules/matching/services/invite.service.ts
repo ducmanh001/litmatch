@@ -65,7 +65,7 @@ function inviteRateLimitKey(userId: string): string {
 /**
  * CTA "mời Voice/Soul Match" (W4, docs/services/matching-service.md § Invite). Accept tạo trực
  * tiếp `MatchTicket`/`MatchSession` đã confirmed — bỏ qua hàng đợi shard,
- * tái dùng NGUYÊN các bước validate của `MatcherWorkerService.tryPair` (canPair, invariant
+ * tái dùng NGUYÊN các bước validate của `MatcherWorkerService.confirmPair` (canPair, invariant
  * 1-user-1-queue qua `uq_match_tickets_active_user`) — từ đó luồng y hệt auto-match
  * (Soul Match/Calling vào phòng ngay). KHÔNG check gender preference lúc accept
  * — đây là consent trực tiếp (invitee chủ động chấp nhận ĐÚNG người này), khác auto-match nặc

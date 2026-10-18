@@ -65,7 +65,7 @@ import type {
   RealtimeEnvelope,
 } from '@litmatch/common-dtos';
 import type { CreatePartyRoomCommentDto } from './dto/party-room.dtos';
-import type Redis from 'ioredis';
+import type { RealtimePublisherPort } from '../../common/realtime/realtime-publisher.port';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import type { CoreApiEnv } from '../../config/env.validation';
 import type { PartyWebhookEvent } from './ports/livekit-party-room';
@@ -123,7 +123,7 @@ export class PartyRoomService {
     private readonly livekit: PartyLivekitRoomPort,
     private readonly config: ConfigService<CoreApiEnv, true>,
     private readonly userService: UserService,
-    @Inject(PARTY_REDIS) private readonly redis: Redis,
+    @Inject(PARTY_REDIS) private readonly redis: RealtimePublisherPort,
   ) {}
 
   private get commentRepo(): Repository<PartyRoomComment> {

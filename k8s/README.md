@@ -160,6 +160,15 @@ làm song song ở nhánh khác) cần cài `prometheus-adapter` để expose Cu
 HPA dùng `type: Pods` hoặc `type: External`. Không tự bịa cấu hình `prometheus-adapter` ở đây vì
 chưa có metric thật để kiểm chứng tên/label/ngưỡng.
 
+Cập nhật 2026-10-17: gateway nay xuất `signaling_connections_active` (UpDownCounter, OTLP → Prometheus),
+cùng `signaling_fanout_subscribed_users`, `signaling_tracked_leases`, `signaling_relay_events_total{result}`,
+`signaling_lease_refresh_total{result}`; matcher xuất `matching_matcher_windows_total{outcome}`. Tên metric
+đã có để làm nguồn cho `prometheus-adapter` nhưng **cấu hình adapter/HPA vẫn chưa làm** (chưa kiểm chứng
+trên cụm thật). `maxReplicas: 20` của gateway chỉ đủ cho ~1 triệu socket với 50.000 socket/pod (giả định):
+nâng trần chỉ khi đã có số đo, và chia Redis theo userId (`REALTIME_REDIS_URLS`, đặt trong Secret của cả
+core-api và signaling-gateway) trước khi tăng số pod — xem
+`docs/services/realtime-gateway.md` § 7 và `docs/plans/2026-10-17-realtime-matching-chat-scale-plan.md` § 7.
+
 ## Ngân sách kết nối Postgres
 
 Mỗi pod core-api giữ tối đa `DATABASE_POOL_MAX` kết nối tới Postgres (mặc định 10, sàn 5). Hai điều cần nhớ:

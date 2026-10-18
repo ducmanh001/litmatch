@@ -24,7 +24,7 @@ import type {
   FriendStreakIncreasedEventData,
   RealtimeEnvelope,
 } from '@litmatch/common-dtos';
-import type Redis from 'ioredis';
+import type { RealtimePublisherPort } from '../../common/realtime/realtime-publisher.port';
 import type { CoreApiEnv } from '../../config/env.validation';
 
 /** Giới hạn vận hành cho các composition đọc toàn bộ graph; pagination là việc riêng của API. */
@@ -91,7 +91,7 @@ export class FriendService {
     private readonly safetyService: SafetyService,
     private readonly notificationService: NotificationService,
     private readonly config: ConfigService<CoreApiEnv, true>,
-    @Inject(FRIEND_REDIS) private readonly redis: Redis,
+    @Inject(FRIEND_REDIS) private readonly redis: RealtimePublisherPort,
   ) {}
 
   /**

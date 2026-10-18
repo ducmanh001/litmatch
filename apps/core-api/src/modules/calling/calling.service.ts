@@ -37,7 +37,7 @@ import type {
   CallEndedEventData,
   RealtimeEnvelope,
 } from '@litmatch/common-dtos';
-import type Redis from 'ioredis';
+import type { RealtimePublisherPort } from '../../common/realtime/realtime-publisher.port';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import type { CoreApiEnv } from '../../config/env.validation';
 import type { LivekitWebhookEvent } from './ports/livekit-room';
@@ -85,7 +85,7 @@ export class CallingService {
     private readonly livekit: LivekitRoomPort,
     private readonly config: ConfigService<CoreApiEnv, true>,
     private readonly userService: UserService,
-    @Inject(CALLING_REDIS) private readonly redis: Redis,
+    @Inject(CALLING_REDIS) private readonly redis: RealtimePublisherPort,
     private readonly metrics: CallingMetrics,
   ) {}
 

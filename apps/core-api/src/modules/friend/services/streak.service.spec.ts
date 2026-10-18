@@ -73,6 +73,7 @@ describe('StreakService.recordActivity (unit — mock transaction/repo)', () => 
     save: jest.Mock;
   };
   let dataSource: { transaction: jest.Mock };
+  let streakRepo: { findOneBy: jest.Mock };
   let service: StreakService;
   let row: ConversationStreak;
 
@@ -94,12 +95,85 @@ describe('StreakService.recordActivity (unit — mock transaction/repo)', () => 
     dataSource = {
       transaction: jest.fn(async (cb) => cb(manager)),
     };
+    streakRepo = { findOneBy: jest.fn(async () => null) };
     setRow();
     service = new StreakService(
       dataSource as unknown as DataSource,
-      {} as unknown as Repository<ConversationStreak>,
+      streakRepo as unknown as Repository<ConversationStreak>,
       configStub,
     );
+  });
+
+  describe('đường nhanh — bỏ qua transaction khi tin nhắn không đổi gì', () => {
+    it('người gửi đã được ghi nhận hôm nay, bên kia chưa → không mở transaction', async () => {
+      const existing = makeStreakRow({ userLowLastActiveDate: todayUtc() });
+      streakRepo.findOneBy.mockResolvedValueOnce(existing);
+
+      const result = await service.recordActivity(
+        makeConversation(),
+        'user-low',
+      );
+
+      expect(dataSource.transaction).not.toHaveBeenCalled();
+      expect(result).toEqual({ streak: existing, milestoneHit: null });
+    });
+
+    it('cả hai đã active và đã xác nhận hôm nay → không mở transaction (cả hai chiều gửi)', async () => {
+      const existing = makeStreakRow({
+        currentStreak: 4,
+        userLowLastActiveDate: todayUtc(),
+        userHighLastActiveDate: todayUtc(),
+        lastConfirmedDate: todayUtc(),
+      });
+      streakRepo.findOneBy.mockResolvedValue(existing);
+
+      await service.recordActivity(makeConversation(), 'user-low');
+      await service.recordActivity(makeConversation(), 'user-high');
+
+      expect(dataSource.transaction).not.toHaveBeenCalled();
+    });
+
+    it('người gửi CHƯA active hôm nay → vẫn đi qua transaction dù bên kia đã active', async () => {
+      streakRepo.findOneBy.mockResolvedValueOnce(
+        makeStreakRow({ userHighLastActiveDate: todayUtc() }),
+      );
+
+      await service.recordActivity(makeConversation(), 'user-low');
+
+      expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('dữ liệu bất thường (cả hai active hôm nay nhưng chưa xác nhận) → transaction sửa lại, không bị bỏ qua', async () => {
+      streakRepo.findOneBy.mockResolvedValueOnce(
+        makeStreakRow({
+          userLowLastActiveDate: todayUtc(),
+          userHighLastActiveDate: todayUtc(),
+          lastConfirmedDate: addDaysUtc(todayUtc(), -1),
+        }),
+      );
+      setRow({
+        userLowLastActiveDate: todayUtc(),
+        userHighLastActiveDate: todayUtc(),
+        lastConfirmedDate: addDaysUtc(todayUtc(), -1),
+        currentStreak: 2,
+      });
+
+      const result = await service.recordActivity(
+        makeConversation(),
+        'user-low',
+      );
+
+      expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+      expect(result.streak.currentStreak).toBe(3);
+    });
+
+    it('chưa có row streak → transaction tạo lazily như trước', async () => {
+      streakRepo.findOneBy.mockResolvedValueOnce(null);
+
+      await service.recordActivity(makeConversation(), 'user-low');
+
+      expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('lần đầu cả 2 chiều cùng ngày → currentStreak=1, longestStreak=1', async () => {

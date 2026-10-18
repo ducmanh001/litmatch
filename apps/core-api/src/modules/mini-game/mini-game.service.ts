@@ -22,7 +22,7 @@ import type {
   MiniGameSessionStartedEventData,
   RealtimeEnvelope,
 } from '@litmatch/common-dtos';
-import type Redis from 'ioredis';
+import type { RealtimePublisherPort } from '../../common/realtime/realtime-publisher.port';
 import type { RockPaperScissorsMove } from './mini-game.constants';
 
 /** Cột move của 1 user trong session — quyết định bởi caller là `userLowId` hay `userHighId`. */
@@ -44,7 +44,7 @@ export class MiniGameService {
     @InjectRepository(MiniGameSession)
     private readonly sessionRepo: Repository<MiniGameSession>,
     private readonly friendService: FriendService,
-    @Inject(MINI_GAME_REDIS) private readonly redis: Redis,
+    @Inject(MINI_GAME_REDIS) private readonly redis: RealtimePublisherPort,
   ) {}
 
   /**

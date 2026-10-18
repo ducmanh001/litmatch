@@ -16,6 +16,10 @@ data:
   CORS_ORIGINS: ''
   WS_MAX_CONNECTIONS_PER_USER: '3'
   WS_CONNECTION_LEASE_MS: '90000'
+  # 0 = lease/3. Ở quy mô triệu socket, tăng lease + chu kỳ để giảm tải gia hạn trên Redis (docs/services/realtime-gateway.md § 7).
+  WS_CONNECTION_LEASE_REFRESH_MS: '0'
+  # user = chỉ SUBSCRIBE user có socket trên pod (mặc định); pattern = PSUBSCRIBE realtime:user:* (đường lùi).
+  WS_FANOUT_MODE: 'user'
   SENTRY_DSN: ''
   SENTRY_RELEASE: ''
   OTEL_EXPORTER_OTLP_ENDPOINT: ''

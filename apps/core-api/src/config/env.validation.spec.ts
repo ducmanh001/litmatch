@@ -21,6 +21,18 @@ describe('coreApiEnvSchema invariants', () => {
     expect(schema.validate('https://redis.example').error).toBeDefined();
   });
 
+  it('shard Redis realtime mặc định rỗng (một shard = REDIS_URL), từ chối URL sai hoặc trùng', () => {
+    const schema = coreApiEnvSchema.extract('REALTIME_REDIS_URLS');
+    expect(schema.validate(undefined).value).toBe('');
+    expect(
+      schema.validate('redis://a:6379,rediss://default:pw@b:6380').error,
+    ).toBeUndefined();
+    expect(schema.validate('redis://a:6379,https://b').error).toBeDefined();
+    expect(
+      schema.validate('redis://a:6379,redis://a:6379').error,
+    ).toBeDefined();
+  });
+
   it('pool Postgres mỗi pod mặc định 10, sàn 5 và nằm trong khoảng hữu hạn', () => {
     const schema = coreApiEnvSchema.extract('DATABASE_POOL_MAX');
     expect(schema.validate(undefined).value).toBe(10);

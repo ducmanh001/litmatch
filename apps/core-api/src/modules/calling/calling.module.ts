@@ -1,7 +1,6 @@
 import { Inject, Module, OnApplicationShutdown } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { closeCoreRedisClient } from '../../common/redis/core-redis-client';
 import { LivekitSdkClient } from '../../common/livekit/livekit-sdk.client';
 import { CallingController } from './calling.controller';
 import { CallingMetrics } from './calling.metrics';
@@ -20,7 +19,7 @@ import { FriendModule } from '../friend';
 import { MatchingModule } from '../matching';
 import { UserModule } from '../user';
 
-import type Redis from 'ioredis';
+import type { RealtimePublisherPort } from '../../common/realtime/realtime-publisher.port';
 
 @Module({
   imports: [
@@ -41,9 +40,11 @@ import type Redis from 'ioredis';
   exports: [], // chưa module nào cần gọi Calling — export tối thiểu (docs/05 § 5.3)
 })
 export class CallingModule implements OnApplicationShutdown {
-  constructor(@Inject(CALLING_REDIS) private readonly redis: Redis) {}
+  constructor(
+    @Inject(CALLING_REDIS) private readonly redis: RealtimePublisherPort,
+  ) {}
 
   async onApplicationShutdown(): Promise<void> {
-    await closeCoreRedisClient(this.redis);
+    await this.redis.close?.();
   }
 }

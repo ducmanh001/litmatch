@@ -100,6 +100,11 @@ data:
   # --- matching (docs/03 § 3.8.B) ---
   MATCHING_MATCHER_INTERVAL_MS: '10000'
   MATCHING_MATCHER_BATCH_SIZE: '20'
+  # Cửa sổ ứng viên đầu shard (2 = hành vi cũ) và số shard drain song song mỗi pod (≤ 1/4 DATABASE_POOL_MAX).
+  MATCHING_MATCHER_CANDIDATE_WINDOW: '32'
+  MATCHING_MATCHER_CONCURRENCY: '2'
+  # Nhớ cặp bị block/report (ms) để không hỏi canPair lại mỗi wake-up; 0 = tắt.
+  MATCHING_MATCHER_UNPAIRABLE_CACHE_MS: '30000'
   MATCHING_SWEEPER_INTERVAL_MS: '5000'
   MATCHING_QUEUE_MAX_WAIT_SECONDS: '120'
   MATCHING_CONFIRM_TIMEOUT_SECONDS: '15'

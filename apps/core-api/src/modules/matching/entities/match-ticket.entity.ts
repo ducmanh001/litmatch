@@ -92,7 +92,7 @@ export class MatchTicket extends BaseAppEntity {
 
   /**
    * Snapshot lựa chọn giới tính cho LẦN vào queue này (đổi ý = cancel + join lại). Check khớp
-   * 2 chiều tại matcher `tryPair` với gender đọc TƯƠI từ users (docs/10 § 10.0.C) — KHÔNG shard
+   * 2 chiều tại matcher (`matchWindow`/`confirmPair`) với gender đọc TƯƠI từ users (docs/10 § 10.0.C) — KHÔNG shard
    * theo gender: preference `any` phải quét được mọi ứng viên trong shard hiện có.
    */
   @Column({ type: 'varchar', length: 10, default: GenderPreference.Any })

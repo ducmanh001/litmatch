@@ -1,6 +1,7 @@
 import {
   baseEnvSchema,
   createConfigValidator,
+  realtimeRedisUrlsSchema,
 } from '@litmatch/config-validator';
 import * as Joi from 'joi';
 
@@ -27,6 +28,11 @@ export interface CoreApiEnv {
   DATABASE_POOL_MAX: number;
   DATABASE_POOL_ACQUIRE_TIMEOUT_MS: number;
   REDIS_URL: string;
+  /**
+   * Redis từng shard của mặt phẳng realtime (publish `realtime:user:*` + đọc presence), phân theo
+   * userId. Rỗng = một shard là `REDIS_URL`. PHẢI trùng danh sách + thứ tự với signaling-gateway.
+   */
+  REALTIME_REDIS_URLS: string;
   KAFKA_BROKERS: string;
   EVENT_BUS_KAFKA_REQUEST_TIMEOUT_MS: number;
   EVENT_BUS_KAFKA_RETRIES: number;
@@ -109,6 +115,16 @@ export interface CoreApiEnv {
   PAYOS_CANCEL_URL: string;
   MATCHING_MATCHER_INTERVAL_MS: number;
   MATCHING_MATCHER_BATCH_SIZE: number;
+  /** Số ticket đầu shard matcher xét mỗi lần để tìm cặp tương thích (docs/services/matching-service.md § 3). */
+  MATCHING_MATCHER_CANDIDATE_WINDOW: number;
+  /** Số shard matcher drain song song mỗi pod; bị chặn theo pool Postgres (tối đa 1/4 pool). */
+  MATCHING_MATCHER_CONCURRENCY: number;
+  /**
+   * Thời gian (ms) matcher nhớ một cặp bị block/report để wake-up kế tiếp không hỏi lại và quét được
+   * sâu hơn; 0 = tắt. Chỉ có thể làm CHẬM một lần ghép (vd sau khi bỏ chặn), không bao giờ cho ghép
+   * cặp bị cấm — quyết định cuối cùng vẫn là `canPair` dưới lock.
+   */
+  MATCHING_MATCHER_UNPAIRABLE_CACHE_MS: number;
   MATCHING_SWEEPER_INTERVAL_MS: number;
   MATCHING_QUEUE_MAX_WAIT_SECONDS: number;
   MATCHING_CONFIRM_TIMEOUT_SECONDS: number;
@@ -262,6 +278,7 @@ export const coreApiEnvSchema = Joi.object({
   REDIS_URL: Joi.string()
     .uri({ scheme: ['redis', 'rediss'] })
     .default('redis://localhost:6379'),
+  REALTIME_REDIS_URLS: realtimeRedisUrlsSchema(),
   KAFKA_BROKERS: Joi.string().default('localhost:9092'),
   EVENT_BUS_KAFKA_REQUEST_TIMEOUT_MS: Joi.number()
     .integer()
@@ -464,6 +481,23 @@ export const coreApiEnvSchema = Joi.object({
   // Matching — event wake-up là đường chính; interval chỉ là backstop thưa (docs/services/matching-service.md § 8)
   MATCHING_MATCHER_INTERVAL_MS: Joi.number().integer().min(50).default(10_000),
   MATCHING_MATCHER_BATCH_SIZE: Joi.number().integer().min(1).default(20),
+  // 2 = hành vi cũ (chỉ xét 2 ticket đầu shard). Mặc định 32: mô phỏng cho thấy cửa sổ nhỏ để cặp đầu
+  // không khớp preference chặn cả shard (docs/plans/2026-10-17-...).
+  MATCHING_MATCHER_CANDIDATE_WINDOW: Joi.number()
+    .integer()
+    .min(2)
+    .max(64)
+    .default(32),
+  MATCHING_MATCHER_CONCURRENCY: Joi.number()
+    .integer()
+    .min(1)
+    .max(16)
+    .default(2),
+  MATCHING_MATCHER_UNPAIRABLE_CACHE_MS: Joi.number()
+    .integer()
+    .min(0)
+    .max(600_000)
+    .default(30_000),
   MATCHING_SWEEPER_INTERVAL_MS: Joi.number().integer().min(500).default(5000),
   MATCHING_QUEUE_MAX_WAIT_SECONDS: Joi.number().integer().min(5).default(120),
   MATCHING_CONFIRM_TIMEOUT_SECONDS: Joi.number().integer().min(3).default(15),

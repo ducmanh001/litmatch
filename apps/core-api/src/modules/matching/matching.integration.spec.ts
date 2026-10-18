@@ -17,6 +17,7 @@ import { MatchInvite1754700000000 } from '../../database/migrations/175470000000
 import { GuestMatchQuota1756400000000 } from '../../database/migrations/1756400000000-guest-match-quota';
 import { MatchingDailyEntitlements1757100000000 } from '../../database/migrations/1757100000000-matching-daily-entitlements';
 import { AuthIdentity } from '../auth/entities/auth-identity.entity';
+import { Block, Report, SafetyService } from '../safety';
 import { PhoneOtp } from '../auth/entities/phone-otp.entity';
 import { RefreshToken } from '../auth/entities/refresh-token.entity';
 import { Gender, User, UserService, UserStatus } from '../user';
@@ -100,6 +101,11 @@ jest.setTimeout(60_000);
 const CONFIG: Record<string, unknown> = {
   MATCHING_MATCHER_INTERVAL_MS: 300,
   MATCHING_MATCHER_BATCH_SIZE: 20,
+  MATCHING_MATCHER_CANDIDATE_WINDOW: 32,
+  MATCHING_MATCHER_CONCURRENCY: 2,
+  MATCHING_MATCHER_UNPAIRABLE_CACHE_MS: 0,
+  SAFETY_REMATCH_COOLDOWN_DAYS: 30,
+  DATABASE_POOL_MAX: 10,
   MATCHING_SWEEPER_INTERVAL_MS: 5000,
   // timeout đặt RẤT lớn để ticket/session của các test trước (cùng DB) không "tự già" khi suite chạy chậm;
   // test sweeper chủ động backdate 2 giờ vào quá khứ thay vì ngồi chờ thật
@@ -258,6 +264,8 @@ d('Matching integration (Postgres + Redis thật)', () => {
         MatchInvite,
         GuestMatchQuota,
         MatchDailyQuota,
+        Block,
+        Report,
       ],
       migrations: [
         InitAuthUser1751900000000,
@@ -544,7 +552,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
     ).toBe(1);
   });
 
-  it('2 matcher tick chạy đồng thời trên cùng shard → 2 ticket chỉ được ghép ĐÚNG 1 lần (ZPOPMIN atomic + verify DB)', async () => {
+  it('2 matcher tick chạy đồng thời trên cùng shard → 2 ticket chỉ được ghép ĐÚNG 1 lần (claimPair atomic + verify DB)', async () => {
     const u1 = await createUser('race-1');
     const u2 = await createUser('race-2');
     const t1 = await matching.joinQueue(
@@ -748,6 +756,238 @@ d('Matching integration (Postgres + Redis thật)', () => {
       (await ds.getRepository(MatchTicket).findOneByOrFail({ id: t2.id }))
         .status,
     ).toBe(MatchTicketStatus.Queued);
+  });
+
+  describe('Matcher — cửa sổ ứng viên, claimPair atomic, shard song song', () => {
+    const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 5));
+    const join = (u: User, genderPreference = GenderPreference.Any) =>
+      matching.joinQueue(
+        auth(u.id),
+        { matchType: MatchType.Voice, genderPreference },
+        'k',
+      );
+    const sessionsOf = (ids: string[]): Promise<MatchSession[]> =>
+      ds.getRepository(MatchSession).find({
+        where: [{ ticketAId: In(ids) }, { ticketBId: In(ids) }],
+      });
+
+    it('cặp đầu shard không khớp preference KHÔNG chặn shard: ticket cũ nhất ghép với ứng viên tương thích đầu tiên', async () => {
+      // a, b: nam chỉ muốn nữ, đứng đầu shard và KHÔNG khớp nhau (bản cũ chỉ xét 2 ticket đầu → kẹt).
+      const a = await createUser('win-a', { gender: Gender.Male });
+      const b = await createUser('win-b', { gender: Gender.Male });
+      const c = await createUser('win-c', { gender: Gender.Female });
+      const ta = await join(a, GenderPreference.Female);
+      await tick();
+      const tb = await join(b, GenderPreference.Female);
+      await tick();
+      const tc = await join(c);
+
+      expect(await worker.runOnce()).toBe(1);
+
+      const sessions = await sessionsOf([ta.id, tb.id, tc.id]);
+      expect(sessions).toHaveLength(1);
+      expect(new Set([sessions[0].ticketAId, sessions[0].ticketBId])).toEqual(
+        new Set([ta.id, tc.id]),
+      ); // a (cũ nhất) được ghép trước
+      // b không bị đụng: vẫn queued, vẫn trong Redis với score gốc — không mất lượt chờ
+      const shard = matchingShardKey(MatchType.Voice, 'VN', tb.ageBand);
+      const freshB = await ds
+        .getRepository(MatchTicket)
+        .findOneByOrFail({ id: tb.id });
+      expect(freshB.status).toBe(MatchTicketStatus.Queued);
+      expect(freshB.sessionId).toBeNull();
+      expect(await redis.zscore(shard, tb.id)).toBe(
+        String(tb.enqueuedAt.getTime()),
+      );
+      expect(await redis.zscore(shard, ta.id)).toBeNull();
+      expect(await redis.zscore(shard, tc.id)).toBeNull();
+    });
+
+    it('ghép theo thứ tự ưu tiên rồi tiếp tục trong cùng tick: (a,c) rồi (b,d)', async () => {
+      const a = await createUser('prio-a', { gender: Gender.Male });
+      const b = await createUser('prio-b', { gender: Gender.Male });
+      const c = await createUser('prio-c', { gender: Gender.Female });
+      const d = await createUser('prio-d', { gender: Gender.Female });
+      const ta = await join(a, GenderPreference.Female);
+      await tick();
+      const tb = await join(b);
+      await tick();
+      const tc = await join(c);
+      await tick();
+      const td = await join(d);
+
+      expect(await worker.runOnce()).toBe(2);
+
+      const sessions = await sessionsOf([ta.id, tb.id, tc.id, td.id]);
+      const pairs = sessions
+        .map((s) => [s.ticketAId, s.ticketBId].sort().join('|'))
+        .sort();
+      expect(pairs).toEqual(
+        [
+          [ta.id, tc.id].sort().join('|'),
+          [tb.id, td.id].sort().join('|'),
+        ].sort(),
+      );
+    });
+
+    it('cặp bị block ở đầu shard không chặn ứng viên phía sau', async () => {
+      const a = await createUser('blk-a');
+      const b = await createUser('blk-b');
+      const c = await createUser('blk-c');
+      const ta = await join(a);
+      await tick();
+      const tb = await join(b);
+      await tick();
+      const tc = await join(c);
+      blockedPairs.add(`${a.id}|${b.id}`);
+
+      expect(await worker.runOnce()).toBe(1);
+
+      const sessions = await sessionsOf([ta.id, tb.id, tc.id]);
+      expect(new Set([sessions[0].ticketAId, sessions[0].ticketBId])).toEqual(
+        new Set([ta.id, tc.id]),
+      );
+      const shard = matchingShardKey(MatchType.Voice, 'VN', tb.ageBand);
+      expect(await redis.zscore(shard, tb.id)).toBe(
+        String(tb.enqueuedAt.getTime()),
+      );
+    });
+
+    it('một ticket đơn lẻ không bị đụng: không pop/requeue, score và shard active giữ nguyên', async () => {
+      const u = await createUser('lone-1');
+      const t = await join(u);
+      const shard = matchingShardKey(MatchType.Voice, 'VN', t.ageBand);
+      const before = await redis.zscore(shard, t.id);
+
+      expect(await worker.runOnce()).toBe(0);
+      expect(await worker.runOnce()).toBe(0);
+
+      expect(await redis.zscore(shard, t.id)).toBe(before);
+      expect(await redis.sismember(MATCHING_ACTIVE_SHARDS_KEY, shard)).toBe(1);
+      expect(
+        (await ds.getRepository(MatchTicket).findOneByOrFail({ id: t.id }))
+          .status,
+      ).toBe(MatchTicketStatus.Queued);
+    });
+
+    it('2 matcher chạy song song trên 4 ticket → đúng 2 session, mỗi ticket chỉ nằm trong MỘT session', async () => {
+      const ids: string[] = [];
+      for (const name of ['race4-a', 'race4-b', 'race4-c', 'race4-d']) {
+        ids.push((await join(await createUser(name))).id);
+        await tick();
+      }
+
+      const [m1, m2] = await Promise.all([worker.runOnce(), workerB.runOnce()]);
+
+      expect(m1 + m2).toBe(2);
+      const sessions = await sessionsOf(ids);
+      expect(sessions).toHaveLength(2);
+      const used = sessions.flatMap((s) => [s.ticketAId, s.ticketBId]);
+      expect(new Set(used).size).toBe(4);
+      expect(new Set(used)).toEqual(new Set(ids));
+    });
+
+    it('nhiều shard cùng lúc được drain song song mà không ghép nhầm giữa các shard', async () => {
+      const regions = ['R1', 'R2', 'R3', 'R4', 'R5'];
+      const byRegion = new Map<string, string[]>();
+      for (const region of regions) {
+        const ids: string[] = [];
+        for (const suffix of ['x', 'y']) {
+          const u = await createUser(`par-${region}-${suffix}`, { region });
+          ids.push((await join(u)).id);
+        }
+        byRegion.set(region, ids);
+      }
+
+      expect(await worker.runOnce()).toBe(regions.length);
+
+      for (const ids of byRegion.values()) {
+        const sessions = await sessionsOf(ids);
+        expect(sessions).toHaveLength(1);
+        expect(new Set([sessions[0].ticketAId, sessions[0].ticketBId])).toEqual(
+          new Set(ids),
+        );
+      }
+    });
+
+    it('transaction ghép lỗi SAU claim (vd hết pool) → cả hai ticket quay lại hàng đợi với score gốc, tick sau ghép được', async () => {
+      const a = await createUser('txfail-a');
+      const b = await createUser('txfail-b');
+      const ta = await join(a);
+      await tick();
+      const tb = await join(b);
+      const shard = matchingShardKey(MatchType.Voice, 'VN', ta.ageBand);
+
+      const failing = jest
+        .spyOn(ds, 'transaction')
+        .mockRejectedValueOnce(new Error('pool acquire timeout') as never);
+      try {
+        await expect(worker.runOnce()).rejects.toThrow('pool acquire timeout');
+      } finally {
+        failing.mockRestore();
+      }
+
+      for (const t of [ta, tb]) {
+        expect(await redis.zscore(shard, t.id)).toBe(
+          String(t.enqueuedAt.getTime()),
+        );
+        expect(
+          (await ds.getRepository(MatchTicket).findOneByOrFail({ id: t.id }))
+            .status,
+        ).toBe(MatchTicketStatus.Queued);
+      }
+      expect(await sessionsOf([ta.id, tb.id])).toHaveLength(0);
+      expect(await worker.runOnce()).toBe(1);
+    });
+
+    it('cache cặp-không-ghép-được bật: wake-up kế tiếp không hỏi canPair lại (chỉ làm CHẬM sau khi bỏ chặn, không cho ghép cặp bị cấm)', async () => {
+      CONFIG['MATCHING_MATCHER_UNPAIRABLE_CACHE_MS'] = 60_000;
+      const canPair = jest.spyOn(policyStub, 'canPair');
+      try {
+        const a = await createUser('cache-a');
+        const b = await createUser('cache-b');
+        const ta = await join(a);
+        await tick();
+        const tb = await join(b);
+        blockedPairs.add(`${a.id}|${b.id}`);
+
+        expect(await worker.runOnce()).toBe(0);
+        expect(canPair).toHaveBeenCalledTimes(1);
+        expect(await worker.runOnce()).toBe(0);
+        expect(canPair).toHaveBeenCalledTimes(1); // đã nhớ cặp (a,b) → không hỏi lại
+
+        // Bỏ chặn: trong thời hạn cache cặp vẫn bị bỏ qua (đánh đổi đã chấp nhận)…
+        blockedPairs.clear();
+        expect(await worker.runOnce()).toBe(0);
+        // …và tắt cache (MATCHING_MATCHER_UNPAIRABLE_CACHE_MS=0) thì ghép ngay.
+        CONFIG['MATCHING_MATCHER_UNPAIRABLE_CACHE_MS'] = 0;
+        expect(await worker.runOnce()).toBe(1);
+        expect(await sessionsOf([ta.id, tb.id])).toHaveLength(1);
+      } finally {
+        CONFIG['MATCHING_MATCHER_UNPAIRABLE_CACHE_MS'] = 0;
+        canPair.mockRestore();
+      }
+    });
+
+    it('claimPair lấy cả hai hoặc không lấy gì: bên thua không làm mất ticket của người khác', async () => {
+      const shard = matchingShardKey(MatchType.Voice, 'VN', 5);
+      await matchingQueue.enqueue(shard, '1000', 'tk-x', 'NX');
+      await matchingQueue.enqueue(shard, '2000', 'tk-y', 'NX');
+      await matchingQueue.enqueue(shard, '3000', 'tk-z', 'NX');
+
+      expect(await matchingQueue.peekWindow(shard, 2)).toEqual([
+        ['tk-x', '1000'],
+        ['tk-y', '2000'],
+      ]);
+      expect(await matchingQueue.claimPair(shard, 'tk-x', 'tk-y')).toBe(true);
+      // x đã bị lấy → claim (x, z) thất bại và KHÔNG được xoá z
+      expect(await matchingQueue.claimPair(shard, 'tk-x', 'tk-z')).toBe(false);
+      expect(await redis.zscore(shard, 'tk-z')).toBe('3000');
+      // chỉ peek: không làm đổi hàng đợi
+      expect(await matchingQueue.peekWindow(shard, 10)).toEqual([
+        ['tk-z', '3000'],
+      ]);
+    });
   });
 
   it('auto-confirm khi matcher chọn được cặp; endpoint confirm vẫn bảo vệ session legacy', async () => {
@@ -1017,7 +1257,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
   // ============ Chaos tests (docs/07 GĐ7) — kill matcher/sweeper giữa chừng, xác nhận ============
   // ============ idempotency + recovery đúng dưới lỗi THẬT, không chỉ đúng trên giấy   ============
 
-  it('chaos: matcher chết SAU ZPOPMIN, TRƯỚC tryPair → 2 zombie (queued DB, mất khỏi Redis) không tạo session, sweeper expire được, sweep 2 lần idempotent', async () => {
+  it('chaos: matcher chết SAU claimPair (ticket đã rời Redis), TRƯỚC transaction ghép → 2 zombie (queued DB, mất khỏi Redis) không tạo session, sweeper expire được, sweep 2 lần idempotent', async () => {
     const u1 = await createUser('chaos-pop-1');
     const u2 = await createUser('chaos-pop-2');
     const t1 = await matching.joinQueue(
@@ -1032,8 +1272,9 @@ d('Matching integration (Postgres + Redis thật)', () => {
     );
     const shard = matchingShardKey(MatchType.Voice, 'VN', t1.ageBand);
 
-    // Giả lập đúng crash window của drainShard (matcher-worker.service.ts): ZPOPMIN atomic
-    // lấy 2 ticket khỏi Redis rồi process CHẾT — tryPair (transaction Postgres) không bao giờ chạy.
+    // Giả lập đúng crash window của matchWindow (matcher-worker.service.ts): `claimPair` đã lấy
+    // 2 ticket khỏi Redis rồi process CHẾT — transaction ghép (Postgres) không bao giờ chạy.
+    // ZPOPMIN cho cùng trạng thái Redis: 2 ticket biến mất khỏi shard, DB vẫn 'queued'.
     const popped = await redis.zpopmin(shard, 2);
     expect(popped.length).toBe(4); // đúng 2 ticket (id, score) đã bị pop khỏi queue
 
@@ -1083,7 +1324,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
     }
   });
 
-  it('chaos: matcher chết SAU commit tryPair, realtime publish không bao giờ tới → match đã bền trong DB, client vẫn thấy qua GET /matching/tickets/:id (poll fallback)', async () => {
+  it('chaos: matcher chết SAU commit ghép (confirmPair), realtime publish không bao giờ tới → match đã bền trong DB, client vẫn thấy qua GET /matching/tickets/:id (poll fallback)', async () => {
     const u1 = await createUser('chaos-publish-1');
     const u2 = await createUser('chaos-publish-2');
     const t1 = await matching.joinQueue(
@@ -1097,7 +1338,7 @@ d('Matching integration (Postgres + Redis thật)', () => {
       'k',
     );
 
-    // Giả lập crash window thứ 2 của tryPair: DB transaction ĐÃ commit, bước publish realtime
+    // Giả lập crash window thứ 2 của confirmPair: DB transaction ĐÃ commit, bước publish realtime
     // (chạy SAU commit, best-effort) chết — mọi redis.publish đều fail
     const publishSpy = jest
       .spyOn(redis, 'publish')
@@ -1224,6 +1465,90 @@ d('Matching integration (Postgres + Redis thật)', () => {
       (await ds.getRepository(MatchTicket).findOneByOrFail({ id: requeued.id }))
         .status,
     ).toBe(MatchTicketStatus.Expired);
+  });
+
+  describe('SafetyService.canPair — một truy vấn SQL, đúng ngữ nghĩa bản 4 truy vấn (Postgres thật)', () => {
+    const insertBlock = (
+      blocker: string,
+      blocked: string,
+      action: 'blocked' | 'unblocked',
+      daysAgo = 0,
+    ) =>
+      ds.query(
+        `INSERT INTO blocks (blocker_user_id, blocked_user_id, action, created_at)
+         VALUES ($1, $2, $3, now() - make_interval(days => $4))`,
+        [blocker, blocked, action, daysAgo],
+      );
+    const insertReport = (reporter: string, target: string, daysAgo = 0) =>
+      ds.query(
+        `INSERT INTO reports (reporter_user_id, target_user_id, reason, created_at)
+         VALUES ($1, $2, 'spam', now() - make_interval(days => $3))`,
+        [reporter, target, daysAgo],
+      );
+    let safety: SafetyService;
+
+    beforeAll(() => {
+      safety = new SafetyService(
+        ds,
+        ds.getRepository(Report),
+        ds.getRepository(Block),
+        new UserService(ds.getRepository(User), configStub),
+        configStub,
+      );
+    });
+
+    async function pairOf(name: string): Promise<[User, User, User]> {
+      return [
+        await createUser(`${name}-a`),
+        await createUser(`${name}-b`),
+        await createUser(`${name}-c`),
+      ];
+    }
+    const both = async (a: User, b: User): Promise<[boolean, boolean]> => [
+      await safety.canPair(a.id, b.id),
+      await safety.canPair(b.id, a.id),
+    ];
+
+    it('không có block/report nào → ghép được, cả hai thứ tự tham số', async () => {
+      const [a, b] = await pairOf('cp-none');
+      expect(await both(a, b)).toEqual([true, true]);
+    });
+
+    it('block đang hiệu lực theo MỘT chiều bất kỳ → không ghép (kể cả block cũ hơn cooldown nhưng chưa unblock)', async () => {
+      const [a, b, c] = await pairOf('cp-active');
+      await insertBlock(a.id, b.id, 'blocked');
+      expect(await both(a, b)).toEqual([false, false]);
+      await insertBlock(c.id, a.id, 'blocked', 400); // cũ hơn cooldown nhưng vẫn là dòng mới nhất
+      expect(await both(a, c)).toEqual([false, false]);
+    });
+
+    it('đã unblock nhưng sự kiện còn trong cooldown → vẫn không ghép; ngoài cooldown → ghép được', async () => {
+      const [a, b, c] = await pairOf('cp-unblock');
+      await insertBlock(a.id, b.id, 'blocked', 10);
+      await insertBlock(a.id, b.id, 'unblocked', 5); // dòng mới nhất = unblocked, còn trong 30 ngày
+      expect(await both(a, b)).toEqual([false, false]);
+      await insertBlock(a.id, c.id, 'blocked', 40);
+      await insertBlock(a.id, c.id, 'unblocked', 35); // cả hai ngoài cooldown
+      expect(await both(a, c)).toEqual([true, true]);
+    });
+
+    it('report của MỘT chiều bất kỳ trong cooldown → không ghép; report ngoài cooldown → ghép được', async () => {
+      const [a, b, c] = await pairOf('cp-report');
+      await insertReport(a.id, b.id, 0);
+      expect(await both(a, b)).toEqual([false, false]);
+      await insertReport(c.id, a.id, 5); // chiều ngược lại
+      expect(await both(a, c)).toEqual([false, false]);
+      const d = await createUser('cp-report-d');
+      await insertReport(a.id, d.id, 40);
+      expect(await both(a, d)).toEqual([true, true]);
+    });
+
+    it('dòng của cặp khác không ảnh hưởng cặp đang xét', async () => {
+      const [a, b, c] = await pairOf('cp-other');
+      await insertBlock(a.id, c.id, 'blocked');
+      await insertReport(b.id, c.id, 1);
+      expect(await both(a, b)).toEqual([true, true]);
+    });
   });
 
   describe('Invite — CTA mời Voice/Soul Match (W4)', () => {

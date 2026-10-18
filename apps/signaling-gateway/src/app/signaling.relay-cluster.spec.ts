@@ -4,9 +4,11 @@ import type { AddressInfo } from 'node:net';
 
 import { createAdapter } from '@socket.io/redis-adapter';
 import { Server } from 'socket.io';
+import { metrics } from '@opentelemetry/api';
 import { io as connect } from 'socket.io-client';
 
 import { SignalingGateway } from './signaling.gateway';
+import { SignalingMetrics } from './signaling.metrics';
 
 import type { ConfigService } from '@nestjs/config';
 import type { JwtService } from '@nestjs/jwt';
@@ -101,6 +103,7 @@ async function bootInstance(bus: FakeRedisBus): Promise<Instance> {
       get: () => undefined,
     } as unknown as ConfigService<SignalingEnv, true>,
     {} as unknown as ConnectionQuotaService,
+    new SignalingMetrics(metrics.getMeter('test')),
   );
   // bình thường @WebSocketServer inject namespace sau afterInit()
   Object.assign(gateway, { server: namespace });
@@ -126,7 +129,7 @@ function waitConnected(socket: ClientSocket): Promise<void> {
 const settle = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
-describe('SignalingGateway.relay — nhiều pod cùng PSUBSCRIBE (Redis cluster adapter)', () => {
+describe('SignalingGateway.relay — nhiều pod cùng relay một event (Redis cluster adapter)', () => {
   const instances: Instance[] = [];
   const clients: ClientSocket[] = [];
 

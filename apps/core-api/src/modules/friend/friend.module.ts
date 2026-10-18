@@ -1,7 +1,6 @@
 import { Inject, Module, OnApplicationShutdown } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { closeCoreRedisClient } from '../../common/redis/core-redis-client';
 import { FriendController } from './friend.controller';
 import { FriendService } from './friend.service';
 import { ProfileSocialController } from './controllers/profile-social.controller';
@@ -26,7 +25,7 @@ import { UserModule } from '../user';
 import { MediaModule } from '../media';
 import { User } from '../user';
 
-import type Redis from 'ioredis';
+import type { RealtimePublisherPort } from '../../common/realtime/realtime-publisher.port';
 
 /**
  * Friend (docs/services/friend-service.md): Friendship (từ Soul Match) + Chat 1-1 lâu dài
@@ -63,9 +62,11 @@ import type Redis from 'ioredis';
   exports: [FriendService, ProfileSocialService],
 })
 export class FriendModule implements OnApplicationShutdown {
-  constructor(@Inject(FRIEND_REDIS) private readonly redis: Redis) {}
+  constructor(
+    @Inject(FRIEND_REDIS) private readonly redis: RealtimePublisherPort,
+  ) {}
 
   async onApplicationShutdown(): Promise<void> {
-    await closeCoreRedisClient(this.redis);
+    await this.redis.close?.();
   }
 }

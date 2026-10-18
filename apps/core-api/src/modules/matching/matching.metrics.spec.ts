@@ -5,10 +5,12 @@ import { MatchingMetrics } from './matching.metrics';
 describe('MatchingMetrics', () => {
   function makeMeter() {
     const histogram = { record: jest.fn() };
+    const counter = { add: jest.fn() };
     const meter = {
       createHistogram: jest.fn(() => histogram),
+      createCounter: jest.fn(() => counter),
     } as unknown as Meter;
-    return { meter, histogram };
+    return { meter, histogram, counter };
   }
 
   it('observeMatched ghi histogram theo matchType để OTLP reader export định kỳ', () => {
@@ -33,6 +35,19 @@ describe('MatchingMetrics', () => {
     metrics.observeMatched('voice', -5);
 
     expect(histogram.record).toHaveBeenCalledWith(0, { matchType: 'voice' });
+  });
+
+  it('observeWindow đếm kết quả cửa sổ ứng viên theo outcome và nuốt lỗi ghi metric', () => {
+    const { meter, counter } = makeMeter();
+    const metrics = new MatchingMetrics(meter);
+
+    metrics.observeWindow('stalled');
+    expect(counter.add).toHaveBeenCalledWith(1, { outcome: 'stalled' });
+
+    counter.add.mockImplementation(() => {
+      throw new Error('boom');
+    });
+    expect(() => metrics.observeWindow('matched')).not.toThrow();
   });
 
   it('lỗi ghi metric (best-effort) không được throw ra caller', () => {

@@ -46,7 +46,16 @@ Chốt (docs/06): mọi ngày dùng để so sánh là chuỗi `YYYY-MM-DD` deri
 tại **thời điểm server xử lý request** — không tin timezone client, không có khái niệm "ngày của
 user A" khác "ngày của user B".
 
-Trong `recordActivity(conversation, senderUserId)`:
+**Đường nhanh (không mở transaction).** `recordActivity` đọc row streak KHÔNG khoá trước. Nếu người
+gửi đã được ghi nhận hôm nay VÀ không còn bước xác nhận nào đang chờ (bên kia chưa nhắn hôm nay, hoặc
+`lastConfirmedDate` đã là hôm nay) thì không có gì để đổi và trả về ngay — phần lớn tin nhắn trong ngày
+không còn tốn một row lock + vài round trip. An toàn dưới race vì các cột ngày chỉ tiến tới hôm nay và
+`lastConfirmedDate` được đặt trong CÙNG transaction với ngày của bên thứ hai: bản đọc cũ chỉ có thể báo
+"còn việc" (đi tiếp vào transaction, nơi mọi thứ được đọc lại dưới `FOR UPDATE`), không bao giờ báo "không
+còn việc" sai. Cả hai bên đã active nhưng chưa xác nhận (dữ liệu bất thường) vẫn đi qua transaction để
+sửa. Test race thật: `friend.integration.spec.ts` ("RACE: hai bên gửi gần như đồng thời").
+
+Trong `recordActivity(conversation, senderUserId)` (phần dưới đây chạy trong transaction):
 
 1. Set `userLow`/`userHighLastActiveDate` = hôm nay cho bên gửi.
 2. Nếu **cả 2 bên** đã có `lastActiveDate = hôm nay` VÀ `lastConfirmedDate != hôm nay` (chưa xác

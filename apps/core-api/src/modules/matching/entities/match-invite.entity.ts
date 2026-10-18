@@ -33,7 +33,7 @@ export const MATCH_INVITE_TRANSITIONS: Readonly<
 /**
  * CTA "mời Voice/Soul Match" (W4, docs/services/matching-service.md § Invite) — directed invite,
  * KHÔNG phải friend-request flow mới. Accept tạo trực tiếp `MatchTicket`/`MatchSession` (bỏ qua
- * hàng đợi shard), tái dùng các chốt an toàn của `tryPair` (`interactionPolicy.canPair`,
+ * hàng đợi shard), tái dùng các chốt an toàn của matcher (`confirmPair`: `interactionPolicy.canPair`,
  * invariant 1-user-1-queue qua `uq_match_tickets_active_user`) — không check gender preference
  * vì invitee đồng ý trực tiếp đúng người đã xem profile —
  * từ lúc đó luồng y hệt auto-match, không có state/logic riêng ở Soul Match/Calling.

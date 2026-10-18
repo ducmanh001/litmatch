@@ -1,7 +1,6 @@
 import { Inject, Module, OnApplicationShutdown } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { closeCoreRedisClient } from '../../common/redis/core-redis-client';
 import { GiftController } from './gift.controller';
 import { GiftService } from './gift.service';
 import { Gift } from './entities/gift.entity';
@@ -14,7 +13,7 @@ import { ShortVideoModule } from '../short-video';
 import { UserModule } from '../user';
 import { FriendModule } from '../friend';
 
-import type Redis from 'ioredis';
+import type { RealtimePublisherPort } from '../../common/realtime/realtime-publisher.port';
 
 @Module({
   imports: [
@@ -31,9 +30,11 @@ import type Redis from 'ioredis';
   exports: [GiftService], // AdminModule quản lý catalog (docs/12 § 12.7)
 })
 export class GiftModule implements OnApplicationShutdown {
-  constructor(@Inject(GIFT_REDIS) private readonly redis: Redis) {}
+  constructor(
+    @Inject(GIFT_REDIS) private readonly redis: RealtimePublisherPort,
+  ) {}
 
   async onApplicationShutdown(): Promise<void> {
-    await closeCoreRedisClient(this.redis);
+    await this.redis.close?.();
   }
 }

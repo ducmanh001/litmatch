@@ -14,9 +14,16 @@ Connection quota:
 
 - `WS_MAX_CONNECTIONS_PER_USER` — mặc định/trần hiện hành `3`
 - `WS_CONNECTION_LEASE_MS` — mặc định `90000`, validation `10000..300000`
+- `WS_CONNECTION_LEASE_REFRESH_MS` — chu kỳ gia hạn lease; `0` (mặc định) = lease/3
+
+Fanout và shard Redis (docs/services/realtime-gateway.md § 5–7):
+
+- `WS_FANOUT_MODE` — `user` (mặc định: chỉ subscribe user có socket trên pod) hoặc `pattern` (PSUBSCRIBE cũ)
+- `REALTIME_REDIS_URLS` — danh sách Redis shard theo userId; rỗng = một shard là `REDIS_URL`. Phải giống core-api.
 
 Client nhận `CONNECTION_LIMIT` khi hết slot và `CONNECTION_QUOTA_UNAVAILABLE` khi không thể xác minh
-quota. Lease được refresh khi socket sống và tự hết hạn sau process failure.
+quota lúc handshake. Lease được gia hạn gộp lô khi socket sống và tự hết hạn sau process failure; Redis
+chớp không ngắt socket đang sống, chỉ ngắt khi lease cục bộ hết hạn mà không gia hạn được.
 
 ## Commands
 

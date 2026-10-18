@@ -1,7 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { createCoreRedisClient } from '../../../common/redis/core-redis-client';
 import { RedisRateLimitAdapter } from '../../../common/redis/redis-rate-limit.adapter';
-import { RedisRealtimePublisher } from '../../../common/realtime/redis-realtime-publisher.adapter';
+import { createRealtimePublisher } from '../../../common/realtime/realtime-publisher.factory';
 import { RedisMatchingQueue } from './redis-matching-queue.adapter';
 
 import type { Provider } from '@nestjs/common';
@@ -74,7 +74,8 @@ export const matchingRateLimitProvider: Provider = {
 
 export const matchingRealtimeProvider: Provider = {
   provide: MATCHING_REALTIME,
-  inject: [MATCHING_REDIS_CLIENT],
-  useFactory: (redis: import('ioredis').default): RealtimePublisherPort =>
-    new RedisRealtimePublisher(redis),
+  inject: [ConfigService],
+  useFactory: (
+    config: ConfigService<CoreApiEnv, true>,
+  ): RealtimePublisherPort => createRealtimePublisher(config),
 };

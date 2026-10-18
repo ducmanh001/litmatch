@@ -5,7 +5,11 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { realtimePresenceKey } from '@litmatch/common-dtos';
+import {
+  parseRealtimeRedisUrls,
+  realtimePresenceKey,
+  realtimeShardIndex,
+} from '@litmatch/common-dtos';
 import Redis from 'ioredis';
 
 import { signalingRedisClientOptions } from './redis-client-options';
@@ -13,6 +17,8 @@ import { signalingRedisClientOptions } from './redis-client-options';
 import type { SignalingEnv } from '../config/env.validation';
 
 const QUOTA_KEY_PREFIX = 'signaling:connection-quota:';
+/** Số lease refresh/release trong một pipeline — đủ lớn để gộp round trip, đủ nhỏ để dưới commandTimeout. */
+const PIPELINE_CHUNK = 500;
 
 const ACQUIRE_SCRIPT = `
 local now = redis.call('TIME')
@@ -62,13 +68,42 @@ end
 return removed
 `;
 
+type ScriptArg = string | number;
+/** Script đăng ký bằng `defineCommand` → gọi EVALSHA (40 byte) thay vì gửi lại cả thân script. */
+type QuotaRedis = Redis & {
+  quotaAcquire(...args: ScriptArg[]): Promise<number>;
+  quotaRefresh(...args: ScriptArg[]): Promise<number>;
+  quotaRelease(...args: ScriptArg[]): Promise<number>;
+};
+type QuotaPipeline = {
+  quotaAcquire(...args: ScriptArg[]): unknown;
+  quotaRefresh(...args: ScriptArg[]): unknown;
+  quotaRelease(...args: ScriptArg[]): unknown;
+  exec(): Promise<Array<[Error | null, unknown]> | null>;
+};
+
+export interface LeaseRef {
+  userId: string;
+  leaseId: string;
+}
+
+/**
+ * - `ok`: lease còn và đã được gia hạn.
+ * - `lost`: Redis trả lời lease không còn (hết hạn/bị dọn) → socket không còn quyền giữ slot.
+ * - `error`: không biết (Redis lỗi/timeout) → gateway giữ socket tới hạn lease cục bộ rồi mới ngắt.
+ */
+export type RefreshOutcome = 'ok' | 'lost' | 'error';
+
+/**
+ * Quota socket/user + presence, lease trên Redis. Mọi key của một user nằm cùng một shard
+ * (`realtimeShardIndex`) nên script hai-key vẫn atomic và không lệnh nào đi xuyên shard.
+ */
 @Injectable()
 export class ConnectionQuotaService
   implements OnModuleInit, OnApplicationShutdown
 {
   private readonly logger = new Logger(ConnectionQuotaService.name);
-  private readonly redis: Redis;
-  private readonly unavailableListeners = new Set<() => void>();
+  private readonly clients: QuotaRedis[];
   readonly leaseMs: number;
   readonly maxConnections: number;
 
@@ -79,53 +114,41 @@ export class ConnectionQuotaService
     this.maxConnections = config.getOrThrow('WS_MAX_CONNECTIONS_PER_USER', {
       infer: true,
     });
-    this.redis = new Redis(
+    const urls = parseRealtimeRedisUrls(
+      config.get('REALTIME_REDIS_URLS', { infer: true }),
       config.getOrThrow('REDIS_URL', { infer: true }),
-      signalingRedisClientOptions(),
     );
-    // This command client is deliberately separate from subscriber-mode connections.
-    // Commands still reject during an outage (the gateway fails closed), while the listener
-    // prevents a transient ioredis EventEmitter error from becoming unhandled.
-    this.redis.on('error', (error) => {
-      this.logger.warn(`Quota Redis lỗi: ${String(error)}`);
-    });
-    this.redis.on('close', () => this.notifyUnavailable());
-    this.redis.on('end', () => this.notifyUnavailable());
+    this.clients = urls.map((url, shard) => this.createClient(url, shard));
+  }
+
+  get shardCount(): number {
+    return this.clients.length;
   }
 
   isReady(): boolean {
-    return this.redis.status === 'ready';
+    return this.clients.every((_client, index) => this.isShardReady(index));
   }
 
-  onUnavailable(listener: () => void): () => void {
-    this.unavailableListeners.add(listener);
-    return () => this.unavailableListeners.delete(listener);
+  /** Shard `index` đang nhận lệnh được. */
+  isShardReady(index: number): boolean {
+    return this.clients[index]?.status === 'ready';
   }
 
+  /**
+   * Một shard chết lúc khởi động không được chặn cả pod (rolling restart/scale-up đúng lúc một shard
+   * failover sẽ crash-loop): user của shard đó fail closed lúc handshake, user các shard còn lại
+   * vẫn phục vụ được. Chỉ khi KHÔNG shard nào lên được mới là lỗi khởi động (như trước khi có shard).
+   */
   async onModuleInit(): Promise<void> {
-    if (this.isReady()) return;
-    await new Promise<void>((resolve, reject) => {
-      const cleanup = () => {
-        this.redis.off('ready', onReady);
-        this.redis.off('error', onError);
-      };
-      const onReady = () => {
-        cleanup();
-        resolve();
-      };
-      const onError = (error: Error) => {
-        cleanup();
-        reject(error);
-      };
-      this.redis.once('ready', onReady);
-      this.redis.once('error', onError);
-    });
+    try {
+      await Promise.any(this.clients.map((client) => this.waitReady(client)));
+    } catch (error) {
+      throw error instanceof AggregateError ? error.errors[0] : error;
+    }
   }
 
   async acquire(userId: string, leaseId: string): Promise<boolean> {
-    const result = await this.redis.eval(
-      ACQUIRE_SCRIPT,
-      2,
+    const result = await this.clientFor(userId).quotaAcquire(
       this.key(userId),
       realtimePresenceKey(userId),
       leaseId,
@@ -135,42 +158,172 @@ export class ConnectionQuotaService
     return result === 1;
   }
 
-  async refresh(userId: string, leaseId: string): Promise<boolean> {
-    const result = await this.redis.eval(
-      REFRESH_SCRIPT,
-      2,
-      this.key(userId),
-      realtimePresenceKey(userId),
-      leaseId,
-      this.leaseMs,
-    );
-    return result === 1;
+  /**
+   * Gia hạn nhiều lease bằng pipeline theo shard. Không bao giờ throw: lỗi Redis được báo bằng
+   * `error` để gateway quyết định (giữ tới hạn lease cục bộ) thay vì ngắt cả đàn socket cùng lúc.
+   */
+  async refreshMany(leases: readonly LeaseRef[]): Promise<RefreshOutcome[]> {
+    const results = await this.pipelineByShard(leases, (pipeline, lease) => {
+      pipeline.quotaRefresh(
+        this.key(lease.userId),
+        realtimePresenceKey(lease.userId),
+        lease.leaseId,
+        this.leaseMs,
+      );
+    });
+    return results.map((result): RefreshOutcome => {
+      if (result === undefined || result[0]) return 'error';
+      return result[1] === 1 ? 'ok' : 'lost';
+    });
+  }
+
+  /**
+   * Cấp lại lease mà Redis báo `lost`. `lost` không chỉ là lease hết hạn thật: Redis restart hoặc
+   * failover mất dữ liệu cũng làm MỌI lease biến mất cùng lúc, và ngắt hết socket trong trường hợp đó
+   * là biến sự cố Redis thành reconnect storm. Script acquire idempotent theo leaseId và kiểm trần
+   * socket/user nên chỉ cấp lại khi slot còn trống; hết slot → vẫn `lost`. Không bao giờ throw.
+   */
+  async reacquireMany(leases: readonly LeaseRef[]): Promise<RefreshOutcome[]> {
+    const results = await this.pipelineByShard(leases, (pipeline, lease) => {
+      pipeline.quotaAcquire(
+        this.key(lease.userId),
+        realtimePresenceKey(lease.userId),
+        lease.leaseId,
+        this.leaseMs,
+        this.maxConnections,
+      );
+    });
+    return results.map((result): RefreshOutcome => {
+      if (result === undefined || result[0]) return 'error';
+      return result[1] === 1 ? 'ok' : 'lost';
+    });
   }
 
   async release(userId: string, leaseId: string): Promise<void> {
-    await this.redis.eval(
-      RELEASE_SCRIPT,
-      2,
+    await this.clientFor(userId).quotaRelease(
       this.key(userId),
       realtimePresenceKey(userId),
       leaseId,
     );
   }
 
+  /** Best-effort: lease có TTL nên release lỗi chỉ làm slot giữ thêm tới khi hết hạn. */
+  async releaseMany(leases: readonly LeaseRef[]): Promise<void> {
+    await this.pipelineByShard(leases, (pipeline, lease) => {
+      pipeline.quotaRelease(
+        this.key(lease.userId),
+        realtimePresenceKey(lease.userId),
+        lease.leaseId,
+      );
+    });
+  }
+
   async onApplicationShutdown(): Promise<void> {
-    try {
-      await this.redis.quit();
-    } catch (error) {
-      this.logger.warn(`Quota Redis quit thất bại: ${String(error)}`);
-      this.redis.disconnect();
-    }
+    await Promise.all(
+      this.clients.map(async (client) => {
+        try {
+          await client.quit();
+        } catch (error) {
+          this.logger.warn(`Quota Redis quit thất bại: ${String(error)}`);
+          client.disconnect();
+        }
+      }),
+    );
+  }
+
+  private createClient(url: string, shard: number): QuotaRedis {
+    const client = new Redis(url, signalingRedisClientOptions()) as QuotaRedis;
+    client.defineCommand('quotaAcquire', {
+      numberOfKeys: 2,
+      lua: ACQUIRE_SCRIPT,
+    });
+    client.defineCommand('quotaRefresh', {
+      numberOfKeys: 2,
+      lua: REFRESH_SCRIPT,
+    });
+    client.defineCommand('quotaRelease', {
+      numberOfKeys: 2,
+      lua: RELEASE_SCRIPT,
+    });
+    // Client lệnh tách riêng khỏi subscriber-mode. Lệnh vẫn reject khi Redis mất kết nối (handshake
+    // mới fail closed), còn listener này chặn lỗi ioredis bất đồng bộ thành unhandled error.
+    // Socket đang sống KHÔNG bị ngắt theo sự kiện close/end: ngắt cả đàn khi Redis chớp một giây
+    // rồi cả đàn reconnect vào đúng Redis đang hồi phục là vòng khuếch đại, nên gateway chỉ ngắt
+    // từng socket khi lease cục bộ của nó hết hạn mà không gia hạn được (lease-refresher).
+    client.on('error', (error) => {
+      this.logger.warn(`Quota Redis shard ${shard} lỗi: ${String(error)}`);
+    });
+    return client;
+  }
+
+  private waitReady(client: QuotaRedis): Promise<void> {
+    if (client.status === 'ready') return Promise.resolve();
+    return new Promise<void>((resolve, reject) => {
+      const cleanup = () => {
+        client.off('ready', onReady);
+        client.off('error', onError);
+      };
+      const onReady = () => {
+        cleanup();
+        resolve();
+      };
+      const onError = (error: Error) => {
+        cleanup();
+        reject(error);
+      };
+      client.once('ready', onReady);
+      client.once('error', onError);
+    });
+  }
+
+  /** Chạy một pipeline cho mỗi (shard, chunk); trả kết quả theo đúng thứ tự `leases`. */
+  private async pipelineByShard(
+    leases: readonly LeaseRef[],
+    enqueue: (pipeline: QuotaPipeline, lease: LeaseRef) => void,
+  ): Promise<Array<[Error | null, unknown] | undefined>> {
+    // `fill` để mảng không có "lỗ" — `Array.prototype.map` bỏ qua ô trống nên lease không nhận được
+    // kết quả sẽ không bao giờ được ánh xạ thành `error`.
+    const results = new Array<[Error | null, unknown] | undefined>(
+      leases.length,
+    ).fill(undefined);
+    const indexesByShard = new Map<number, number[]>();
+    leases.forEach((lease, index) => {
+      const shard = realtimeShardIndex(lease.userId, this.clients.length);
+      const indexes = indexesByShard.get(shard);
+      if (indexes) indexes.push(index);
+      else indexesByShard.set(shard, [index]);
+    });
+    await Promise.all(
+      [...indexesByShard].map(async ([shard, indexes]) => {
+        for (
+          let offset = 0;
+          offset < indexes.length;
+          offset += PIPELINE_CHUNK
+        ) {
+          const chunk = indexes.slice(offset, offset + PIPELINE_CHUNK);
+          try {
+            const pipeline = this.clients[
+              shard
+            ].pipeline() as unknown as QuotaPipeline;
+            for (const index of chunk) enqueue(pipeline, leases[index]);
+            const executed = await pipeline.exec();
+            executed?.forEach((entry, position) => {
+              results[chunk[position]] = entry;
+            });
+          } catch {
+            // Giữ `undefined` → caller coi là lỗi (refresh) hoặc bỏ qua (release, có TTL).
+          }
+        }
+      }),
+    );
+    return results;
+  }
+
+  private clientFor(userId: string): QuotaRedis {
+    return this.clients[realtimeShardIndex(userId, this.clients.length)];
   }
 
   private key(userId: string): string {
     return `${QUOTA_KEY_PREFIX}${userId}`;
-  }
-
-  private notifyUnavailable(): void {
-    for (const listener of this.unavailableListeners) listener();
   }
 }

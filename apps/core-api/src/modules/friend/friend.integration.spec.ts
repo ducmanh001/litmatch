@@ -770,6 +770,33 @@ d('Friend integration (Postgres thật)', () => {
       expect(streak?.current).toBe(1);
     });
 
+    it('RACE: hai bên gửi gần như đồng thời (kể cả gửi lặp) → streak tăng đúng 1 lần, không mất lượt', async () => {
+      const [a, b] = await Promise.all([
+        createUser('st-race-a'),
+        createUser('st-race-b'),
+      ]);
+      await ensureFriendship(a, b);
+      const conv = await friend.getConversationWithFriend(a.id, b.id);
+
+      // Đường nhanh đọc không khoá: 4 lời gọi chồng nhau (mỗi bên gửi 2 tin) không được làm tăng
+      // đôi hoặc bỏ sót lượt xác nhận.
+      await Promise.all([
+        friend.sendMessage(a.id, conv.id, 'a1', 'race-a1'),
+        friend.sendMessage(b.id, conv.id, 'b1', 'race-b1'),
+        friend.sendMessage(a.id, conv.id, 'a2', 'race-a2'),
+        friend.sendMessage(b.id, conv.id, 'b2', 'race-b2'),
+      ]);
+
+      expect(await friend.getStreak(a.id, conv.id)).toEqual({
+        current: 1,
+        longest: 1,
+        isActive: true,
+      });
+      // Tin kế tiếp (đường nhanh thuần) cũng không đổi gì.
+      await friend.sendMessage(a.id, conv.id, 'a3', 'race-a3');
+      expect((await friend.getStreak(a.id, conv.id))?.current).toBe(1);
+    });
+
     it('gapDays=1 (hôm qua đã confirm) → tăng liên tục ngày kế tiếp', async () => {
       const [a, b] = await Promise.all([
         createUser('st-gap1-a'),

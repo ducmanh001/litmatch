@@ -26,22 +26,24 @@ Mọi transition khác throw `MATCHING_TICKET_INVALID_TRANSITION`.
 - Shard key: `matching:queue:{matchType}:{region}:{ageBand}` — `ageBand = floor(age / MATCHING_AGE_BAND_SIZE)`. `matchType` ∈ `soul|voice`.
 - Cấu trúc: **Sorted Set**, member = `ticketId`, score = `enqueuedAtMs - speedupBoostMs` (speed-up trừ `MATCHING_PRIORITY_BOOST_MS` khỏi score → nổi lên đầu hàng đợi, score càng nhỏ càng được ghép trước).
 - Danh sách shard đang hoạt động: Set `matching:shards:active` (thêm khi enqueue, dọn khi shard rỗng) để matcher worker không phải quét toàn bộ keyspace.
-- **Double-lock ghép cặp — atomic bằng `ZPOPMIN key 2`** (Redis native, atomic sẵn không cần Lua vì Redis đơn luồng): lấy 2 ticketId điểm thấp nhất ra khỏi sorted set trong 1 lệnh, đảm bảo 2 matcher instance không bao giờ lấy trùng ticket.
-- Sau khi pop khỏi Redis, **verify lại trong Postgres** (không tin trạng thái Redis là nguồn sự thật): cả 2 ticket còn `queued`, không cùng `userId`, **preference giới tính khớp 2 chiều (§ 2.1)**, không nằm trong danh sách block/report lẫn nhau (docs/06). Verify + transition `queued→confirmed` + tạo `MatchSession{confirmed}` phải nằm trong **1 transaction Postgres** với `SELECT ... FOR UPDATE` trên 2 ticket đó.
-- Ticket nào verify fail (đã bị cancel/hết hạn ở giữa chừng, hoặc bị block) → **không** ghép, tự expire ticket đó; ticket còn hợp lệ → đẩy lại vào Redis với **priority gốc, không mất lượt chờ** (dùng lại `enqueuedAtMs` cũ, không tính lại từ đầu).
+- **Cửa sổ ứng viên + double-lock ghép cặp.** Matcher ĐỌC (`ZRANGE ... WITHSCORES`, không lấy ra) tối đa `MATCHING_MATCHER_CANDIDATE_WINDOW` ticket điểm thấp nhất, chọn cặp ở bước verify (xem dưới), rồi lấy ĐÚNG cặp đó bằng `claimPair` — một Lua nhỏ: `ZSCORE` cả hai, chỉ khi cả hai còn thì `ZREM` cả hai (atomic trên Redis đơn luồng). Hai matcher cùng chọn một ticket thì đúng một bên thắng; bên thua nhận `false` và nhìn lại cửa sổ mới. Không còn ticket nào bị lấy ra rồi phải trả lại. Cửa sổ = 2 cho đúng hành vi cũ (chỉ xét 2 ticket đầu shard).
+- **Verify trong Postgres** (không tin trạng thái Redis là nguồn sự thật). Bước chọn cặp đọc ticket + user của cửa sổ (không khoá) rồi lọc theo thứ tự ưu tiên: còn `queued`, user còn `active`, không cùng `userId`, **preference giới tính khớp 2 chiều (§ 2.1)** và `canPair` (block/report lẫn nhau, docs/06) — bộ lọc, tối đa 4 lần `canPair` CHƯA có trong cache mỗi cửa sổ; cặp bị chặn được nhớ `MATCHING_MATCHER_UNPAIRABLE_CACHE_MS` (mặc định 30 giây) để wake-up kế tiếp không hỏi lại và quét được sâu hơn. Cache chỉ có thể làm CHẬM một lần ghép (vd sau khi bỏ chặn), không bao giờ cho ghép cặp bị cấm. Sau `claimPair`, **1 transaction Postgres** với `SELECT ... FOR UPDATE` trên đúng 2 ticket đó verify lại trạng thái, gender, user active VÀ `canPair` ngay lúc khoá (quyết định cuối cùng — khoảng từ lúc chọn cặp tới commit gồm cả thời gian chờ kết nối pool), rồi `queued→confirmed` (một `UPDATE` có điều kiện `status='queued'`) + tạo `MatchSession{confirmed}`.
+- Ticket không còn hợp lệ trong cửa sổ (đã rời `queued`, hoặc user bị ban) → gỡ khỏi Redis; ticket còn `queued` nhưng user không active → expire. Ticket hợp lệ không được chọn **không bị đụng**: nằm yên trong Redis với score gốc nên không mất lượt chờ. Nếu một bên của cặp đã chọn đổi trạng thái giữa lúc chọn và lúc khoá, bên còn hợp lệ được đẩy lại với score gốc (`ZADD NX`).
 
 ### 2.1 Bộ lọc giới tính (docs/01 #13)
 
 - Client chọn `genderPreference` ∈ `any|male|female` trong body join (không gửi = `any`); snapshot lên ticket cho **lần vào queue này** — đổi ý = cancel + join lại. Retry cùng Idempotency-Key nhưng đổi preference = request khác nội dung → 409.
-- **KHÔNG shard theo gender**: filter là điều kiện verify tại thời điểm ghép trong `tryPair`, cùng chỗ với block/report (docs/10 § 10.0.C). Lý do: shard theo gender nổ số shard ×3 và preference `any` sẽ phải quét nhiều shard.
+- **KHÔNG shard theo gender**: filter là điều kiện verify tại thời điểm ghép trong `matchWindow`/`confirmPair`, cùng chỗ với block/report (docs/10 § 10.0.C). Lý do: shard theo gender nổ số shard ×3 và preference `any` sẽ phải quét nhiều shard.
 - Check **2 chiều** (`prefA` khớp `genderB` VÀ `prefB` khớp `genderA`); gender đối phương đọc **tươi** từ `users` trong chính transaction verify — user đổi profile giữa lúc chờ vẫn đúng. Preference cụ thể chỉ khớp đúng giá trị đó: user gender `unknown`/`other` chỉ ghép được với preference `any`.
-- Cặp không khớp giới = cặp hợp lệ nhưng không ghép → đi cùng nhánh requeue với block/report (score gốc, không mất lượt). Trade-off đã chấp nhận (giống block): cặp không khớp ở đầu shard chặn shard đó tới khi có ứng viên score thấp hơn chen vào hoặc sweeper expire; nếu thành vấn đề thật → slice sau đổi sang pop-k-candidates.
+- Cặp không khớp giới = cặp hợp lệ nhưng không ghép → không bị đụng (nằm yên trong Redis với score gốc, không mất lượt) và **không còn chặn shard**: ticket cũ nhất tìm đối tác tương thích đầu tiên trong cửa sổ ứng viên. Head-of-line blocking của bản chỉ xét 2 ticket đầu đã được đo bằng mô phỏng (docs/plans/2026-10-17-realtime-matching-chat-scale-plan.md § 3). Giới hạn còn lại: nếu CẢ cửa sổ đồng nhất (vd 32 nam cùng chỉ muốn nữ) thì không tìm được cặp và shard dừng tới khi ticket đầu hàng được ghép/hết hạn (sweeper) hoặc một ticket được speed-up nhảy lên đầu — ticket mới vào có score cao nhất nên nằm cuối hàng, không tự chen vào cửa sổ. Metric `matching_matcher_windows_total{outcome="stalled"}` đo mức độ này; nếu đáng kể thì hướng tiếp theo là chia hàng đợi theo nhóm giới tính (cần quyết định sản phẩm).
 
 ## 3. Matcher worker & sweeper
 
 - `MatcherWorkerService`: enqueue phát tín hiệu đánh thức trong process và debounce các tín hiệu
-  liên tiếp thành một lần chạy batch; mỗi lần chạy quét `matching:shards:active`, mỗi shard thử
-  ghép tối đa `MATCHING_MATCHER_BATCH_SIZE` cặp. `MATCHING_MATCHER_INTERVAL_MS` chỉ là backstop
+  liên tiếp thành một lần chạy batch; mỗi lần chạy quét `matching:shards:active` (thứ tự xáo
+  trộn), drain song song tối đa `MATCHING_MATCHER_CONCURRENCY` shard (bị chặn ở 1/4
+  `DATABASE_POOL_MAX`), mỗi shard thử ghép tối đa `MATCHING_MATCHER_BATCH_SIZE` cặp. Shard chỉ còn
+  1 ticket thì không bị đụng (không pop rồi trả lại). Wake-up đến khi một tick đang chạy KHÔNG bị bỏ: tick đó chạy lại ngay khi xong (tối đa 4 vòng liên tiếp), nếu không ticket vừa vào shard đã xử lý phải chờ wake-up kế tiếp hoặc backstop. `MATCHING_MATCHER_INTERVAL_MS` chỉ là backstop
   thưa để phục hồi khi event bị mất hoặc ticket tồn tại trước khi process khởi động.
 - `TicketSweeperService`: đăng ký interval động bằng `SchedulerRegistry`, đọc
   `MATCHING_SWEEPER_INTERVAL_MS`:
@@ -113,6 +115,8 @@ Check block/report **không chỉ lúc vào queue** — bắt buộc verify lạ
 ## 8. Config
 
 `MATCHING_MATCHER_INTERVAL_MS`, `MATCHING_MATCHER_BATCH_SIZE`,
+`MATCHING_MATCHER_CANDIDATE_WINDOW` (mặc định 32; 2 = hành vi cũ), `MATCHING_MATCHER_CONCURRENCY`
+(mặc định 2), `MATCHING_MATCHER_UNPAIRABLE_CACHE_MS` (mặc định 30000; 0 = tắt),
 `MATCHING_SWEEPER_INTERVAL_MS`, `MATCHING_QUEUE_MAX_WAIT_SECONDS`,
 `MATCHING_CONFIRM_TIMEOUT_SECONDS` (chỉ dọn session legacy), `MATCHING_AGE_BAND_SIZE`,
 `MATCHING_SPEEDUP_PRICE_DIAMOND`, `MATCHING_VIP_SPEEDUP_PRICE_DIAMOND`,
@@ -174,7 +178,7 @@ Transition hợp lệ duy nhất (`MATCH_INVITE_TRANSITIONS`, không tin client 
 
 Khác auto-match (2 ticket độc lập vào queue rồi chờ matcher ghép), accept invite tạo **trực
 tiếp** 2 `MatchTicket{status: confirmed}` + 1 `MatchSession{status: confirmed}` trong 1
-transaction — tái dùng NGUYÊN các validate của `tryPair` (§ 2):
+transaction — tái dùng NGUYÊN các validate của `confirmPair` (§ 2):
 
 - **1-user-1-queue** (docs/06): cùng partial unique index `uq_match_tickets_active_user` — insert
   2 ticket mới cũng phải qua index này; vi phạm (1 trong 2 bên đang bận queue/session khác) →

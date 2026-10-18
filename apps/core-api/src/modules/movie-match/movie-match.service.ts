@@ -47,7 +47,7 @@ import type {
   MovieStateChangedEventData,
   RealtimeEnvelope,
 } from '@litmatch/common-dtos';
-import type Redis from 'ioredis';
+import type { RealtimePublisherPort } from '../../common/realtime/realtime-publisher.port';
 import type { CoreApiEnv } from '../../config/env.validation';
 
 /** Phase client của flow ẩn danh — map 1-1 với 4 state màn hình movie-match.html. */
@@ -94,7 +94,7 @@ export class MovieMatchService {
     private readonly friendService: FriendService,
     private readonly safetyService: SafetyService,
     private readonly config: ConfigService<CoreApiEnv, true>,
-    @Inject(MOVIE_MATCH_REDIS) private readonly redis: Redis,
+    @Inject(MOVIE_MATCH_REDIS) private readonly redis: RealtimePublisherPort,
   ) {}
 
   /**

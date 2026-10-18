@@ -1,7 +1,6 @@
 import { Inject, Module, OnApplicationShutdown } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { closeCoreRedisClient } from '../../common/redis/core-redis-client';
 import { LivekitSdkClient } from '../../common/livekit/livekit-sdk.client';
 import { PartyRoomController } from './party-room.controller';
 import { PartyRoomService } from './party-room.service';
@@ -15,7 +14,7 @@ import { PARTY_REDIS, partyRedisProvider } from './redis/party-redis.provider';
 import { PartyLivekitWebhookController } from './webhooks/party-livekit-webhook.controller';
 import { UserModule } from '../user';
 
-import type Redis from 'ioredis';
+import type { RealtimePublisherPort } from '../../common/realtime/realtime-publisher.port';
 
 @Module({
   imports: [
@@ -35,9 +34,11 @@ import type Redis from 'ioredis';
   exports: [PartyRoomService],
 })
 export class PartyRoomModule implements OnApplicationShutdown {
-  constructor(@Inject(PARTY_REDIS) private readonly redis: Redis) {}
+  constructor(
+    @Inject(PARTY_REDIS) private readonly redis: RealtimePublisherPort,
+  ) {}
 
   async onApplicationShutdown(): Promise<void> {
-    await closeCoreRedisClient(this.redis);
+    await this.redis.close?.();
   }
 }
