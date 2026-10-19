@@ -34,7 +34,10 @@ return out
 
 /**
  * Counter buffer trên Redis lõi: mỗi video một hash `{prefix}{id}` (`v`/`l`/`c`) + tập `{prefix}dirty` các video có
- * delta. `HINCRBY` + `SADD` đi chung một pipeline; lỗi bất kỳ được ném lên để caller cộng thẳng vào DB.
+ * delta. `HINCRBY` + `SADD` đi chung một MULTI (nguyên tử: không để lại hash mồ côi ngoài tập dirty khi `SADD` lỗi);
+ * lỗi bất kỳ được ném lên để caller cộng thẳng vào DB. Giới hạn đã biết: nếu lệnh đã tới Redis nhưng phản hồi trễ quá
+ * `commandTimeout`, `add()` ném lỗi dù delta ĐÃ vào bộ đệm và caller cộng thêm vào DB → lượt đó đếm hai lần (counter chỉ
+ * là số hiển thị xấp xỉ, không phải sổ cái; không có cách phân biệt timeout mơ hồ với lỗi thật ở phía client).
  * Một Redis đơn (cùng giả định với rate limiter): script chạm hai nhóm khoá khác nhau.
  */
 export class RedisVideoCounterBufferAdapter extends VideoCounterBufferPort {
@@ -57,7 +60,7 @@ export class RedisVideoCounterBufferAdapter extends VideoCounterBufferPort {
       throw new Error('Video counter delta must be a non-zero integer');
     }
     const results = await this.redis
-      .pipeline()
+      .multi()
       .hincrby(`${this.prefix}${videoId}`, FIELD_CODE[field], delta)
       .sadd(`${this.prefix}dirty`, videoId)
       .exec();

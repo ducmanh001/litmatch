@@ -624,6 +624,29 @@ d('short-video integration (Postgres thật)', () => {
       expect(row?.n).toBe(5);
     });
 
+    it('catalogue nhỏ hơn lô × số lô: mỗi video chỉ được tính MỘT lần mỗi tick (không ghi lặp), vòng lặp dừng sớm', async () => {
+      const author = await createUser('rank-once-author');
+      await markAllComputed('3 days');
+      for (let i = 0; i < 3; i += 1) await uploadAndPublish(author.id);
+      const [{ n }] = (await ds.query(
+        `SELECT count(*)::int AS n FROM videos WHERE status = 'published'`,
+      )) as Array<{ n: number }>;
+
+      let processed = 0;
+      await withConfig(
+        {
+          VIDEO_RANKING_BATCH_SIZE: 2,
+          VIDEO_RANKING_MAX_BATCHES_PER_TICK: 100,
+        },
+        async () => {
+          processed = await ranking.runOnce();
+        },
+      );
+
+      // Trước khi sửa: lô nào cũng đầy (còn ≥ 2 video) nên chạy đủ 100 lô × 2 = 200 lần ghi.
+      expect(processed).toBe(n);
+    });
+
     it('sort=ranked phân trang đúng theo (rank_score DESC, id DESC) — không trùng/không sót — và câu truy vấn dùng idx_videos_ranked', async () => {
       const author = await createUser('rank-page-author');
       const created: Video[] = [];

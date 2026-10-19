@@ -102,7 +102,7 @@ tăng khoá hàng `videos` tới hết transaction. Khi `VIDEO_COUNTER_BUFFER_EN
 `VIDEO_COUNTER_FLUSH_INTERVAL_MS`) drain tối đa `VIDEO_COUNTER_FLUSH_BATCH` video và áp bằng MỘT câu UPDATE `unnest`.
 Bộ đệm được cộng SAU khi transaction nguồn (reaction/comment/view) commit; Redis lỗi thì cộng thẳng vào DB (fail-open);
 flush DB lỗi thì cộng lại delta; `GREATEST(…, 0)` giữ counter không âm. Đánh đổi: số đếm hiển thị trễ tối đa một chu kỳ flush
-và lệch nhẹ nếu pod chết giữa commit nguồn và lần đệm. Chưa giải quyết: mỗi lượt xem vẫn ghi một hàng `video_views`
+và lệch nhẹ nếu pod chết giữa commit nguồn và lần đệm. Hai giới hạn đã biết: (1) `HINCRBY`+`SADD` đi trong một MULTI, nhưng nếu phản hồi Redis trễ quá `commandTimeout` thì lượt đó vừa vào bộ đệm vừa được cộng thẳng DB → đếm hai lần; (2) đặt `VIDEO_COUNTER_BUFFER_ENABLED=false` khi bộ đệm còn delta thì flush job không chạy nữa, delta nằm lại Redis cho tới khi bật lại (tắt cờ chỉ sau khi tập `video:counter:dirty` đã rỗng). Chưa giải quyết: mỗi lượt xem vẫn ghi một hàng `video_views`
 vĩnh viễn (cần quyết định sản phẩm về dữ liệu theo lượt xem).
 
 ## 5. Report + moderation — mở rộng `Report` của Safety, KHÔNG đụng trust score cá nhân

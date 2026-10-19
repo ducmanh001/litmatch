@@ -84,6 +84,13 @@ export class VideoRankingService
         { infer: true },
       );
 
+      // Mốc bắt đầu tick theo đồng hồ DB (giữ micro giây): lô sau chỉ lấy video chưa được tính TRONG tick này.
+      // Thiếu điều kiện đó thì catalogue nhỏ hơn lô × số lô bị ghi lại nhiều lần mỗi tick (mỗi lần UPDATE là
+      // non-HOT vì đổi cả `rank_score` lẫn `rank_computed_at`, kéo theo ghi hai index) và vòng lặp không bao giờ dừng sớm.
+      const [{ tickStart }] = (await this.dataSource.query(
+        `SELECT clock_timestamp()::text AS "tickStart"`,
+      )) as Array<{ tickStart: string }>;
+
       let total = 0;
       for (let batch = 0; batch < maxBatches; batch += 1) {
         const [, count] = (await this.dataSource.query(
@@ -94,6 +101,7 @@ export class VideoRankingService
           WHERE id IN (
             SELECT id FROM videos
              WHERE status = $5
+               AND (rank_computed_at IS NULL OR rank_computed_at < $7::timestamptz)
              ORDER BY rank_computed_at ASC NULLS FIRST, id ASC
              LIMIT $6
              FOR UPDATE SKIP LOCKED
@@ -105,6 +113,7 @@ export class VideoRankingService
             decayHours,
             VideoStatus.Published,
             batchSize,
+            tickStart,
           ],
         )) as [unknown, number];
         total += count;
