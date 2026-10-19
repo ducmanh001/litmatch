@@ -47,3 +47,4 @@ Quan hệ với `docs/03-architecture.md`: file 03 mô tả kiến trúc **hiệ
 | [0011](./0011-hybrid-modular-layered-event-driven.md)   | Hybrid modular/layered và event-driven có chọn lọc        | 2026-07-30 | Accepted   |
 | [0012](./0012-postgres-persistence-boundaries.md)       | Persistence boundary cho PostgreSQL và TypeORM            | 2026-08-07 | Accepted   |
 | [0013](./0013-scale-readiness-policies.md)              | Chính sách scale: gộp thông báo chat, retention, giao OTP | 2026-10-19 | Accepted   |
+| [0014](./0014-data-lifecycle-and-growth-model.md)       | Vòng đời dữ liệu và mô hình tăng trưởng theo năm          | 2026-10-19 | Accepted   |

@@ -7,6 +7,7 @@ import { ShortVideoService } from './short-video.service';
 import { VideoSweeperService } from './jobs/video-sweeper.service';
 import { VideoRankingService } from './jobs/video-ranking.service';
 import { VideoCounterFlushService } from './jobs/video-counter-flush.service';
+import { ShortVideoRetentionJob } from './jobs/short-video-retention.job';
 import { Video } from './entities/video.entity';
 import { VideoView } from './entities/video-view.entity';
 import { VideoComment } from './entities/video-comment.entity';
@@ -43,6 +44,7 @@ import { UserModule } from '../user';
     VideoSweeperService,
     VideoRankingService,
     VideoCounterFlushService,
+    ShortVideoRetentionJob,
     {
       // Bộ đệm counter (ADR 0013): tắt mặc định; bật bằng VIDEO_COUNTER_BUFFER_ENABLED (dùng Redis lõi REDIS_URL).
       provide: VideoCounterBufferPort,

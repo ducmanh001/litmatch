@@ -48,6 +48,10 @@ reveal + Friend list.
   (docs/06). Đây là kỷ luật ở call site (không wire `MoodService` vào luồng anonymous), không có
   cờ nào trong service tự chặn được vì service không biết ngữ cảnh gọi.
 
+## 3.1 Vòng đời dữ liệu
+
+`mood_status_events` chỉ có nghĩa trong `MOOD_STATUS_TTL_HOURS`; `MoodRetentionJob` xoá sự kiện cũ hơn `MOOD_EVENT_RETENTION_DAYS` (mặc định 7) khi `RETENTION_MODE` ≠ `off` (ADR 0014). `idempotency_key` UNIQUE chỉ bảo vệ trong khoảng đó.
+
 ## 4. Preset-only W1 — không có moderation
 
 - `presetCode` client gửi phải khớp `mood_presets.code` đang `active=true`, sai →

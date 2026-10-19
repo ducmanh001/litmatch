@@ -233,6 +233,14 @@ export interface CoreApiEnv {
   RETENTION_BATCH_PAUSE_MS: number;
   NOTIFICATION_READ_RETENTION_DAYS: number;
   NOTIFICATION_UNREAD_RETENTION_DAYS: number;
+  AUTH_REFRESH_RETENTION_GRACE_DAYS: number;
+  AUTH_OTP_RETENTION_DAYS: number;
+  MATCHING_QUOTA_RETENTION_DAYS: number;
+  OUTBOX_PUBLISHED_RETENTION_DAYS: number;
+  OUTBOX_DEAD_LETTER_RETENTION_DAYS: number;
+  VIDEO_VIEW_RETENTION_DAYS: number;
+  VIDEO_DELETED_COMMENT_RETENTION_DAYS: number;
+  MOOD_EVENT_RETENTION_DAYS: number;
   VIDEO_CAPTION_MAX_LENGTH: number;
   VIDEO_UPLOAD_ENABLED: boolean;
   VIDEO_MODERATION_MODE: 'pre' | 'post';
@@ -874,6 +882,44 @@ export const coreApiEnvSchema = Joi.object({
     .min(0)
     .max(3_650)
     .default(365),
+  // Vòng đời dữ liệu theo mô hình tăng trưởng (ADR 0014, `pnpm capacity:data`); 0 = giữ vĩnh viễn. Chỉ có hiệu lực khi
+  // RETENTION_MODE ≠ off; dry-run đếm hàng đủ điều kiện trước khi xoá thật.
+  AUTH_REFRESH_RETENTION_GRACE_DAYS: Joi.number()
+    .integer()
+    .min(0)
+    .max(365)
+    .default(7),
+  AUTH_OTP_RETENTION_DAYS: Joi.number().integer().min(0).max(365).default(1),
+  MATCHING_QUOTA_RETENTION_DAYS: Joi.number()
+    .integer()
+    .min(0)
+    .max(365)
+    .default(2),
+  OUTBOX_PUBLISHED_RETENTION_DAYS: Joi.number()
+    .integer()
+    .min(0)
+    .max(3_650)
+    .default(7),
+  OUTBOX_DEAD_LETTER_RETENTION_DAYS: Joi.number()
+    .integer()
+    .min(0)
+    .max(3_650)
+    .default(0), // dead-letter cần người xử lý nên mặc định GIỮ; chỉ bật khi đã có quy trình xử lý
+  VIDEO_VIEW_RETENTION_DAYS: Joi.number()
+    .integer()
+    .min(0)
+    .max(3_650)
+    .default(180),
+  VIDEO_DELETED_COMMENT_RETENTION_DAYS: Joi.number()
+    .integer()
+    .min(0)
+    .max(3_650)
+    .default(30),
+  MOOD_EVENT_RETENTION_DAYS: Joi.number()
+    .integer()
+    .min(0)
+    .max(3_650)
+    .default(7),
 
   // Video ngắn — W5, hướng Momo (docs/services/short-video-service.md)
   VIDEO_CAPTION_MAX_LENGTH: Joi.number().integer().min(1).default(500),

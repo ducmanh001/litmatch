@@ -19,6 +19,12 @@ export interface RefreshSessionRecord {
 export interface RefreshSessionRotationInput {
   tokenId: string;
   replacement: Pick<RefreshSessionIssue, 'tokenHash' | 'expiresAt'>;
+  /**
+   * Cùng transaction với xoay: xoá token ĐÃ XOAY của cùng họ cũ hơn N ngày (ADR 0014). Bỏ trống/0 = không xoá. Phát lại token
+   * cũ hơn N ngày chỉ bị từ chối (không tìm thấy), không còn kích hoạt thu hồi cả họ — đánh đổi có chủ đích để bảng
+   * không tăng một hàng cho mỗi lần xoay mãi mãi.
+   */
+  purgeRotatedOlderThanDays?: number;
 }
 
 /**

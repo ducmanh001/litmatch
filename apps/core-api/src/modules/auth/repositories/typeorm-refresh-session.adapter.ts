@@ -73,6 +73,20 @@ export class TypeOrmRefreshSessionAdapter implements RefreshSessionPort {
         familyId: session.familyId,
         expiresAt: input.replacement.expiresAt,
       });
+      if (
+        input.purgeRotatedOlderThanDays !== undefined &&
+        input.purgeRotatedOlderThanDays > 0
+      ) {
+        // Theo họ (idx_refresh_tokens_family_id): mỗi lần xoay xoá ~1 hàng đã quá hạn giữ — chi phí tỉ lệ với hoạt động,
+        // không cần index mới và không quét toàn bảng.
+        await manager.query(
+          `DELETE FROM refresh_tokens
+            WHERE family_id = $1
+              AND rotated_at IS NOT NULL
+              AND rotated_at < now() - make_interval(days => $2)`,
+          [session.familyId, input.purgeRotatedOlderThanDays],
+        );
+      }
       return 'rotated';
     });
   }

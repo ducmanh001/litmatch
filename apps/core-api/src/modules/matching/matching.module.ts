@@ -9,6 +9,7 @@ import { InviteService } from './services/invite.service';
 import { MatcherWorkerService } from './jobs/matcher-worker.service';
 import { TicketSweeperService } from './jobs/ticket-sweeper.service';
 import { InviteSweeperService } from './jobs/invite-sweeper.service';
+import { MatchingRetentionJob } from './jobs/matching-retention.job';
 import { MatcherWakeup } from './matcher-wakeup';
 import { MatchTicket } from './entities/match-ticket.entity';
 import { MatchSession } from './entities/match-session.entity';
@@ -60,6 +61,7 @@ import type { MatchingQueuePort } from './ports/matching-queue.port';
     MatcherWakeup,
     TicketSweeperService,
     InviteSweeperService,
+    MatchingRetentionJob,
     GuestMatchQuotaService,
     matchingRedisClientProvider,
     matchingQueueProvider,

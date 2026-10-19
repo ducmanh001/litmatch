@@ -266,7 +266,7 @@ The service catalog names every top-level Core API module and links module-speci
 
 - Result: PASS on 2026-07-24: agent check; 76 agent/tool tests; OpenAPI and formatting; lint/build for core-api, web, admin and api-client; core 551, web 230, admin 52 and api-client 23 tests
 - Command: `pnpm agent:check; pnpm agent:test; pnpm openapi:check; pnpm format:check; NX_DAEMON=false nx run-many -t lint build test -p core-api web admin api-client --skip-nx-cache`
-- Source evidence: `package.json:41` — contains `"agent:check":`; `scripts/agent/verify.mjs:34` — contains `requiredTargets: ['lint', 'test', 'build']`
+- Source evidence: `package.json:43` — contains `"agent:check":`; `scripts/agent/verify.mjs:34` — contains `requiredTargets: ['lint', 'test', 'build']`
 - Caveat: The core unit command intentionally skipped 16 integration suites without a shared integration URL. The changed short-video PostgreSQL integration suite is recorded separately. Canonical verify wrappers exceeded the mandatory 45-second shell budget, so their underlying commands were run separately and passed.
 
 ## Review-module verification

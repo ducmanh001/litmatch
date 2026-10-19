@@ -8,6 +8,7 @@ import { UserModule } from '../user';
 
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { AuthRetentionJob } from './jobs/auth-retention.job';
 import { AuthUpgradeController } from './controllers/auth-upgrade.controller';
 import { PhoneSearchController } from './controllers/phone-search.controller';
 import { AuthIdentity } from './entities/auth-identity.entity';
@@ -47,6 +48,7 @@ import { TypeOrmRefreshSessionAdapter } from './repositories/typeorm-refresh-ses
     SocialVerifierService,
     GuestDeviceTokenService,
     PhoneSearchService,
+    AuthRetentionJob,
     TypeOrmRefreshSessionAdapter,
     { provide: RefreshSessionPort, useExisting: TypeOrmRefreshSessionAdapter },
   ],

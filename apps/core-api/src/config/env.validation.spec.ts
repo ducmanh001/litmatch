@@ -128,6 +128,31 @@ describe('coreApiEnvSchema invariants', () => {
     });
   });
 
+  describe('vòng đời dữ liệu (ADR 0014)', () => {
+    const value = (key: string, input?: unknown) =>
+      coreApiEnvSchema.extract(key).validate(input);
+
+    it('mặc định đúng khuyến nghị, 0 = giữ vĩnh viễn, âm hoặc quá trần bị chặn', () => {
+      const defaults: Array<[string, number]> = [
+        ['AUTH_REFRESH_RETENTION_GRACE_DAYS', 7],
+        ['AUTH_OTP_RETENTION_DAYS', 1],
+        ['MATCHING_QUOTA_RETENTION_DAYS', 2],
+        ['OUTBOX_PUBLISHED_RETENTION_DAYS', 7],
+        ['OUTBOX_DEAD_LETTER_RETENTION_DAYS', 0],
+        ['VIDEO_VIEW_RETENTION_DAYS', 180],
+        ['VIDEO_DELETED_COMMENT_RETENTION_DAYS', 30],
+        ['MOOD_EVENT_RETENTION_DAYS', 7],
+      ];
+      for (const [key, expected] of defaults) {
+        expect(value(key).value).toBe(expected);
+        expect(value(key, 0).error).toBeUndefined();
+        expect(value(key, -1).error).toBeDefined();
+      }
+      expect(value('AUTH_OTP_RETENTION_DAYS', 366).error).toBeDefined();
+      expect(value('VIDEO_VIEW_RETENTION_DAYS', 3_651).error).toBeDefined();
+    });
+  });
+
   describe('admin broadcast chạy nền (ADR 0013)', () => {
     const value = (key: string, input?: unknown) =>
       coreApiEnvSchema.extract(key).validate(input);

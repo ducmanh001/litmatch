@@ -27,6 +27,8 @@
     "reliability:production-gate": "node scripts/reliability/verify-evidence.mjs",
     "reliability:test": "node --test scripts/reliability/*.test.mjs",
     "capacity:model": "node scripts/capacity/model.mjs",
+    "capacity:row-sizes": "node scripts/capacity/measure-row-sizes.mjs",
+    "capacity:data": "node scripts/capacity/data-growth.mjs",
     "capacity:test": "node --test scripts/capacity/*.test.mjs",
     "build": "nx run-many -t build --outputStyle=static",
     "test": "nx run-many -t test --outputStyle=static",
