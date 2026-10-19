@@ -72,6 +72,9 @@ services:
       AUTH_OTP_DELIVERY: ${AUTH_OTP_DELIVERY:-response}
       AUTH_OTP_SMS_HTTP_URL: ${AUTH_OTP_SMS_HTTP_URL:-}
       AUTH_OTP_SMS_HTTP_TOKEN: ${AUTH_OTP_SMS_HTTP_TOKEN:-}
+      # Retention dữ liệu vận hành (ADR 0013): dry-run chỉ ĐẾM hàng đủ điều kiện (gauge retention_eligible_rows), không xoá.
+      # Đổi sang `delete` sau khi đã xem số liệu và chấp nhận hạn giữ; `off` để tắt hẳn.
+      RETENTION_MODE: ${RETENTION_MODE:-dry-run}
       AUTH_GOOGLE_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:?required}
       AUTH_APPLE_CLIENT_ID: ''
       AUTH_FACEBOOK_APP_ID: ${FACEBOOK_APP_ID:-}
