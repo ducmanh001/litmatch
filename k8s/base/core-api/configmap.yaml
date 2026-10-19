@@ -81,6 +81,9 @@ data:
   ECONOMY_RECONCILIATION_ENABLED: 'true'
   ECONOMY_RECONCILIATION_INTERVAL_MS: '300000'
   ECONOMY_RECONCILIATION_FAST_INTERVAL_MS: '60000'
+  # Bất biến Nợ=Có kiểm tăng dần: LAG > transaction ghi sổ lâu nhất; FULL = chu kỳ dựng lại tổng từ toàn bộ lịch sử
+  ECONOMY_RECONCILIATION_LAG_MS: '300000'
+  ECONOMY_RECONCILIATION_FULL_INTERVAL_MS: '86400000'
 
   # --- economy: refund/chargeback ---
   ECONOMY_APPLE_WEBHOOK_VERIFIER: 'store'

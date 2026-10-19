@@ -96,6 +96,8 @@ export interface CoreApiEnv {
   ECONOMY_RECONCILIATION_ENABLED: boolean;
   ECONOMY_RECONCILIATION_INTERVAL_MS: number;
   ECONOMY_RECONCILIATION_FAST_INTERVAL_MS: number;
+  ECONOMY_RECONCILIATION_LAG_MS: number;
+  ECONOMY_RECONCILIATION_FULL_INTERVAL_MS: number;
   ECONOMY_APPLE_WEBHOOK_VERIFIER: 'dev' | 'store';
   ECONOMY_APPLE_ROOT_CA_PEM: string;
   ECONOMY_GOOGLE_RTDN_VERIFIER: 'dev' | 'store';
@@ -468,6 +470,20 @@ export const coreApiEnvSchema = Joi.object({
     .integer()
     .min(10_000)
     .default(60_000),
+  // Tier fast kiểm bất biến Nợ=Có TĂNG DẦN: chỉ cộng cửa sổ transaction cũ hơn `now() − LAG`. `created_at` là giờ
+  // BẮT ĐẦU transaction DB nên LAG phải lớn hơn transaction ghi sổ lâu nhất (transaction commit sau cửa sổ của nó
+  // sẽ lọt khỏi lần kiểm tăng dần cho tới lần dựng lại kế tiếp).
+  ECONOMY_RECONCILIATION_LAG_MS: Joi.number()
+    .integer()
+    .min(0)
+    .max(3_600_000)
+    .default(300_000),
+  // Chu kỳ dựng lại tổng cộng dồn từ TOÀN BỘ lịch sử ledger (lưới an toàn cho lần kiểm tăng dần; cũng chạy khi pod
+  // giành khoá singleton lần đầu). Đây là câu truy vấn duy nhất có chi phí tỉ lệ với cả bảng nên giữ thưa, tối thiểu 1 giờ.
+  ECONOMY_RECONCILIATION_FULL_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(3_600_000)
+    .default(86_400_000),
 
   // payOS web top-up: credential chỉ ở core-api; URL callback chỉ phục vụ UX, không credit.
   PAYOS_CLIENT_ID: Joi.string().allow('').default(''),

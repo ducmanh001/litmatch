@@ -20,6 +20,19 @@ const JOB_FAST = 'economy-reconciliation-fast';
 const JOB_DEEP = 'economy-reconciliation-deep';
 /** Số ví lấy mẫu đối chiếu snapshot↔ledger mỗi run — ngưỡng vận hành nội bộ, không phải rule nghiệp vụ. */
 const WALLET_SAMPLE_SIZE = 100;
+/** Mỗi lần cộng dồn tối đa 6 giờ transaction — chặn một câu aggregate quá lớn sau khi job nghỉ lâu. */
+const MAX_WINDOW_HOURS = 6;
+/** Trần số cửa sổ mỗi tick (50 × 6 giờ ≈ 12 ngày bắt kịp mỗi tick); phần còn lại để tick sau. */
+const MAX_WINDOWS_PER_TICK = 50;
+
+/** Tổng Nợ − Có cộng dồn theo currency của MỌI transaction có `created_at` < `watermark`. */
+interface LedgerBalanceState {
+  /** timestamptz dạng text do Postgres trả (giữ micro giây — Date của JS chỉ có mili giây). */
+  watermark: string;
+  imbalance: Map<string, bigint>;
+  /** Lần dựng lại gần nhất từ toàn bộ lịch sử (Date.now()). */
+  rebasedAt: number;
+}
 
 interface FastReconciliationReport {
   currencyImbalances: Array<{ currency: string; imbalance: string }>;
@@ -52,9 +65,18 @@ interface ReconciliationReport {
  * TỰ PHÁT HIỆN tiền sinh ra/mất đi từ hư không bằng bất biến toán học. Từ Giai đoạn 7 tách 2 tier
  * lịch độc lập theo chi phí query:
  * - fast (ECONOMY_RECONCILIATION_FAST_INTERVAL_MS): bất biến Nợ=Có theo currency + orphan
- *   receipt — 1 câu aggregate + 1 câu COUNT, đủ rẻ để chạy dày.
+ *   receipt. Bất biến được kiểm TĂNG DẦN (xem dưới) nên chi phí mỗi tick tỉ lệ với số giao dịch MỚI, không
+ *   phải cả bảng ledger_entries; COUNT orphan chạy trên partial index gần như rỗng.
  * - deep (ECONOMY_RECONCILIATION_INTERVAL_MS): sample ví so snapshot↔derived — scan/join theo
  *   từng ví nên đắt hơn, giữ cadence thưa như cũ.
+ * Tăng dần: mỗi transaction ledger cân Nợ=Có theo currency, nên tổng cộng dồn của mọi transaction cũ hơn một
+ * mốc `watermark` phải bằng 0. Job giữ (trong bộ nhớ) tổng cộng dồn + watermark; mỗi tick chỉ cộng thêm cửa sổ
+ * `[watermark, now() − LAG)` theo `transactions.created_at` (BRIN) rồi dịch watermark. `created_at` là giờ BẮT ĐẦU transaction
+ * DB nên transaction chạy lâu có thể commit sau khi cửa sổ của nó đã qua — LAG (ECONOMY_RECONCILIATION_LAG_MS)
+ * phải lớn hơn transaction ghi sổ lâu nhất. Lưới an toàn: mỗi ECONOMY_RECONCILIATION_FULL_INTERVAL_MS (và khi
+ * pod lần đầu giành khoá cluster-singleton) dựng lại tổng từ TOÀN BỘ lịch sử — đây là lần duy nhất chi phí tỉ lệ với cả bảng.
+ * Trạng thái chỉ ở bộ nhớ nên job vẫn READ-ONLY tuyệt đối (không bảng trạng thái, không ghi gì xuống DB).
+ *
  * Lệch = log error + metric `economy_reconciliation_*` (EconomyMetrics) để alert rule Prometheus
  * fire — metrics được push trực tiếp lên Grafana Cloud qua OTLP khi đã cấu hình.
  *
@@ -68,6 +90,8 @@ export class ReconciliationService
   private readonly logger = new Logger(ReconciliationService.name);
   private readonly fastJob = new ManagedInterval();
   private readonly deepJob = new ManagedInterval();
+  /** Tổng cộng dồn của tier fast, riêng từng pod (khoá singleton giành lại mỗi tick); pod chưa có thì dựng lại từ đầu. */
+  private ledgerBalance: LedgerBalanceState | undefined;
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
@@ -126,14 +150,8 @@ export class ReconciliationService
   /** Tier rẻ: bất biến toàn cục + orphan receipt. Chạy dày (fast interval). */
   async runFast(): Promise<FastReconciliationReport> {
     const startedAt = Date.now();
-    // 1. Bất biến toàn cục: tổng Nợ = tổng Có theo từng currency
-    const imbalances: Array<{ currency: string; imbalance: string }> =
-      await this.dataSource.query(`
-      SELECT currency,
-             SUM(CASE WHEN direction = 'debit' THEN amount ELSE -amount END)::text AS imbalance
-      FROM ledger_entries GROUP BY currency
-      HAVING SUM(CASE WHEN direction = 'debit' THEN amount ELSE -amount END) <> 0
-    `);
+    // 1. Bất biến toàn cục: tổng Nợ = tổng Có theo từng currency (cộng dồn tăng dần)
+    const imbalances = await this.currentImbalances();
 
     // 2. Receipt đã credit phải có đúng 1 transaction ledger đi kèm
     const [{ count: orphanReceipts }]: Array<{ count: string }> =
@@ -170,6 +188,109 @@ export class ReconciliationService
       this.logger.debug('Đối soát fast OK — tổng Nợ = tổng Có, receipt khớp');
     }
     return report;
+  }
+
+  /**
+   * Cập nhật tổng cộng dồn rồi trả các currency đang lệch (tổng ≠ 0). Chỉ SELECT. Trạng thái chỉ đổi SAU khi một
+   * cửa sổ được tính xong, nên lỗi DB giữa chừng không làm mất/nhân đôi cửa sổ nào — tick sau tính lại đúng chỗ.
+   */
+  private async currentImbalances(): Promise<
+    Array<{ currency: string; imbalance: string }>
+  > {
+    const lagSeconds =
+      this.config.getOrThrow('ECONOMY_RECONCILIATION_LAG_MS', { infer: true }) /
+      1000;
+    const fullIntervalMs = this.config.getOrThrow(
+      'ECONOMY_RECONCILIATION_FULL_INTERVAL_MS',
+      { infer: true },
+    );
+    const current = this.ledgerBalance;
+    if (
+      current === undefined ||
+      Date.now() - current.rebasedAt >= fullIntervalMs
+    ) {
+      const startedAt = Date.now();
+      const { to } = await this.nextWindow(null, lagSeconds);
+      const imbalance = await this.sumImbalance(null, to);
+      this.ledgerBalance = { watermark: to, imbalance, rebasedAt: Date.now() };
+      this.logger.log(
+        `Đối soát ledger: dựng lại tổng từ toàn bộ lịch sử tới ${to} (${Date.now() - startedAt} ms)`,
+      );
+    } else {
+      for (let i = 0; i < MAX_WINDOWS_PER_TICK; i += 1) {
+        const { to, advances, final } = await this.nextWindow(
+          current.watermark,
+          lagSeconds,
+        );
+        if (!advances) break;
+        const delta = await this.sumImbalance(current.watermark, to);
+        for (const [currency, amount] of delta) {
+          current.imbalance.set(
+            currency,
+            (current.imbalance.get(currency) ?? 0n) + amount,
+          );
+        }
+        current.watermark = to;
+        if (final) break;
+      }
+    }
+    return [...(this.ledgerBalance?.imbalance ?? [])]
+      .filter(([, amount]) => amount !== 0n)
+      .map(([currency, amount]) => ({
+        currency,
+        imbalance: amount.toString(),
+      }));
+  }
+
+  /**
+   * Cận trên cửa sổ kế tiếp, tính bằng đồng hồ DB (không lệch đồng hồ giữa pod và DB): `now() − LAG`, và tối đa
+   * `MAX_WINDOW_HOURS` sau watermark. `from = null` là lần dựng lại (không giới hạn độ dài).
+   */
+  private async nextWindow(
+    from: string | null,
+    lagSeconds: number,
+  ): Promise<{ to: string; advances: boolean; final: boolean }> {
+    const [row]: Array<{ to: string; advances: boolean; final: boolean }> =
+      await this.dataSource.query(
+        `SELECT w.hi::text AS "to",
+                ($1::timestamptz IS NULL OR w.hi > $1::timestamptz) AS advances,
+                ($1::timestamptz IS NULL OR w.hi = w.safe) AS final
+           FROM (
+             SELECT s.safe,
+                    CASE WHEN $1::timestamptz IS NULL THEN s.safe
+                         ELSE LEAST($1::timestamptz + make_interval(hours => $3::int), s.safe) END AS hi
+               FROM (SELECT now() - make_interval(secs => $2::double precision) AS safe) s
+           ) w`,
+        [from, lagSeconds, MAX_WINDOW_HOURS],
+      );
+    return row;
+  }
+
+  /**
+   * Tổng Nợ − Có theo currency của các transaction có `created_at` trong `[from, to)` (`from = null` → từ đầu).
+   * Theo transaction (không theo từng entry) để cửa sổ luôn chứa TRỌN các transaction đã cân — cắt giữa chừng sẽ
+   * báo lệch giả. Hai câu SQL riêng (không `$1 IS NULL OR …`) để planner dùng được BRIN cho cửa sổ hẹp.
+   */
+  private async sumImbalance(
+    from: string | null,
+    to: string,
+  ): Promise<Map<string, bigint>> {
+    const select = `SELECT le.currency,
+                SUM(CASE WHEN le.direction = 'debit' THEN le.amount ELSE -le.amount END)::text AS delta
+           FROM transactions t
+           JOIN ledger_entries le ON le.transaction_id = t.id`;
+    const rows: Array<{ currency: string; delta: string }> =
+      from === null
+        ? await this.dataSource.query(
+            `${select} WHERE t.created_at < $1::timestamptz GROUP BY le.currency`,
+            [to],
+          )
+        : await this.dataSource.query(
+            `${select} WHERE t.created_at >= $1::timestamptz AND t.created_at < $2::timestamptz
+              GROUP BY le.currency`,
+            [from, to],
+          );
+    return new Map(rows.map((row) => [row.currency, BigInt(row.delta)]));
   }
 
   /** Tier đắt: sample ví so snapshot↔derived từ ledger. Giữ cadence thưa (interval cũ). */

@@ -108,6 +108,26 @@ describe('coreApiEnvSchema invariants', () => {
     });
   });
 
+  describe('đối soát ledger tăng dần (ADR 0013)', () => {
+    const value = (key: string, input?: unknown) =>
+      coreApiEnvSchema.extract(key).validate(input);
+
+    it('LAG mặc định 5 phút và chu kỳ dựng lại mặc định 1 ngày; cả hai bị chặn khoảng an toàn', () => {
+      expect(value('ECONOMY_RECONCILIATION_LAG_MS').value).toBe(300_000);
+      expect(value('ECONOMY_RECONCILIATION_LAG_MS', 0).error).toBeUndefined();
+      expect(value('ECONOMY_RECONCILIATION_LAG_MS', -1).error).toBeDefined();
+      expect(
+        value('ECONOMY_RECONCILIATION_LAG_MS', 3_600_001).error,
+      ).toBeDefined();
+      expect(value('ECONOMY_RECONCILIATION_FULL_INTERVAL_MS').value).toBe(
+        86_400_000,
+      );
+      expect(
+        value('ECONOMY_RECONCILIATION_FULL_INTERVAL_MS', 3_599_999).error,
+      ).toBeDefined();
+    });
+  });
+
   describe('admin broadcast chạy nền (ADR 0013)', () => {
     const value = (key: string, input?: unknown) =>
       coreApiEnvSchema.extract(key).validate(input);

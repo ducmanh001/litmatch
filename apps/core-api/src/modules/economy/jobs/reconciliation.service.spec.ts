@@ -42,9 +42,14 @@ const ENABLED_CONFIG = {
   ECONOMY_RECONCILIATION_ENABLED: true,
   ECONOMY_RECONCILIATION_INTERVAL_MS: 300_000,
   ECONOMY_RECONCILIATION_FAST_INTERVAL_MS: 60_000,
+  ECONOMY_RECONCILIATION_LAG_MS: 300_000,
+  ECONOMY_RECONCILIATION_FULL_INTERVAL_MS: 86_400_000,
 };
 
-/** DataSource stub: fast tier gọi 2 query (imbalance, orphan), deep tier gọi 1 (wallet sample). */
+/**
+ * DataSource stub: fast tier gọi cận trên cửa sổ + tổng (lần đầu dựng lại từ toàn bộ lịch sử) + orphan, deep tier
+ * gọi 1 (wallet sample). `imbalances` là tổng Nợ − Có theo currency mà lần dựng lại trả về.
+ */
 function stubDataSource(input: {
   imbalances?: Array<{ currency: string; imbalance: string }>;
   orphanCount?: string;
@@ -56,7 +61,13 @@ function stubDataSource(input: {
 }): DataSource {
   const dataSource = {
     query: jest.fn(async (sql: string) => {
-      if (sql.includes('GROUP BY currency')) return input.imbalances ?? [];
+      if (sql.includes('AS "to"'))
+        return [{ to: '2026-10-19 00:00:00+00', advances: true, final: true }];
+      if (sql.includes('GROUP BY le.currency'))
+        return (input.imbalances ?? []).map(({ currency, imbalance }) => ({
+          currency,
+          delta: imbalance,
+        }));
       if (sql.includes('iap_receipts'))
         return [{ count: input.orphanCount ?? '0' }];
       if (sql.includes('FROM sample_wallets'))
@@ -195,6 +206,132 @@ describe('ReconciliationService', () => {
       // run lỗi giữa chừng KHÔNG ghi duration (tránh nhiễu histogram bởi run dở dang)
       expect(metricState.histogram.record).not.toHaveBeenCalled();
       service.onApplicationShutdown();
+    });
+  });
+
+  describe('đối soát tăng dần (ADR 0013)', () => {
+    type Window = { to: string; advances: boolean; final: boolean };
+    type Sum = Array<{ currency: string; delta: string }>;
+
+    /** DataSource kịch bản: mỗi câu "cận trên cửa sổ" / "tổng" lấy phần tử kế tiếp trong hàng đợi. */
+    function scripted(script: { windows: Window[]; sums: Array<Sum | Error> }) {
+      const sumCalls: Array<{ full: boolean; params: unknown[] }> = [];
+      const dataSource = {
+        query: jest.fn(async (sql: string, params: unknown[] = []) => {
+          if (sql.includes('AS "to"')) {
+            const window = script.windows.shift();
+            if (window === undefined) throw new Error('hết kịch bản window');
+            return [window];
+          }
+          if (sql.includes('GROUP BY le.currency')) {
+            sumCalls.push({ full: !sql.includes('t.created_at >='), params });
+            const sum = script.sums.shift() ?? [];
+            if (sum instanceof Error) throw sum;
+            return sum;
+          }
+          if (sql.includes('iap_receipts')) return [{ count: '0' }];
+          throw new Error(`query không nhận diện được trong stub: ${sql}`);
+        }),
+      } as unknown as DataSource;
+      return { dataSource, sumCalls };
+    }
+    const window = (to: string, final = true): Window => ({
+      to,
+      advances: true,
+      final,
+    });
+
+    it('lần đầu dựng lại từ toàn bộ lịch sử; các lần sau chỉ cộng cửa sổ [watermark, to) và dồn tổng', async () => {
+      const { dataSource, sumCalls } = scripted({
+        windows: [window('T1'), window('T2')],
+        sums: [
+          [{ currency: 'DIA', delta: '5' }],
+          [{ currency: 'DIA', delta: '-5' }],
+        ],
+      });
+      const { service } = makeService(dataSource);
+
+      const first = await service.runFast();
+      expect(first.currencyImbalances).toEqual([
+        { currency: 'DIA', imbalance: '5' },
+      ]);
+      const second = await service.runFast();
+
+      expect(second.ok).toBe(true);
+      expect(sumCalls).toEqual([
+        { full: true, params: ['T1'] },
+        { full: false, params: ['T1', 'T2'] },
+      ]);
+    });
+
+    it('job nghỉ lâu: chia nhiều cửa sổ trong một tick tới khi bắt kịp mốc an toàn', async () => {
+      const { dataSource, sumCalls } = scripted({
+        windows: [window('T1'), window('T2', false), window('T3', true)],
+        sums: [[], [], []],
+      });
+      const { service } = makeService(dataSource);
+
+      await service.runFast();
+      await service.runFast();
+
+      expect(sumCalls.map((call) => call.params)).toEqual([
+        ['T1'],
+        ['T1', 'T2'],
+        ['T2', 'T3'],
+      ]);
+    });
+
+    it('mốc an toàn chưa tiến (LAG chưa qua): không truy vấn tổng nào', async () => {
+      const { dataSource, sumCalls } = scripted({
+        windows: [window('T1'), { to: 'T1', advances: false, final: true }],
+        sums: [[]],
+      });
+      const { service } = makeService(dataSource);
+
+      await service.runFast();
+      expect((await service.runFast()).ok).toBe(true);
+
+      expect(sumCalls).toHaveLength(1);
+    });
+
+    it('dựng lại định kỳ: sau FULL_INTERVAL tính lại từ toàn bộ lịch sử và thay tổng cũ (bắt transaction commit muộn)', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-10-19T00:00:00Z'));
+      const { dataSource, sumCalls } = scripted({
+        windows: [window('T1'), window('T2'), window('T3')],
+        // lần 2 (trong chu kỳ) cửa sổ không thấy gì; lần 3 dựng lại thấy transaction lệch commit muộn
+        sums: [[], [], [{ currency: 'DIA', delta: '9' }]],
+      });
+      const { service } = makeService(dataSource);
+
+      expect((await service.runFast()).ok).toBe(true);
+      expect((await service.runFast()).ok).toBe(true);
+      jest.setSystemTime(new Date('2026-10-20T00:00:01Z'));
+      const rebased = await service.runFast();
+
+      expect(rebased.ok).toBe(false);
+      expect(rebased.currencyImbalances).toEqual([
+        { currency: 'DIA', imbalance: '9' },
+      ]);
+      expect(sumCalls.map((call) => call.full)).toEqual([true, false, true]);
+    });
+
+    it('lỗi DB giữa cửa sổ không làm mất cửa sổ: tick sau tính lại đúng [watermark, to)', async () => {
+      const { dataSource, sumCalls } = scripted({
+        windows: [window('T1'), window('T2'), window('T2')],
+        sums: [[], new Error('db down'), []],
+      });
+      const { service } = makeService(dataSource);
+
+      await service.runFast();
+      await expect(service.runFast()).rejects.toThrow('db down');
+      expect((await service.runFast()).ok).toBe(true);
+
+      expect(sumCalls.map((call) => call.params)).toEqual([
+        ['T1'],
+        ['T1', 'T2'],
+        ['T1', 'T2'],
+      ]);
     });
   });
 

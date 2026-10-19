@@ -74,6 +74,31 @@ giá hoặc tự gửi giá trong request mua.
 
 1. Toàn cục: tổng Nợ = tổng Có theo currency; 2. mọi `iap_receipts` đã credit có đúng 1 transaction completed khớp số diamond; 3. sample wallet vs derive từ ledger. Từ Giai đoạn 7 tách 2 tier: check 1+2 là tier fast (`ECONOMY_RECONCILIATION_FAST_INTERVAL_MS`, mặc định 60s), check 3 là tier deep (`ECONOMY_RECONCILIATION_INTERVAL_MS`, mặc định 300s); `ECONOMY_RECONCILIATION_ENABLED=false` tắt cả hai. Lệch → log error + metric `economy_reconciliation_mismatch_total{check,currency}`; mỗi run set `economy_reconciliation_last_run_status{tier}` (0 = lệch hoặc run lỗi — alert rule fire trên metric này) + histogram `economy_reconciliation_run_duration_seconds{tier}`. Job read-only tuyệt đối — không auto-correct, sửa lệch bằng reversal entry qua write path chuẩn.
 
+**Kiểm bất biến Nợ=Có tăng dần (ADR 0013).** Trước đây tier fast chạy `SUM(...) GROUP BY currency` trên TOÀN BỘ
+`ledger_entries` mỗi 60s — chi phí tăng tuyến tính theo lịch sử sổ cái. Giờ mỗi `transaction` đã cân Nợ=Có theo currency nên tổng
+cộng dồn của mọi transaction cũ hơn một mốc `watermark` phải bằng 0; job giữ tổng này **trong bộ nhớ** và mỗi tick chỉ cộng cửa sổ
+`[watermark, now() − ECONOMY_RECONCILIATION_LAG_MS)` theo `transactions.created_at` (BRIN `idx_transactions_created_at_brin`, join
+`idx_ledger_entries_transaction`) rồi dịch watermark — chi phí tỉ lệ với số giao dịch MỚI. Cửa sổ chọn theo transaction (không theo
+từng entry) nên luôn chứa trọn các transaction đã cân. Tối đa 6 giờ mỗi cửa sổ, 50 cửa sổ mỗi tick (job nghỉ lâu thì bắt kịp dần).
+
+- **Job vẫn read-only tuyệt đối**: không bảng trạng thái, không ghi gì xuống DB; mọi câu là `SELECT`. Không đổi bảng/ràng
+  buộc/trigger của sổ cái; chỉ thêm 2 index (migration `1758400000000`: BRIN `transactions(created_at)` và partial index
+  `idx_iap_receipts_orphan` cho COUNT orphan receipt).
+- **Giới hạn đã biết (LAG)**: `created_at` là giờ BẮT ĐẦU transaction DB. Transaction ghi sổ chạy lâu hơn `LAG` (mặc định 5 phút)
+  có thể commit sau khi cửa sổ của nó đã qua nên lọt khỏi lần kiểm tăng dần. Lưới an toàn: mỗi `ECONOMY_RECONCILIATION_FULL_INTERVAL_MS`
+  (mặc định 24h, tối thiểu 1h) và khi một pod lần đầu giành khoá cluster-singleton, tổng được **dựng lại từ toàn bộ lịch sử** — lần DUY NHẤT chi phí tỉ lệ
+  với cả bảng; trong lúc dựng lại tier fast không tick (chạy tuần tự, không chồng). Lệch do transaction commit muộn vì vậy được phát
+  hiện chậm tối đa một chu kỳ dựng lại.
+- **Điểm mù cùng loại**: bất kỳ entry nào ghi vào cửa sổ ĐÃ cộng — transaction chèn tay với `created_at` quá khứ, hoặc một entry
+  lẻ thêm vào `transaction_id` cũ (trigger append-only chỉ chặn UPDATE/DELETE, FK vẫn cho INSERT) — cũng chỉ bị bắt ở lần dựng lại. Code
+  ghi sổ chuẩn (`LedgerService`) không tạo các trường hợp này; chúng chỉ xảy ra khi bỏ qua write path.
+- **Trạng thái theo từng pod, không có leader cố định**: khoá cluster-singleton được giành lại MỖI tick nên pod nào thắng tick nào
+  thì dùng tổng cộng dồn của chính pod đó (pod lâu không thắng thì bắt kịp bằng các cửa sổ liên tiếp, vẫn đúng). Hệ quả chi phí: mỗi
+  pod từng giữ khoá dựng lại tối đa một lần mỗi `ECONOMY_RECONCILIATION_FULL_INTERVAL_MS`, tức N pod ≈ N lần quét toàn bộ/ngày.
+- **Tier deep chưa đổi**: vẫn lấy mẫu 100 ví theo `wallets.updated_at DESC` mỗi 300s (quét ví, không phải ledger). Cố ý KHÔNG thêm
+  index `wallets(updated_at)`: mọi lần ghi số dư đổi `updated_at` nên index sẽ chặn HOT update trên bảng ghi nóng nhất. Nếu số ví
+  lên hàng chục triệu, tăng `ECONOMY_RECONCILIATION_INTERVAL_MS` hoặc chạy job trên replica (quyết định riêng).
+
 ## 3. Quy tắc concurrency (docs/10 § Economy)
 
 - Điểm tuần tự hoá per-user: `SELECT ... FOR UPDATE` trên dòng `wallets` (lock theo thứ tự userId khi chạm nhiều ví để tránh deadlock).

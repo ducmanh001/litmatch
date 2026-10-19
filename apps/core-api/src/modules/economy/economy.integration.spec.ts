@@ -66,6 +66,33 @@ if (!INTEGRATION_DB_URL) {
 
 jest.setTimeout(60_000);
 
+/**
+ * Config đối soát cho test: LAG=0 để giao dịch vừa tạo rơi vào cửa sổ ngay (production dùng LAG > transaction ghi
+ * sổ lâu nhất); FULL lớn để tổng cộng dồn không bị dựng lại ngoài ý muốn. `values` đổi được giữa các lần chạy.
+ */
+function reconConfig() {
+  const values: Record<string, unknown> = {
+    ECONOMY_RECONCILIATION_LAG_MS: 0,
+    ECONOMY_RECONCILIATION_FULL_INTERVAL_MS: 86_400_000,
+  };
+  const config = {
+    getOrThrow: (key: string) => values[key] ?? true,
+  } as unknown as ConfigService<CoreApiEnv, true>;
+  return { values, config };
+}
+
+function makeRecon(
+  ds: DataSource,
+  config: ConfigService<CoreApiEnv, true> = reconConfig().config,
+): ReconciliationService {
+  return new ReconciliationService(
+    ds,
+    config,
+    { addInterval: () => undefined } as unknown as SchedulerRegistry,
+    new EconomyMetrics(metrics.getMeter('economy-integration')),
+  );
+}
+
 d('Economy integration (Postgres thật)', () => {
   let ds: DataSource;
   let ledger: LedgerService;
@@ -474,16 +501,7 @@ d('Economy integration (Postgres thật)', () => {
   });
 
   it('đối soát: phát hiện snapshot bị sửa lệch, rebuildWallet khôi phục từ ledger', async () => {
-    const stubConfig = { getOrThrow: () => true } as unknown as ConfigService<
-      CoreApiEnv,
-      true
-    >;
-    const recon = new ReconciliationService(
-      ds,
-      stubConfig,
-      { addInterval: () => undefined } as unknown as SchedulerRegistry,
-      new EconomyMetrics(metrics.getMeter('economy-integration')),
-    );
+    const recon = makeRecon(ds);
 
     expect((await recon.runOnce()).ok).toBe(true);
 
@@ -498,6 +516,78 @@ d('Economy integration (Postgres thật)', () => {
 
     await ledger.rebuildWallet(userA);
     expect((await recon.runOnce()).ok).toBe(true);
+  });
+
+  /** Ghi một transaction lệch/bù lệch BYPASS LedgerService (giả lập bug hoặc SQL tay) — chỉ chân Nợ hoặc chân Có. */
+  async function postSkewed(
+    key: string,
+    direction: 'debit' | 'credit',
+    amount: number,
+    createdAt = 'now()',
+  ): Promise<void> {
+    const [account] = await ds.query<Array<{ id: string }>>(
+      `SELECT id FROM ledger_accounts WHERE kind <> 'user_wallet' AND currency = 'DIA' LIMIT 1`,
+    );
+    const [tx] = await ds.query<Array<{ id: string }>>(
+      `INSERT INTO transactions (type, status, idempotency_key, request_hash, created_at)
+       VALUES ('test_skew', 'completed', $1, repeat('a', 64), ${createdAt}) RETURNING id`,
+      [key],
+    );
+    await ds.query(
+      `INSERT INTO ledger_entries (transaction_id, account_id, direction, amount, currency, created_at)
+       VALUES ($1, $2, $3, $4, 'DIA', ${createdAt})`,
+      [tx.id, account.id, direction, amount],
+    );
+  }
+
+  it('đối soát tăng dần: giao dịch mới được cộng dồn, lệch được phát hiện, bút toán bù thì hết lệch', async () => {
+    const recon = makeRecon(ds);
+    // Lần đầu dựng lại tổng từ toàn bộ lịch sử.
+    expect((await recon.runFast()).ok).toBe(true);
+
+    await economy.creditFromIap(
+      userA,
+      IapProvider.Google,
+      { devTransactionId: 'recon-incremental-1' },
+      'com.litmatch.diamond.100',
+    );
+    // Cửa sổ mới chứa giao dịch vừa nạp (đã cân Nợ=Có) → vẫn cân.
+    expect((await recon.runFast()).ok).toBe(true);
+
+    await postSkewed('recon-skew-1', 'debit', 5);
+    const dirty = await recon.runFast();
+    expect(dirty.ok).toBe(false);
+    expect(dirty.currencyImbalances).toEqual([
+      { currency: 'DIA', imbalance: '5' },
+    ]);
+
+    // Sửa lệch bằng bút toán bù (không sửa/xoá entry cũ — sổ cái append-only).
+    await postSkewed('recon-skew-1-fix', 'credit', 5);
+    expect((await recon.runFast()).ok).toBe(true);
+    // Một instance mới (pod khác giành khoá) dựng lại từ đầu phải cho cùng kết luận.
+    expect((await makeRecon(ds).runFast()).ok).toBe(true);
+  });
+
+  it('transaction commit muộn (created_at đã nằm sau watermark) lọt khỏi lần kiểm tăng dần nhưng bị bắt khi dựng lại định kỳ', async () => {
+    const { config, values } = reconConfig();
+    const recon = makeRecon(ds, config);
+    expect((await recon.runFast()).ok).toBe(true);
+
+    // Transaction "bắt đầu" từ 1 giờ trước (created_at cũ hơn watermark) nhưng chỉ commit bây giờ.
+    await postSkewed('recon-late-1', 'debit', 7, "now() - interval '1 hour'");
+    // Giới hạn đã ghi tài liệu: cửa sổ tăng dần không thấy nó (LAG phải lớn hơn transaction ghi sổ lâu nhất)...
+    expect((await recon.runFast()).ok).toBe(true);
+
+    // ...nhưng lần dựng lại định kỳ từ toàn bộ lịch sử thì thấy.
+    values['ECONOMY_RECONCILIATION_FULL_INTERVAL_MS'] = 0;
+    const rebased = await recon.runFast();
+    expect(rebased.ok).toBe(false);
+    expect(rebased.currencyImbalances).toEqual([
+      { currency: 'DIA', imbalance: '7' },
+    ]);
+
+    await postSkewed('recon-late-1-fix', 'credit', 7);
+    expect((await recon.runFast()).ok).toBe(true);
   });
 
   it('lịch sử giao dịch: cursor pagination + diamondDelta đúng dấu', async () => {
@@ -587,12 +677,7 @@ d('Economy integration (Postgres thật)', () => {
     expect((await economy.getWallet(user.id)).balance).toBe('50'); // -500 + 550
 
     // Bất biến toàn cục vẫn giữ nguyên sau toàn bộ chuỗi refund/nạp bù
-    const recon = new ReconciliationService(
-      ds,
-      { getOrThrow: () => true } as unknown as ConfigService<CoreApiEnv, true>,
-      { addInterval: () => undefined } as unknown as SchedulerRegistry,
-      new EconomyMetrics(metrics.getMeter('economy-integration')),
-    );
+    const recon = makeRecon(ds);
     expect((await recon.runOnce()).ok).toBe(true);
   });
 
@@ -609,12 +694,7 @@ d('Economy integration (Postgres thật)', () => {
         ),
       ),
     );
-    const recon = new ReconciliationService(
-      ds,
-      { getOrThrow: () => true } as unknown as ConfigService<CoreApiEnv, true>,
-      { addInterval: () => undefined } as unknown as SchedulerRegistry,
-      new EconomyMetrics(metrics.getMeter('economy-integration')),
-    );
+    const recon = makeRecon(ds);
     const products = [
       'com.litmatch.diamond.100',
       'com.litmatch.diamond.550',
