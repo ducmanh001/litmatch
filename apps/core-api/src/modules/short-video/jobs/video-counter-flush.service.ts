@@ -79,7 +79,8 @@ export class VideoCounterFlushService
             `UPDATE videos v
                 SET view_count = GREATEST(v.view_count + d.views, 0),
                     like_count = GREATEST(v.like_count + d.likes, 0),
-                    comment_count = GREATEST(v.comment_count + d.comments, 0)
+                    comment_count = GREATEST(v.comment_count + d.comments, 0),
+                    rank_due_at = LEAST(COALESCE(v.rank_due_at, now()), now() + make_interval(secs => $5::int))
                FROM (
                  SELECT unnest($1::uuid[]) AS id,
                         unnest($2::int[]) AS views,
@@ -92,6 +93,9 @@ export class VideoCounterFlushService
               items.map((item) => item.views),
               items.map((item) => item.likes),
               items.map((item) => item.comments),
+              this.config.getOrThrow('VIDEO_RANKING_ACTIVE_REFRESH_SECONDS', {
+                infer: true,
+              }),
             ],
           );
         } catch (error) {

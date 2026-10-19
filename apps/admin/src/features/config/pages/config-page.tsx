@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
+import { newIdempotencyKey } from '../../../shared/lib/idempotency-key';
 import { showToast } from '../../../shared/lib/toast-store';
 import { t, useT } from '../../../shared/i18n/catalog';
 import { Button } from '../../../shared/ui/button';
@@ -182,6 +183,9 @@ function NotifyComposerCard() {
   const [audience, setAudience] = useState<BroadcastAudience>('all');
   const [body, setBody] = useState('');
   const broadcast = useBroadcastNotification();
+  // Cùng nội dung gửi lại (bấm đúp, retry sau lỗi mạng) dùng lại CÙNG khoá nên server trả broadcast cũ thay vì tạo bản
+  // thứ hai gửi cho cả hệ thống; đổi nội dung thì khoá mới.
+  const attempt = useRef<{ signature: string; key: string } | null>(null);
 
   return (
     <Card>
@@ -203,15 +207,25 @@ function NotifyComposerCard() {
             showToast(t('config.requiredNotification'), 'warn');
             return;
           }
+          const signature = JSON.stringify([
+            normalizedTitle,
+            normalizedBody,
+            audience,
+          ]);
+          if (attempt.current?.signature !== signature) {
+            attempt.current = { signature, key: newIdempotencyKey() };
+          }
           broadcast.mutate(
             {
               title: normalizedTitle,
               body: normalizedBody,
               audience,
+              idempotencyKey: attempt.current.key,
             },
             {
               onSuccess: (result) => {
                 if (result === undefined) return;
+                attempt.current = null;
                 showToast(t('config.notificationQueued'));
                 setTitle('');
                 setBody('');

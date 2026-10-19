@@ -13,6 +13,7 @@ import { ReportTargetVideo1754900000000 } from '../../database/migrations/175490
 import { ShortVideo1754800000000 } from '../../database/migrations/1754800000000-short-video';
 import { VideoStorageCleanupMarker1757800000000 } from '../../database/migrations/1757800000000-video-storage-cleanup-marker';
 import { ShortVideoRankingIndexes1758200000000 } from '../../database/migrations/1758200000000-short-video-ranking-indexes';
+import { VideoRankDue1758700000000 } from '../../database/migrations/1758700000000-video-rank-due';
 
 import { ShortVideoService } from './short-video.service';
 import { ShortVideoErrors } from './short-video.errors';
@@ -72,6 +73,9 @@ const CONFIG: Record<string, unknown> = {
   VIDEO_RANKING_JOB_INTERVAL_MS: 1_800_000,
   VIDEO_RANKING_BATCH_SIZE: 1_000,
   VIDEO_RANKING_MAX_BATCHES_PER_TICK: 5,
+  VIDEO_RANKING_STALENESS_PCT: 1,
+  VIDEO_RANKING_MAX_INTERVAL_HOURS: 168,
+  VIDEO_RANKING_ACTIVE_REFRESH_SECONDS: 600,
   VIDEO_COUNTER_BUFFER_ENABLED: false,
   VIDEO_COUNTER_FLUSH_INTERVAL_MS: 2_000,
   VIDEO_COUNTER_FLUSH_BATCH: 500,
@@ -168,6 +172,7 @@ d('short-video integration (Postgres thật)', () => {
         ShortVideo1754800000000,
         VideoStorageCleanupMarker1757800000000,
         ShortVideoRankingIndexes1758200000000,
+        VideoRankDue1758700000000,
       ],
       // Như data-source production: migration ranking tạo index CONCURRENTLY nên phải ngoài transaction.
       migrationsTransactionMode: 'each',
@@ -530,7 +535,7 @@ d('short-video integration (Postgres thật)', () => {
     expect(ids).not.toContain(notYetPublished.id);
   });
 
-  describe('ranking: xoay vòng theo rank_computed_at, index cho sort=ranked', () => {
+  describe('ranking: tính lại theo hạn (rank_due_at), index cho sort=ranked', () => {
     const withConfig = async (
       over: Record<string, unknown>,
       run: () => Promise<void>,
@@ -547,7 +552,7 @@ d('short-video integration (Postgres thật)', () => {
     };
     const markAllComputed = (interval: string) =>
       ds.query(
-        `UPDATE videos SET rank_computed_at = now() - interval '${interval}' WHERE status = 'published'`,
+        `UPDATE videos SET rank_computed_at = now() - interval '${interval}', rank_due_at = now() - interval '${interval}' WHERE status = 'published'`,
       );
 
     it('video mới (NULL) được tính điểm TRƯỚC video đã có điểm, kể cả khi lô chỉ có 1; job không đụng updated_at', async () => {
@@ -578,7 +583,7 @@ d('short-video integration (Postgres thật)', () => {
       const recent = await uploadAndPublish(author.id);
       await markAllComputed('1 day');
       await ds.query(
-        `UPDATE videos SET rank_computed_at = now() - interval '30 days' WHERE id = $1`,
+        `UPDATE videos SET rank_computed_at = now() - interval '30 days', rank_due_at = now() - interval '30 days' WHERE id = $1`,
         [stale.id],
       );
       // like làm updated_at của `stale` mới nhất — trước đây điều này đẩy nó xuống cuối hàng chờ
@@ -645,6 +650,99 @@ d('short-video integration (Postgres thật)', () => {
 
       // Trước khi sửa: lô nào cũng đầy (còn ≥ 2 video) nên chạy đủ 100 lô × 2 = 200 lần ghi.
       expect(processed).toBe(n);
+    });
+
+    it('khoảng tính lại tỉ lệ với (decay + tuổi): video mới ~29 phút, video 100 ngày ~1 ngày, trần theo VIDEO_RANKING_MAX_INTERVAL_HOURS', async () => {
+      const author = await createUser('rank-due-author');
+      await markAllComputed('10 days');
+      const fresh = await uploadAndPublish(author.id);
+      const old = await uploadAndPublish(author.id);
+      await ds.query(
+        `UPDATE videos SET created_at = now() - interval '100 days' WHERE id = $1`,
+        [old.id],
+      );
+      const interval = async (id: string): Promise<number> =>
+        Number(
+          (
+            (await ds.query(
+              `SELECT EXTRACT(EPOCH FROM (rank_due_at - rank_computed_at)) AS s FROM videos WHERE id = $1`,
+              [id],
+            )) as Array<{ s: string }>
+          )[0]?.s,
+        );
+
+      await ranking.runOnce();
+
+      // 1% × (48 giờ + tuổi): video mới 0,48 giờ; video 100 ngày (2.400 giờ) 24,48 giờ.
+      expect(await interval(fresh.id)).toBeCloseTo(0.48 * 3600, -1);
+      expect(await interval(old.id)).toBeCloseTo(24.48 * 3600, -1);
+
+      // Trần: video cũ không bao giờ bị hoãn quá VIDEO_RANKING_MAX_INTERVAL_HOURS.
+      await ds.query(`UPDATE videos SET rank_due_at = NULL WHERE id = $1`, [
+        old.id,
+      ]);
+      await withConfig({ VIDEO_RANKING_MAX_INTERVAL_HOURS: 2 }, async () => {
+        await ranking.runOnce();
+      });
+      expect(await interval(old.id)).toBeCloseTo(2 * 3600, -1);
+    });
+
+    it('video chưa đến hạn không được tính lại; đến hạn thì được tính đúng một lần mỗi tick', async () => {
+      const author = await createUser('rank-notdue-author');
+      const target = await uploadAndPublish(author.id);
+      await ds.query(
+        `UPDATE videos SET rank_due_at = now() + interval '1 day' WHERE status = 'published'`,
+      );
+      expect(await ranking.runOnce()).toBe(0);
+
+      await ds.query(
+        `UPDATE videos SET rank_due_at = now() - interval '1 minute' WHERE id = $1`,
+        [target.id],
+      );
+      expect(await ranking.runOnce()).toBe(1);
+      expect(await ranking.runOnce()).toBe(0); // hạn mới nằm trong tương lai
+    });
+
+    it('counter đổi kéo hạn về ≤ now + VIDEO_RANKING_ACTIVE_REFRESH_SECONDS; lần đổi kế tiếp trong khoảng đó không đổi hạn nữa', async () => {
+      const author = await createUser('rank-active-author');
+      const liker = await createUser('rank-active-liker');
+      const liker2 = await createUser('rank-active-liker2');
+      const published = await uploadAndPublish(author.id);
+      await ds.query(
+        `UPDATE videos SET rank_due_at = now() + interval '3 days' WHERE id = $1`,
+        [published.id],
+      );
+      const dueIn = async (): Promise<number> =>
+        Number(
+          (
+            (await ds.query(
+              `SELECT EXTRACT(EPOCH FROM (rank_due_at - now())) AS s FROM videos WHERE id = $1`,
+              [published.id],
+            )) as Array<{ s: string }>
+          )[0]?.s,
+        );
+
+      await video.like(auth(liker.id), published.id);
+      const afterFirst = await dueIn();
+      expect(afterFirst).toBeLessThanOrEqual(600);
+      expect(afterFirst).toBeGreaterThan(500);
+
+      const before = (
+        (await ds.query(`SELECT rank_due_at FROM videos WHERE id = $1`, [
+          published.id,
+        ])) as Array<{ rank_due_at: Date }>
+      )[0]?.rank_due_at;
+      await video.like(auth(liker2.id), published.id);
+      const after = (
+        (await ds.query(`SELECT rank_due_at FROM videos WHERE id = $1`, [
+          published.id,
+        ])) as Array<{ rank_due_at: Date }>
+      )[0]?.rank_due_at;
+      expect(after.getTime()).toBe(before.getTime());
+      expect(
+        (await ds.getRepository(Video).findOneByOrFail({ id: published.id }))
+          .likeCount,
+      ).toBe(2);
     });
 
     it('sort=ranked phân trang đúng theo (rank_score DESC, id DESC) — không trùng/không sót — và câu truy vấn dùng idx_videos_ranked', async () => {
@@ -815,6 +913,25 @@ d('short-video integration (Postgres thật)', () => {
         comments: 1,
       });
       expect(await flush.runOnce()).toBe(0); // đã drain hết
+    });
+
+    it('flush counter cũng kéo hạn tính lại về ≤ now + VIDEO_RANKING_ACTIVE_REFRESH_SECONDS', async () => {
+      const author = await createUser('buf-due-author');
+      const liker = await createUser('buf-due-liker');
+      const published = await uploadAndPublish(author.id);
+      await ds.query(
+        `UPDATE videos SET rank_due_at = now() + interval '3 days' WHERE id = $1`,
+        [published.id],
+      );
+
+      await buffered.like(auth(liker.id), published.id);
+      await flush.runOnce();
+
+      const [row] = (await ds.query(
+        `SELECT EXTRACT(EPOCH FROM (rank_due_at - now())) AS s FROM videos WHERE id = $1`,
+        [published.id],
+      )) as Array<{ s: string }>;
+      expect(Number(row?.s)).toBeLessThanOrEqual(600);
     });
 
     it('unlike và xoá comment trừ qua bộ đệm; counter không âm; like replay (unique) không đệm lần hai', async () => {

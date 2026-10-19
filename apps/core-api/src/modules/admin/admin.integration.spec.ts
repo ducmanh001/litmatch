@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { metrics } from '@opentelemetry/api';
 import { DataSource } from 'typeorm';
 
@@ -20,6 +22,7 @@ import { ReportTargetVideo1754900000000 } from '../../database/migrations/175490
 import { PartyRoomGift1752700000000 } from '../../database/migrations/1752700000000-party-room-gift';
 import { ReportStatus1753800000000 } from '../../database/migrations/1753800000000-report-status';
 import { NotificationBroadcasts1758300000000 } from '../../database/migrations/1758300000000-notification-broadcasts';
+import { BroadcastIdempotencyCancel1758600000000 } from '../../database/migrations/1758600000000-broadcast-idempotency-cancel';
 import { AuditLogService } from '../../common/audit/audit-log.service';
 import { AdminAuditLog } from '../../common/audit/audit-log.entity';
 import { Gender, User, UserService, UserStatus } from '../user';
@@ -182,6 +185,7 @@ d('Admin integration (Postgres thật)', () => {
         AdminSupportPermission1755400000000,
         ReportStatus1753800000000,
         NotificationBroadcasts1758300000000,
+        BroadcastIdempotencyCancel1758600000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -692,6 +696,12 @@ d('Admin integration (Postgres thật)', () => {
         );
       const reload = (id: string) =>
         ds.getRepository(NotificationBroadcast).findOneByOrFail({ id });
+      /** Mỗi lần xếp hàng mặc định dùng một Idempotency-Key MỚI (như client bấm gửi một lần). */
+      const enqueue = (
+        actorId: string,
+        input: { title: string; body: string; audience: BroadcastAudience },
+        key: string = randomUUID(),
+      ) => admin.broadcastNotification(actorId, input, key);
 
       // Xả broadcast còn dở của test trước để mỗi test bắt đầu từ hàng đợi rỗng.
       beforeEach(async () => {
@@ -702,7 +712,7 @@ d('Admin integration (Postgres thật)', () => {
         const actor = await createUser('bc-queue-actor');
         const title = `Tin xếp hàng ${actor.id}`;
 
-        const result = await admin.broadcastNotification(actor.id, {
+        const result = await enqueue(actor.id, {
           title,
           body: 'Nội dung',
           audience: BroadcastAudience.All,
@@ -743,12 +753,12 @@ d('Admin integration (Postgres thật)', () => {
         const vipTitle = `Tin VIP ${actor.id}`;
         const freeTitle = `Tin Free ${actor.id}`;
 
-        const vip = await admin.broadcastNotification(actor.id, {
+        const vip = await enqueue(actor.id, {
           title: vipTitle,
           body: 'Chỉ dành cho VIP',
           audience: BroadcastAudience.Vip,
         });
-        await admin.broadcastNotification(actor.id, {
+        await enqueue(actor.id, {
           title: freeTitle,
           body: 'Chỉ dành cho người dùng thường',
           audience: BroadcastAudience.Free,
@@ -783,7 +793,7 @@ d('Admin integration (Postgres thật)', () => {
           users.push(await createUser('bc-resume'));
         await sleep(10);
         const title = `Tin nhiều lô ${actor.id}`;
-        const { broadcastId } = await admin.broadcastNotification(actor.id, {
+        const { broadcastId } = await enqueue(actor.id, {
           title,
           body: 'x',
           audience: BroadcastAudience.All,
@@ -830,7 +840,7 @@ d('Admin integration (Postgres thật)', () => {
         await admin.banUser(actor.id, banned.id);
         await sleep(10);
         const title = `Tin phạm vi ${actor.id}`;
-        await admin.broadcastNotification(actor.id, {
+        await enqueue(actor.id, {
           title,
           body: 'x',
           audience: BroadcastAudience.All,
@@ -844,6 +854,141 @@ d('Admin integration (Postgres thật)', () => {
         expect(recipients).toContain(regular.id);
         expect(recipients).not.toContain(banned.id);
         expect(recipients).not.toContain(late.id);
+      });
+
+      it('Idempotency-Key: gửi lại cùng khoá + cùng nội dung → trả lại broadcast cũ (không bản thứ hai, không audit lần hai); khác nội dung → 409; khoá của admin khác độc lập', async () => {
+        const actor = await createUser('bc-idem-actor');
+        const other = await createUser('bc-idem-other');
+        const key = randomUUID();
+        const input = {
+          title: `Tin idempotent ${actor.id}`,
+          body: 'x',
+          audience: BroadcastAudience.All,
+        };
+
+        const first = await enqueue(actor.id, input, key);
+        const replay = await enqueue(actor.id, input, key);
+
+        expect(replay).toEqual(first);
+        expect(
+          await ds
+            .getRepository(NotificationBroadcast)
+            .countBy({ actorUserId: actor.id }),
+        ).toBe(1);
+        expect(
+          await ds.getRepository(AdminAuditLog).findBy({
+            targetId: first.broadcastId,
+            action: 'notification.broadcast.queued',
+          }),
+        ).toHaveLength(1);
+
+        await expect(
+          enqueue(actor.id, { ...input, body: 'khác' }, key),
+        ).rejects.toMatchObject({
+          code: AdminErrors.BROADCAST_IDEMPOTENCY_CONFLICT,
+        });
+        await expect(
+          enqueue(actor.id, { ...input, audience: BroadcastAudience.Vip }, key),
+        ).rejects.toMatchObject({
+          code: AdminErrors.BROADCAST_IDEMPOTENCY_CONFLICT,
+        });
+
+        // Cùng chuỗi khoá nhưng admin khác là một broadcast khác (khoá có phạm vi theo người gửi).
+        const otherBroadcast = await enqueue(other.id, input, key);
+        expect(otherBroadcast.broadcastId).not.toBe(first.broadcastId);
+      });
+
+      it('hai request ĐỒNG THỜI cùng khoá → đúng một broadcast (unique violation được đọc lại thành replay)', async () => {
+        const actor = await createUser('bc-idem-race');
+        const key = randomUUID();
+        const input = {
+          title: `Tin đua khoá ${actor.id}`,
+          body: 'x',
+          audience: BroadcastAudience.All,
+        };
+
+        const results = await Promise.all(
+          Array.from({ length: 6 }, () => enqueue(actor.id, input, key)),
+        );
+
+        expect(new Set(results.map((r) => r.broadcastId)).size).toBe(1);
+        expect(
+          await ds
+            .getRepository(NotificationBroadcast)
+            .countBy({ actorUserId: actor.id }),
+        ).toBe(1);
+        expect(
+          await ds.getRepository(AdminAuditLog).findBy({
+            targetId: results[0].broadcastId,
+            action: 'notification.broadcast.queued',
+          }),
+        ).toHaveLength(1);
+      });
+
+      it('huỷ broadcast đang gửi dở: lô đã gửi giữ nguyên, phần còn lại không gửi; huỷ lại idempotent; đã hoàn tất → 409; không tồn tại → 404', async () => {
+        const actor = await createUser('bc-cancel-actor');
+        for (let i = 0; i < 4; i += 1) await createUser('bc-cancel');
+        await sleep(10);
+        const title = `Tin huỷ giữa chừng ${actor.id}`;
+        const { broadcastId } = await enqueue(actor.id, {
+          title,
+          body: 'x',
+          audience: BroadcastAudience.All,
+        });
+
+        CONFIG['ADMIN_BROADCAST_BATCH_SIZE'] = 2;
+        CONFIG['ADMIN_BROADCAST_MAX_BATCHES_PER_TICK'] = 1;
+        try {
+          expect(await broadcastJob.runOnce()).toBe(1); // lô đầu: 2 người nhận
+          const cancelled = await admin.cancelBroadcast(actor.id, broadcastId);
+          expect(cancelled).toMatchObject({
+            status: BroadcastStatus.Cancelled,
+            recipientCount: 2,
+          });
+          expect(cancelled.completedAt).not.toBeNull();
+
+          // Job không nhặt broadcast đã huỷ nữa: không còn ai nhận thêm.
+          await drain();
+          expect((await titled(title)).length).toBe(2);
+          expect((await reload(broadcastId)).status).toBe(
+            BroadcastStatus.Cancelled,
+          );
+
+          // Huỷ lại: trả nguyên trạng thái, không ghi audit lần hai.
+          expect(
+            (await admin.cancelBroadcast(actor.id, broadcastId)).status,
+          ).toBe(BroadcastStatus.Cancelled);
+          const audits = await ds.getRepository(AdminAuditLog).findBy({
+            targetId: broadcastId,
+            action: 'notification.broadcast.cancelled',
+          });
+          expect(audits).toHaveLength(1);
+          expect(audits[0].metadata).toMatchObject({
+            recipientCountAtCancel: 2,
+          });
+        } finally {
+          CONFIG['ADMIN_BROADCAST_BATCH_SIZE'] = 500;
+          CONFIG['ADMIN_BROADCAST_MAX_BATCHES_PER_TICK'] = 20;
+        }
+
+        // Broadcast đã hoàn tất không huỷ được.
+        const done = await enqueue(actor.id, {
+          title: `${title} xong`,
+          body: 'x',
+          audience: BroadcastAudience.All,
+        });
+        await drain();
+        expect((await reload(done.broadcastId)).status).toBe(
+          BroadcastStatus.Completed,
+        );
+        await expect(
+          admin.cancelBroadcast(actor.id, done.broadcastId),
+        ).rejects.toMatchObject({
+          code: AdminErrors.BROADCAST_NOT_CANCELLABLE,
+        });
+        await expect(
+          admin.cancelBroadcast(actor.id, randomUUID()),
+        ).rejects.toMatchObject({ code: AdminErrors.BROADCAST_NOT_FOUND });
       });
 
       it('lô lỗi giữa chừng rollback sạch; lỗi liên tiếp quá ngưỡng thì failed + audit và không chặn broadcast sau', async () => {
@@ -862,7 +1007,7 @@ d('Admin integration (Postgres thật)', () => {
         let failedId: string;
         try {
           failedId = (
-            await admin.broadcastNotification(actor.id, {
+            await enqueue(actor.id, {
               title,
               body: 'x',
               audience: BroadcastAudience.All,
@@ -893,7 +1038,7 @@ d('Admin integration (Postgres thật)', () => {
           spy.mockRestore();
         }
 
-        const next = await admin.broadcastNotification(actor.id, {
+        const next = await enqueue(actor.id, {
           title: `${title} sau`,
           body: 'x',
           audience: BroadcastAudience.All,

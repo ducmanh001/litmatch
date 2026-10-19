@@ -6037,7 +6037,15 @@
     "/api/v1/admin/notifications/broadcast": {
       "post": {
         "operationId": "AdminController_broadcastNotification",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -6104,6 +6112,41 @@
         },
         "security": [{ "bearer": [] }],
         "summary": "Tiến độ một lần broadcast thông báo — chỉ admin",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/notifications/broadcast/{id}/cancel": {
+      "post": {
+        "operationId": "AdminController_cancelBroadcast",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BroadcastStatusDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Huỷ broadcast đang xếp hàng/đang gửi — lô đã gửi không thu hồi được; idempotent, chỉ admin",
         "tags": ["admin"]
       }
     },
@@ -9044,7 +9087,7 @@
           "broadcastId": { "type": "string" },
           "status": {
             "type": "string",
-            "enum": ["queued", "running", "completed", "failed"]
+            "enum": ["queued", "running", "completed", "failed", "cancelled"]
           }
         },
         "required": ["broadcastId", "status"]
@@ -9055,7 +9098,7 @@
           "broadcastId": { "type": "string" },
           "status": {
             "type": "string",
-            "enum": ["queued", "running", "completed", "failed"]
+            "enum": ["queued", "running", "completed", "failed", "cancelled"]
           },
           "audience": { "type": "string", "enum": ["all", "vip", "free"] },
           "recipientCount": { "type": "number" },

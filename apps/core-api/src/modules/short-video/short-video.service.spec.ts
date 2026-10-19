@@ -20,6 +20,7 @@ const CONFIG: Record<string, unknown> = {
   VIDEO_MODERATION_MODE: 'pre',
   VIDEO_QUALIFIED_VIEW_MIN_MS: 3000,
   VIDEO_REPORT_AUTOHIDE_THRESHOLD: 5,
+  VIDEO_RANKING_ACTIVE_REFRESH_SECONDS: 600,
 };
 const configStub = {
   getOrThrow: (key: string) => {
@@ -94,6 +95,7 @@ describe('ShortVideoService (unit — mock repo/ports/dataSource)', () => {
     update: jest.Mock;
     increment: jest.Mock;
     decrement: jest.Mock;
+    query: jest.Mock;
     create: jest.Mock;
     findOneByOrFail: jest.Mock;
     getRepository: jest.Mock;
@@ -184,6 +186,7 @@ describe('ShortVideoService (unit — mock repo/ports/dataSource)', () => {
         raw: [],
         generatedMaps: [],
       })),
+      query: jest.fn(async () => [[], 1]),
       create: jest.fn((entity, input) =>
         Object.assign(new (entity as new () => object)(), input),
       ),
@@ -429,13 +432,15 @@ describe('ShortVideoService (unit — mock repo/ports/dataSource)', () => {
       videoRepo.findOneBy.mockResolvedValue(makeVideo());
       manager.findOneOrFail.mockResolvedValue(existingView());
       await service.recordView(viewer, 'video-1', 5_000);
-      expect(manager.increment).toHaveBeenCalledTimes(1);
-      expect(manager.increment).toHaveBeenCalledWith(
-        Video,
-        { id: 'video-1' },
-        'viewCount',
-        1,
+      // Counter + kéo rank_due_at về sớm trong MỘT câu UPDATE (không còn manager.increment).
+      expect(manager.increment).not.toHaveBeenCalled();
+      expect(manager.query).toHaveBeenCalledTimes(1);
+      const [sql, params] = manager.query.mock.calls[0] as [string, unknown[]];
+      expect(sql).toContain(
+        'SET view_count = GREATEST(view_count + $2::int, 0)',
       );
+      expect(sql).toContain('rank_due_at = LEAST(COALESCE(rank_due_at, now())');
+      expect(params).toEqual(['video-1', 1, 600]);
       expect(manager.update).toHaveBeenCalledWith(
         VideoView,
         { id: 'view-1' },
@@ -469,7 +474,7 @@ describe('ShortVideoService (unit — mock repo/ports/dataSource)', () => {
         existingView({ watchTimeMs: 5_000, qualified: true }),
       );
       await service.recordView(viewer, 'video-1', 8_000);
-      expect(manager.increment).not.toHaveBeenCalled();
+      expect(manager.query).not.toHaveBeenCalled();
       expect(manager.update).toHaveBeenCalledWith(
         VideoView,
         { id: 'view-1' },
@@ -483,7 +488,7 @@ describe('ShortVideoService (unit — mock repo/ports/dataSource)', () => {
         existingView({ watchTimeMs: 900 }),
       );
       await service.recordView(viewer, 'video-1', 400);
-      expect(manager.increment).not.toHaveBeenCalled();
+      expect(manager.query).not.toHaveBeenCalled();
       expect(manager.update).toHaveBeenCalledWith(
         VideoView,
         { id: 'view-1' },

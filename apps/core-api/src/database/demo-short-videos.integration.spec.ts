@@ -7,6 +7,7 @@ import { ShortVideo1754800000000 } from './migrations/1754800000000-short-video'
 import { UserProfilePreferences1755800000000 } from './migrations/1755800000000-user-profile-preferences';
 import { VideoStorageCleanupMarker1757800000000 } from './migrations/1757800000000-video-storage-cleanup-marker';
 import { ShortVideoRankingIndexes1758200000000 } from './migrations/1758200000000-short-video-ranking-indexes';
+import { VideoRankDue1758700000000 } from './migrations/1758700000000-video-rank-due';
 import {
   DEMO_SHORT_VIDEOS,
   DEMO_VIDEO_AUTHOR_ID,
@@ -38,6 +39,7 @@ if (!INTEGRATION_DB_URL) {
 const configStub = {
   getOrThrow: (key: string) => {
     if (key === 'VIDEO_QUALIFIED_VIEW_MIN_MS') return 3000;
+    if (key === 'VIDEO_RANKING_ACTIVE_REFRESH_SECONDS') return 600;
     throw new Error(`missing config ${key}`);
   },
 } as unknown as ConfigService<CoreApiEnv, true>;
@@ -85,6 +87,7 @@ d('demo short-video seed (Postgres thật)', () => {
         DemoShortVideos1756700000000,
         VideoStorageCleanupMarker1757800000000,
         ShortVideoRankingIndexes1758200000000,
+        VideoRankDue1758700000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -171,8 +174,9 @@ d('demo short-video seed (Postgres thật)', () => {
       `INSERT INTO demo_short_video_author_ref (author_id) VALUES ($1)`,
       [DEMO_VIDEO_AUTHOR_ID],
     );
-    // TypeORM chỉ hoàn tác migration MỚI NHẤT: lần 1 gỡ index/cột ranking (1758200000000), lần 2 gỡ cột đánh dấu
-    // cleanup (1757800000000), lần 3 mới tới migration demo cần kiểm tra.
+    // TypeORM chỉ hoàn tác migration MỚI NHẤT: lần 1 gỡ hạn tính lại ranking (1758700000000), lần 2 gỡ index/cột ranking
+    // (1758200000000), lần 3 gỡ cột đánh dấu cleanup (1757800000000), lần 4 mới tới migration demo cần kiểm tra.
+    await dataSource.undoLastMigration({ transaction: 'each' });
     await dataSource.undoLastMigration({ transaction: 'each' });
     await dataSource.undoLastMigration({ transaction: 'each' });
     await dataSource.undoLastMigration({ transaction: 'each' });

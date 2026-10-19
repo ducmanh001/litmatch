@@ -5,6 +5,7 @@ import { DomainException } from '@litmatch/common-exceptions';
 import { DataSource, Repository } from 'typeorm';
 
 import { AuditLogService } from '../../common/audit/audit-log.service';
+import { isUniqueViolation } from '../../database/postgres-errors';
 import { User, UserService } from '../user';
 import { Report, ReportStatus, SafetyService } from '../safety';
 import { Gift, GiftService } from '../gift';
@@ -422,33 +423,132 @@ export class AdminService {
    * Xếp hàng một broadcast (ADR 0013) — KHÔNG gửi trong request: nạp hết user vào RAM rồi ghi hàng triệu dòng
    * trong một transaction làm request treo. `BroadcastDispatchJob` gửi dần ở nền theo lô; tiến độ xem qua
    * `getBroadcast`. Dòng broadcast và audit `queued` ghi cùng transaction.
+   *
+   * Idempotent theo `(actor, Idempotency-Key)`: bấm gửi hai lần hoặc client retry sau lỗi mạng trả LẠI broadcast đã tạo
+   * (không tạo bản thứ hai gửi cho cả triệu người, không ghi audit lần hai); cùng khoá nhưng nội dung khác → 409.
+   * Unique violation khi hai request cùng khoá chạy đồng thời được đọc lại thành replay.
    */
   async broadcastNotification(
     actorUserId: string,
     input: { title: string; body: string; audience: BroadcastAudience },
+    idempotencyKey: string,
   ): Promise<{ broadcastId: string; status: BroadcastStatus }> {
+    const existing = await this.findBroadcastByKey(actorUserId, idempotencyKey);
+    if (existing !== null) return this.replayBroadcast(existing, input);
+    try {
+      return await this.dataSource.transaction(async (manager) => {
+        const repo = manager.getRepository(NotificationBroadcast);
+        const broadcast = await repo.save(
+          repo.create({
+            actorUserId,
+            title: input.title,
+            body: input.body,
+            audience: input.audience,
+            status: BroadcastStatus.Queued,
+            idempotencyKey,
+          }),
+        );
+        await this.auditLogService.record(
+          {
+            actorUserId,
+            action: 'notification.broadcast.queued',
+            targetType: 'notification_broadcast',
+            targetId: broadcast.id,
+            metadata: { audience: input.audience, title: input.title },
+          },
+          manager,
+        );
+        return { broadcastId: broadcast.id, status: broadcast.status };
+      });
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+      const raced = await this.findBroadcastByKey(actorUserId, idempotencyKey);
+      if (raced === null) throw error;
+      return this.replayBroadcast(raced, input);
+    }
+  }
+
+  private findBroadcastByKey(
+    actorUserId: string,
+    idempotencyKey: string,
+  ): Promise<NotificationBroadcast | null> {
+    return this.dataSource
+      .getRepository(NotificationBroadcast)
+      .findOneBy({ actorUserId, idempotencyKey });
+  }
+
+  private replayBroadcast(
+    existing: NotificationBroadcast,
+    input: { title: string; body: string; audience: BroadcastAudience },
+  ): { broadcastId: string; status: BroadcastStatus } {
+    if (
+      existing.title !== input.title ||
+      existing.body !== input.body ||
+      existing.audience !== input.audience
+    ) {
+      throw new DomainException(
+        AdminErrors.BROADCAST_IDEMPOTENCY_CONFLICT,
+        'Idempotency-Key đã dùng cho một broadcast khác',
+        HttpStatus.CONFLICT,
+      );
+    }
+    return { broadcastId: existing.id, status: existing.status };
+  }
+
+  /**
+   * Huỷ broadcast đang xếp hàng/đang gửi: các lô ĐÃ commit không thu hồi được (thông báo đã tới người dùng), phần còn lại
+   * ngừng ngay — job chỉ nhặt broadcast `queued`/`running` và khoá dòng trước khi ghi mỗi lô, nên một lô đang chạy dở
+   * hoàn tất rồi dừng. Idempotent: huỷ lại broadcast đã huỷ trả lại nguyên trạng thái, không ghi audit lần hai;
+   * broadcast đã `completed`/`failed` thì 409.
+   */
+  async cancelBroadcast(
+    actorUserId: string,
+    broadcastId: string,
+  ): Promise<NotificationBroadcast> {
     return this.dataSource.transaction(async (manager) => {
-      const repo = manager.getRepository(NotificationBroadcast);
-      const broadcast = await repo.save(
-        repo.create({
-          actorUserId,
-          title: input.title,
-          body: input.body,
-          audience: input.audience,
-          status: BroadcastStatus.Queued,
-        }),
+      // UPDATE ... RETURNING qua manager.query trả [rows, rowCount].
+      const [cancelled] = await manager.query<
+        [Array<{ recipientCount: number }>, number]
+      >(
+        `UPDATE notification_broadcasts
+            SET status = 'cancelled', completed_at = now(), updated_at = now()
+          WHERE id = $1 AND status IN ('queued', 'running')
+          RETURNING recipient_count AS "recipientCount"`,
+        [broadcastId],
       );
-      await this.auditLogService.record(
-        {
-          actorUserId,
-          action: 'notification.broadcast.queued',
-          targetType: 'notification_broadcast',
-          targetId: broadcast.id,
-          metadata: { audience: input.audience, title: input.title },
-        },
-        manager,
-      );
-      return { broadcastId: broadcast.id, status: broadcast.status };
+      if (cancelled.length > 0) {
+        await this.auditLogService.record(
+          {
+            actorUserId,
+            action: 'notification.broadcast.cancelled',
+            targetType: 'notification_broadcast',
+            targetId: broadcastId,
+            metadata: { recipientCountAtCancel: cancelled[0]?.recipientCount },
+          },
+          manager,
+        );
+      }
+      const broadcast = await manager
+        .getRepository(NotificationBroadcast)
+        .findOneBy({ id: broadcastId });
+      if (broadcast === null) {
+        throw new DomainException(
+          AdminErrors.BROADCAST_NOT_FOUND,
+          'Không tìm thấy lần gửi thông báo',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+      if (
+        cancelled.length === 0 &&
+        broadcast.status !== BroadcastStatus.Cancelled
+      ) {
+        throw new DomainException(
+          AdminErrors.BROADCAST_NOT_CANCELLABLE,
+          `Broadcast đã ${broadcast.status}, không huỷ được`,
+          HttpStatus.CONFLICT,
+        );
+      }
+      return broadcast;
     });
   }
 

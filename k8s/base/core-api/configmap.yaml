@@ -219,6 +219,10 @@ data:
   # Ranking: mỗi tick tính lại tối đa BATCH_SIZE × MAX_BATCHES_PER_TICK video, xoay vòng theo rank_computed_at
   VIDEO_RANKING_BATCH_SIZE: '2000'
   VIDEO_RANKING_MAX_BATCHES_PER_TICK: '5'
+  # Ranking theo hạn tính lại (ADR 0014): khoảng = STALENESS_PCT% × (decay + tuổi), trần MAX_INTERVAL_HOURS; tương tác → sớm nhất ACTIVE_REFRESH_SECONDS
+  VIDEO_RANKING_STALENESS_PCT: '1'
+  VIDEO_RANKING_MAX_INTERVAL_HOURS: '168'
+  VIDEO_RANKING_ACTIVE_REFRESH_SECONDS: '600'
   # Bộ đệm counter view/like/comment (ADR 0013): 'true' khi một video viral làm nghẽn UPDATE videos (số đếm trễ ≤ FLUSH_INTERVAL_MS)
   VIDEO_COUNTER_BUFFER_ENABLED: 'false'
   VIDEO_COUNTER_FLUSH_INTERVAL_MS: '2000'

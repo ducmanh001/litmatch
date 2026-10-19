@@ -66,6 +66,14 @@ export class Video extends BaseAppEntity {
   @Column({ type: 'timestamptz', nullable: true })
   rankComputedAt!: Date | null;
 
+  /**
+   * Hạn tính lại `rankScore`: job chọn video đến hạn (NULL hoặc ≤ now) theo thứ tự hạn. Sau mỗi lần tính = now +
+   * `VIDEO_RANKING_STALENESS_PCT % × (decay + tuổi)` (trong [60 giây, VIDEO_RANKING_MAX_INTERVAL_HOURS]); mỗi lần counter đổi
+   * kéo hạn về ≤ now + `VIDEO_RANKING_ACTIVE_REFRESH_SECONDS`. NULL = đến hạn ngay.
+   */
+  @Column({ type: 'timestamptz', nullable: true })
+  rankDueAt!: Date | null;
+
   @Column({ type: 'varchar', length: 255, unique: true })
   idempotencyKey!: string;
 }

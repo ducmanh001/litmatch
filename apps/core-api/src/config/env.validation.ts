@@ -255,6 +255,9 @@ export interface CoreApiEnv {
   VIDEO_RANKING_JOB_INTERVAL_MS: number;
   VIDEO_RANKING_BATCH_SIZE: number;
   VIDEO_RANKING_MAX_BATCHES_PER_TICK: number;
+  VIDEO_RANKING_STALENESS_PCT: number;
+  VIDEO_RANKING_MAX_INTERVAL_HOURS: number;
+  VIDEO_RANKING_ACTIVE_REFRESH_SECONDS: number;
   VIDEO_COUNTER_BUFFER_ENABLED: boolean;
   VIDEO_COUNTER_FLUSH_INTERVAL_MS: number;
   VIDEO_COUNTER_FLUSH_BATCH: number;
@@ -692,7 +695,8 @@ export const coreApiEnvSchema = Joi.object({
   // Cap speaker là giới hạn CỨNG theo docs/03 § 3.8.A (consumer tăng N×(N-1)) — chỉ nới khi có cascade SFU
   PARTY_MAX_SPEAKERS: Joi.number().integer().min(1).default(8),
   // Truyền vào LiveKit maxParticipants lúc tạo room — SFU tự chặn join vượt ngưỡng
-  PARTY_MAX_MEMBERS: Joi.number().integer().min(2).default(100),
+  // Trần cứng 500: mỗi sự kiện phòng (bình luận, vào/rời) là N PUBLISH Redis nên N không được vô hạn.
+  PARTY_MAX_MEMBERS: Joi.number().integer().min(2).max(500).default(100),
   PARTY_TOKEN_TTL_SECONDS: Joi.number().integer().min(30).default(120),
   // LiveKit tự đóng room trống sau N giây — backstop tầng SFU cho phòng vô chủ
   PARTY_EMPTY_ROOM_TIMEOUT_SECONDS: Joi.number().integer().min(30).default(300),
@@ -958,6 +962,19 @@ export const coreApiEnvSchema = Joi.object({
     .min(1)
     .max(100)
     .default(5),
+  // Ranking theo HẠN TÍNH LẠI (ADR 0014): khoảng tính lại tỉ lệ với (decay + tuổi) nên công việc tỉ lệ với video trẻ/hoạt động,
+  // không với cả catalogue. Cần số lô × cỡ lô × (3600 / chu kỳ tick) ≥ số video đến hạn mỗi giờ (~3,4%/giờ tổng video ở tuổi trung bình).
+  VIDEO_RANKING_STALENESS_PCT: Joi.number().min(0.1).max(50).default(1),
+  VIDEO_RANKING_MAX_INTERVAL_HOURS: Joi.number()
+    .integer()
+    .min(1)
+    .max(8760)
+    .default(168),
+  VIDEO_RANKING_ACTIVE_REFRESH_SECONDS: Joi.number()
+    .integer()
+    .min(60)
+    .max(86400)
+    .default(600),
   // Bộ đệm counter view/like/comment trên Redis (ADR 0013): gom nhiều lượt trên cùng video thành MỘT câu UPDATE mỗi
   // tick để video viral không thành hàng nóng. Tắt mặc định = cộng thẳng vào DB trong transaction như trước. Bật thì
   // số đếm hiển thị trễ tối đa FLUSH_INTERVAL_MS; Redis lỗi thì tự quay về cộng thẳng vào DB.

@@ -104,8 +104,14 @@ commit; hai runner chồng nhau (failover) không gửi trùng một lô. Trang 
   mất push nhưng vẫn có thông báo in-app. Push theo từng người là điểm nghẽn thật ở quy mô triệu — cần provider hỗ trợ
   topic/batch (quyết định riêng).
 - **Lỗi**: lô lỗi rollback sạch, ghi `failure_count`/`last_error` và thử lại tick sau; 5 lần liên tiếp thì `failed` + audit
-  `notification.broadcast.failed` (không chặn broadcast sau). Chưa có huỷ/pause và chưa có `Idempotency-Key`: bấm gửi hai
-  lần tạo hai broadcast.
+  `notification.broadcast.failed` (không chặn broadcast sau).
+- **Idempotency-Key bắt buộc** ở `POST`: unique một phần `(actor_user_id, idempotency_key)`. Gửi lại cùng khoá + cùng nội dung (bấm đúp,
+  retry sau lỗi mạng) trả LẠI broadcast đã tạo, không bản thứ hai, không audit lần hai; cùng khoá nhưng khác nội dung → 409
+  `ADMIN_BROADCAST_IDEMPOTENCY_CONFLICT`; hai request đồng thời cùng khoá → đúng một broadcast. Admin UI giữ một khoá cho mỗi nội dung.
+- **Huỷ**: `POST /admin/notifications/broadcast/:id/cancel` (idempotent) chuyển `queued`/`running` → `cancelled`; job chỉ nhặt broadcast
+  `queued`/`running` và khoá dòng trước mỗi lô nên lô đang chạy dở hoàn tất rồi dừng. Các lô ĐÃ commit không thu hồi được (thông báo đã
+  tới người dùng); audit `notification.broadcast.cancelled` ghi `recipientCountAtCancel`. `completed`/`failed` → 409
+  `ADMIN_BROADCAST_NOT_CANCELLABLE`.
 
 ## 7. Ngoài scope GĐ4
 

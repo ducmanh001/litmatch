@@ -2648,6 +2648,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/admin/notifications/broadcast/{id}/cancel': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Huỷ broadcast đang xếp hàng/đang gửi — lô đã gửi không thu hồi được; idempotent, chỉ admin */
+    post: operations['AdminController_cancelBroadcast'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/admin/permissions': {
     parameters: {
       query?: never;
@@ -4133,12 +4150,12 @@ export interface components {
     BroadcastNotificationResultDto: {
       broadcastId: string;
       /** @enum {string} */
-      status: 'queued' | 'running' | 'completed' | 'failed';
+      status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
     };
     BroadcastStatusDto: {
       broadcastId: string;
       /** @enum {string} */
-      status: 'queued' | 'running' | 'completed' | 'failed';
+      status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
       /** @enum {string} */
       audience: 'all' | 'vip' | 'free';
       recipientCount: number;
@@ -8881,7 +8898,10 @@ export interface operations {
   AdminController_broadcastNotification: {
     parameters: {
       query?: never;
-      header?: never;
+      header: {
+        /** @description Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10) */
+        'Idempotency-Key': string;
+      };
       path?: never;
       cookie?: never;
     };
@@ -8907,6 +8927,32 @@ export interface operations {
     };
   };
   AdminController_getBroadcast: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['BroadcastStatusDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_cancelBroadcast: {
     parameters: {
       query?: never;
       header?: never;

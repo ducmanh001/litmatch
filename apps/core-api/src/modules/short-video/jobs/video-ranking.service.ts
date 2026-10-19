@@ -14,6 +14,8 @@ import { VideoStatus } from '../entities/video.entity';
 
 import type { CoreApiEnv } from '../../../config/env.validation';
 
+/** Sàn khoảng tính lại: bảo đảm hạn mới luôn nằm trong tương lai nên một video không bị tính hai lần trong một tick. */
+const MIN_REFRESH_SECONDS = 60;
 const VIDEO_RANKING_JOB = 'short-video-ranking';
 
 /**
@@ -21,12 +23,14 @@ const VIDEO_RANKING_JOB = 'short-video-ranking';
  * chia cho hệ số time-decay tuyến tính theo giờ kể từ `createdAt`. Job derive, KHÔNG phải nguồn
  * sự thật — fallback `sort=recent` khi `rankScore IS NULL` (video mới toanh, job chưa kịp chạy).
  *
- * Mỗi tick tính lại một lô video published, xoay vòng theo `rank_computed_at` (NULL trước = video mới được
- * ưu tiên, rồi tới video tính điểm lâu nhất). Trước đây xoay theo `updated_at` mà `increment` counter tự cập nhật
- * `updated_at` nên video đang nóng bị xếp CUỐI hàng chờ. Công thức không đổi; chu kỳ đầy đủ = số video / lô × chu kỳ
- * tick nên tăng `VIDEO_RANKING_BATCH_SIZE`/`VIDEO_RANKING_MAX_BATCHES_PER_TICK` theo quy mô (hàng chục triệu video
- * cần khoá xếp hạng không phụ thuộc tuổi hoặc ZSET — ADR riêng). `SKIP LOCKED` để không chờ video đang bị
- * moderation chuyển trạng thái.
+ * Mỗi tick tính lại các video published ĐẾN HẠN (`rank_due_at` NULL hoặc ≤ now, theo thứ tự hạn). Sau khi tính, hạn kế tiếp
+ * = now + `VIDEO_RANKING_STALENESS_PCT %` × (`VIDEO_RANK_TIME_DECAY_HOURS` + tuổi video), kẹp trong [60 giây,
+ * `VIDEO_RANKING_MAX_INTERVAL_HOURS`]: điểm = tương tác / (1 + tuổi/decay) chỉ lệch tương đối ≈ Δ/(decay + tuổi) sau Δ giờ
+ * nên video mới được tính lại mỗi ~30 phút còn video nhiều tháng tuổi mỗi vài ngày — công việc tỉ lệ với video TRẺ và HOẠT
+ * ĐỘNG (counter đổi kéo hạn về ≤ `VIDEO_RANKING_ACTIVE_REFRESH_SECONDS`), KHÔNG với cả catalogue (trước đây chu kỳ đầy đủ =
+ * số video / lô × chu kỳ tick, hàng chục triệu video không bao giờ kịp). Công thức điểm không đổi. Hạn luôn nằm trong
+ * tương lai sau khi tính nên mỗi video tối đa một lần mỗi tick. `SKIP LOCKED` để không chờ video đang bị moderation
+ * chuyển trạng thái.
  */
 @Injectable()
 export class VideoRankingService
@@ -84,12 +88,13 @@ export class VideoRankingService
         { infer: true },
       );
 
-      // Mốc bắt đầu tick theo đồng hồ DB (giữ micro giây): lô sau chỉ lấy video chưa được tính TRONG tick này.
-      // Thiếu điều kiện đó thì catalogue nhỏ hơn lô × số lô bị ghi lại nhiều lần mỗi tick (mỗi lần UPDATE là
-      // non-HOT vì đổi cả `rank_score` lẫn `rank_computed_at`, kéo theo ghi hai index) và vòng lặp không bao giờ dừng sớm.
-      const [{ tickStart }] = (await this.dataSource.query(
-        `SELECT clock_timestamp()::text AS "tickStart"`,
-      )) as Array<{ tickStart: string }>;
+      const stalenessFraction =
+        this.config.getOrThrow('VIDEO_RANKING_STALENESS_PCT', { infer: true }) /
+        100;
+      const maxIntervalSeconds =
+        this.config.getOrThrow('VIDEO_RANKING_MAX_INTERVAL_HOURS', {
+          infer: true,
+        }) * 3600;
 
       let total = 0;
       for (let batch = 0; batch < maxBatches; batch += 1) {
@@ -97,12 +102,14 @@ export class VideoRankingService
           `UPDATE videos
           SET rank_score = (view_count * $1 + like_count * $2 + comment_count * $3)
                               / (1 + EXTRACT(EPOCH FROM (now() - created_at)) / 3600.0 / $4),
-                rank_computed_at = now()
+              rank_computed_at = now(),
+              rank_due_at = now() + make_interval(secs => LEAST($7::float8, GREATEST($8::float8,
+                $9::float8 * ($10::float8 + EXTRACT(EPOCH FROM (now() - created_at)) / 3600.0) * 3600.0)))
           WHERE id IN (
             SELECT id FROM videos
              WHERE status = $5
-               AND (rank_computed_at IS NULL OR rank_computed_at < $7::timestamptz)
-             ORDER BY rank_computed_at ASC NULLS FIRST, id ASC
+               AND (rank_due_at IS NULL OR rank_due_at <= now())
+             ORDER BY rank_due_at ASC NULLS FIRST, id ASC
              LIMIT $6
              FOR UPDATE SKIP LOCKED
           )`,
@@ -113,7 +120,10 @@ export class VideoRankingService
             decayHours,
             VideoStatus.Published,
             batchSize,
-            tickStart,
+            maxIntervalSeconds,
+            MIN_REFRESH_SECONDS,
+            stalenessFraction,
+            decayHours,
           ],
         )) as [unknown, number];
         total += count;

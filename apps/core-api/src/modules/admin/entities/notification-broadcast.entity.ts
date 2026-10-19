@@ -11,6 +11,7 @@ export enum BroadcastStatus {
   Running = 'running',
   Completed = 'completed',
   Failed = 'failed',
+  Cancelled = 'cancelled',
 }
 
 /**
@@ -22,6 +23,11 @@ export enum BroadcastStatus {
 @Index('idx_notification_broadcasts_open', ['createdAt', 'id'], {
   where: `"status" IN ('queued', 'running')`,
 })
+@Index(
+  'uq_notification_broadcasts_idempotency',
+  ['actorUserId', 'idempotencyKey'],
+  { unique: true, where: '"idempotency_key" IS NOT NULL' },
+)
 export class NotificationBroadcast {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -40,6 +46,10 @@ export class NotificationBroadcast {
 
   @Column({ type: 'varchar', length: 16, default: BroadcastStatus.Queued })
   status!: BroadcastStatus;
+
+  /** Khoá do admin client gửi (header Idempotency-Key); cùng khoá + cùng nội dung → trả lại broadcast cũ. */
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  idempotencyKey!: string | null;
 
   @Column({ type: 'uuid', nullable: true })
   cursorUserId!: string | null;

@@ -92,6 +92,15 @@ describe('coreApiEnvSchema invariants', () => {
       expect(
         value('VIDEO_RANKING_MAX_BATCHES_PER_TICK', 101).error,
       ).toBeDefined();
+      expect(value('VIDEO_RANKING_STALENESS_PCT').value).toBe(1);
+      expect(value('VIDEO_RANKING_STALENESS_PCT', 0.05).error).toBeDefined();
+      expect(value('VIDEO_RANKING_STALENESS_PCT', 51).error).toBeDefined();
+      expect(value('VIDEO_RANKING_MAX_INTERVAL_HOURS').value).toBe(168);
+      expect(value('VIDEO_RANKING_MAX_INTERVAL_HOURS', 0).error).toBeDefined();
+      expect(value('VIDEO_RANKING_ACTIVE_REFRESH_SECONDS').value).toBe(600);
+      expect(
+        value('VIDEO_RANKING_ACTIVE_REFRESH_SECONDS', 59).error,
+      ).toBeDefined();
     });
 
     it('counter đệm tắt mặc định (cộng thẳng vào DB như trước); chu kỳ flush và lô bị chặn khoảng', () => {

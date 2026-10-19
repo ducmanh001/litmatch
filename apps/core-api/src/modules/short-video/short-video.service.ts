@@ -87,9 +87,37 @@ export class ShortVideoService {
         `Counter buffer lỗi, cộng thẳng vào DB: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
-    const manager = this.dataSource.manager;
-    if (delta > 0) await manager.increment(Video, { id: videoId }, column, 1);
-    else await manager.decrement(Video, { id: videoId }, column, 1);
+    await this.bumpCounter(this.dataSource.manager, videoId, column, delta);
+  }
+
+  /**
+   * Cộng/trừ MỘT đơn vị counter (không âm) và kéo `rank_due_at` về ≤ now + `VIDEO_RANKING_ACTIVE_REFRESH_SECONDS` để job
+   * ranking tính lại video vừa có tương tác. `LEAST(...)` giữ nguyên hạn nếu đã sớm hơn nên các lần bump sau trong cùng
+   * khoảng không đổi cột có index (UPDATE vẫn HOT được); chỉ lần đầu sau mỗi lần tính mới ghi index hạn.
+   */
+  private async bumpCounter(
+    manager: EntityManager,
+    videoId: string,
+    column: 'viewCount' | 'likeCount' | 'commentCount',
+    delta: 1 | -1,
+  ): Promise<void> {
+    const sqlColumn =
+      column === 'viewCount'
+        ? 'view_count'
+        : column === 'likeCount'
+          ? 'like_count'
+          : 'comment_count';
+    const activeRefreshSeconds = this.config.getOrThrow(
+      'VIDEO_RANKING_ACTIVE_REFRESH_SECONDS',
+      { infer: true },
+    );
+    await manager.query(
+      `UPDATE videos
+          SET ${sqlColumn} = GREATEST(${sqlColumn} + $2::int, 0),
+              rank_due_at = LEAST(COALESCE(rank_due_at, now()), now() + make_interval(secs => $3::int))
+        WHERE id = $1`,
+      [videoId, delta, activeRefreshSeconds],
+    );
   }
 
   /**
@@ -337,7 +365,7 @@ export class ShortVideoService {
         },
       );
       if (shouldQualifyNow && !this.buffered) {
-        await manager.increment(Video, { id: videoId }, 'viewCount', 1);
+        await this.bumpCounter(manager, videoId, 'viewCount', 1);
       }
       return shouldQualifyNow;
     });
@@ -358,7 +386,7 @@ export class ShortVideoService {
           manager.create(VideoReaction, { videoId, userId: user.userId }),
         );
         if (!this.buffered) {
-          await manager.increment(Video, { id: videoId }, 'likeCount', 1);
+          await this.bumpCounter(manager, videoId, 'likeCount', 1);
         }
       });
       if (this.buffered) await this.bufferCounter(videoId, 'likeCount', 1);
@@ -380,7 +408,7 @@ export class ShortVideoService {
         userId: user.userId,
       });
       if (affected && !this.buffered) {
-        await manager.decrement(Video, { id: videoId }, 'likeCount', 1);
+        await this.bumpCounter(manager, videoId, 'likeCount', -1);
       }
       return affected;
     });
@@ -408,7 +436,7 @@ export class ShortVideoService {
         }),
       );
       if (!this.buffered) {
-        await manager.increment(Video, { id: videoId }, 'commentCount', 1);
+        await this.bumpCounter(manager, videoId, 'commentCount', 1);
       }
       return created;
     });
@@ -474,7 +502,7 @@ export class ShortVideoService {
         { deletedAt: new Date() },
       );
       if (affected && !this.buffered) {
-        await manager.decrement(Video, { id: videoId }, 'commentCount', 1);
+        await this.bumpCounter(manager, videoId, 'commentCount', -1);
       }
       return affected ?? 0;
     });

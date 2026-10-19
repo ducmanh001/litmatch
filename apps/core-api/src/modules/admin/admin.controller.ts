@@ -12,6 +12,10 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  ApiIdempotencyKeyHeader,
+  IdempotencyKey,
+} from '../../common/decorators/idempotency-key.decorator';
+import {
   ApiAcceptedResponse,
   ApiBearerAuth,
   ApiOkResponse,
@@ -497,11 +501,17 @@ export class AdminController {
       'Xếp hàng broadcast thông báo in-app + push best-effort theo audience — gửi dần ở nền, chỉ admin',
   })
   @ApiAcceptedResponse({ type: BroadcastNotificationResultDto })
+  @ApiIdempotencyKeyHeader()
   broadcastNotification(
     @CurrentUser() actor: AuthenticatedUser,
     @Body() body: BroadcastNotificationDto,
+    @IdempotencyKey() idempotencyKey: string,
   ): Promise<BroadcastNotificationResultDto> {
-    return this.adminService.broadcastNotification(actor.userId, body);
+    return this.adminService.broadcastNotification(
+      actor.userId,
+      body,
+      idempotencyKey,
+    );
   }
 
   @Get('notifications/broadcast/:id')
@@ -511,17 +521,24 @@ export class AdminController {
   async getBroadcast(
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<BroadcastStatusDto> {
-    const broadcast = await this.adminService.getBroadcast(id);
-    return {
-      broadcastId: broadcast.id,
-      status: broadcast.status,
-      audience: broadcast.audience,
-      recipientCount: broadcast.recipientCount,
-      createdAt: broadcast.createdAt,
-      startedAt: broadcast.startedAt,
-      completedAt: broadcast.completedAt,
-      lastError: broadcast.lastError,
-    };
+    return BroadcastStatusDto.from(await this.adminService.getBroadcast(id));
+  }
+
+  @Post('notifications/broadcast/:id/cancel')
+  @RequireAdminPermission(AdminPermission.ManageConfig)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Huỷ broadcast đang xếp hàng/đang gửi — lô đã gửi không thu hồi được; idempotent, chỉ admin',
+  })
+  @ApiOkResponse({ type: BroadcastStatusDto })
+  async cancelBroadcast(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<BroadcastStatusDto> {
+    return BroadcastStatusDto.from(
+      await this.adminService.cancelBroadcast(actor.userId, id),
+    );
   }
 
   @Get('permissions')

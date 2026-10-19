@@ -13,6 +13,8 @@ import {
   BroadcastStatus,
 } from '../entities/notification-broadcast.entity';
 
+import type { NotificationBroadcast } from '../entities/notification-broadcast.entity';
+
 import type { IapProductCatalogView, VipPlanCatalogView } from '../../economy';
 
 export class AdminIapProductDto {
@@ -91,4 +93,17 @@ export class BroadcastStatusDto {
   completedAt!: Date | null;
   /** Chỉ có khi lô gần nhất lỗi; rỗng khi đang chạy bình thường. */
   @ApiProperty({ type: String, nullable: true }) lastError!: string | null;
+
+  static from(broadcast: NotificationBroadcast): BroadcastStatusDto {
+    return {
+      broadcastId: broadcast.id,
+      status: broadcast.status,
+      audience: broadcast.audience,
+      recipientCount: broadcast.recipientCount,
+      createdAt: broadcast.createdAt,
+      startedAt: broadcast.startedAt,
+      completedAt: broadcast.completedAt,
+      lastError: broadcast.lastError,
+    };
+  }
 }

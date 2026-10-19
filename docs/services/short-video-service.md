@@ -88,12 +88,17 @@ module để web không gọi riêng `GET /users/:id` cho từng video/comment. 
 
 `rankScore = (viewCount·W_view + likeCount·W_like + commentCount·W_comment) / (1 +
 giờ_kể_từ_tạo/VIDEO_RANK_TIME_DECAY_HOURS)`. Mỗi tick `VideoRankingService` tính lại tối đa
-`VIDEO_RANKING_BATCH_SIZE × VIDEO_RANKING_MAX_BATCHES_PER_TICK` video `published`, xoay vòng theo
-`rank_computed_at` (NULL trước = video mới được tính ngay, rồi tới video tính điểm lâu nhất; không còn xoay theo
-`updated_at` vì counter tăng làm video nóng bị xếp cuối). Chu kỳ đầy đủ = số video / lô × chu kỳ tick — tăng lô theo
-quy mô; hàng chục triệu video cần khoá xếp hạng không phụ thuộc tuổi hoặc ZSET (ADR riêng). `sort=ranked` chạy theo
-index một phần `idx_videos_ranked`. `rankScore IS NULL` (video mới, job chưa kịp chạy) → `listPublished`
-fallback `sort=recent`. Job derive, KHÔNG phải nguồn sự thật — lỗi job không làm sai correctness, chỉ tạm thời không
+`VIDEO_RANKING_BATCH_SIZE × VIDEO_RANKING_MAX_BATCHES_PER_TICK` video `published` **đến hạn** (`rank_due_at` NULL hoặc ≤ now,
+theo thứ tự hạn; video mới NULL được tính ngay). Sau khi tính, hạn kế tiếp = now + `VIDEO_RANKING_STALENESS_PCT`% ×
+(`VIDEO_RANK_TIME_DECAY_HOURS` + tuổi video), kẹp trong [60 giây, `VIDEO_RANKING_MAX_INTERVAL_HOURS`]: điểm lệch tương đối ≈
+Δ/(decay + tuổi) sau Δ giờ nên video mới được tính lại mỗi ~30 phút còn video 100 ngày tuổi mỗi ~1 ngày. Mỗi lần counter đổi
+(like/comment/view, hoặc lúc flush bộ đệm) kéo hạn về ≤ now + `VIDEO_RANKING_ACTIVE_REFRESH_SECONDS` (mặc định 600) nên video
+đang có tương tác được tính lại nhanh bất kể tuổi. Công việc vì vậy tỉ lệ với video TRẺ và HOẠT ĐỘNG, không với cả catalogue
+(trước đây xoay vòng cả bảng: chu kỳ đầy đủ = số video / lô × chu kỳ tick, hàng chục triệu video không bao giờ kịp). Cỡ job: số video đến
+hạn mỗi giờ ≈ vài % tổng video + video hoạt động; cần `batch × số lô × (3600 / chu kỳ tick)` lớn hơn con số đó (ví dụ 30 triệu video ≈ 1 triệu
+lần tính/giờ → batch 5.000 × 20 lô mỗi 5 phút). Job báo thiếu công suất bằng backlog `rank_due_at` quá hạn tăng dần. `sort=ranked` chạy
+theo index một phần `idx_videos_ranked`; index `idx_videos_rank_due_at` phục vụ chọn video đến hạn. `rankScore IS NULL` (video mới,
+job chưa kịp chạy) → `listPublished` fallback `sort=recent`. Job derive, KHÔNG phải nguồn sự thật — lỗi job không làm sai correctness, chỉ tạm thời không
 có ranking mới.
 
 **Counter đệm (ADR 0013, tắt mặc định).** `viewCount/likeCount/commentCount` là hàng nóng một hàng/video: mỗi lượt
