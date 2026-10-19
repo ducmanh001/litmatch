@@ -70,6 +70,7 @@ function makeCall(overrides: Partial<CallSession> = {}): CallSession {
     disconnectedBAt: null,
     endedAt: null,
     endReason: null,
+    cleanupPending: false,
     durationSeconds: null,
     billedMinutes: 0,
     ...overrides,
@@ -83,6 +84,7 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
     findOneBy: jest.Mock;
     findOneByOrFail: jest.Mock;
     createQueryBuilder: jest.Mock;
+    update: jest.Mock;
   };
   let reactionRepo: { findOneBy: jest.Mock; existsBy: jest.Mock };
   let matchingService: {
@@ -111,6 +113,7 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
       create: jest.fn((input) => Object.assign(new CallSession(), input)),
       findOneBy: jest.fn(async () => null),
       findOneByOrFail: jest.fn(),
+      update: jest.fn(async () => ({ affected: 1 })),
       createQueryBuilder: jest.fn(() => {
         const builder = {
           where: jest.fn(),

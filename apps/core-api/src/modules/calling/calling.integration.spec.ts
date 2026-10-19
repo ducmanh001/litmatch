@@ -17,6 +17,7 @@ import { ReportTargetVideo1754900000000 } from '../../database/migrations/175490
 import { VoiceMatchCompletion1756000000000 } from '../../database/migrations/1756000000000-voice-match-completion';
 import { CallingReconnectWindow1756500000000 } from '../../database/migrations/1756500000000-calling-reconnect-window';
 import { FriendCalling1757200000000 } from '../../database/migrations/1757200000000-friend-calling';
+import { CallCleanupRetry1758900000000 } from '../../database/migrations/1758900000000-call-cleanup-retry';
 import { MatchingDailyEntitlements1757100000000 } from '../../database/migrations/1757100000000-matching-daily-entitlements';
 
 import { CallingService } from './calling.service';
@@ -275,8 +276,10 @@ d('Calling integration (Postgres thật)', () => {
         VoiceMatchCompletion1756000000000,
         CallingReconnectWindow1756500000000,
         FriendCalling1757200000000,
+        CallCleanupRetry1758900000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
+      migrationsTransactionMode: 'each',
       synchronize: false,
       dropSchema: true,
     });
@@ -360,6 +363,209 @@ d('Calling integration (Postgres thật)', () => {
   beforeEach(() => {
     deletedRooms.length = 0;
     friendPairs.clear();
+  });
+
+  async function recoverBeforeTickerLock(
+    callId: string,
+    reason: CallEndReason,
+    recover: () => Promise<void>,
+  ): Promise<void> {
+    const original = calling.endById.bind(calling);
+    let recovered = false;
+    const spy = jest
+      .spyOn(calling, 'endById')
+      .mockImplementation(async (id, endReason, guard) => {
+        if (id === callId && endReason === reason && !recovered) {
+          recovered = true;
+          await recover();
+        }
+        return original(id, endReason, guard);
+      });
+    try {
+      await ticker.runOnce();
+      expect(recovered).toBe(true);
+      expect(
+        await ds.getRepository(CallSession).findOneByOrFail({ id: callId }),
+      ).toMatchObject({
+        status: CallSessionStatus.Active,
+        cleanupPending: false,
+      });
+    } finally {
+      spy.mockRestore();
+    }
+  }
+
+  it('pending timeout rechecks under lock after both participants activate the selected call', async () => {
+    const [a, b] = await Promise.all([
+      createUser('recover-p-a'),
+      createUser('recover-p-b'),
+    ]);
+    const session = await createVoiceSession(a, b);
+    const { call } = await calling.joinCall(auth(a.id), session.id);
+    await ds.query(
+      "UPDATE call_sessions SET created_at = now() - interval '2 hours' WHERE id = $1",
+      [call.id],
+    );
+    await recoverBeforeTickerLock(
+      call.id,
+      CallEndReason.PendingTimeout,
+      async () => {
+        for (const user of [a, b]) {
+          await calling.handleWebhookEvent({
+            event: 'participant_joined',
+            roomName: call.roomName,
+            participantIdentity: user.id,
+          });
+        }
+      },
+    );
+    expect(deletedRooms).not.toContain(call.roomName);
+  });
+
+  it('reconnect timeout rechecks under lock after the selected participant returns', async () => {
+    const [a, b] = await Promise.all([
+      createUser('recover-r-a'),
+      createUser('recover-r-b'),
+    ]);
+    const call = await activeCall(a, b, 60);
+    await calling.handleWebhookEvent({
+      event: 'participant_left',
+      roomName: call.roomName,
+      participantIdentity: b.id,
+    });
+    await ds.query(
+      "UPDATE call_sessions SET reconnect_started_at = now() - interval '31 seconds' WHERE id = $1",
+      [call.id],
+    );
+    await recoverBeforeTickerLock(call.id, CallEndReason.Completed, () =>
+      calling.handleWebhookEvent({
+        event: 'participant_joined',
+        roomName: call.roomName,
+        participantIdentity: b.id,
+      }),
+    );
+    expect(deletedRooms).not.toContain(call.roomName);
+  });
+
+  it('free limit rechecks under lock when the selected call starts reconnect grace', async () => {
+    const [a, b] = await Promise.all([
+      createUser('recover-f-a'),
+      createUser('recover-f-b'),
+    ]);
+    const call = await activeCall(a, b, 430);
+    await recoverBeforeTickerLock(call.id, CallEndReason.FreeLimit, () =>
+      calling.handleWebhookEvent({
+        event: 'participant_left',
+        roomName: call.roomName,
+        participantIdentity: b.id,
+      }),
+    );
+    expect(deletedRooms).not.toContain(call.roomName);
+  });
+
+  it('committed call end retains cleanup after a one-time Matching failure, then ticker retries it', async () => {
+    const [a, b] = await Promise.all([
+      createUser('cleanup-db-a'),
+      createUser('cleanup-db-b'),
+    ]);
+    const call = await activeCall(a, b, 15);
+    const matching = (
+      calling as unknown as { matchingService: MatchingService }
+    ).matchingService;
+    const spy = jest
+      .spyOn(matching, 'endVoiceSessionForCall')
+      .mockRejectedValueOnce(new Error('transient matching DB failure'));
+    try {
+      await calling.endById(call.id, CallEndReason.Completed);
+      expect(
+        await ds.getRepository(CallSession).findOneByOrFail({ id: call.id }),
+      ).toMatchObject({
+        status: CallSessionStatus.Ended,
+        cleanupPending: true,
+      });
+      expect(
+        (
+          await ds
+            .getRepository(MatchSession)
+            .findOneByOrFail({ id: call.matchSessionId! })
+        ).status,
+      ).toBe(MatchSessionStatus.Confirmed);
+      expect(deletedRooms).not.toContain(call.roomName);
+      await tickerB.runOnce();
+      expect(
+        (
+          await ds
+            .getRepository(MatchSession)
+            .findOneByOrFail({ id: call.matchSessionId! })
+        ).status,
+      ).toBe(MatchSessionStatus.Ended);
+      expect(
+        (await ds.getRepository(CallSession).findOneByOrFail({ id: call.id }))
+          .cleanupPending,
+      ).toBe(false);
+      expect(deletedRooms).toContain(call.roomName);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('SFU deletion failure leaves a durable retry marker until a later ticker succeeds', async () => {
+    const [a, b] = await Promise.all([
+      createUser('cleanup-sfu-a'),
+      createUser('cleanup-sfu-b'),
+    ]);
+    const call = await activeCall(a, b, 15);
+    const spy = jest
+      .spyOn(livekitStub, 'deleteRoom')
+      .mockRejectedValueOnce(new Error('SFU temporarily unavailable'));
+    try {
+      await calling.endById(call.id, CallEndReason.Completed);
+      expect(
+        (await ds.getRepository(CallSession).findOneByOrFail({ id: call.id }))
+          .cleanupPending,
+      ).toBe(true);
+      await tickerB.runOnce();
+      expect(
+        (await ds.getRepository(CallSession).findOneByOrFail({ id: call.id }))
+          .cleanupPending,
+      ).toBe(false);
+      expect(deletedRooms).toContain(call.roomName);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('a fresh ticker discovers cleanup committed before a simulated process crash', async () => {
+    const [a, b] = await Promise.all([
+      createUser('cleanup-crash-a'),
+      createUser('cleanup-crash-b'),
+    ]);
+    const call = await activeCall(a, b, 15);
+    await ds.getRepository(CallSession).update(call.id, {
+      status: CallSessionStatus.Ended,
+      endedAt: new Date(),
+      endReason: CallEndReason.Completed,
+      cleanupPending: true,
+    });
+    const restartedTicker = new CallTickerService(
+      ds,
+      configStub,
+      schedulerStub,
+      calling,
+    );
+    await restartedTicker.runOnce();
+    expect(
+      (await ds.getRepository(CallSession).findOneByOrFail({ id: call.id }))
+        .cleanupPending,
+    ).toBe(false);
+    expect(deletedRooms).toContain(call.roomName);
+    expect(
+      (
+        await ds
+          .getRepository(MatchSession)
+          .findOneByOrFail({ id: call.matchSessionId! })
+      ).status,
+    ).toBe(MatchSessionStatus.Ended);
   });
 
   it('join 2 bên đồng thời → đúng 1 call (unique match_session_id); webhook joined đủ 2 → active', async () => {

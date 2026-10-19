@@ -333,42 +333,45 @@ describe('LeaseRefresher — mốc ngắt độc lập, cấp lại lease, lỗi
     expect(reacquireMany).not.toHaveBeenCalled();
   });
 
-  it('socket disconnect trong lúc cấp lại lease (lô sau chạy sau khi đã release) → lease vừa cấp lại bị nhả, không để slot ma', async () => {
-    const { refreshMany, reacquireMany, clock } = setup2();
-    // setup2 không có releaseMany: dựng lại refresher với quota đầy đủ để quan sát lệnh nhả.
-    const releaseMany = jest.fn(async (): Promise<void> => undefined);
-    const withRelease = new LeaseRefresher({
-      quota: { refreshMany, reacquireMany, releaseMany },
-      leaseMs: LEASE_MS,
-      refreshMs: REFRESH_MS,
-      now: () => clock.now,
-      random: () => 0.5,
-    });
-    const onExpired = jest.fn();
-    withRelease.add('lease-1', 'user-1', onExpired);
-    withRelease.add('lease-2', 'user-2', onExpired);
-    refreshMany.mockResolvedValueOnce(['lost', 'lost']);
-    let reply!: (outcomes: RefreshOutcome[]) => void;
-    reacquireMany.mockReturnValueOnce(
-      new Promise<RefreshOutcome[]>((resolve) => (reply = resolve)),
-    );
-    clock.now += REFRESH_MS;
+  it.each(['ok', 'error'] as const)(
+    'socket disconnect trong lúc cấp lại lease (%s, kể cả timeout sau khi Redis đã cấp) → nhả lease ma',
+    async (outcome) => {
+      const { refreshMany, reacquireMany, clock } = setup2();
+      // setup2 không có releaseMany: dựng lại refresher với quota đầy đủ để quan sát lệnh nhả.
+      const releaseMany = jest.fn(async (): Promise<void> => undefined);
+      const withRelease = new LeaseRefresher({
+        quota: { refreshMany, reacquireMany, releaseMany },
+        leaseMs: LEASE_MS,
+        refreshMs: REFRESH_MS,
+        now: () => clock.now,
+        random: () => 0.5,
+      });
+      const onExpired = jest.fn();
+      withRelease.add('lease-1', 'user-1', onExpired);
+      withRelease.add('lease-2', 'user-2', onExpired);
+      refreshMany.mockResolvedValueOnce(['lost', 'lost']);
+      let reply!: (outcomes: RefreshOutcome[]) => void;
+      reacquireMany.mockReturnValueOnce(
+        new Promise<RefreshOutcome[]>((resolve) => (reply = resolve)),
+      );
+      clock.now += REFRESH_MS;
 
-    const pending = withRelease.tick();
-    for (let index = 0; index < 10; index += 1) await Promise.resolve();
-    expect(reacquireMany).toHaveBeenCalledTimes(1);
-    // Socket 2 ngắt và gateway release TRƯỚC khi lô cấp lại của nó chạy; lô đó rồi vẫn cấp lease.
-    withRelease.remove('lease-2');
-    reply(['ok', 'ok']);
-    await pending;
+      const pending = withRelease.tick();
+      for (let index = 0; index < 10; index += 1) await Promise.resolve();
+      expect(reacquireMany).toHaveBeenCalledTimes(1);
+      // Socket 2 ngắt và gateway release TRƯỚC khi lô cấp lại của nó chạy; lô đó rồi vẫn cấp lease.
+      withRelease.remove('lease-2');
+      reply(['ok', outcome]);
+      await pending;
 
-    expect(releaseMany).toHaveBeenCalledTimes(1);
-    expect(releaseMany).toHaveBeenCalledWith([
-      { userId: 'user-2', leaseId: 'lease-2' },
-    ]);
-    expect(withRelease.size).toBe(1);
-    expect(onExpired).not.toHaveBeenCalled();
-  });
+      expect(releaseMany).toHaveBeenCalledTimes(1);
+      expect(releaseMany).toHaveBeenCalledWith([
+        { userId: 'user-2', leaseId: 'lease-2' },
+      ]);
+      expect(withRelease.size).toBe(1);
+      expect(onExpired).not.toHaveBeenCalled();
+    },
+  );
 
   it('một callback onExpired ném lỗi không làm các socket còn lại mất theo dõi', async () => {
     const { refresher, refreshMany, reacquireMany, onError, clock } = setup2();

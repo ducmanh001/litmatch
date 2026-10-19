@@ -3,6 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const script = new URL('./verify-evidence.mjs', import.meta.url);
@@ -46,7 +47,7 @@ function runGate(overridesByFile = {}) {
       JSON.stringify(evidence({ checks, ...overridesByFile[name] })),
     );
   }
-  return spawnSync(process.execPath, [script.pathname], {
+  return spawnSync(process.execPath, [fileURLToPath(script)], {
     encoding: 'utf8',
     env: { ...process.env, RELIABILITY_EVIDENCE_DIR: directory },
   });

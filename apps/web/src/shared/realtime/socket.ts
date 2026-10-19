@@ -22,7 +22,12 @@ import type { Socket } from 'socket.io-client';
  * nền qua REST (onReconnected → invalidate query), không đoán state từ event bị miss.
  */
 let socket: Socket | null = null;
-let authRefreshInFlight: Promise<void> | null = null;
+let cancelRecovery: (() => void) | null = null;
+/** Namespace middleware failures do not trigger Socket.IO's transport reconnection. */
+const QUOTA_UNAVAILABLE_ERROR = 'CONNECTION_QUOTA_UNAVAILABLE';
+const MAX_ADMISSION_RETRIES = 8;
+const RETRY_BASE_MS = 1_000;
+const RETRY_MAX_MS = 30_000;
 let realtimeConnected = false;
 const realtimeConnectionListeners = new Set<() => void>();
 
@@ -52,18 +57,68 @@ function getSocket(): Socket {
       timeout: 10_000,
     });
     const current = socket;
-    current.on('connect', () => setRealtimeConnected(true));
-    current.on('disconnect', () => setRealtimeConnected(false));
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let attempts = 0;
+    let refreshedAuth = false;
+    const cancelRetry = () => {
+      if (retryTimer !== undefined) clearTimeout(retryTimer);
+      retryTimer = undefined;
+    };
+    cancelRecovery = cancelRetry;
+    const retryAdmission = () => {
+      if (
+        socket !== current ||
+        current.connected ||
+        current.active ||
+        retryTimer !== undefined ||
+        attempts >= MAX_ADMISSION_RETRIES
+      )
+        return;
+      const cap = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** attempts++);
+      // Equal jitter: never retry immediately; one timer per socket, bounded total attempts.
+      retryTimer = setTimeout(
+        () => {
+          retryTimer = undefined;
+          if (socket === current && !current.connected && !current.active) {
+            current.connect();
+          }
+        },
+        cap * (0.5 + Math.random() * 0.5),
+      );
+    };
+    current.on('connect', () => {
+      if (socket !== current) return;
+      cancelRetry();
+      attempts = 0;
+      refreshedAuth = false;
+      setRealtimeConnected(true);
+    });
+    current.on('disconnect', () => {
+      if (socket === current) setRealtimeConnected(false);
+    });
     current.on('connect_error', (error: Error) => {
+      if (socket !== current) return;
       setRealtimeConnected(false);
-      if (error.message !== RealtimeConnectionErrors.Unauthorized) return;
-      authRefreshInFlight ??= apiClient
+      if (error.message === QUOTA_UNAVAILABLE_ERROR) {
+        retryAdmission();
+        return;
+      }
+      cancelRetry();
+      // CONNECTION_LIMIT and unknown namespace rejections are terminal for this connection.
+      // Transport failures keep Socket.IO's existing jittered reconnection (current.active).
+      if (
+        error.message !== RealtimeConnectionErrors.Unauthorized ||
+        refreshedAuth
+      )
+        return;
+      refreshedAuth = true;
+      void apiClient
         .refreshSession()
         .then((restored) => {
-          if (restored && socket === current) current.connect();
+          if (restored) retryAdmission();
         })
-        .finally(() => {
-          authRefreshInFlight = null;
+        .catch(() => {
+          // REST recovery remains the fallback; never loop refresh requests on rejected auth.
         });
     });
   }
@@ -78,9 +133,11 @@ export function connectRealtime(): void {
 
 /** Gọi khi logout — đóng kết nối và quên instance (token user khác không dùng lại socket cũ). */
 export function disconnectRealtime(): void {
-  socket?.disconnect();
+  cancelRecovery?.();
+  cancelRecovery = null;
+  const previous = socket;
   socket = null;
-  authRefreshInFlight = null;
+  previous?.disconnect();
   setRealtimeConnected(false);
   resetSocketReconnectState();
 }
@@ -109,12 +166,15 @@ export function subscribeRealtime<T>(
 /** Đăng ký callback sau khi socket nối LẠI (không phải lần connect đầu) — nơi refetch REST. */
 export function onReconnected(handler: () => void): () => void {
   const s = getSocket();
-  const wrapped = (attempt: number): void => {
-    if (attempt > 0) {
+  let connectedOnce = s.connected;
+  const wrapped = (): void => {
+    if (connectedOnce) {
       markSocketReconnect();
       handler();
     }
+    connectedOnce = true;
   };
-  s.io.on('reconnect', wrapped);
-  return () => s.io.off('reconnect', wrapped);
+  // Namespace connect happens AFTER authentication/admission, including manual middleware retries.
+  s.on('connect', wrapped);
+  return () => s.off('connect', wrapped);
 }

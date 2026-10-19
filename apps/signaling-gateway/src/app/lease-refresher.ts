@@ -216,7 +216,9 @@ export class LeaseRefresher {
       if (this.entries.get(entry.leaseId) !== entry) {
         // Cấp lại theo NHIỀU lô: socket ngắt và gateway đã release TRƯỚC khi lô của nó chạy, nên lô đó vẫn cấp một
         // lease mà không ai còn giữ (slot ma + presence online giả tới hết TTL). Phải nhả lease vừa cấp.
-        if (reacquired.has(index)) {
+        // Timeout can hide a successful acquire too. Releasing this removed lease is idempotent,
+        // including when the failed operation was only a refresh and recreated nothing.
+        if (reacquired.has(index) || outcomes[index] === 'error') {
           orphaned.push({ userId: entry.userId, leaseId: entry.leaseId });
         }
         return;

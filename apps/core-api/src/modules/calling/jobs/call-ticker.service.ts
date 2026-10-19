@@ -14,6 +14,7 @@ import { ManagedInterval } from '../../../common/scheduling/managed-interval';
 import { CallingService } from '../calling.service';
 import {
   CallEndReason,
+  CallKind,
   CallSession,
   CallSessionStatus,
 } from '../entities/call-session.entity';
@@ -70,6 +71,7 @@ export class CallTickerService
         await this.sweepPending();
         await this.sweepReconnectTimeouts();
         await this.processActiveCalls();
+        await this.retryCleanup();
       });
     }, undefined);
   }
@@ -87,7 +89,13 @@ export class CallTickerService
       take: TICK_BATCH_SIZE,
     });
     for (const call of stale) {
-      await this.callingService.endById(call.id, CallEndReason.PendingTimeout);
+      await this.callingService.endById(
+        call.id,
+        CallEndReason.PendingTimeout,
+        (current) =>
+          current.status === CallSessionStatus.Pending &&
+          current.createdAt < cutoff,
+      );
     }
   }
 
@@ -107,7 +115,14 @@ export class CallTickerService
       take: TICK_BATCH_SIZE,
     });
     for (const call of stale) {
-      await this.callingService.endById(call.id, CallEndReason.Completed);
+      await this.callingService.endById(
+        call.id,
+        CallEndReason.Completed,
+        (current) =>
+          current.status === CallSessionStatus.Active &&
+          current.reconnectStartedAt !== null &&
+          current.reconnectStartedAt < cutoff,
+      );
     }
   }
 
@@ -138,13 +153,37 @@ export class CallTickerService
     const active = await activeQuery.getMany();
     for (const call of active) {
       await this.callingService
-        .endById(call.id, CallEndReason.FreeLimit)
+        .endById(
+          call.id,
+          CallEndReason.FreeLimit,
+          (current) =>
+            current.status === CallSessionStatus.Active &&
+            current.callKind === CallKind.VoiceMatch &&
+            current.reconnectStartedAt === null &&
+            current.startedAt !== null &&
+            current.startedAt.getTime() <= Date.now() - freeSeconds * 1000,
+        )
         .catch((err) =>
           this.logger.error(
             { err: `${err}` },
             `Xử lý call active ${call.id} lỗi — thử lại ở tick sau`,
           ),
         );
+    }
+  }
+
+  private async retryCleanup(): Promise<void> {
+    const pending = await this.dataSource.getRepository(CallSession).find({
+      select: { id: true, endReason: true },
+      where: { status: CallSessionStatus.Ended, cleanupPending: true },
+      order: { updatedAt: 'ASC', id: 'ASC' },
+      take: TICK_BATCH_SIZE,
+    });
+    for (const call of pending) {
+      await this.callingService.endById(
+        call.id,
+        call.endReason ?? CallEndReason.Completed,
+      );
     }
   }
 }

@@ -118,7 +118,10 @@ function makeSocket(token?: unknown): Socket {
   return {
     handshake: { auth: token === undefined ? {} : { token } },
     data: {},
-    conn: Object.assign(new EventEmitter(), { readyState: 'open' }),
+    conn: Object.assign(new EventEmitter(), {
+      readyState: 'open',
+      close: jest.fn(),
+    }),
     join: jest.fn(async () => undefined),
     disconnect: jest.fn(),
   } as unknown as Socket;
@@ -362,7 +365,7 @@ describe('SignalingGateway (unit — fanout thuần, không business logic)', ()
       expect(signalingMetrics.connectionOpened).toHaveBeenCalledTimes(1);
       // Lease hết hạn không gia hạn được → refresher gọi callback này để ngắt socket.
       refresher.add.mock.calls[0][2]();
-      expect(socket.disconnect).toHaveBeenCalledWith(true);
+      expect(socket.conn.close).toHaveBeenCalledWith(true);
     });
 
     it('disconnect: gỡ lease khỏi refresher, release quota và subscribe đúng một lần', async () => {
@@ -404,14 +407,14 @@ describe('SignalingGateway (unit — fanout thuần, không business logic)', ()
       gateway.handleConnection(socket);
       const leaseId = (socket.data as { quotaLeaseId?: string }).quotaLeaseId;
       // Disconnect thật sẽ kích hoạt handleDisconnect — nó không được release lẻ khi shutdown.
-      jest.mocked(socket.disconnect).mockImplementation(() => {
+      jest.mocked(socket.conn.close).mockImplementation(() => {
         gateway.handleDisconnect(socket);
-        return socket;
+        return socket.conn;
       });
 
       await gateway.onModuleDestroy();
 
-      const disconnect = jest.mocked(socket.disconnect);
+      const disconnect = jest.mocked(socket.conn.close);
       const releaseMany = jest.mocked(connectionQuota.releaseMany);
       expect(refresher.stop).toHaveBeenCalled();
       expect(disconnect).toHaveBeenCalledWith(true);

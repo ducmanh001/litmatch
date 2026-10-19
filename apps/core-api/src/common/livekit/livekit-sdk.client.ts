@@ -110,7 +110,13 @@ export class LivekitSdkClient {
   }
 
   async deleteRoom(roomName: string): Promise<void> {
-    await this.roomService.deleteRoom(roomName);
+    try {
+      await this.roomService.deleteRoom(roomName);
+    } catch (error) {
+      // A retried cleanup is complete when the first attempt already deleted the room.
+      if (this.isNotFound(error)) return;
+      throw error;
+    }
   }
 
   async listParticipantIdentities(roomName: string): Promise<string[]> {

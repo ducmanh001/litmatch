@@ -437,9 +437,14 @@ export class CallingService {
   /**
    * End idempotent — dùng bởi endpoint/webhook/ticker (spec § 1). Lock call FOR UPDATE:
    * đây chính là chốt chặn race end-vs-tick (docs/10 § Calling). Chỉ lời gọi
-   * thực hiện transition mới dọn room + publish realtime (không bắn đôi khi retry).
+   * thực hiện transition mới publish realtime; cleanup có marker bền vững để ticker/retry tiếp tục
+   * sau lỗi provider hoặc process chết giữa commit và dọn room.
    */
-  async endById(callId: string, reason: CallEndReason): Promise<EndCallResult> {
+  async endById(
+    callId: string,
+    reason: CallEndReason,
+    shouldEnd?: (call: CallSession) => boolean,
+  ): Promise<EndCallResult> {
     const result = await this.dataSource.transaction(async (manager) => {
       const call = await manager.findOne(CallSession, {
         where: { id: callId },
@@ -449,9 +454,12 @@ export class CallingService {
       if (call.status === CallSessionStatus.Ended) {
         return { call, justEnded: false };
       }
+      // Ticker candidates are snapshots: a webhook may have activated/resumed the call while waiting for this lock.
+      if (shouldEnd && !shouldEnd(call)) return { call, justEnded: false };
       call.status = CallSessionStatus.Ended;
       call.endReason = reason;
       call.endedAt = new Date();
+      call.cleanupPending = true;
       // Không tính thời gian nằm trong cửa sổ reconnect vào thời lượng đã dùng.
       // Nếu cửa sổ hết hạn thì mốc startedAt được dời qua đoạn gián đoạn trước khi
       // duration được chốt.
@@ -477,7 +485,22 @@ export class CallingService {
     if (result.justEnded && result.call) {
       // Call drop rate (docs/07 GĐ6) — đúng 1 lần/call vì chỉ nhánh justEnded mới chạy tới đây
       this.metrics.recordEnded(result.call.endReason ?? reason);
-      await this.cleanupEndedCall(result.call);
+      await this.publishCallEnded(result.call);
+    }
+    if (result.call?.cleanupPending) {
+      try {
+        await this.cleanupEndedCall(result.call);
+        result.call.cleanupPending = false;
+      } catch (error) {
+        // Requeue at the tail: a permanently failing room must not starve newer cleanup tasks.
+        await this.callRepo.update(
+          { id: result.call.id, cleanupPending: true },
+          { cleanupPending: true },
+        );
+        this.logger.warn(
+          `Cleanup call ${result.call.id} chưa hoàn tất — ticker sẽ thử lại: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
     }
     return result;
   }
@@ -690,12 +713,11 @@ export class CallingService {
         call.userAId,
         call.userBId,
       );
-    await this.livekit.deleteRoom(call.roomName).catch((err) => {
-      // room có thể đã tự đóng (room_finished) — không phải lỗi nghiệp vụ
-      this.logger.debug(
-        `deleteRoom ${call.roomName} bỏ qua: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    });
+    await this.livekit.deleteRoom(call.roomName);
+    await this.callRepo.update(call.id, { cleanupPending: false });
+  }
+
+  private async publishCallEnded(call: CallSession): Promise<void> {
     const envelope: RealtimeEnvelope<CallEndedEventData> = {
       event: RealtimeEvents.CallEnded,
       data: {

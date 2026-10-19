@@ -153,7 +153,7 @@ export class SignalingGateway
     this.activeLeases.clear();
     // Stop the transport before freeing its global slot. Nest disposes Socket.IO only after
     // module-destroy hooks, so release-first would temporarily admit >3 across replicas.
-    for (const [, { client }] of leases) client.disconnect(true);
+    for (const [, { client }] of leases) client.conn.close(true);
     await this.connectionQuota.releaseMany(
       leases.map(([leaseId, { userId }]) => ({ userId, leaseId })),
     );
@@ -395,7 +395,9 @@ export class SignalingGateway
     }
     this.activeLeases.set(leaseId, { userId, client });
     // Hết hạn lease mà không gia hạn được → ngắt socket (lease-refresher giải thích khi nào).
-    this.refresher?.add(leaseId, userId, () => client.disconnect(true));
+    // A transient lease failure must close the transport, not send a terminal namespace
+    // DISCONNECT: Socket.IO automatically reconnects transport closures with client backoff.
+    this.refresher?.add(leaseId, userId, () => client.conn.close(true));
     return true;
   }
 

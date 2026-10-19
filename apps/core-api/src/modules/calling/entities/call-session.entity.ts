@@ -41,6 +41,9 @@ export enum CallEndReason {
 @Index('idx_call_sessions_reconnect_started', ['reconnectStartedAt', 'id'], {
   where: "status = 'active' AND reconnect_started_at IS NOT NULL",
 })
+@Index('idx_call_sessions_cleanup_pending', ['updatedAt', 'id'], {
+  where: "status = 'ended' AND cleanup_pending = true",
+})
 export class CallSession extends BaseAppEntity {
   @Column({ type: 'uuid', nullable: true })
   matchSessionId!: string | null;
@@ -86,6 +89,10 @@ export class CallSession extends BaseAppEntity {
 
   @Column({ type: 'varchar', length: 24, nullable: true })
   endReason!: CallEndReason | null;
+
+  /** Durable retry marker: committing ended must not lose Matching/SFU cleanup after a crash. */
+  @Column({ type: 'boolean', default: false })
+  cleanupPending!: boolean;
 
   @Column({ type: 'int', nullable: true })
   durationSeconds!: number | null;

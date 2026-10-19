@@ -58,6 +58,14 @@ p95 join < 800ms, get/cancel < 400ms, error rate < 2%.
 
 ## 2. `signaling-ws.js` — GIỚI HẠN QUAN TRỌNG (đọc trước khi tin kết quả)
 
+`connection_drop_rate` có đúng một sample cho mỗi lần thử: chỉ thành công khi đã nhận CONNECT ack
+của namespace `/signaling` và giữ đủ `HOLD_SECONDS` rồi tự đóng. Server ngắt ngay sau ack vẫn là
+failure; `error` rồi `close` không đếm hai lần. Thời gian giữ bắt đầu sau ack, không bao gồm thời
+gian auth. `CONNECT_TIMEOUT_SECONDS` (mặc định 10) chặn handshake không có ack. Metric lịch sử
+`auth_fail_rate` gồm cả lỗi guest login và namespace admission (kể cả lỗi quota), có sample 0 cho
+lần không bị từ chối. Regression test: `node --test scripts/reliability/signaling-loadtest.test.mjs`
+chạy entrypoint thật với transport điều khiển được; không thay cho k6/staging thật.
+
 k6 (`k6/ws` lẫn `k6/experimental/websockets`) chỉ nói WebSocket **thuần** theo chuẩn W3C, không có
 client Socket.IO/Engine.IO built-in. Socket.IO **không phải** WebSocket trần — nó có 2 lớp framing
 riêng (Engine.IO packet bọc Socket.IO packet) cộng cơ chế ping/pong do server khởi xướng để giữ

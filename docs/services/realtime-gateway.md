@@ -39,6 +39,14 @@ fallback (`GET /matching/tickets/:id`, `GET /soul-match/sessions/:id[/messages]`
 là ephemeral + có fallback nên **không dùng outbox** cho luồng này (outbox dành cho consumer
 nghiệp vụ như Notification — docs/10 § Distributed).
 
+Rollout và hết hạn lease đóng transport Engine.IO, để Socket.IO tự reconnect bằng backoff/jitter;
+không gửi namespace DISCONNECT vốn làm client dừng tự nối lại. Browser retry lỗi admission tạm thời
+`CONNECTION_QUOTA_UNAVAILABLE` tối đa 8 lần với equal jitter, trần 30 giây/lần; `UNAUTHORIZED`
+chỉ thử refresh session một lần cho tới khi connect thành công. Hết lượt hoặc bị từ chối vĩnh viễn
+thì REST polling tiếp tục làm fallback. Logout hủy timer và callback muộn của socket cũ không
+được mở lại kết nối. Refetch phục hồi chạy sau sự kiện namespace `connect` (đã auth/join room),
+kể cả khi kết nối lại qua retry admission, không chạy sớm ở sự kiện transport `reconnect`.
+
 ## 4. Producer hiện có (core-api)
 
 | Nơi publish                                          | Event             | Người nhận                   |
@@ -76,7 +84,9 @@ Mỗi module publish bằng Redis client riêng của mình (docs/05 § 5.3) qua
   slot mới ngắt socket; lease của socket đã disconnect trong lúc chờ không được cấp lại (tránh lease
   ma). Cấp lại chạy theo NHIỀU lô pipeline (≤500 lease/lô mỗi shard) nên một socket có thể ngắt và release SAU khi danh sách
   cần cấp lại đã chốt nhưng TRƯỚC khi lô của nó chạy; lô đó vẫn cấp một lease không ai còn giữ — refresher nhả (`releaseMany`)
-  mọi lease vừa được cấp lại mà entry đã bị gỡ, thay vì để slot ma và presence online giả tới hết TTL. Redis lỗi/timeout (`error`) → **không ngắt ngay**: thử lại mỗi ≤5 giây, và socket bị ngắt khi
+  mọi lease vừa được cấp lại mà entry đã bị gỡ, kể cả khi response là `error` vì Redis có thể đã ghi
+  thành công trước khi timeout, thay vì để slot ma và presence online giả tới hết TTL.
+  Redis lỗi/timeout (`error`) → **không ngắt ngay**: thử lại mỗi ≤5 giây, và socket bị ngắt khi
   lần gia hạn thành công cuối đã đủ `WS_CONNECTION_LEASE_MS` trừ biên an toàn (≥ 2 tick, ≤ 5 giây), tức
   trước khi Redis có thể cấp lại slot. Mốc này được quét ĐỘC LẬP với việc gia hạn (`sweepExpired` mỗi
   tick, kể cả khi tick gia hạn đang treo chờ Redis) nên Redis treo không kéo dài thời gian giữ socket

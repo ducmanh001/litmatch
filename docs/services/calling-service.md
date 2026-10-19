@@ -29,8 +29,11 @@
 - `durationSeconds = endedAt - startedAt` (giờ server core-api — nguồn sự thật thời lượng,
   không tin client lẫn không phụ thuộc LiveKit); khoảng reconnect grace được loại khỏi
   `startedAt`.
-- MỌI nhánh end đều `deleteRoom` LiveKit best-effort (chống leak resource — docs/10
-  § Calling); `room_finished` chỉ mở reconnect grace khi call còn active, còn webhook đến sau
+- MỌI nhánh end ghi `cleanup_pending=true` cùng transaction với `ended`. Sau commit, cleanup chốt
+  Matching rồi `deleteRoom` LiveKit; chỉ khi cả hai thành công mới xoá marker. Lỗi DB/SFU hoặc process
+  chết sau commit không mất việc: ticker lấy marker còn lại theo lô và retry (404 room đã xoá = thành công).
+  Call vẫn terminal trong lúc chờ cleanup; các call đã ended trước migration không tự backfill marker.
+  `room_finished` chỉ mở reconnect grace khi call còn active, còn webhook đến sau
   khi call đã ended là retry/no-op.
 
 ## 2. Join & token (docs/10 § 10.1.D)
@@ -73,15 +76,20 @@ phương không còn trong LiveKit, API chốt `ended(completed)`. Client không
 - `active` Voice Match quá `CALLING_FREE_CALL_SECONDS = 420` giây kể từ `startedAt` (đã loại
   trừ reconnect grace) → end `free_limit`. Không gọi Economy, không trừ Diamond.
 - `Friend` call không đi qua free timer; hai người đã mutual-like có thể gọi lại lâu dài.
-- **Race end-vs-tick** vẫn dùng lock + re-check `status = active`, bảo đảm không end/cleanup đôi.
+- **Race webhook-vs-tick**: danh sách ID chỉ là ứng viên; dưới lock phải kiểm lại đúng predicate
+  pending timeout / reconnect timeout / free limit. Call vừa active hoặc đã reconnect không bị
+  kết thúc bởi kết quả SELECT cũ.
+- Cleanup retry chỉ lấy tối đa 100 call `ended AND cleanup_pending` qua partial index `(updated_at, id)`.
+  Lỗi được đưa về cuối hàng để không bỏ đói room khác. Cleanup là at-least-once và idempotent;
+  transition, metric kết thúc và lần publish realtime chỉ phát sinh ở nhánh `justEnded`.
 
 ## 5. Realtime & API
 
 End ở bất kỳ nhánh nào → publish `call.ended` `{callId, matchSessionId, reason,
 durationSeconds}` cho cả 2 qua kênh `realtime:user:{userId}` (hợp đồng
 `@litmatch/common-dtos`, best-effort — polling `GET /calling/calls/:id` là fallback).
-Kết thúc call cũng chốt `MatchSession{ended}` ở Matching trong cùng cleanup boundary; từ đó cả
-hai user lập tức không còn bị session voice cũ giữ lại để vào queue mới. Khi rời màn trước lúc
+Kết thúc call cũng chốt `MatchSession{ended}` ở Matching trong cleanup boundary. Khi dependency lỗi,
+hai trạng thái hội tụ qua retry marker; `ended` của call không bị đảo ngược. Khi rời màn trước lúc
 CallSession được tạo, endpoint end MatchSession thực hiện cùng cleanup durable.
 
 `POST /calling/calls/:id/like` nhận consent immutable khi call `active` hoặc `ended`; server

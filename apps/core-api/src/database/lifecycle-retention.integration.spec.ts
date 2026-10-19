@@ -237,18 +237,14 @@ d('Vòng đời dữ liệu (Postgres thật, toàn bộ migration)', () => {
     };
 
     it('migration 1758800000000 đảo ngược được: down khôi phục ĐÚNG sáu BRIN và gỡ cả năm B-tree', async () => {
-      const migrations = await ds.query(
-        `SELECT name FROM migrations ORDER BY id DESC LIMIT 1`,
-      );
-      // undoLastMigration chỉ đúng khi migration này là migration MỚI NHẤT
-      expect(migrations[0].name).toBe('LifecycleBtreeIndexes1758800000000');
-
-      await ds.undoLastMigration({ transaction: 'each' });
+      const migration = new LifecycleBtreeIndexes1758800000000();
+      // Exercise this migration explicitly: later additive migrations must not change what is reverted here.
+      await migration.down(fixture);
       let afterDown: { brin: string[]; btree: string[] };
       try {
         afterDown = await indexState();
       } finally {
-        await ds.runMigrations({ transaction: 'each' });
+        await migration.up(fixture);
       }
       expect(afterDown).toEqual({ brin: BRIN_NAMES, btree: [] });
       expect(await indexState()).toEqual({ brin: [], btree: BTREE_NAMES });
