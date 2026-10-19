@@ -13,7 +13,7 @@ import type { CoreApiEnv } from '../../../config/env.validation';
 
 /**
  * Retention cho tương tác video (ADR 0014):
- * - `video_views`: bảng KHỬ TRÙNG một hàng cho mỗi cặp (video, người xem) — KHÔNG phải mỗi lượt xem — nhưng vẫn tăng theo số cặp
+ * - `video_views` (QUYẾT ĐỊNH SẢN PHẨM — mặc định 0 = giữ, khuyến nghị 180): bảng KHỬ TRÙNG một hàng cho mỗi cặp (video, người xem) — KHÔNG phải mỗi lượt xem — nhưng vẫn tăng theo số cặp
  *   mới mỗi ngày (mô hình: ~144 triệu hàng/ngày ở 10 triệu CCU). Xoá hàng quá `VIDEO_VIEW_RETENTION_DAYS` ngày; đánh đổi: người
  *   xem lại một video SAU hạn đó có thể được đếm thêm một lần vào `viewCount` (counter chỉ là số hiển thị).
  * - `video_comments` đã xoá mềm quá `VIDEO_DELETED_COMMENT_RETENTION_DAYS` ngày: xoá cứng (counter đã trừ lúc xoá mềm).
@@ -49,6 +49,7 @@ export class ShortVideoRetentionJob extends RetentionJob {
         primaryKey: 'id',
         predicate: 'created_at < now() - make_interval(days => $2)',
         params: [viewDays],
+        orderBy: 'created_at',
       });
     }
     if (commentDays > 0) {

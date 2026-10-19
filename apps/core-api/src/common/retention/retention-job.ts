@@ -23,6 +23,21 @@ import type { PurgeResult, PurgeStep } from './batched-purge';
 const RETENTION_TICK_BUDGET_MS = 30_000;
 
 /**
+ * Độ lệch pha khởi động TẤT ĐỊNH theo tên job, trong [0, intervalMs): nhiều job retention cùng interval mà cùng khởi tạo ở
+ * bootstrap thì mọi lần chạy rơi vào CÙNG một giây, và mỗi lần chạy singleton giữ một kết nối pool cho advisory lock cộng
+ * thêm kết nối cho task — sáu job đồng loạt có thể chiếm trọn pool 10 kết nối trong lúc xoá backlog. FNV-1a theo tên nên
+ * mỗi job luôn cùng một độ lệch giữa các lần khởi động và giữa các pod.
+ */
+export function staggerOffsetMs(jobName: string, intervalMs: number): number {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < jobName.length; index += 1) {
+    hash ^= jobName.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash % Math.max(1, intervalMs);
+}
+
+/**
  * Khung chung cho job retention (ADR 0013). Module sở hữu bảng khai báo `steps()` (SQL của nó, theo
  * ranh giới module ADR 0012); khung lo vòng đời, chọn chế độ, giới hạn lô, log và metric.
  *
@@ -36,6 +51,7 @@ export abstract class RetentionJob
 {
   private readonly job = new ManagedInterval();
   private stopping = false;
+  private startTimer: NodeJS.Timeout | undefined;
   /** Quy tắc bắt đầu của tick kế tiếp — xoay vòng để một backlog lớn không bỏ đói các quy tắc sau. */
   private rotation = 0;
 
@@ -56,22 +72,45 @@ export abstract class RetentionJob
     if (this.config.getOrThrow('RETENTION_MODE', { infer: true }) === 'off') {
       return;
     }
-    this.job.start(this.scheduler, {
-      jobName: this.jobName,
-      intervalMs: this.config.getOrThrow('RETENTION_INTERVAL_MS', {
-        infer: true,
-      }),
-      task: () => this.runOnce(),
-      logger: this.logger,
-      errorMessage: `Job retention ${this.jobName} lỗi`,
-      skipWhenIdle: true,
-      clusterSingleton: { dataSource: this.dataSource },
+    const intervalMs = this.config.getOrThrow('RETENTION_INTERVAL_MS', {
+      infer: true,
     });
+    const start = () =>
+      this.job.start(this.scheduler, {
+        jobName: this.jobName,
+        intervalMs,
+        task: () => this.runOnce(),
+        logger: this.logger,
+        errorMessage: `Job retention ${this.jobName} lỗi`,
+        skipWhenIdle: true,
+        clusterSingleton: { dataSource: this.dataSource },
+      });
+    const offsetMs = staggerOffsetMs(this.jobName, intervalMs);
+    if (offsetMs === 0) {
+      start();
+      return;
+    }
+    this.startTimer = setTimeout(() => {
+      this.startTimer = undefined;
+      if (this.stopping) return;
+      // Chạy trong callback của timer: một lỗi ném ra ở đây sẽ thành uncaught exception thay vì làm bootstrap thất bại.
+      try {
+        start();
+      } catch (error) {
+        this.logger.error(
+          `Không đăng ký được job retention ${this.jobName}`,
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
+    }, offsetMs);
+    this.startTimer.unref();
   }
 
   onApplicationShutdown(): void {
     // Lô đang chạy xong rồi dừng; không bắt đầu lô/quy tắc mới.
     this.stopping = true;
+    if (this.startTimer) clearTimeout(this.startTimer);
+    this.startTimer = undefined;
     this.job.stop();
   }
 

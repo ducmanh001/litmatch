@@ -121,11 +121,11 @@ describe('TokenService', () => {
     });
   });
 
-  it('RETENTION_MODE=delete: rotate yêu cầu dọn token đã xoay cũ hơn grace ngày (ADR 0014); dry-run thì không', async () => {
+  it('rotate chỉ yêu cầu dọn token đã xoay khi RETENTION_MODE=delete VÀ AUTH_REFRESH_ROTATED_RETENTION_DAYS > 0 (ADR 0014); dry-run hoặc 0 thì không', async () => {
     const values: Record<string, unknown> = {
       JWT_ACCESS_TTL_SECONDS: 900,
       AUTH_REFRESH_TTL_DAYS: 30,
-      AUTH_REFRESH_RETENTION_GRACE_DAYS: 7,
+      AUTH_REFRESH_ROTATED_RETENTION_DAYS: 7,
       RETENTION_MODE: 'delete',
     };
     config.getOrThrow.mockImplementation(
@@ -138,6 +138,14 @@ describe('TokenService', () => {
       );
 
       values['RETENTION_MODE'] = 'dry-run';
+      await service.rotate('refresh-plain');
+      expect(refreshSessions.rotate).toHaveBeenLastCalledWith(
+        expect.objectContaining({ purgeRotatedOlderThanDays: 0 }),
+      );
+
+      // delete nhưng chủ hệ thống chưa chấp nhận đánh đổi bảo mật (mặc định 0) => không dọn
+      values['RETENTION_MODE'] = 'delete';
+      values['AUTH_REFRESH_ROTATED_RETENTION_DAYS'] = 0;
       await service.rotate('refresh-plain');
       expect(refreshSessions.rotate).toHaveBeenLastCalledWith(
         expect.objectContaining({ purgeRotatedOlderThanDays: 0 }),

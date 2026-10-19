@@ -78,12 +78,18 @@ export class TypeOrmRefreshSessionAdapter implements RefreshSessionPort {
         input.purgeRotatedOlderThanDays > 0
       ) {
         // Theo họ (idx_refresh_tokens_family_id): mỗi lần xoay xoá ~1 hàng đã quá hạn giữ — chi phí tỉ lệ với hoạt động,
-        // không cần index mới và không quét toàn bảng.
+        // không cần index mới và không quét toàn bảng. `SKIP LOCKED` để việc dọn KHÔNG BAO GIỜ chờ khoá hàng: revokeFamily /
+        // revokeForUser cập nhật các hàng của họ theo thứ tự index và có thể đang giữ một hàng cũ trong khi chờ hàng mà xoay
+        // đang khoá — nếu xoay cũng chờ hàng đó sẽ thành vòng chờ (deadlock 40P01). Hàng bị bỏ qua được dọn ở lần xoay sau.
         await manager.query(
           `DELETE FROM refresh_tokens
-            WHERE family_id = $1
-              AND rotated_at IS NOT NULL
-              AND rotated_at < now() - make_interval(days => $2)`,
+            WHERE id IN (
+              SELECT id FROM refresh_tokens
+               WHERE family_id = $1
+                 AND rotated_at IS NOT NULL
+                 AND rotated_at < now() - make_interval(days => $2)
+                 FOR UPDATE SKIP LOCKED
+            )`,
           [session.familyId, input.purgeRotatedOlderThanDays],
         );
       }

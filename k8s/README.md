@@ -11,7 +11,7 @@ tái sử dụng YAML giữa các môi trường (base + overlay patch) — đâ
 YAML**, không phải quyết định kiến trúc/ADR. Nếu sau này cần templating phức tạp hơn (Helm chart,
 giá trị tham số hoá nhiều), đó vẫn chỉ là đổi công cụ tooling, không đụng tới boundary/baseline.
 
-Không dùng Helm ở đây vì: chỉ 3 app, số lượng biến môi trường tuy nhiều (86 key core-api) nhưng
+Không dùng Helm ở đây vì: chỉ 3 app, số lượng biến môi trường tuy nhiều (239 khoá trong `CoreApiEnv`, đếm 2026-10-19) nhưng
 không cần logic templating điều kiện phức tạp — kustomize patch/overlay là đủ và không thêm
 dependency ngoài `kubectl`.
 
@@ -100,18 +100,24 @@ rồi `kubectl apply -k k8s/overlays/production`. `media-server` dùng image Liv
   `AUTH_OTP_DELIVERY: 'disabled'` (không trả mã OTP trong response). Trước khi apply lên cluster đang chạy, đặt
   `AUTH_GOOGLE_CLIENT_ID` (admin đăng nhập bằng Google hoặc SĐT; thiếu cả hai thì chỉ còn guest) hoặc chuyển
   `AUTH_OTP_DELIVERY: 'sms-http'` kèm `AUTH_OTP_SMS_HTTP_URL` (https) và `AUTH_OTP_SMS_HTTP_TOKEN` trong Secret.
-  Retention dữ liệu vận hành mặc định `RETENTION_MODE: 'dry-run'` (chỉ đếm); đổi sang `delete` sau khi xem gauge
-  `retention_eligible_rows`.
-- **ConfigMap của core-api liệt kê đủ 76/86 biến** trong `CoreApiEnv`
-  (số cũ "74/84" trong bản trước đã lệch 1 so với thực tế — đã đối chiếu lại bằng script diff
-  lúc thêm `LIVEKIT_REGION_URLS`: 86 = 76 ConfigMap + 10 Secret, 0 thiếu, 0 thừa)
-  (`apps/core-api/src/config/env.validation.ts`) — 10 biến còn lại (credential/connection-string
-  có thể chứa mật khẩu) nằm trong Secret manifest placeholder: `JWT_SECRET`, `AUTH_OTP_PEPPER`,
-  `DATABASE_URL`, `REDIS_URL`, `ECONOMY_APPLE_SHARED_SECRET`, `ECONOMY_GOOGLE_SA_EMAIL`,
-  `ECONOMY_GOOGLE_SA_PRIVATE_KEY`, `ECONOMY_APPLE_PRIVATE_KEY`, `LIVEKIT_API_KEY`,
-  `LIVEKIT_API_SECRET`. Đã đối chiếu bằng script diff tự động giữa `env.validation.ts` và
-  `configmap.yaml` lúc viết — 0 thiếu, 0 thừa. Nếu sửa `env.validation.ts` sau này, **phải** đối
-  chiếu lại `configmap.yaml`/`secret.yaml` trong cùng thay đổi.
+  Retention dữ liệu vận hành mặc định `RETENTION_MODE: 'dry-run'` (chỉ đếm). **Một công tắc duy nhất**: đổi sang `delete`
+  bật CÙNG LÚC mọi quy tắc đang có số ngày > 0 — thông báo (đọc 90/chưa đọc 365 ngày), `refresh_tokens` hết hạn quá 7
+  ngày, OTP > 1 ngày, quota ghép > 2 ngày, outbox đã publish > 7 ngày, bình luận video xoá mềm > 30 ngày, sự kiện mood.
+  Xem gauge `retention_eligible_rows{rule}` của TỪNG quy tắc trước khi đổi. Các quyết định chưa chốt mặc định TẮT (số ngày
+  `0`): `VIDEO_VIEW_RETENTION_DAYS`, `AUTH_REFRESH_ROTATED_RETENTION_DAYS` (đánh đổi bảo mật, ADR 0014),
+  `OUTBOX_DEAD_LETTER_RETENTION_DAYS`; muốn hoãn thêm quy tắc nào thì đặt số ngày của nó về `0` TRƯỚC khi đổi sang
+  `delete`. Story sweeper không chịu `RETENTION_MODE` (luôn xoá story hết hạn; chu kỳ `STORY_SWEEPER_INTERVAL_MS`, mặc
+  định 1 giờ — ở quy mô lớn cần ngắn hơn, xem ADR 0014).
+- **Đối chiếu ConfigMap/Secret với `CoreApiEnv`** (`apps/core-api/src/config/env.validation.ts`, đếm 2026-10-19): 239
+  khoá, trong đó 144 nằm trong ConfigMap, 14 trong Secret (credential/connection-string có thể chứa mật khẩu), 81 dùng
+  mặc định trong mã (tuỳ chọn hoặc có mặc định an toàn: thông báo đẩy, AWS, PayOS, tinh chỉnh matching/discovery/video…).
+  ConfigMap/Secret còn có 4 + 2 khoá ngoài `CoreApiEnv` (quan sát: `OTEL_*`, `GRAFANA_CLOUD_*`,
+  `OBSERVABILITY_REQUIRED`). Các con số này đổi mỗi khi thêm biến: đừng coi là hợp đồng — **phải** đối chiếu lại
+  `configmap.yaml`/`secret.yaml` trong cùng thay đổi mỗi khi sửa `env.validation.ts`. Secret placeholder gồm
+  `JWT_SECRET`, `AUTH_OTP_PEPPER`, `AUTH_GUEST_DEVICE_TOKEN_SECRET`, `DATABASE_URL`, `REDIS_URL`,
+  `ECONOMY_APPLE_SHARED_SECRET`, `ECONOMY_GOOGLE_SA_EMAIL`, `ECONOMY_GOOGLE_SA_PRIVATE_KEY`,
+  `ECONOMY_APPLE_PRIVATE_KEY`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `MEDIA_R2_ACCESS_KEY_ID`,
+  `MEDIA_R2_SECRET_ACCESS_KEY`, `AUTH_FACEBOOK_APP_SECRET`, `OTEL_EXPORTER_OTLP_HEADERS`, `GRAFANA_CLOUD_API_TOKEN`.
 - **Secret manifest KHÔNG chứa giá trị thật** — mọi giá trị đều là chuỗi `'REPLACE_ME...'`. Điền
   giá trị thật qua sealed-secrets (kubeseal) hoặc external-secrets-operator (Vault) tuỳ hạ tầng
   cluster thật — công cụ quản lý secret cụ thể **chưa chốt** ở thay đổi này, chỉ khai đúng tên key
@@ -183,6 +189,10 @@ Mỗi pod core-api giữ tối đa `DATABASE_POOL_MAX` kết nối tới Postgre
   advisory lock suốt lúc chạy, và task của nó cần thêm 1 kết nối nữa. Pool quá nhỏ có thể bị job tự chiếm
   hết, vì vậy có sàn 5 và `DATABASE_POOL_ACQUIRE_TIMEOUT_MS` (mặc định 10 giây): hết hạn thì request/job
   lỗi thay vì chờ vô hạn (driver pg mặc định không có timeout).
+- Job retention (6 job: thông báo, auth, ghép đôi, economy, short-video, mood) chung `RETENTION_INTERVAL_MS`, nên mỗi job
+  bắt đầu lệch một khoảng tất định theo hash của TÊN job (0 – 1 chu kỳ) để không đồng loạt chiếm kết nối lúc khởi động.
+  Khi có backlog mỗi tick chạy tới 30 giây nên các job vẫn có thể chồng nhau: ngân sách xấu nhất ≈ 2 kết nối × số job
+  đang chạy cùng lúc (cộng story sweeper) — đặt `DATABASE_POOL_MAX` đủ cho phần đó, hoặc nâng `RETENTION_INTERVAL_MS`.
 - Tổng kết nối ≈ số pod tối đa (kể cả pod surge lúc rollout) × `DATABASE_POOL_MAX` + migration/công cụ
   vận hành. Ví dụ: base `maxReplicas: 10` + `maxSurge: 1` = 11 pod × 10 = 110; overlay production và
   production-region-b `maxReplicas: 15` → 16 × 10 = 160. Postgres mặc định `max_connections = 100` và dành 3

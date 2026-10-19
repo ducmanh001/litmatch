@@ -58,7 +58,7 @@ tiến lên phía sau, không lặp lại 200 hàng cũ nhất và không đói 
 
 ## 3. View counting — chống đếm đôi, self-view không tính
 
-`video_views` unique `(video_id, viewer_id)` — cùng pattern `story_views` (MỘT HÀNG MỖI CẶP, không phải mỗi lượt xem; xoá hàng quá `VIDEO_VIEW_RETENTION_DAYS` (mặc định 180) khi `RETENTION_MODE` ≠ `off`, sau đó người xem lại có thể được đếm thêm một lần — ADR 0014). `qualified` (đã xem đủ
+`video_views` unique `(video_id, viewer_id)` — cùng pattern `story_views` (MỘT HÀNG MỖI CẶP, không phải mỗi lượt xem; nếu bật `VIDEO_VIEW_RETENTION_DAYS` (mặc định 0 = giữ; khuyến nghị 180) thì khi `RETENTION_MODE=delete` xoá hàng quá hạn đó (`dry-run` chỉ đếm), sau đó người xem lại có thể được đếm thêm một lần — ADR 0014). `qualified` (đã xem đủ
 `VIDEO_QUALIFIED_VIEW_MIN_MS`) chỉ chuyển `false→true` **đúng 1 lần**, `Video.viewCount` cộng
 ATOMIC đúng lúc đó (cùng transaction với update `VideoView.qualified`) — các lần cập nhật
 watch-time sau (video xem tiếp) không cộng lại. Self-view (tác giả tự xem video mình) không bao

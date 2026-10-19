@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 
-import { RetentionJob } from './retention-job';
+import { RetentionJob, staggerOffsetMs } from './retention-job';
 
 import type { PurgeStep } from './batched-purge';
 
@@ -103,18 +103,31 @@ describe('RetentionJob (khung chung, ADR 0013)', () => {
   });
 
   it.each(['dry-run', 'delete'])(
-    'mode=%s: đăng ký đúng một interval theo RETENTION_INTERVAL_MS và gỡ khi tắt',
+    'mode=%s: đăng ký đúng một interval theo RETENTION_INTERVAL_MS (sau độ lệch pha tất định) và gỡ khi tắt',
     (mode) => {
+      jest.useFakeTimers();
       settings['RETENTION_MODE'] = mode;
 
       job.onApplicationBootstrap();
+      expect(scheduler.addInterval).not.toHaveBeenCalled(); // chưa tới độ lệch pha
+      jest.advanceTimersByTime(60_000);
       expect(scheduler.addInterval).toHaveBeenCalledTimes(1);
       expect(scheduler.addInterval.mock.calls[0]?.[0]).toBe('test-retention');
 
       job.onApplicationShutdown();
       expect(scheduler.deleteInterval).toHaveBeenCalledWith('test-retention');
+      jest.useRealTimers();
     },
   );
+
+  it('tắt trước khi tới độ lệch pha thì KHÔNG bao giờ đăng ký interval (không rò timer)', () => {
+    jest.useFakeTimers();
+    job.onApplicationBootstrap();
+    job.onApplicationShutdown();
+    jest.advanceTimersByTime(120_000);
+    expect(scheduler.addInterval).not.toHaveBeenCalled();
+    jest.useRealTimers();
+  });
 
   it('delete: chạy từng quy tắc với giới hạn lô từ config, đếm hàng đã xoá vào counter theo quy tắc', async () => {
     query
@@ -241,5 +254,36 @@ describe('RetentionJob (khung chung, ADR 0013)', () => {
     // và không để lại cờ "đang chạy": tick sau chạy được
     query.mockResolvedValue([{ n: 0 }]);
     await expect(job.runOnce()).resolves.toHaveLength(1);
+  });
+});
+
+describe('staggerOffsetMs', () => {
+  const JOBS = [
+    'auth-retention',
+    'matching-retention',
+    'economy-retention',
+    'short-video-retention',
+    'mood-retention',
+    'notification-retention',
+  ];
+
+  it('tất định theo tên và nằm trong [0, interval)', () => {
+    for (const name of JOBS) {
+      const offset = staggerOffsetMs(name, 60_000);
+      expect(offset).toBe(staggerOffsetMs(name, 60_000));
+      expect(offset).toBeGreaterThanOrEqual(0);
+      expect(offset).toBeLessThan(60_000);
+    }
+    expect(staggerOffsetMs('x', 1)).toBe(0);
+  });
+
+  it('các job retention thật được rải ra nhiều giây khác nhau thay vì cùng một lúc', () => {
+    const seconds = JOBS.map((name) =>
+      Math.floor(staggerOffsetMs(name, 60_000) / 1_000),
+    );
+    expect(new Set(seconds).size).toBeGreaterThanOrEqual(4);
+    expect(Math.max(...seconds) - Math.min(...seconds)).toBeGreaterThanOrEqual(
+      10,
+    );
   });
 });

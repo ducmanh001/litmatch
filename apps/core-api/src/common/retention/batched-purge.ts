@@ -44,6 +44,33 @@ export interface PurgeResult {
   capped: boolean;
 }
 
+/**
+ * Bảng KHÔNG BAO GIỜ được xoá bằng khung retention, dù ai khai báo quy tắc (ADR 0014): sổ cái append-only, ví, chứng từ
+ * nạp/hoàn tiền, quà (gắn giao dịch sổ cái) và nhật ký kiểm toán admin. Chốt chặn cấu trúc thay cho việc chỉ tin literal
+ * trong từng job: thêm quy tắc trỏ vào các bảng này làm câu SQL ném lỗi ngay lúc dựng, kể cả ở chế độ dry-run.
+ */
+const PROTECTED_TABLES: ReadonlySet<string> = new Set([
+  'transactions',
+  'ledger_entries',
+  'ledger_accounts',
+  'wallets',
+  'iap_receipts',
+  'payos_payment_orders',
+  'gift_events',
+  'admin_audit_logs',
+]);
+
+function assertDeletable(table: string): void {
+  // Khớp cả bảng con phân vùng (`transactions_2026_01`): ADR 0014 dự kiến phân vùng theo tháng cho chính các bảng này. Tiền tố
+  // `<tên>_` có thể chặn nhầm một bảng khác tên giống — hướng lỗi an toàn (từ chối) và dễ thấy ngay lúc dựng SQL.
+  const protectedName = [...PROTECTED_TABLES].find(
+    (name) => table === name || table.startsWith(`${name}_`),
+  );
+  if (protectedName !== undefined) {
+    throw new Error(`Retention không được phép xoá bảng được bảo vệ: ${table}`);
+  }
+}
+
 function assertIdentifier(value: string, what: string): void {
   if (!/^[a-z_][a-z0-9_]*$/u.test(value)) {
     throw new Error(`Retention ${what} không hợp lệ: ${value}`);
@@ -54,10 +81,15 @@ function assertIdentifier(value: string, what: string): void {
 export function buildDeleteSql(step: PurgeStep): string {
   assertIdentifier(step.table, 'table');
   assertIdentifier(step.primaryKey, 'primary key');
+  assertDeletable(step.table);
+  // `ctid` chỉ định danh hàng TRONG một bảng con: với bảng phân vùng phải kèm `tableoid` (nếu không, `t.ctid = d.ctid`
+  // khớp cả hàng cùng ctid ở partition khác và xoá nhầm).
+  const keyColumns =
+    step.primaryKey === 'ctid' ? ['ctid', 'tableoid'] : [step.primaryKey];
   const order = step.orderBy === undefined ? '' : `ORDER BY ${step.orderBy}`;
   return `
     WITH doomed AS MATERIALIZED (
-      SELECT ${step.primaryKey} FROM ${step.table}
+      SELECT ${keyColumns.join(', ')} FROM ${step.table}
        WHERE ${step.predicate}
        ${order}
        LIMIT $1
@@ -65,7 +97,7 @@ export function buildDeleteSql(step: PurgeStep): string {
     ), removed AS (
       DELETE FROM ${step.table} t
        USING doomed d
-       WHERE t.${step.primaryKey} = d.${step.primaryKey}
+       WHERE ${keyColumns.map((column) => `t.${column} = d.${column}`).join(' AND ')}
       RETURNING 1
     )
     SELECT count(*)::int AS n FROM removed`;
@@ -74,6 +106,7 @@ export function buildDeleteSql(step: PurgeStep): string {
 /** Đếm có chặn trên (không quét cả bảng khi backlog khổng lồ). */
 export function buildCountSql(step: PurgeStep): string {
   assertIdentifier(step.table, 'table');
+  assertDeletable(step.table);
   return `
     SELECT count(*)::int AS n FROM (
       SELECT 1 FROM ${step.table}

@@ -46,6 +46,38 @@ describe('buildDeleteSql / buildCountSql', () => {
     expect(sql).not.toContain('DELETE');
   });
 
+  it('khoá chính ctid kèm tableoid để an toàn khi bảng được phân vùng (ctid chỉ duy nhất trong một partition)', () => {
+    const sql = buildDeleteSql({
+      ...STEP,
+      table: 'match_daily_quotas',
+      primaryKey: 'ctid',
+      orderBy: undefined,
+    }).replace(/\s+/gu, ' ');
+    expect(sql).toContain('SELECT ctid, tableoid FROM match_daily_quotas');
+    expect(sql).toContain('WHERE t.ctid = d.ctid AND t.tableoid = d.tableoid');
+  });
+
+  it.each([
+    'transactions',
+    'ledger_entries',
+    'ledger_accounts',
+    'wallets',
+    'iap_receipts',
+    'payos_payment_orders',
+    'gift_events',
+    'admin_audit_logs',
+  ])(
+    'TỪ CHỐI xoá bảng được bảo vệ (%s) ở cả câu xoá lẫn câu đếm, kể cả khi ai đó khai báo quy tắc',
+    (table) => {
+      expect(() => buildDeleteSql({ ...STEP, table })).toThrow(/được bảo vệ/u);
+      expect(() => buildCountSql({ ...STEP, table })).toThrow(/được bảo vệ/u);
+      // bảng con phân vùng của chính bảng đó cũng bị chặn
+      expect(() =>
+        buildDeleteSql({ ...STEP, table: `${table}_2026_01` }),
+      ).toThrow(/được bảo vệ/u);
+    },
+  );
+
   it.each(['notifications; DROP TABLE users', 'Notifications', 'a b'])(
     'từ chối tên bảng không hợp lệ (%s) ở cả câu xoá lẫn câu đếm',
     (table) => {

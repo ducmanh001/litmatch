@@ -5,17 +5,23 @@ import { metrics } from '@opentelemetry/api';
 import { DataSource } from 'typeorm';
 import type { QueryRunner } from 'typeorm';
 
+import { LifecycleBtreeIndexes1758800000000 } from './migrations/1758800000000-lifecycle-btree-indexes';
 import { SnakeNamingStrategy } from './snake-naming.strategy';
 import { RefreshToken } from '../modules/auth/entities/refresh-token.entity';
 import { AuthRetentionJob } from '../modules/auth/jobs/auth-retention.job';
 import { TypeOrmRefreshSessionAdapter } from '../modules/auth/repositories/typeorm-refresh-session.adapter';
 import { StorySweeperService } from '../modules/feed/jobs/story-sweeper.service';
+import {
+  buildCountSql,
+  buildDeleteSql,
+} from '../common/retention/batched-purge';
 import { MatchingRetentionJob } from '../modules/matching/jobs/matching-retention.job';
 import { EconomyRetentionJob } from '../modules/economy/jobs/economy-retention.job';
 import { ShortVideoRetentionJob } from '../modules/short-video/jobs/short-video-retention.job';
 import { MoodRetentionJob } from '../modules/mood/jobs/mood-retention.job';
 
 import type { SchedulerRegistry } from '@nestjs/schedule';
+import type { PurgeStep } from '../common/retention/batched-purge';
 import type { ConfigService } from '@nestjs/config';
 import type { CoreApiEnv } from '../config/env.validation';
 
@@ -64,6 +70,7 @@ function resetConfig(over: Record<string, unknown> = {}): void {
     VIDEO_VIEW_RETENTION_DAYS: 180,
     VIDEO_DELETED_COMMENT_RETENTION_DAYS: 30,
     MOOD_EVENT_RETENTION_DAYS: 7,
+    MOOD_STATUS_TTL_HOURS: 24,
     STORY_SWEEPER_INTERVAL_MS: 3_600_000,
     ...over,
   });
@@ -165,26 +172,22 @@ d('Vòng đời dữ liệu (Postgres thật, toàn bộ migration)', () => {
   });
 
   describe('migration index', () => {
-    it('đủ index vòng đời, hợp lệ (indisvalid), đúng loại', async () => {
+    it('đủ index vòng đời, hợp lệ (indisvalid), đúng loại; BRIN cũ đã được thay bằng B-tree', async () => {
       const rows = (await q(
         `SELECT c.relname AS name, am.amname AS method, i.indisvalid AS valid
            FROM pg_class c
            JOIN pg_index i ON i.indexrelid = c.oid
            JOIN pg_am am ON am.oid = c.relam
-          WHERE c.relname LIKE ANY (ARRAY['idx_%_brin', 'idx_outbox_events_%_at', 'idx_video_comments_deleted_at'])`,
+          WHERE c.relname LIKE ANY (ARRAY['idx_%_brin', 'idx_%_expires_at', 'idx_%_created_at', 'idx_%_quota_date',
+                                          'idx_outbox_events_%_at', 'idx_video_comments_deleted_at'])`,
       )) as Array<{ name: string; method: string; valid: boolean }>;
       const byName = new Map(rows.map((row) => [row.name, row]));
       for (const name of [
-        'idx_refresh_tokens_created_brin',
-        'idx_phone_otps_created_brin',
-        'idx_video_views_created_brin',
-        'idx_mood_status_events_created_brin',
-        'idx_match_daily_quotas_date_brin',
-        'idx_guest_match_quotas_date_brin',
-      ]) {
-        expect(byName.get(name)).toMatchObject({ method: 'brin', valid: true });
-      }
-      for (const name of [
+        'idx_refresh_tokens_expires_at',
+        'idx_phone_otps_created_at',
+        'idx_video_views_created_at',
+        'idx_mood_status_events_created_at',
+        'idx_match_daily_quotas_quota_date',
         'idx_outbox_events_published_at',
         'idx_outbox_events_dead_lettered_at',
         'idx_video_comments_deleted_at',
@@ -194,26 +197,155 @@ d('Vòng đời dữ liệu (Postgres thật, toàn bộ migration)', () => {
           valid: true,
         });
       }
+      // BRIN mất chọn lọc khi bảng bị xoá từ đầu rồi chèn lại (đo ở migration 1758800000000) nên sáu BRIN của các bảng
+      // có retention đã bị gỡ. BRIN của `transactions` (sổ cái append-only, không bao giờ xoá) được GIỮ: đúng chỗ dùng BRIN.
+      expect(
+        [...byName.keys()].filter((name) => name.endsWith('_brin')),
+      ).toEqual(['idx_transactions_created_at_brin']);
+    });
+
+    const BRIN_NAMES = [
+      'idx_guest_match_quotas_date_brin',
+      'idx_match_daily_quotas_date_brin',
+      'idx_mood_status_events_created_brin',
+      'idx_phone_otps_created_brin',
+      'idx_refresh_tokens_created_brin',
+      'idx_video_views_created_brin',
+    ];
+    const BTREE_NAMES = [
+      'idx_match_daily_quotas_quota_date',
+      'idx_mood_status_events_created_at',
+      'idx_phone_otps_created_at',
+      'idx_refresh_tokens_expires_at',
+      'idx_video_views_created_at',
+    ];
+    const indexState = async (): Promise<{
+      brin: string[];
+      btree: string[];
+    }> => {
+      const rows = (await q(
+        `SELECT c.relname AS name, i.indisvalid AS valid
+           FROM pg_class c JOIN pg_index i ON i.indexrelid = c.oid
+          WHERE c.relname = ANY ($1::text[])`,
+        [[...BRIN_NAMES, ...BTREE_NAMES]],
+      )) as Array<{ name: string; valid: boolean }>;
+      const valid = rows.filter((row) => row.valid).map((row) => row.name);
+      return {
+        brin: valid.filter((name) => BRIN_NAMES.includes(name)).sort(),
+        btree: valid.filter((name) => BTREE_NAMES.includes(name)).sort(),
+      };
+    };
+
+    it('migration 1758800000000 đảo ngược được: down khôi phục ĐÚNG sáu BRIN và gỡ cả năm B-tree', async () => {
+      const migrations = await ds.query(
+        `SELECT name FROM migrations ORDER BY id DESC LIMIT 1`,
+      );
+      // undoLastMigration chỉ đúng khi migration này là migration MỚI NHẤT
+      expect(migrations[0].name).toBe('LifecycleBtreeIndexes1758800000000');
+
+      await ds.undoLastMigration({ transaction: 'each' });
+      let afterDown: { brin: string[]; btree: string[] };
+      try {
+        afterDown = await indexState();
+      } finally {
+        await ds.runMigrations({ transaction: 'each' });
+      }
+      expect(afterDown).toEqual({ brin: BRIN_NAMES, btree: [] });
+      expect(await indexState()).toEqual({ brin: [], btree: BTREE_NAMES });
+    });
+
+    it('up() chạy lại trên trạng thái đã áp dụng thì không lỗi; một index B-tree INVALID bị dựng lại', async () => {
+      // chạy lại lần hai: IF NOT EXISTS + dọn index invalid
+      await new LifecycleBtreeIndexes1758800000000().up(fixture);
+      expect(await indexState()).toEqual({ brin: [], btree: BTREE_NAMES });
+
+      // mô phỏng CREATE INDEX CONCURRENTLY bị huỷ giữa chừng: index tồn tại nhưng indisvalid = false
+      await q(
+        `UPDATE pg_index SET indisvalid = false
+          WHERE indexrelid = 'idx_refresh_tokens_expires_at'::regclass`,
+      );
+      expect((await indexState()).btree).not.toContain(
+        'idx_refresh_tokens_expires_at',
+      );
+
+      await new LifecycleBtreeIndexes1758800000000().up(fixture);
+
+      expect(await indexState()).toEqual({ brin: [], btree: BTREE_NAMES });
+    });
+  });
+
+  describe('index thật sự phục vụ câu chọn lô của từng quy tắc', () => {
+    /** Index kỳ vọng cho từng quy tắc; ép planner bỏ Seq Scan để chứng minh predicate + ORDER BY khớp index. */
+    const EXPECTED_INDEX: Record<string, string> = {
+      'refresh_tokens:expired': 'idx_refresh_tokens_expires_at',
+      'phone_otps:old': 'idx_phone_otps_created_at',
+      'match_daily_quotas:old': 'idx_match_daily_quotas_quota_date',
+      // khoá chính (quota_date, key_hash) dẫn đầu bằng quota_date nên không cần index riêng
+      'guest_match_quotas:old': 'pk_guest_match_quotas',
+      'outbox_events:published': 'idx_outbox_events_published_at',
+      'outbox_events:dead_letter': 'idx_outbox_events_dead_lettered_at',
+      'video_views:old': 'idx_video_views_created_at',
+      'video_comments:deleted': 'idx_video_comments_deleted_at',
+      'mood_status_events:old': 'idx_mood_status_events_created_at',
+    };
+
+    it('mọi quy tắc mới đều có index kỳ vọng và câu xoá lô dùng đúng index đó', async () => {
+      resetConfig({ VIDEO_VIEW_RETENTION_DAYS: 180 });
+      const jobs = [
+        new AuthRetentionJob(ds, configStub, schedulerStub, meter),
+        new MatchingRetentionJob(ds, configStub, schedulerStub, meter),
+        new EconomyRetentionJob(ds, configStub, schedulerStub, meter),
+        new ShortVideoRetentionJob(ds, configStub, schedulerStub, meter),
+        new MoodRetentionJob(ds, configStub, schedulerStub, meter),
+      ];
+      const steps = jobs.flatMap((job) =>
+        (job as unknown as { steps(): PurgeStep[] }).steps(),
+      );
+      expect(steps.map((step) => step.label).sort()).toEqual(
+        Object.keys(EXPECTED_INDEX).sort(),
+      );
+
+      await q('SET enable_seqscan = off');
+      try {
+        for (const step of steps) {
+          const plan = (
+            (await q(`EXPLAIN ${buildDeleteSql(step)}`, [
+              1_000,
+              ...step.params,
+            ])) as Array<{ 'QUERY PLAN': string }>
+          )
+            .map((row) => row['QUERY PLAN'])
+            .join('\n');
+          expect(plan).toContain(EXPECTED_INDEX[step.label]);
+        }
+      } finally {
+        await q('RESET enable_seqscan');
+      }
     });
   });
 
   describe('auth: refresh_tokens + phone_otps', () => {
-    const insertToken = async (createdDaysAgo: number): Promise<string> =>
+    /** Token đã HẾT HẠN `expiredDaysAgo` ngày (âm = còn hạn), phát hành `ttlDays` ngày trước hạn. */
+    const insertToken = async (
+      expiredDaysAgo: number,
+      ttlDays = 30,
+    ): Promise<string> =>
       (
         (await q(
           `INSERT INTO refresh_tokens (user_id, token_hash, family_id, expires_at, created_at)
            VALUES (gen_random_uuid(), md5(random()::text) || md5(random()::text), gen_random_uuid(),
-                   now() + interval '5 days', now() - make_interval(days => $1::int))
+                   now() - make_interval(days => $1::int),
+                   now() - make_interval(days => $1::int) - make_interval(days => $2::int))
            RETURNING id`,
-          [createdDaysAgo],
+          [expiredDaysAgo, ttlDays],
         )) as Array<{ id: string }>
       )[0].id;
 
-    it('xoá token tạo quá TTL(30)+grace(7)=37 ngày, giữ token còn trong hạn; dry-run không xoá', async () => {
+    it('xoá token đã HẾT HẠN quá grace(7) ngày (theo expires_at), giữ token còn hạn hoặc mới hết hạn; dry-run không xoá', async () => {
       const old = await insertToken(40);
       const oldest = await insertToken(400);
-      const edge = await insertToken(36);
-      const recent = await insertToken(1);
+      const withinGrace = await insertToken(6);
+      const valid = await insertToken(-10);
       const job = new AuthRetentionJob(ds, configStub, schedulerStub, meter);
 
       resetConfig({ RETENTION_MODE: 'dry-run' });
@@ -229,9 +361,24 @@ d('Vòng đời dữ liệu (Postgres thật, toàn bộ migration)', () => {
         results.find((r) => r.label === 'refresh_tokens:expired'),
       ).toMatchObject({ mode: 'delete', rows: 2 });
       const left = await ids('refresh_tokens');
-      expect(left.sort()).toEqual([edge, recent].sort());
+      expect(left.sort()).toEqual([withinGrace, valid].sort());
       expect(left).not.toContain(old);
       expect(left).not.toContain(oldest);
+    });
+
+    it('đổi AUTH_REFRESH_TTL_DAYS KHÔNG làm xoá nhầm token còn hạn: token phát hành 45 ngày trước nhưng còn 45 ngày hạn được giữ', async () => {
+      // Trước đây quy tắc theo created_at < now() - (TTL+grace) nên hạ TTL từ 90 xuống 30 sẽ xoá token này (đăng xuất cưỡng bức).
+      const longLived = await insertToken(-45, 90);
+      resetConfig({ AUTH_REFRESH_TTL_DAYS: 30 });
+
+      await new AuthRetentionJob(
+        ds,
+        configStub,
+        schedulerStub,
+        meter,
+      ).runOnce();
+
+      expect(await ids('refresh_tokens')).toEqual([longLived]);
     });
 
     it('xoá OTP quá 1 ngày, giữ OTP mới', async () => {
@@ -268,7 +415,7 @@ d('Vòng đời dữ liệu (Postgres thật, toàn bộ migration)', () => {
       expect(await count('refresh_tokens')).toBe(1);
     });
 
-    describe('dọn token đã xoay NGAY LÚC xoay (theo họ)', () => {
+    describe('dọn token đã xoay NGAY LÚC xoay (theo họ) — quyết định bảo mật, mặc định tắt', () => {
       const adapter = () => new TypeOrmRefreshSessionAdapter(ds);
       /** Xoay chèn token thay thế bằng kết nối thường (có kiểm tra FK) nên cần user thật. */
       const createUser = async (): Promise<string> =>
@@ -295,6 +442,10 @@ d('Vòng đời dữ liệu (Postgres thật, toàn bộ migration)', () => {
             [input.familyId, input.rotatedDaysAgo, userId],
           )) as Array<{ id: string }>
         )[0].id;
+      const replacement = (hash: string) => ({
+        tokenHash: hash.repeat(64).slice(0, 64),
+        expiresAt: new Date(Date.now() + 30 * 86_400_000),
+      });
 
       it('xoay xoá token đã xoay cũ hơn N ngày của CÙNG họ, giữ token xoay gần đây và họ khác', async () => {
         const familyId = '11111111-1111-4111-8111-111111111111';
@@ -315,10 +466,7 @@ d('Vòng đời dữ liệu (Postgres thật, toàn bộ migration)', () => {
 
         const result = await adapter().rotate({
           tokenId: current,
-          replacement: {
-            tokenHash: 'c'.repeat(64),
-            expiresAt: new Date(Date.now() + 30 * 86_400_000),
-          },
+          replacement: replacement('c'),
           purgeRotatedOlderThanDays: 7,
         });
 
@@ -326,12 +474,29 @@ d('Vòng đời dữ liệu (Postgres thật, toàn bộ migration)', () => {
         const left = await ids('refresh_tokens');
         expect(left).not.toContain(stale);
         expect(left).toContain(recentlyRotated);
-        expect(left).toContain(current); // vừa được đánh dấu đã xoay (3 ngày nữa mới đủ tuổi dọn)
+        expect(left).toContain(current); // vừa được đánh dấu đã xoay (7 ngày nữa mới đủ tuổi dọn)
         expect(left).toContain(otherStale); // họ khác không bị đụng
         expect(await count('refresh_tokens')).toBe(4); // 3 cũ còn lại + 1 token thay thế
       });
 
-      it('không truyền hạn (dry-run/off) thì không xoá gì khi xoay', async () => {
+      it('purgeRotatedOlderThanDays = 0 (TokenService truyền 0 khi dry-run hoặc chưa chấp nhận đánh đổi) thì không xoá gì khi xoay', async () => {
+        const familyId = '66666666-6666-4666-8666-666666666666';
+        const stale = await insertFamilyToken({ familyId, rotatedDaysAgo: 10 });
+        const current = await insertFamilyToken({
+          familyId,
+          rotatedDaysAgo: null,
+        });
+
+        await adapter().rotate({
+          tokenId: current,
+          replacement: replacement('z'),
+          purgeRotatedOlderThanDays: 0,
+        });
+
+        expect(await ids('refresh_tokens')).toContain(stale);
+      });
+
+      it('không truyền hạn (dry-run/off hoặc quyết định chưa chấp nhận) thì không xoá gì khi xoay', async () => {
         const familyId = '33333333-3333-4333-8333-333333333333';
         const stale = await insertFamilyToken({ familyId, rotatedDaysAgo: 10 });
         const current = await insertFamilyToken({
@@ -341,13 +506,84 @@ d('Vòng đời dữ liệu (Postgres thật, toàn bộ migration)', () => {
 
         await adapter().rotate({
           tokenId: current,
-          replacement: {
-            tokenHash: 'd'.repeat(64),
-            expiresAt: new Date(Date.now() + 30 * 86_400_000),
-          },
+          replacement: replacement('d'),
         });
 
         expect(await ids('refresh_tokens')).toContain(stale);
+      });
+
+      it('token đã bị dọn mà bị phát lại thì chỉ bị TỪ CHỐI (invalid), không còn thu hồi cả họ — đánh đổi đã ghi ở ADR 0014', async () => {
+        const familyId = '44444444-4444-4444-8444-444444444444';
+        const stale = await insertFamilyToken({ familyId, rotatedDaysAgo: 10 });
+        const current = await insertFamilyToken({
+          familyId,
+          rotatedDaysAgo: null,
+        });
+        await adapter().rotate({
+          tokenId: current,
+          replacement: replacement('e'),
+          purgeRotatedOlderThanDays: 7,
+        });
+
+        const replay = await adapter().rotate({
+          tokenId: stale,
+          replacement: replacement('f'),
+        });
+
+        expect(replay).toBe('invalid');
+        // Họ KHÔNG bị thu hồi: token thay thế vẫn dùng được.
+        const revoked = (await q(
+          `SELECT count(*)::int AS n FROM refresh_tokens WHERE family_id = $1 AND revoked_at IS NOT NULL`,
+          [familyId],
+        )) as Array<{ n: number }>;
+        expect(revoked[0]?.n).toBe(0);
+      });
+
+      it('dọn KHÔNG BAO GIỜ chờ khoá hàng: hàng cũ đang bị giữ bởi giao dịch khác (vd thu hồi họ) được bỏ qua, xoay vẫn hoàn tất', async () => {
+        const familyId = '55555555-5555-4555-8555-555555555555';
+        const stale = await insertFamilyToken({ familyId, rotatedDaysAgo: 10 });
+        const current = await insertFamilyToken({
+          familyId,
+          rotatedDaysAgo: null,
+        });
+        const holder = ds.createQueryRunner();
+        await holder.connect();
+        await holder.startTransaction();
+        await holder.query(
+          `SELECT id FROM refresh_tokens WHERE id = $1 FOR UPDATE`,
+          [stale],
+        );
+        try {
+          const timeout = new Promise<'timeout'>((resolve) =>
+            setTimeout(() => resolve('timeout'), 5_000),
+          );
+          const outcome = await Promise.race([
+            adapter().rotate({
+              tokenId: current,
+              replacement: replacement('g'),
+              purgeRotatedOlderThanDays: 7,
+            }),
+            timeout,
+          ]);
+          // Nếu việc dọn chờ khoá, xoay treo tới timeout (và có thể thành deadlock với revoke).
+          expect(outcome).toBe('rotated');
+          expect(await ids('refresh_tokens')).toContain(stale);
+        } finally {
+          await holder.commitTransaction();
+          await holder.release();
+        }
+
+        // Lần xoay kế tiếp (khoá đã nhả) dọn nốt hàng đã bỏ qua.
+        const next = (await q(
+          `SELECT id FROM refresh_tokens WHERE family_id = $1 AND rotated_at IS NULL`,
+          [familyId],
+        )) as Array<{ id: string }>;
+        await adapter().rotate({
+          tokenId: (next[0] as { id: string }).id,
+          replacement: replacement('h'),
+          purgeRotatedOlderThanDays: 7,
+        });
+        expect(await ids('refresh_tokens')).not.toContain(stale);
       });
     });
   });
@@ -421,12 +657,48 @@ d('Vòng đời dữ liệu (Postgres thật, toàn bộ migration)', () => {
       ).toBe(1);
     });
 
-    it('không có job nào của economy chạm transactions/ledger_entries (sổ cái append-only)', async () => {
-      const job = new EconomyRetentionJob(ds, configStub, schedulerStub, meter);
-      const tables = (job as unknown as { steps(): Array<{ table: string }> })
+    it('sổ cái được bảo vệ CẤU TRÚC: không job nào trỏ vào bảng sổ cái/ví/chứng từ và deny-list từ chối dựng SQL cho chúng', () => {
+      resetConfig({ VIDEO_VIEW_RETENTION_DAYS: 180 });
+      const jobs = [
+        new AuthRetentionJob(ds, configStub, schedulerStub, meter),
+        new MatchingRetentionJob(ds, configStub, schedulerStub, meter),
+        new EconomyRetentionJob(ds, configStub, schedulerStub, meter),
+        new ShortVideoRetentionJob(ds, configStub, schedulerStub, meter),
+        new MoodRetentionJob(ds, configStub, schedulerStub, meter),
+      ];
+      const tables = new Set(
+        jobs.flatMap((job) =>
+          (job as unknown as { steps(): PurgeStep[] })
+            .steps()
+            .map((step) => step.table),
+        ),
+      );
+      // economy chỉ có outbox_events; không job nào khác có bảng sổ cái.
+      const economyTables = (jobs[2] as unknown as { steps(): PurgeStep[] })
         .steps()
         .map((step) => step.table);
-      expect(new Set(tables)).toEqual(new Set(['outbox_events']));
+      expect(new Set(economyTables)).toEqual(new Set(['outbox_events']));
+      for (const table of [
+        'transactions',
+        'ledger_entries',
+        'ledger_accounts',
+        'wallets',
+        'iap_receipts',
+        'payos_payment_orders',
+        'gift_events',
+        'admin_audit_logs',
+      ]) {
+        expect(tables.has(table)).toBe(false);
+        const step: PurgeStep = {
+          label: `${table}:bad`,
+          table,
+          primaryKey: 'id',
+          predicate: 'created_at < now()',
+          params: [],
+        };
+        expect(() => buildDeleteSql(step)).toThrow(/bảo vệ/u);
+        expect(() => buildCountSql(step)).toThrow(/bảo vệ/u);
+      }
     });
   });
 
@@ -486,6 +758,29 @@ d('Vòng đời dữ liệu (Postgres thật, toàn bộ migration)', () => {
     });
   });
 
+  describe('mood: hạn giữ không bao giờ ngắn hơn TTL trạng thái', () => {
+    it('MOOD_STATUS_TTL_HOURS=240 (10 ngày) với retention 7 ngày: sự kiện 9 ngày tuổi (trạng thái còn sống) được GIỮ, 12 ngày tuổi bị xoá', async () => {
+      await q(
+        `INSERT INTO mood_status_events (user_id, kind, idempotency_key, created_at) VALUES
+           (gen_random_uuid(), 'clear', 'k-alive', now() - interval '9 days'),
+           (gen_random_uuid(), 'clear', 'k-dead', now() - interval '12 days')`,
+      );
+      resetConfig({ MOOD_STATUS_TTL_HOURS: 240 });
+
+      await new MoodRetentionJob(
+        ds,
+        configStub,
+        schedulerStub,
+        meter,
+      ).runOnce();
+
+      const rows = (await q(
+        `SELECT idempotency_key FROM mood_status_events`,
+      )) as Array<{ idempotency_key: string }>;
+      expect(rows).toEqual([{ idempotency_key: 'k-alive' }]);
+    });
+  });
+
   describe('feed: story sweeper xoá hết backlog trong MỘT tick', () => {
     it('xoá 1.300 story hết hạn (3 lô) cùng story_views cascade; story còn hạn được giữ', async () => {
       await q(
@@ -511,6 +806,22 @@ d('Vòng đời dữ liệu (Postgres thật, toàn bộ migration)', () => {
       expect(swept).toBe(1300);
       expect(await ids('stories')).toEqual([alive.id]);
       expect(await count('story_views')).toBe(1);
+    });
+
+    it('shutdown giữa tick: xong lô đang chạy rồi dừng, KHÔNG bắt đầu lô mới (SIGTERM không phải chờ hết ngân sách 30 giây)', async () => {
+      await q(
+        `INSERT INTO stories (author_user_id, media_url, expires_at, idempotency_key)
+         SELECT gen_random_uuid(), 'm', now() - interval '1 hour', 'old-' || g
+           FROM generate_series(1, 1300) g`,
+      );
+      const sweeper = new StorySweeperService(ds, configStub, schedulerStub);
+      sweeper.onApplicationShutdown();
+
+      const swept = await sweeper.runOnce();
+
+      // đúng MỘT lô (500) rồi thoát vòng lặp; phần còn lại để pod khác/tick sau
+      expect(swept).toBe(500);
+      expect(await count('stories')).toBe(800);
     });
   });
 });

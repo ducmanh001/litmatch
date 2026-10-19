@@ -144,11 +144,12 @@ describe('coreApiEnvSchema invariants', () => {
     it('mặc định đúng khuyến nghị, 0 = giữ vĩnh viễn, âm hoặc quá trần bị chặn', () => {
       const defaults: Array<[string, number]> = [
         ['AUTH_REFRESH_RETENTION_GRACE_DAYS', 7],
+        ['AUTH_REFRESH_ROTATED_RETENTION_DAYS', 0],
         ['AUTH_OTP_RETENTION_DAYS', 1],
         ['MATCHING_QUOTA_RETENTION_DAYS', 2],
         ['OUTBOX_PUBLISHED_RETENTION_DAYS', 7],
         ['OUTBOX_DEAD_LETTER_RETENTION_DAYS', 0],
-        ['VIDEO_VIEW_RETENTION_DAYS', 180],
+        ['VIDEO_VIEW_RETENTION_DAYS', 0],
         ['VIDEO_DELETED_COMMENT_RETENTION_DAYS', 30],
         ['MOOD_EVENT_RETENTION_DAYS', 7],
       ];

@@ -15,7 +15,8 @@ import type { CoreApiEnv } from '../../../config/env.validation';
  * Retention cho quota ghép theo ngày UTC (ADR 0014): `match_daily_quotas` (1 hàng / user / ngày / loại) và
  * `guest_match_quotas` (1 hàng / khoá khách / ngày) chỉ có nghĩa trong ngày của chúng — hàng của ngày đã qua không còn
  * ai đọc. Khoá chính ghép (không có cột `id`) nên chọn lô theo `ctid` (an toàn vì hàng đã bị `FOR UPDATE` khoá trong
- * cùng một câu lệnh). BRIN trên `quota_date` phục vụ câu chọn lô.
+ * cùng một câu lệnh). Chọn lô theo `quota_date`: `match_daily_quotas` dùng B-tree `idx_match_daily_quotas_quota_date`;
+ * `guest_match_quotas` dùng chính khoá chính `(quota_date, key_hash)` (dẫn đầu bằng `quota_date`, không cần index riêng).
  *
  * `match_tickets` / `match_sessions` CHƯA có quy tắc ở đây: vé trỏ tới phiên và ngược lại (FK vòng) và phiên có
  * rating/chat/cuộc gọi phụ thuộc — cần quyết định giữ bằng chứng report và phân vùng theo ngày (xem ADR 0014).
@@ -46,6 +47,7 @@ export class MatchingRetentionJob extends RetentionJob {
         primaryKey: 'ctid',
         predicate: 'quota_date < current_date - $2::int',
         params: [days],
+        orderBy: 'quota_date',
       },
       {
         label: 'guest_match_quotas:old',
@@ -53,6 +55,7 @@ export class MatchingRetentionJob extends RetentionJob {
         primaryKey: 'ctid',
         predicate: 'quota_date < current_date - $2::int',
         params: [days],
+        orderBy: 'quota_date',
       },
     ];
   }

@@ -27,7 +27,7 @@ thành consumer độc lập/nhiều consumer.
 
 - `Notification`: `userId` (người nhận), `type` (enum), `payload` (jsonb — dữ liệu tối thiểu để
   client tự render, KHÔNG hardcode text hiển thị ở backend), `readAt` (nullable), `createdAt`.
-- **Retention (ADR 0013)**: `NotificationRetentionJob` xoá theo lô khi `RETENTION_MODE` là `dry-run`/`delete` (mặc định
+- **Retention (ADR 0013)**: `NotificationRetentionJob` chạy khi `RETENTION_MODE` là `dry-run` (chỉ đếm) hoặc `delete` (xoá thật theo lô; mặc định
   `off`): đã đọc quá `NOTIFICATION_READ_RETENTION_DAYS` (90) kể từ `readAt`, chưa đọc quá
   `NOTIFICATION_UNREAD_RETENTION_DAYS` (365) kể từ `createdAt`; 0 = giữ vĩnh viễn. Hai quy tắc riêng vì đọc
   hội thoại không đánh dấu notification đã đọc. Không FK nào trỏ vào bảng nên xoá an toàn; index một phần

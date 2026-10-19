@@ -75,7 +75,7 @@ Mọi transition khác throw `MATCHING_TICKET_INVALID_TRANSITION`.
 
 ## 4.1 Quota match miễn phí và lượt mua thêm
 
-> Hàng quota (`match_daily_quotas`, `guest_match_quotas`) của ngày đã qua quá `MATCHING_QUOTA_RETENTION_DAYS` (mặc định 2) bị `MatchingRetentionJob` xoá khi `RETENTION_MODE` ≠ `off` (ADR 0014). `match_tickets`/`match_sessions` chưa có vòng đời: FK vòng và bảng con — cần phân vùng theo ngày.
+> Hàng quota (`match_daily_quotas`, `guest_match_quotas`) của ngày đã qua quá `MATCHING_QUOTA_RETENTION_DAYS` (mặc định 2) bị `MatchingRetentionJob` xoá khi `RETENTION_MODE=delete` (ADR 0014; `dry-run` chỉ đếm). `match_tickets`/`match_sessions` chưa có vòng đời: FK vòng và bảng con — cần phân vùng theo ngày.
 
 Quota tính theo ngày UTC, tách riêng Soul Match và Voice Match. Guest vẫn dùng quota chống farm
 hiện hữu `MATCHING_GUEST_DAILY_LIMIT = 3` lượt tổng/ngày.

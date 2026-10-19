@@ -10,8 +10,9 @@
 - `mood_presets`: catalog data-driven (pattern `avatar_assets`) — `code` (unique), `label`,
   `emoji`, `active`, `sortOrder`. Danh sách thật chỉnh qua seed migration/admin sau, không hardcode
   trong code.
-- `mood_status_events`: **append-only tuyệt đối** — set/clear đều là 1 dòng mới, không
-  update/xoá dòng cũ. Không có cột `status` (approve/pending) ở W1 vì preset auto-approve; cột đó
+- `mood_status_events`: **append-only về logic** — set/clear đều là 1 dòng mới, không
+  update/xoá dòng cũ trong luồng nghiệp vụ; dòng cũ chỉ bị xoá hàng loạt theo tuổi bởi
+  `MoodRetentionJob` (§ 3.1). Không có cột `status` (approve/pending) ở W1 vì preset auto-approve; cột đó
   thêm bằng migration mới khi ship free-text (backlog, không scaffold trước — docs/11).
   - `kind`: `'set' | 'clear'`. `kind='set'` bắt buộc có `presetId` + `expiresAt`; `kind='clear'`
     cả hai đều NULL (CHECK constraint enforce ở DB).
@@ -21,7 +22,7 @@
 
 ## 2. "Mood hiện tại" — derive khi đọc, không cron
 
-Không có job dọn/hết hạn. Đọc dòng **mới nhất** của user (`ORDER BY createdAt DESC LIMIT 1`):
+Không có job hết hạn (mood hết hạn được derive khi đọc; chỉ có job dọn sự kiện cũ theo tuổi, § 3.1). Đọc dòng **mới nhất** của user (`ORDER BY createdAt DESC LIMIT 1`):
 
 - Không có dòng nào → không có mood.
 - Dòng mới nhất `kind='clear'` → không có mood (bất kể có set trước đó bao lâu).
@@ -50,7 +51,7 @@ reveal + Friend list.
 
 ## 3.1 Vòng đời dữ liệu
 
-`mood_status_events` chỉ có nghĩa trong `MOOD_STATUS_TTL_HOURS`; `MoodRetentionJob` xoá sự kiện cũ hơn `MOOD_EVENT_RETENTION_DAYS` (mặc định 7) khi `RETENTION_MODE` ≠ `off` (ADR 0014). `idempotency_key` UNIQUE chỉ bảo vệ trong khoảng đó.
+`mood_status_events` chỉ có nghĩa trong `MOOD_STATUS_TTL_HOURS`; `MoodRetentionJob` xoá sự kiện cũ hơn `MOOD_EVENT_RETENTION_DAYS` (mặc định 7) khi `RETENTION_MODE=delete` (ADR 0014; `dry-run` chỉ đếm). Hạn giữ THỰC TẾ = `max(MOOD_EVENT_RETENTION_DAYS, ceil(MOOD_STATUS_TTL_HOURS / 24) + 1)` nên nâng TTL trạng thái lên (vd 336 giờ) không bao giờ làm job xoá sự kiện của trạng thái còn sống. `idempotency_key` UNIQUE chỉ bảo vệ trong khoảng đó.
 
 ## 4. Preset-only W1 — không có moderation
 

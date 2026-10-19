@@ -234,6 +234,7 @@ export interface CoreApiEnv {
   NOTIFICATION_READ_RETENTION_DAYS: number;
   NOTIFICATION_UNREAD_RETENTION_DAYS: number;
   AUTH_REFRESH_RETENTION_GRACE_DAYS: number;
+  AUTH_REFRESH_ROTATED_RETENTION_DAYS: number;
   AUTH_OTP_RETENTION_DAYS: number;
   MATCHING_QUOTA_RETENTION_DAYS: number;
   OUTBOX_PUBLISHED_RETENTION_DAYS: number;
@@ -888,11 +889,21 @@ export const coreApiEnvSchema = Joi.object({
     .default(365),
   // Vòng đời dữ liệu theo mô hình tăng trưởng (ADR 0014, `pnpm capacity:data`); 0 = giữ vĩnh viễn. Chỉ có hiệu lực khi
   // RETENTION_MODE ≠ off; dry-run đếm hàng đủ điều kiện trước khi xoá thật.
+  // Sau khi token HẾT HẠN thêm N ngày thì job xoá hàng (theo `expires_at`, nên đổi AUTH_REFRESH_TTL_DAYS không làm xoá nhầm token
+  // còn hạn). 0 = không dọn.
   AUTH_REFRESH_RETENTION_GRACE_DAYS: Joi.number()
     .integer()
     .min(0)
     .max(365)
     .default(7),
+  // QUYẾT ĐỊNH BẢO MẬT (ADR 0014): mỗi lần xoay xoá token ĐÃ XOAY cũ hơn N ngày của cùng họ. Giữ bảng nhỏ (~1 TB thay vì ~5 TB ở quy mô
+  // đề bài) nhưng rút cửa sổ phát hiện token bị đánh cắp từ ~AUTH_REFRESH_TTL_DAYS xuống N ngày: phát lại token cũ hơn N ngày chỉ bị từ chối,
+  // không thu hồi cả họ. Mặc định 0 = TẮT (giữ nguyên hành vi bảo mật) cho tới khi chủ hệ thống chấp nhận đánh đổi; chỉ chạy khi RETENTION_MODE=delete.
+  AUTH_REFRESH_ROTATED_RETENTION_DAYS: Joi.number()
+    .integer()
+    .min(0)
+    .max(365)
+    .default(0),
   AUTH_OTP_RETENTION_DAYS: Joi.number().integer().min(0).max(365).default(1),
   MATCHING_QUOTA_RETENTION_DAYS: Joi.number()
     .integer()
@@ -909,11 +920,13 @@ export const coreApiEnvSchema = Joi.object({
     .min(0)
     .max(3_650)
     .default(0), // dead-letter cần người xử lý nên mặc định GIỮ; chỉ bật khi đã có quy trình xử lý
+  // QUYẾT ĐỊNH SẢN PHẨM (ADR 0014): xoá hàng khử trùng quá N ngày thì người xem lại video cũ có thể được đếm thêm một lần. Mặc định 0 = GIỮ cho tới
+  // khi chủ sản phẩm chọn (khuyến nghị 180).
   VIDEO_VIEW_RETENTION_DAYS: Joi.number()
     .integer()
     .min(0)
     .max(3_650)
-    .default(180),
+    .default(0),
   VIDEO_DELETED_COMMENT_RETENTION_DAYS: Joi.number()
     .integer()
     .min(0)
