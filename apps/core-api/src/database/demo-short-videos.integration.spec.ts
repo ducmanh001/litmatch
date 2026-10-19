@@ -6,6 +6,7 @@ import { UserRole1753600000000 } from './migrations/1753600000000-user-role';
 import { ShortVideo1754800000000 } from './migrations/1754800000000-short-video';
 import { UserProfilePreferences1755800000000 } from './migrations/1755800000000-user-profile-preferences';
 import { VideoStorageCleanupMarker1757800000000 } from './migrations/1757800000000-video-storage-cleanup-marker';
+import { ShortVideoRankingIndexes1758200000000 } from './migrations/1758200000000-short-video-ranking-indexes';
 import {
   DEMO_SHORT_VIDEOS,
   DEMO_VIDEO_AUTHOR_ID,
@@ -83,6 +84,7 @@ d('demo short-video seed (Postgres thật)', () => {
         UserProfilePreferences1755800000000,
         DemoShortVideos1756700000000,
         VideoStorageCleanupMarker1757800000000,
+        ShortVideoRankingIndexes1758200000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -169,8 +171,9 @@ d('demo short-video seed (Postgres thật)', () => {
       `INSERT INTO demo_short_video_author_ref (author_id) VALUES ($1)`,
       [DEMO_VIDEO_AUTHOR_ID],
     );
-    // TypeORM chỉ hoàn tác migration MỚI NHẤT: lần 1 gỡ cột đánh dấu cleanup (1757800000000), lần 2 mới
-    // tới migration demo cần kiểm tra.
+    // TypeORM chỉ hoàn tác migration MỚI NHẤT: lần 1 gỡ index/cột ranking (1758200000000), lần 2 gỡ cột đánh dấu
+    // cleanup (1757800000000), lần 3 mới tới migration demo cần kiểm tra.
+    await dataSource.undoLastMigration({ transaction: 'each' });
     await dataSource.undoLastMigration({ transaction: 'each' });
     await dataSource.undoLastMigration({ transaction: 'each' });
 

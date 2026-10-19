@@ -243,6 +243,11 @@ export interface CoreApiEnv {
   VIDEO_RANK_WEIGHT_COMMENT: number;
   VIDEO_RANK_TIME_DECAY_HOURS: number;
   VIDEO_RANKING_JOB_INTERVAL_MS: number;
+  VIDEO_RANKING_BATCH_SIZE: number;
+  VIDEO_RANKING_MAX_BATCHES_PER_TICK: number;
+  VIDEO_COUNTER_BUFFER_ENABLED: boolean;
+  VIDEO_COUNTER_FLUSH_INTERVAL_MS: number;
+  VIDEO_COUNTER_FLUSH_BATCH: number;
   THROTTLE_TTL_SECONDS: number;
   THROTTLE_LIMIT: number;
   THROTTLE_STORAGE: 'memory' | 'redis';
@@ -876,6 +881,32 @@ export const coreApiEnvSchema = Joi.object({
     .integer()
     .min(60_000)
     .default(1_800_000),
+  // Mỗi tick tính lại tối đa BATCH_SIZE × MAX_BATCHES_PER_TICK video (xoay vòng theo rank_computed_at, video mới
+  // trước). Chu kỳ đầy đủ = số video / (lô × số lô) × chu kỳ tick: tăng theo quy mô (plan 2026-10-17 § 7a).
+  VIDEO_RANKING_BATCH_SIZE: Joi.number()
+    .integer()
+    .min(100)
+    .max(20_000)
+    .default(2_000),
+  VIDEO_RANKING_MAX_BATCHES_PER_TICK: Joi.number()
+    .integer()
+    .min(1)
+    .max(100)
+    .default(5),
+  // Bộ đệm counter view/like/comment trên Redis (ADR 0013): gom nhiều lượt trên cùng video thành MỘT câu UPDATE mỗi
+  // tick để video viral không thành hàng nóng. Tắt mặc định = cộng thẳng vào DB trong transaction như trước. Bật thì
+  // số đếm hiển thị trễ tối đa FLUSH_INTERVAL_MS; Redis lỗi thì tự quay về cộng thẳng vào DB.
+  VIDEO_COUNTER_BUFFER_ENABLED: Joi.boolean().default(false),
+  VIDEO_COUNTER_FLUSH_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(500)
+    .max(60_000)
+    .default(2_000),
+  VIDEO_COUNTER_FLUSH_BATCH: Joi.number()
+    .integer()
+    .min(10)
+    .max(5_000)
+    .default(500),
 
   THROTTLE_TTL_SECONDS: Joi.number().integer().min(1).default(60),
   THROTTLE_LIMIT: Joi.number().integer().min(1).default(100),

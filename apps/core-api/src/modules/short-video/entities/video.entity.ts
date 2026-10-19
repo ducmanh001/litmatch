@@ -62,6 +62,10 @@ export class Video extends BaseAppEntity {
   @Column({ type: 'double precision', nullable: true })
   rankScore!: number | null;
 
+  /** Lần job ranking tính `rankScore` gần nhất — job xoay vòng theo cột này (NULL = chưa từng tính, được ưu tiên). */
+  @Column({ type: 'timestamptz', nullable: true })
+  rankComputedAt!: Date | null;
+
   @Column({ type: 'varchar', length: 255, unique: true })
   idempotencyKey!: string;
 }

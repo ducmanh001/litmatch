@@ -15,14 +15,18 @@ import { VideoStatus } from '../entities/video.entity';
 import type { CoreApiEnv } from '../../../config/env.validation';
 
 const VIDEO_RANKING_JOB = 'short-video-ranking';
-const VIDEO_RANKING_BATCH = 1000;
 
 /**
  * Ranking v1 (docs/services/short-video-service.md § 4): `rankScore` = engagement có trọng số,
  * chia cho hệ số time-decay tuyến tính theo giờ kể từ `createdAt`. Job derive, KHÔNG phải nguồn
  * sự thật — fallback `sort=recent` khi `rankScore IS NULL` (video mới toanh, job chưa kịp chạy).
- * V1 tính lại toàn bộ published video mỗi tick (đơn giản, đủ cho quy mô nhỏ) — nâng cấp thành
- * incremental/watch-time-weighted sau không đổi schema (`rankScore` vẫn 1 cột double precision).
+ *
+ * Mỗi tick tính lại một lô video published, xoay vòng theo `rank_computed_at` (NULL trước = video mới được
+ * ưu tiên, rồi tới video tính điểm lâu nhất). Trước đây xoay theo `updated_at` mà `increment` counter tự cập nhật
+ * `updated_at` nên video đang nóng bị xếp CUỐI hàng chờ. Công thức không đổi; chu kỳ đầy đủ = số video / lô × chu kỳ
+ * tick nên tăng `VIDEO_RANKING_BATCH_SIZE`/`VIDEO_RANKING_MAX_BATCHES_PER_TICK` theo quy mô (hàng chục triệu video
+ * cần khoá xếp hạng không phụ thuộc tuổi hoặc ZSET — ADR riêng). `SKIP LOCKED` để không chờ video đang bị
+ * moderation chuyển trạng thái.
  */
 @Injectable()
 export class VideoRankingService
@@ -72,27 +76,41 @@ export class VideoRankingService
         infer: true,
       });
 
-      const [, count] = (await this.dataSource.query(
-        `UPDATE videos
+      const batchSize = this.config.getOrThrow('VIDEO_RANKING_BATCH_SIZE', {
+        infer: true,
+      });
+      const maxBatches = this.config.getOrThrow(
+        'VIDEO_RANKING_MAX_BATCHES_PER_TICK',
+        { infer: true },
+      );
+
+      let total = 0;
+      for (let batch = 0; batch < maxBatches; batch += 1) {
+        const [, count] = (await this.dataSource.query(
+          `UPDATE videos
           SET rank_score = (view_count * $1 + like_count * $2 + comment_count * $3)
                               / (1 + EXTRACT(EPOCH FROM (now() - created_at)) / 3600.0 / $4),
-                updated_at = now()
-          WHERE status = $5 AND id IN (
+                rank_computed_at = now()
+          WHERE id IN (
             SELECT id FROM videos
              WHERE status = $5
-             ORDER BY updated_at ASC, id ASC
+             ORDER BY rank_computed_at ASC NULLS FIRST, id ASC
              LIMIT $6
+             FOR UPDATE SKIP LOCKED
           )`,
-        [
-          weightView,
-          weightLike,
-          weightComment,
-          decayHours,
-          VideoStatus.Published,
-          VIDEO_RANKING_BATCH,
-        ],
-      )) as [unknown, number];
-      return count;
+          [
+            weightView,
+            weightLike,
+            weightComment,
+            decayHours,
+            VideoStatus.Published,
+            batchSize,
+          ],
+        )) as [unknown, number];
+        total += count;
+        if (count < batchSize) break;
+      }
+      return total;
     }, 0);
   }
 }

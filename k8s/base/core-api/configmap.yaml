@@ -204,6 +204,13 @@ data:
   # K8s production chưa có vendor storage/transcode thật; dev provider fail-fast ở production.
   # Giữ capability tắt cho tới khi có ADR + provider production.
   VIDEO_UPLOAD_ENABLED: 'false'
+  # Ranking: mỗi tick tính lại tối đa BATCH_SIZE × MAX_BATCHES_PER_TICK video, xoay vòng theo rank_computed_at
+  VIDEO_RANKING_BATCH_SIZE: '2000'
+  VIDEO_RANKING_MAX_BATCHES_PER_TICK: '5'
+  # Bộ đệm counter view/like/comment (ADR 0013): 'true' khi một video viral làm nghẽn UPDATE videos (số đếm trễ ≤ FLUSH_INTERVAL_MS)
+  VIDEO_COUNTER_BUFFER_ENABLED: 'false'
+  VIDEO_COUNTER_FLUSH_INTERVAL_MS: '2000'
+  VIDEO_COUNTER_FLUSH_BATCH: '500'
 
   # --- palm match ---
   PALM_MATCH_TARGET_NAME_MAX_LENGTH: '50'

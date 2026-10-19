@@ -1,9 +1,9 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { buildCursorPage, decodeCursor } from '@litmatch/common-dtos';
 import { DomainException } from '@litmatch/common-exceptions';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, IsNull, Repository } from 'typeorm';
 
 import { isUniqueViolation } from '../../database/postgres-errors';
 import { videoUploadIdempotencyKey } from './short-video.constants';
@@ -14,6 +14,7 @@ import { VideoComment } from './entities/video-comment.entity';
 import { VideoReaction } from './entities/video-reaction.entity';
 import { VideoStoragePort } from './ports/video-storage.port';
 import { VideoTranscodePort } from './ports/video-transcode.port';
+import { VideoCounterBufferPort } from './ports/video-counter-buffer.port';
 import { FriendService } from '../friend';
 import { ReportReason, SafetyService } from '../safety';
 
@@ -34,6 +35,8 @@ import type {
  */
 @Injectable()
 export class ShortVideoService {
+  private readonly logger = new Logger(ShortVideoService.name);
+
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     @InjectRepository(Video) private readonly videoRepo: Repository<Video>,
@@ -48,7 +51,46 @@ export class ShortVideoService {
     private readonly friendService: FriendService,
     private readonly safetyService: SafetyService,
     private readonly config: ConfigService<CoreApiEnv, true>,
+    @Optional() private readonly counterBuffer?: VideoCounterBufferPort,
   ) {}
+
+  /** Counter đệm trên Redis được bật (ADR 0013) — tắt thì cộng thẳng vào DB trong transaction như trước. */
+  private get buffered(): boolean {
+    return this.counterBuffer?.enabled === true;
+  }
+
+  /**
+   * Cộng/trừ counter qua bộ đệm (gọi SAU khi transaction nguồn commit để không đếm khi rollback). Bộ đệm lỗi thì
+   * fail-open: cộng thẳng vào DB (hành vi cũ) — counter chỉ là cache đọc nhanh nên chấp nhận lệch nhẹ khi crash
+   * giữa commit nguồn và lần cộng này.
+   */
+  private async bufferCounter(
+    videoId: string,
+    column: 'viewCount' | 'likeCount' | 'commentCount',
+    delta: 1 | -1,
+  ): Promise<void> {
+    const field =
+      column === 'viewCount'
+        ? 'view'
+        : column === 'likeCount'
+          ? 'like'
+          : 'comment';
+    try {
+      await (this.counterBuffer as VideoCounterBufferPort).add(
+        videoId,
+        field,
+        delta,
+      );
+      return;
+    } catch (error) {
+      this.logger.warn(
+        `Counter buffer lỗi, cộng thẳng vào DB: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    const manager = this.dataSource.manager;
+    if (delta > 0) await manager.increment(Video, { id: videoId }, column, 1);
+    else await manager.decrement(Video, { id: videoId }, column, 1);
+  }
 
   /**
    * Idempotent theo Idempotency-Key (docs/05 § 5.10) — replay không tạo video mới, đọc lại
@@ -265,7 +307,7 @@ export class ShortVideoService {
     );
     const nowQualifies = watchTimeMs >= qualifiedMinMs;
 
-    await this.dataSource.transaction(async (manager) => {
+    const qualifiedNow = await this.dataSource.transaction(async (manager) => {
       // Tạo hàng nếu chưa có bằng ON CONFLICT DO NOTHING: không ném unique violation nên transaction
       // không bị Postgres huỷ (LRN-2026-002). Rồi KHOÁ hàng: hai request đồng thời của cùng viewer
       // chạy tuần tự, request sau thấy `qualified=true` của request trước và không cộng viewCount lần nữa.
@@ -294,10 +336,14 @@ export class ShortVideoService {
           qualified: view.qualified || nowQualifies,
         },
       );
-      if (shouldQualifyNow) {
+      if (shouldQualifyNow && !this.buffered) {
         await manager.increment(Video, { id: videoId }, 'viewCount', 1);
       }
+      return shouldQualifyNow;
     });
+    if (qualifiedNow && this.buffered) {
+      await this.bufferCounter(videoId, 'viewCount', 1);
+    }
   }
 
   /** Idempotent — like khi đã like là no-op (unique DB chặn race). */
@@ -311,8 +357,11 @@ export class ShortVideoService {
         await manager.save(
           manager.create(VideoReaction, { videoId, userId: user.userId }),
         );
-        await manager.increment(Video, { id: videoId }, 'likeCount', 1);
+        if (!this.buffered) {
+          await manager.increment(Video, { id: videoId }, 'likeCount', 1);
+        }
       });
+      if (this.buffered) await this.bufferCounter(videoId, 'likeCount', 1);
       return { liked: true, likeCount: video.likeCount + 1 };
     } catch (err) {
       if (!isUniqueViolation(err)) throw err;
@@ -330,11 +379,14 @@ export class ShortVideoService {
         videoId,
         userId: user.userId,
       });
-      if (affected) {
+      if (affected && !this.buffered) {
         await manager.decrement(Video, { id: videoId }, 'likeCount', 1);
       }
       return affected;
     });
+    if (affected && this.buffered) {
+      await this.bufferCounter(videoId, 'likeCount', -1);
+    }
     return {
       liked: false,
       likeCount: affected ? video.likeCount - 1 : video.likeCount,
@@ -347,17 +399,21 @@ export class ShortVideoService {
     content: string,
   ): Promise<VideoComment> {
     await this.getVideoOrThrow(user, videoId);
-    return this.dataSource.transaction(async (manager) => {
-      const comment = await manager.save(
+    const comment = await this.dataSource.transaction(async (manager) => {
+      const created = await manager.save(
         manager.create(VideoComment, {
           videoId,
           authorUserId: user.userId,
           content,
         }),
       );
-      await manager.increment(Video, { id: videoId }, 'commentCount', 1);
-      return comment;
+      if (!this.buffered) {
+        await manager.increment(Video, { id: videoId }, 'commentCount', 1);
+      }
+      return created;
     });
+    if (this.buffered) await this.bufferCounter(videoId, 'commentCount', 1);
+    return comment;
   }
 
   async listComments(
@@ -409,14 +465,22 @@ export class ShortVideoService {
         HttpStatus.FORBIDDEN,
       );
     }
-    await this.dataSource.transaction(async (manager) => {
-      await manager.update(
+    const deleted = await this.dataSource.transaction(async (manager) => {
+      // `deletedAt IS NULL`: bấm đúp/retry đồng thời chỉ MỘT request xoá được và trừ commentCount (trước đây cả hai
+      // cùng trừ → đếm lệch, có thể vi phạm CHECK >= 0). Bản Feed đã vá cùng cách.
+      const { affected } = await manager.update(
         VideoComment,
-        { id: commentId },
+        { id: commentId, deletedAt: IsNull() },
         { deletedAt: new Date() },
       );
-      await manager.decrement(Video, { id: videoId }, 'commentCount', 1);
+      if (affected && !this.buffered) {
+        await manager.decrement(Video, { id: videoId }, 'commentCount', 1);
+      }
+      return affected ?? 0;
     });
+    if (deleted > 0 && this.buffered) {
+      await this.bufferCounter(videoId, 'commentCount', -1);
+    }
   }
 
   // ---------- dùng bởi Admin/moderation (gọi qua service, không phải HTTP trực tiếp) ----------
@@ -426,19 +490,25 @@ export class ShortVideoService {
     query: CursorPageQueryDto,
   ): Promise<CursorPage<Video>> {
     const after = this.decodeVideoCursor(query.cursor);
+    // Sắp ASC (cũ nhất trước) nên trang kế tiếp là các hàng SAU cursor: `>` (dùng `<` làm trang 2 lặp trang 1).
+    // Cursor mang `createdAt.toISOString()` (mili giây) còn cột có micro giây: so sánh/sắp theo
+    // `date_trunc('milliseconds', created_at)` để cùng độ chính xác với cursor — nếu không, hàng cuối của trang luôn
+    // thoả `created_at > cursor` và bị lặp ở đầu trang sau. Hàng chờ duyệt nhỏ nên không cần index theo biểu thức này.
+    const createdMs = "date_trunc('milliseconds', v.created_at)";
     const qb = this.videoRepo
       .createQueryBuilder('v')
+      .addSelect(createdMs, 'created_ms')
       .where('v.status = :status', { status: VideoStatus.PendingReview });
     if (after) {
-      qb.andWhere('(v.createdAt, v.id) < (:cursorCreatedAt, :cursorId)', {
+      qb.andWhere(`(${createdMs}, v.id) > (:cursorCreatedAt, :cursorId)`, {
         cursorCreatedAt: after.value,
         cursorId: after.id,
       });
     }
     const rows = await qb
-      .orderBy('v.createdAt', 'ASC')
+      .orderBy('created_ms', 'ASC')
       .addOrderBy('v.id', 'ASC')
-      .take(query.limit + 1)
+      .limit(query.limit + 1)
       .getMany();
     return buildCursorPage(rows, query.limit, (last) => ({
       value: last.createdAt.toISOString(),

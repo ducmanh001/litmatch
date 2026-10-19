@@ -77,6 +77,37 @@ describe('coreApiEnvSchema invariants', () => {
     });
   });
 
+  describe('short-video: ranking và counter đệm (ADR 0013)', () => {
+    const value = (key: string, input?: unknown) =>
+      coreApiEnvSchema.extract(key).validate(input);
+
+    it('ranking: lô và số lô mỗi tick có mặc định hữu hạn, trong khoảng an toàn', () => {
+      expect(value('VIDEO_RANKING_BATCH_SIZE').value).toBe(2_000);
+      expect(value('VIDEO_RANKING_BATCH_SIZE', 99).error).toBeDefined();
+      expect(value('VIDEO_RANKING_BATCH_SIZE', 20_001).error).toBeDefined();
+      expect(value('VIDEO_RANKING_MAX_BATCHES_PER_TICK').value).toBe(5);
+      expect(
+        value('VIDEO_RANKING_MAX_BATCHES_PER_TICK', 0).error,
+      ).toBeDefined();
+      expect(
+        value('VIDEO_RANKING_MAX_BATCHES_PER_TICK', 101).error,
+      ).toBeDefined();
+    });
+
+    it('counter đệm tắt mặc định (cộng thẳng vào DB như trước); chu kỳ flush và lô bị chặn khoảng', () => {
+      expect(value('VIDEO_COUNTER_BUFFER_ENABLED').value).toBe(false);
+      expect(value('VIDEO_COUNTER_BUFFER_ENABLED', true).error).toBeUndefined();
+      expect(value('VIDEO_COUNTER_FLUSH_INTERVAL_MS').value).toBe(2_000);
+      expect(value('VIDEO_COUNTER_FLUSH_INTERVAL_MS', 499).error).toBeDefined();
+      expect(
+        value('VIDEO_COUNTER_FLUSH_INTERVAL_MS', 60_001).error,
+      ).toBeDefined();
+      expect(value('VIDEO_COUNTER_FLUSH_BATCH').value).toBe(500);
+      expect(value('VIDEO_COUNTER_FLUSH_BATCH', 9).error).toBeDefined();
+      expect(value('VIDEO_COUNTER_FLUSH_BATCH', 5_001).error).toBeDefined();
+    });
+  });
+
   describe('giao mã OTP (ADR 0013)', () => {
     // Chỉ các khoá liên quan: `when` tham chiếu NODE_ENV/AUTH_OTP_DELIVERY cần có anh em trong cùng object.
     const otpEnvSchema = Joi.object({

@@ -87,11 +87,23 @@ module để web không gọi riêng `GET /users/:id` cho từng video/comment. 
 ## 4. Ranking v1 — derived, có fallback
 
 `rankScore = (viewCount·W_view + likeCount·W_like + commentCount·W_comment) / (1 +
-giờ_kể_từ_tạo/VIDEO_RANK_TIME_DECAY_HOURS)`, tính lại toàn bộ video `published` mỗi tick
-(`VideoRankingService`, đơn giản cho quy mô V1 — nâng cấp thành incremental/watch-time-weighted
-sau không đổi schema, `rankScore` vẫn 1 cột `double precision`). `rankScore IS NULL` (video mới,
-job chưa kịp chạy) → `listPublished` fallback `sort=recent`. Job derive, KHÔNG phải nguồn sự
-thật — lỗi job không làm sai correctness, chỉ tạm thời không có ranking mới.
+giờ_kể_từ_tạo/VIDEO_RANK_TIME_DECAY_HOURS)`. Mỗi tick `VideoRankingService` tính lại tối đa
+`VIDEO_RANKING_BATCH_SIZE × VIDEO_RANKING_MAX_BATCHES_PER_TICK` video `published`, xoay vòng theo
+`rank_computed_at` (NULL trước = video mới được tính ngay, rồi tới video tính điểm lâu nhất; không còn xoay theo
+`updated_at` vì counter tăng làm video nóng bị xếp cuối). Chu kỳ đầy đủ = số video / lô × chu kỳ tick — tăng lô theo
+quy mô; hàng chục triệu video cần khoá xếp hạng không phụ thuộc tuổi hoặc ZSET (ADR riêng). `sort=ranked` chạy theo
+index một phần `idx_videos_ranked`. `rankScore IS NULL` (video mới, job chưa kịp chạy) → `listPublished`
+fallback `sort=recent`. Job derive, KHÔNG phải nguồn sự thật — lỗi job không làm sai correctness, chỉ tạm thời không
+có ranking mới.
+
+**Counter đệm (ADR 0013, tắt mặc định).** `viewCount/likeCount/commentCount` là hàng nóng một hàng/video: mỗi lượt
+tăng khoá hàng `videos` tới hết transaction. Khi `VIDEO_COUNTER_BUFFER_ENABLED=true` các lượt tăng/giảm đi vào Redis
+(hash theo video + tập video có delta), `VideoCounterFlushService` (cluster singleton, mỗi
+`VIDEO_COUNTER_FLUSH_INTERVAL_MS`) drain tối đa `VIDEO_COUNTER_FLUSH_BATCH` video và áp bằng MỘT câu UPDATE `unnest`.
+Bộ đệm được cộng SAU khi transaction nguồn (reaction/comment/view) commit; Redis lỗi thì cộng thẳng vào DB (fail-open);
+flush DB lỗi thì cộng lại delta; `GREATEST(…, 0)` giữ counter không âm. Đánh đổi: số đếm hiển thị trễ tối đa một chu kỳ flush
+và lệch nhẹ nếu pod chết giữa commit nguồn và lần đệm. Chưa giải quyết: mỗi lượt xem vẫn ghi một hàng `video_views`
+vĩnh viễn (cần quyết định sản phẩm về dữ liệu theo lượt xem).
 
 ## 5. Report + moderation — mở rộng `Report` của Safety, KHÔNG đụng trust score cá nhân
 
