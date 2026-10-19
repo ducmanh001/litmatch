@@ -24,6 +24,11 @@ interface UserSubscription {
   count: number;
   /** Settle khi SUBSCRIBE đã được Redis xác nhận — socket thứ hai của user chờ cùng promise. */
   ready: Promise<void>;
+  /**
+   * Lần SUBSCRIBE gần nhất (chính `ready`) đã bị Redis từ chối/timeout. Promise đã reject KHÔNG được dùng lại làm
+   * kết quả cho socket sau: Redis hồi phục rồi mà socket mới của user còn socket cũ trên pod vẫn bị từ chối.
+   */
+  failed: boolean;
 }
 
 interface FanoutShard {
@@ -122,22 +127,32 @@ export class RealtimeFanout {
       entry.count += 1;
       // Promise cũ đã resolve từ trước một lần Redis mất kết nối: subscription thật có thể không
       // còn. SUBSCRIBE idempotent nên gửi lại — reject khi connection còn đứt (offline queue tắt),
-      // và handshake fail closed đúng như socket đầu tiên.
-      if (!shard.ready || shard.redis.status !== 'ready') {
-        entry.ready = shard.redis
-          .subscribe(realtimeUserChannel(userId))
-          .then(() => undefined);
+      // và handshake fail closed đúng như socket đầu tiên. Lần SUBSCRIBE trước đã thất bại cũng gửi lại.
+      if (entry.failed || !shard.ready || shard.redis.status !== 'ready') {
+        this.requestSubscription(shard, userId, entry);
       }
     } else {
-      entry = {
-        count: 1,
-        ready: shard.redis
-          .subscribe(realtimeUserChannel(userId))
-          .then(() => undefined),
-      };
+      entry = { count: 1, ready: Promise.resolve(), failed: false };
       shard.users.set(userId, entry);
+      this.requestSubscription(shard, userId, entry);
     }
     await entry.ready;
+  }
+
+  /** Gửi SUBSCRIBE và ghi lại kết quả vào entry (chỉ lần gửi MỚI NHẤT được tính là trạng thái của entry). */
+  private requestSubscription(
+    shard: FanoutShard,
+    userId: string,
+    entry: UserSubscription,
+  ): void {
+    const attempt = shard.redis
+      .subscribe(realtimeUserChannel(userId))
+      .then(() => undefined);
+    entry.ready = attempt;
+    entry.failed = false;
+    attempt.catch(() => {
+      if (entry.ready === attempt) entry.failed = true;
+    });
   }
 
   /** Socket cuối cùng của user rời pod → bỏ subscribe để Redis không giao event cho pod nữa. */

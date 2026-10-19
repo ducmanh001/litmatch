@@ -110,6 +110,10 @@ mockup: search → watch → rating → result. Plan chi tiết + bảng giả �
   lúc tìm (nếu khoá thì cả hàng đợi poll cùng lúc sẽ bỏ qua nhau và không ai ghép được). Hai người vào cùng lúc có thể
   bỏ lỡ nhau vì đối tác đang bị khoá; `getAnonCurrent` của người đang queued thử ghép lại nên lượt poll kế tiếp ghép
   được. Entry quá hạn được dọn mỗi lượt join (tối đa 50 hàng, `SKIP LOCKED`).
+  **Hai lượt join của CÙNG một user** (bấm đúp, hai tab) được tuần tự hoá bằng khoá advisory THEO USER (`pg_advisory_xact_lock`,
+  lấy đầu transaction, không toàn cục): thiếu nó, lượt thứ hai đọc "chưa active" trước khi lượt đầu commit rồi chèn lại entry sau
+  khi user đã được ghép — trả `queued` cho user đã active và để lại entry thừa. Khoá chỉ giữ một khoá mỗi transaction và lấy
+  TRƯỚC mọi khoá khác nên không tạo chu trình chờ; lượt sau chờ rồi trả đúng phiên vừa ghép.
   **Giới hạn còn lại:** FIFO chính xác khi tuần tự, xấp xỉ khi đồng thời; hàng đợi vẫn ở Postgres (mỗi lượt poll của
   người đang chờ chạy ≥2 câu lệnh); khi số đo thật cho thấy Postgres là nút thắt thì chuyển hàng đợi sang Redis shard
   như Matching chính. Không chia khoá theo bucket trước khi có tiêu chí ghép (vùng/tuổi) vì bucket tuỳ ý chỉ làm hai

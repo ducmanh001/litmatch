@@ -940,6 +940,98 @@ d('Matching integration (Postgres + Redis thật)', () => {
       expect(await worker.runOnce()).toBe(1);
     });
 
+    it('speed-up mua GIỮA lúc cặp đã bị claim và transaction ghép lỗi → ticket quay lại hàng đợi với score ĐÃ boost (không mất ưu tiên đã trả tiền)', async () => {
+      const a = await createUser('boostlost-a');
+      const b = await createUser('boostlost-b');
+      await fund(a.id);
+      const ta = await join(a);
+      await tick();
+      const tb = await join(b);
+      const shard = matchingShardKey(MatchType.Voice, 'VN', ta.ageBand);
+
+      const failing = jest
+        .spyOn(ds, 'transaction')
+        .mockImplementationOnce((async () => {
+          // Cặp đã bị claim khỏi Redis: speed-up chỉ ghi được DB (ZADD XX không có member để cập nhật).
+          await matching.speedup(auth(a.id), ta.id, 'sp-during-claim');
+          throw new Error('pool acquire timeout');
+        }) as never);
+      try {
+        await expect(worker.runOnce()).rejects.toThrow('pool acquire timeout');
+      } finally {
+        failing.mockRestore();
+      }
+
+      const freshA = await ds
+        .getRepository(MatchTicket)
+        .findOneByOrFail({ id: ta.id });
+      expect(freshA.priorityBoostMs).toBe(300_000);
+      expect(await redis.zscore(shard, ta.id)).toBe(
+        String(freshA.enqueuedAt.getTime() - 300_000),
+      );
+      // Ticket không mua gì giữ score gốc.
+      expect(await redis.zscore(shard, tb.id)).toBe(
+        String(tb.enqueuedAt.getTime()),
+      );
+    });
+
+    it('speed-up hoàn tất TRƯỚC khi ticket được trả về hàng đợi sau lượt ghép không thành → score trả về lấy từ DB, không phải score đọc lúc lấy cửa sổ', async () => {
+      const a = await createUser('boostdrop-a');
+      const b = await createUser('boostdrop-b');
+      await fund(a.id);
+      const ta = await join(a);
+      await tick();
+      const tb = await join(b);
+      const shard = matchingShardKey(MatchType.Voice, 'VN', ta.ageBand);
+
+      // findPair thấy cặp hợp lệ nhưng lúc xác minh dưới khoá cặp không còn ghép được → nhánh "dropped": cả hai ticket
+      // còn hợp lệ nên được trả về hàng đợi SAU commit. Speed-up bắt đầu ngay lúc đó (ghi DB bị chặn bởi khoá hàng
+      // của matcher) và chỉ xong TRƯỚC lệnh trả về hàng đợi đầu tiên.
+      let speedup: Promise<unknown> = Promise.resolve();
+      let canPairCalls = 0;
+      const canPair = jest
+        .spyOn(policyStub, 'canPair')
+        .mockImplementation(async () => {
+          canPairCalls += 1;
+          if (canPairCalls === 1) return true; // findPair chọn cặp
+          // Lần 2 là lần xác minh dưới khoá; các lần sau (vòng thử lại) cũng không ghép được.
+          if (canPairCalls === 2) {
+            speedup = matching.speedup(auth(a.id), ta.id, 'sp-before-requeue');
+          }
+          return false;
+        });
+      const realEnqueue = matchingQueue.enqueue.bind(matchingQueue);
+      let waited = false;
+      const enqueue = jest
+        .spyOn(matchingQueue, 'enqueue')
+        .mockImplementation(async (...args) => {
+          if (args[3] === 'NX' && !waited) {
+            waited = true;
+            await speedup;
+          }
+          return realEnqueue(...args);
+        });
+      try {
+        expect(await worker.runOnce()).toBe(0);
+        await speedup;
+      } finally {
+        canPair.mockRestore();
+        enqueue.mockRestore();
+      }
+
+      const freshA = await ds
+        .getRepository(MatchTicket)
+        .findOneByOrFail({ id: ta.id });
+      expect(freshA.status).toBe(MatchTicketStatus.Queued);
+      expect(freshA.priorityBoostMs).toBe(300_000);
+      expect(await redis.zscore(shard, ta.id)).toBe(
+        String(freshA.enqueuedAt.getTime() - 300_000),
+      );
+      expect(await redis.zscore(shard, tb.id)).toBe(
+        String(tb.enqueuedAt.getTime()),
+      );
+    });
+
     it('cache cặp-không-ghép-được bật: wake-up kế tiếp không hỏi canPair lại (chỉ làm CHẬM sau khi bỏ chặn, không cho ghép cặp bị cấm)', async () => {
       CONFIG['MATCHING_MATCHER_UNPAIRABLE_CACHE_MS'] = 60_000;
       const canPair = jest.spyOn(policyStub, 'canPair');

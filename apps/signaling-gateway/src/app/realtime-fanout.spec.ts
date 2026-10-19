@@ -294,6 +294,28 @@ describe('RealtimeFanout — readiness theo shard, subscribe lại, tắt', () =
     );
   });
 
+  it('subscribe lỗi lúc Redis đứt rồi Redis lên lại → socket mới của user đang có socket khác vẫn vào được (không dùng lại promise đã reject)', async () => {
+    const { fanout, clients } = makeFanout();
+    await flush();
+    await fanout.subscribeUser('user-a'); // socket 1: thành công
+    clients[0].emit('close');
+    clients[0].status = 'reconnecting';
+    clients[0].subscribe.mockRejectedValueOnce(new Error('not writable'));
+    await expect(fanout.subscribeUser('user-a')).rejects.toThrow(
+      'not writable',
+    );
+    fanout.releaseUser('user-a'); // gateway nhả lượt thất bại; socket 1 vẫn còn
+
+    // Redis hồi phục: reconcile subscribe lại mọi user còn socket.
+    clients[0].status = 'ready';
+    clients[0].emit('ready');
+    await flush();
+    expect(fanout.isShardReady(0)).toBe(true);
+
+    await expect(fanout.subscribeUser('user-a')).resolves.toBeUndefined();
+    expect(fanout.subscribedUsers).toBe(1);
+  });
+
   it('socket thứ hai khi shard đã sẵn sàng thì KHÔNG subscribe lại', async () => {
     const { fanout, clients } = makeFanout();
     await flush();

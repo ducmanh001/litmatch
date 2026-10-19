@@ -29,6 +29,8 @@ import { MatcherWakeup } from '../matcher-wakeup';
 import {
   MATCHING_QUEUE,
   MATCHING_REALTIME,
+  shardKeyOfTicket,
+  ticketScore,
 } from '../redis/matching-redis.provider';
 import { User, UserStatus } from '../../user';
 import { NotificationService, NotificationType } from '../../notification';
@@ -589,25 +591,17 @@ export class MatcherWorkerService
       // cả hai về hàng đợi với score gốc thay vì để thành zombie tới khi sweeper expire — dưới tải
       // lớn, lỗi lấy kết nối là chuyện thường. Nếu thực ra transaction đã commit (mất phản hồi),
       // ticket `confirmed` quay lại Redis sẽ bị `matchWindow` gỡ ở lần sau, không ghép đôi.
-      await Promise.allSettled(
-        pair.map((ticket) => {
-          const popped = poppedById.get(ticket.id);
-          return popped
-            ? this.queue.enqueue(shard, String(popped.score), popped.id, 'NX')
-            : undefined;
-        }),
+      await this.requeueClaimed(
+        shard,
+        pair.flatMap((ticket) => poppedById.get(ticket.id) ?? []),
+        false,
       );
       await this.queue.markActive(shard).catch(() => undefined);
       throw error;
     });
 
     if (result.requeue.length > 0) {
-      await Promise.all(
-        result.requeue.map((r) =>
-          // score gốc (đã gồm boost) — không mất lượt chờ (spec § 2); NX phòng trùng
-          this.queue.enqueue(shard, String(r.score), r.id, 'NX'),
-        ),
-      );
+      await this.requeueClaimed(shard, result.requeue, true);
       await this.queue.markActive(shard);
     }
     if (result.matchedPair) {
@@ -637,6 +631,57 @@ export class MatcherWorkerService
       );
     }
     return result.kind === 'matched' ? 'matched' : 'progress';
+  }
+
+  /**
+   * Trả ticket đã bị claim về hàng đợi mà KHÔNG làm mất ưu tiên đã mua. Score đọc lúc lấy cửa sổ có thể đã cũ:
+   * speed-up hoàn tất sau lúc claim chỉ ghi được DB (`ZADD XX` của nó bỏ qua vì member đang không nằm trong Redis),
+   * nên trả lại bằng score cũ sẽ xoá mất lượt boost đã trả tiền. Cách làm:
+   * 1. `NX` bằng score đã đọc — khôi phục sự hiện diện ngay (`NX` phòng trùng);
+   * 2. đọc lại `priorityBoostMs` từ DB và đặt score TUYỆT ĐỐI bằng `XX`. Từ bước 1 member đã có trong Redis nên
+   *    speed-up mới tự `ZADD XX` đúng; speed-up đã ghi DB trước bước đọc thì được bước này bắt. Không còn khe hở nào
+   *    giữa hai bên, và `XX` tuyệt đối nên chạy lại bao nhiêu lần cũng không boost đôi.
+   * `strict`: lỗi bước 1 được ném lên (đường thường); đường lỗi transaction chỉ ghi nhận để lỗi gốc đi tiếp. Bước 2 luôn
+   * best-effort: DB lỗi thì còn score đã đọc, và sweeper dựng lại score từ DB cho ticket queued thiếu trong Redis.
+   */
+  private async requeueClaimed(
+    shard: string,
+    claimed: readonly PoppedTicket[],
+    strict: boolean,
+  ): Promise<void> {
+    if (claimed.length === 0) return;
+    const restored = await Promise.allSettled(
+      claimed.map((c) =>
+        this.queue.enqueue(shard, String(c.score), c.id, 'NX'),
+      ),
+    );
+    const failed = restored.find((r) => r.status === 'rejected');
+    if (strict && failed?.status === 'rejected') throw failed.reason;
+    try {
+      const scoreAtRead = new Map(claimed.map((c) => [c.id, c.score]));
+      const rows = await this.dataSource.manager.find(MatchTicket, {
+        where: {
+          id: In(claimed.map((c) => c.id)),
+          status: MatchTicketStatus.Queued,
+        },
+      });
+      await Promise.all(
+        rows
+          .filter((row) => ticketScore(row) !== scoreAtRead.get(row.id))
+          .map((row) =>
+            this.queue.enqueue(
+              shardKeyOfTicket(row),
+              String(ticketScore(row)),
+              row.id,
+              'XX',
+            ),
+          ),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Không đọc lại được score từ DB khi trả ticket về hàng đợi: ${String(error)}`,
+      );
+    }
   }
 
   /** Dọn shard rỗng khỏi set active (spec § 2) — re-check sau SREM để không nuốt enqueue chen giữa. */

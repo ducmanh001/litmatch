@@ -15,6 +15,7 @@ import { DataSource, EntityManager, Repository } from 'typeorm';
 import { canonicalPair } from '../../common/entities/canonical-pair';
 import { fnv1aHash } from '../../common/hash/fnv1a';
 import { publishRealtimeEvent } from '../../common/realtime/publish-realtime';
+import { lockAdvisoryXact } from '../../database/advisory-lock';
 import { isUniqueViolation } from '../../database/postgres-errors';
 import { FriendService, FriendshipSource } from '../friend';
 import { SafetyService } from '../safety';
@@ -291,14 +292,19 @@ export class MovieMatchService {
   // ---------- flow ghép ẨN DANH (movie-match.html) ----------
 
   /**
-   * Enqueue idempotent rồi thử ghép với entry cũ nhất. KHÔNG có khoá toàn cục: mỗi lượt giữ khoá hàng entry của
-   * CHÍNH MÌNH rồi giành entry đối tác bằng `FOR UPDATE SKIP LOCKED` (`tryMatchAnon`) nên các lượt join song
-   * song không xếp hàng sau nhau; PK queue + PK active-participant là chốt DB cuối. Hai người vào cùng một
-   * lúc có thể bỏ lỡ nhau (mỗi bên thấy bên kia đang bị khoá) — lượt poll `getAnonCurrent` tiếp theo thử ghép
-   * lại. Server tự chọn video từ config `MOVIE_MATCH_ANON_VIDEO_URLS` — client không gửi URL.
+   * Enqueue idempotent rồi thử ghép với entry cũ nhất. KHÔNG có khoá toàn cục: người MỚI hơn giành entry đối tác
+   * cũ hơn bằng `FOR UPDATE SKIP LOCKED` (`tryMatchAnon`) nên các lượt join của những user khác nhau không xếp
+   * hàng sau nhau; PK queue + PK active-participant là chốt DB cuối. Hai người vào cùng một lúc có thể bỏ lỡ
+   * nhau (mỗi bên thấy bên kia đang bị khoá) — lượt poll `getAnonCurrent` tiếp theo thử ghép lại. Server tự chọn
+   * video từ config `MOVIE_MATCH_ANON_VIDEO_URLS` — client không gửi URL.
+   *
+   * Các lượt join của CÙNG một user (bấm đúp, hai tab) được tuần tự hoá bằng khoá advisory THEO USER: nếu không,
+   * lượt thứ hai đọc "chưa active" trước khi lượt đầu commit rồi chèn lại entry sau khi user đã được ghép — trả
+   * `queued` cho user đã active và để lại entry thừa trong hàng đợi.
    */
   async joinAnonQueue(userId: string): Promise<MovieMatchAnonStateView> {
     return this.dataSource.transaction(async (manager) => {
+      await lockAdvisoryXact(manager, 'movie-match-join', userId);
       await this.expireAnonForUser(manager, userId);
 
       const activeState = await this.anonActiveState(manager, userId);

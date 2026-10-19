@@ -74,7 +74,9 @@ Mỗi module publish bằng Redis client riêng của mình (docs/05 § 5.3) qua
   idempotent theo leaseId và kiểm trần socket/user): Redis restart/failover mất dữ liệu làm MỌI lease
   biến mất cùng lúc, và ngắt hết socket lúc đó là biến sự cố Redis thành reconnect storm. Chỉ khi hết
   slot mới ngắt socket; lease của socket đã disconnect trong lúc chờ không được cấp lại (tránh lease
-  ma). Redis lỗi/timeout (`error`) → **không ngắt ngay**: thử lại mỗi ≤5 giây, và socket bị ngắt khi
+  ma). Cấp lại chạy theo NHIỀU lô pipeline (≤500 lease/lô mỗi shard) nên một socket có thể ngắt và release SAU khi danh sách
+  cần cấp lại đã chốt nhưng TRƯỚC khi lô của nó chạy; lô đó vẫn cấp một lease không ai còn giữ — refresher nhả (`releaseMany`)
+  mọi lease vừa được cấp lại mà entry đã bị gỡ, thay vì để slot ma và presence online giả tới hết TTL. Redis lỗi/timeout (`error`) → **không ngắt ngay**: thử lại mỗi ≤5 giây, và socket bị ngắt khi
   lần gia hạn thành công cuối đã đủ `WS_CONNECTION_LEASE_MS` trừ biên an toàn (≥ 2 tick, ≤ 5 giây), tức
   trước khi Redis có thể cấp lại slot. Mốc này được quét ĐỘC LẬP với việc gia hạn (`sweepExpired` mỗi
   tick, kể cả khi tick gia hạn đang treo chờ Redis) nên Redis treo không kéo dài thời gian giữ socket
@@ -89,7 +91,9 @@ Mỗi module publish bằng Redis client riêng của mình (docs/05 § 5.3) qua
   event publish sau khi client thấy `connect` đều tới pod. Khi connection Redis nối lại, pod tự
   subscribe lại đúng tập user hiện có (`autoResubscribe` của ioredis tắt có chủ đích); socket thứ
   hai của cùng user đến lúc shard đang reconnect cũng gửi lại `SUBSCRIBE` (idempotent) và fail closed
-  như socket đầu nếu Redis chưa nhận. Shutdown: `beginClose` trước khi ngắt socket nên không có bão
+  như socket đầu nếu Redis chưa nhận. Lần `SUBSCRIBE` đã bị từ chối/timeout được ghi là `failed` trên entry của user: promise đã
+  reject không được dùng lại cho socket sau (Redis hồi phục rồi mà user còn socket cũ vẫn bị từ chối kết nối mới trên pod đó) —
+  socket kế tiếp luôn gửi lại `SUBSCRIBE`. Shutdown: `beginClose` trước khi ngắt socket nên không có bão
   `UNSUBSCRIBE` từng user (QUIT đã bỏ mọi subscription). Chế độ
   `pattern` giữ cách cũ (`PSUBSCRIBE realtime:user:*`: mọi pod nhận MỌI event, tổng công việc
   tỉ lệ `event × pod`) làm đường lùi. 1 connection Redis riêng cho mỗi shard (ioredis subscriber

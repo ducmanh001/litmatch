@@ -22,6 +22,8 @@ export interface LeaseRefresherOptions {
     refreshMany(leases: readonly LeaseRef[]): Promise<RefreshOutcome[]>;
     /** Cấp lại lease Redis báo `lost`; bỏ qua = `lost` là kết luận cuối. */
     reacquireMany?(leases: readonly LeaseRef[]): Promise<RefreshOutcome[]>;
+    /** Nhả lease đã được cấp lại cho socket không còn nữa; bỏ qua = chờ TTL (lease ma tới `leaseMs`). */
+    releaseMany?(leases: readonly LeaseRef[]): Promise<void>;
   };
   leaseMs: number;
   refreshMs: number;
@@ -42,7 +44,7 @@ export interface LeaseRefresherOptions {
  * rải đều (jitter) để không dồn thành đợt sau một lần reconnect hàng loạt.
  *
  * An toàn lease (docs/services/realtime-gateway.md § 5):
- * - Redis báo `lost` → thử CẤP LẠI trước (Redis restart/failover mất dữ liệu làm mọi lease biến mất
+ * - Redis báo `lost` → thử CẤP LẠI trước (lease cấp lại cho socket đã ngắt giữa chừng thì nhả ngay, xem `apply`) (Redis restart/failover mất dữ liệu làm mọi lease biến mất
  *   cùng lúc, không phải mọi socket đều hết quyền); chỉ khi không còn slot mới ngắt socket.
  * - Redis lỗi/timeout (`error`) → KHÔNG ngắt ngay; thử lại dày hơn, và chỉ ngắt khi lần gia hạn
  *   thành công cuối cùng đã đủ `leaseMs` (trừ biên an toàn). Slot chưa thể bị cấp cho socket
@@ -208,9 +210,17 @@ export class LeaseRefresher {
       reacquired: 0,
     };
     const expired: LeaseEntry[] = [];
+    const orphaned: LeaseRef[] = [];
     due.forEach((entry, index) => {
       // Socket có thể đã disconnect (hoặc bị quét hạn) trong lúc chờ Redis — không đụng vào entry đã bị gỡ.
-      if (this.entries.get(entry.leaseId) !== entry) return;
+      if (this.entries.get(entry.leaseId) !== entry) {
+        // Cấp lại theo NHIỀU lô: socket ngắt và gateway đã release TRƯỚC khi lô của nó chạy, nên lô đó vẫn cấp một
+        // lease mà không ai còn giữ (slot ma + presence online giả tới hết TTL). Phải nhả lease vừa cấp.
+        if (reacquired.has(index)) {
+          orphaned.push({ userId: entry.userId, leaseId: entry.leaseId });
+        }
+        return;
+      }
       const outcome = outcomes[index] ?? 'error';
       counts[reacquired.has(index) ? 'reacquired' : outcome] += 1;
       if (outcome === 'ok') {
@@ -238,7 +248,17 @@ export class LeaseRefresher {
       if (counts[outcome] > 0)
         this.options.onOutcomes?.(outcome, counts[outcome]);
     }
+    this.releaseOrphans(orphaned);
     for (const entry of expired) this.expire(entry);
+  }
+
+  /** Nhả best-effort: lỗi chỉ để lại lease tới hết TTL, không được ảnh hưởng các socket còn lại. */
+  private releaseOrphans(leases: readonly LeaseRef[]): void {
+    const release = this.options.quota.releaseMany;
+    if (leases.length === 0 || !release) return;
+    void release
+      .call(this.options.quota, leases)
+      .catch((error: unknown) => this.report(error));
   }
 
   /** Gỡ entry rồi báo socket; một callback ném lỗi không được làm các socket còn lại mất theo dõi. */
