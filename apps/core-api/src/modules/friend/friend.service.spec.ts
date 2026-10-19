@@ -5,13 +5,12 @@ import { FriendService } from './friend.service';
 import { FriendErrors } from './friend.errors';
 import { Conversation } from './entities/conversation.entity';
 import { Message } from './entities/message.entity';
-import { FriendshipSource } from './entities/friendship.entity';
+import { Friendship, FriendshipSource } from './entities/friendship.entity';
 
 import type { ConfigService } from '@nestjs/config';
 import type { EntityManager, Repository } from 'typeorm';
 
 import type { CoreApiEnv } from '../../config/env.validation';
-import type { Friendship } from './entities/friendship.entity';
 import type { ConversationService } from './services/conversation.service';
 import type { StreakService } from './services/streak.service';
 
@@ -166,6 +165,21 @@ describe('FriendService (unit — mock repo/conversationService/redis)', () => {
   });
 
   describe('areFriends', () => {
+    it('có truyền manager → tra bảng bạn bè trên transaction của caller, không dùng repo (kết nối khác)', async () => {
+      const txRepo = { exists: jest.fn(async () => true) };
+      const manager = { getRepository: jest.fn(() => txRepo) };
+
+      expect(await service.areFriends(USER_B, USER_A, manager as never)).toBe(
+        true,
+      );
+
+      expect(manager.getRepository).toHaveBeenCalledWith(Friendship);
+      expect(txRepo.exists).toHaveBeenCalledWith({
+        where: { userLowId: USER_A, userHighId: USER_B },
+      });
+      expect(friendshipRepo.exists).not.toHaveBeenCalled();
+    });
+
     it('tự so với chính mình → false, không query DB', async () => {
       expect(await service.areFriends(USER_A, USER_A)).toBe(false);
       expect(friendshipRepo.exists).not.toHaveBeenCalled();

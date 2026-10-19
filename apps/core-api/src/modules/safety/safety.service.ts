@@ -316,13 +316,18 @@ export class SafetyService {
    * Implementation thật của `MatchInteractionPolicy.canPair` (docs/services/safety-service.md
    * § 3.1) — verify lại ĐÚNG lúc matcher ghép, không chỉ lúc enqueue (docs/10 § 10.0.C).
    */
-  async canPair(userAId: string, userBId: string): Promise<boolean> {
+  async canPair(
+    userAId: string,
+    userBId: string,
+    /** Chạy trên transaction của caller (cùng kết nối) thay vì mượn thêm một kết nối pool. */
+    manager?: EntityManager,
+  ): Promise<boolean> {
     const cooldownDays = this.config.getOrThrow(
       'SAFETY_REMATCH_COOLDOWN_DAYS',
       { infer: true },
     );
     const cutoff = new Date(Date.now() - cooldownDays * DAY_MS);
-    const rows = (await this.blockRepo.query(CAN_PAIR_SQL, [
+    const rows = (await (manager ?? this.blockRepo).query(CAN_PAIR_SQL, [
       userAId,
       userBId,
       cutoff,

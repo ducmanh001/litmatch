@@ -331,4 +331,149 @@ d('Palm Match integration (Postgres thật)', () => {
       palmMatch.flip(a.id, paired.sessionId as string),
     ).rejects.toMatchObject({ code: PalmMatchErrors.SESSION_FINISHED });
   });
+
+  describe('ghép không khoá toàn cục (SKIP LOCKED + tự chữa khi poll)', () => {
+    const cleanQueue = () => ds.query(`DELETE FROM palm_match_queue_entries`);
+
+    it('12 user join ĐỒNG THỜI (nhiều hơn pool) → không ai vào hai phiên; vài lượt poll sau tất cả được ghép, hàng đợi trống', async () => {
+      await cleanQueue();
+      const users = await Promise.all(
+        Array.from({ length: 12 }, (_, i) => createUser(`palm-conc-${i}`)),
+      );
+      const ids = users.map((user) => user.id);
+
+      await Promise.all(users.map((user) => palmMatch.joinQueue(user.id)));
+      // Hai người vào cùng lúc có thể bỏ lỡ nhau (đối tác đang bị khoá): người MỚI hơn thử lại ở lượt poll kế tiếp.
+      let states = await Promise.all(
+        users.map((user) => palmMatch.getCurrent(user.id)),
+      );
+      for (
+        let round = 0;
+        round < 10 &&
+        states.some((state) => state.state !== PalmMatchClientState.Active);
+        round += 1
+      ) {
+        states = await Promise.all(
+          users.map((user) => palmMatch.getCurrent(user.id)),
+        );
+      }
+
+      expect(states.map((state) => state.state)).toEqual(
+        Array(12).fill(PalmMatchClientState.Active),
+      );
+      expect(new Set(states.map((state) => state.sessionId)).size).toBe(6);
+      const perSession = (await ds.query(
+        `SELECT session_id, count(*)::int AS n FROM palm_match_active_participants
+          WHERE user_id = ANY($1) GROUP BY session_id`,
+        [ids],
+      )) as Array<{ session_id: string; n: number }>;
+      expect(perSession).toHaveLength(6);
+      expect(perSession.every((row) => row.n === 2)).toBe(true);
+      const [queued] = (await ds.query(
+        `SELECT count(*)::int AS n FROM palm_match_queue_entries WHERE user_id = ANY($1)`,
+        [ids],
+      )) as Array<{ n: number }>;
+      expect(queued?.n).toBe(0);
+    });
+
+    it('entry đối tác đang bị lượt khác giữ khoá → joiner KHÔNG chờ; khi khoá nhả, lượt poll kế tiếp ghép cặp', async () => {
+      await cleanQueue();
+      const [a, b] = await Promise.all([
+        createUser('palm-lock-a'),
+        createUser('palm-lock-b'),
+      ]);
+      await palmMatch.joinQueue(a.id);
+
+      const holder = ds.createQueryRunner();
+      await holder.connect();
+      await holder.startTransaction();
+      await holder.query(
+        `SELECT 1 FROM palm_match_queue_entries WHERE user_id = $1 FOR UPDATE`,
+        [a.id],
+      );
+      try {
+        const startedAt = Date.now();
+        const bState = await palmMatch.joinQueue(b.id);
+        expect(Date.now() - startedAt).toBeLessThan(5_000); // không đợi khoá
+        expect(bState.state).toBe(PalmMatchClientState.Queued);
+      } finally {
+        await holder.rollbackTransaction();
+        await holder.release();
+      }
+
+      const retry = await palmMatch.getCurrent(b.id);
+      expect(retry.state).toBe(PalmMatchClientState.Active);
+      expect((await palmMatch.getCurrent(a.id)).sessionId).toBe(
+        retry.sessionId,
+      );
+    });
+
+    it('toàn bộ hàng đợi poll CÙNG LÚC vẫn ghép được (không ai khoá hàng của mình khi tìm, nên không bỏ qua nhau)', async () => {
+      await cleanQueue();
+      const users = await Promise.all(
+        Array.from({ length: 8 }, (_, i) => createUser(`palm-storm-${i}`)),
+      );
+      for (const user of users) {
+        await ds.query(
+          `INSERT INTO palm_match_queue_entries (user_id, queued_at) VALUES ($1, clock_timestamp())`,
+          [user.id],
+        );
+      }
+
+      const states = await Promise.all(
+        users.map((user) => palmMatch.getCurrent(user.id)),
+      );
+
+      const active = states.filter(
+        (state) => state.state === PalmMatchClientState.Active,
+      );
+      expect(active.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('hai bên đã nằm sẵn trong hàng đợi (bỏ lỡ nhau) → poll cả hai thì ghép được', async () => {
+      await cleanQueue();
+      const [a, b] = await Promise.all([
+        createUser('palm-heal-a'),
+        createUser('palm-heal-b'),
+      ]);
+      await ds.query(
+        `INSERT INTO palm_match_queue_entries (user_id) VALUES ($1), ($2)`,
+        [a.id, b.id],
+      );
+
+      await palmMatch.getCurrent(a.id);
+      await palmMatch.getCurrent(b.id);
+      const finalA = await palmMatch.getCurrent(a.id);
+      const finalB = await palmMatch.getCurrent(b.id);
+
+      expect(finalA.state).toBe(PalmMatchClientState.Active);
+      expect(finalB.state).toBe(PalmMatchClientState.Active);
+      expect(finalA.sessionId).toBe(finalB.sessionId);
+    });
+
+    it('dọn entry quá hạn có chặn 50/lượt, không đụng entry còn hạn', async () => {
+      await cleanQueue();
+      const stale = await Promise.all(
+        Array.from({ length: 60 }, (_, i) => createUser(`palm-stale-${i}`)),
+      );
+      await ds.query(
+        `INSERT INTO palm_match_queue_entries (user_id, queued_at)
+         SELECT unnest($1::uuid[]), now() - interval '1 day'`,
+        [stale.map((user) => user.id)],
+      );
+      const joiner = await createUser('palm-purge-a');
+      const second = await createUser('palm-purge-b');
+      const staleLeft = async (): Promise<number> => {
+        const [row] = (await ds.query(
+          `SELECT count(*)::int AS n FROM palm_match_queue_entries WHERE queued_at < now() - interval '1 hour'`,
+        )) as Array<{ n: number }>;
+        return row?.n ?? -1;
+      };
+
+      await palmMatch.joinQueue(joiner.id);
+      expect(await staleLeft()).toBe(10); // 60 − 50
+      await palmMatch.joinQueue(second.id);
+      expect(await staleLeft()).toBe(0);
+    });
+  });
 });

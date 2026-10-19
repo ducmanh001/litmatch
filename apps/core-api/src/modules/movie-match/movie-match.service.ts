@@ -32,7 +32,6 @@ import {
   MovieSessionStatus,
 } from './entities/movie-session.entity';
 import {
-  MOVIE_MATCH_ADVISORY_LOCK_KEY,
   MOVIE_MATCH_REACTIONS,
   movieMessageIdempotencyKey,
 } from './movie-match.constants';
@@ -49,6 +48,11 @@ import type {
 } from '@litmatch/common-dtos';
 import type { RealtimePublisherPort } from '../../common/realtime/realtime-publisher.port';
 import type { CoreApiEnv } from '../../config/env.validation';
+
+/** Số ứng viên tối đa xét mỗi lượt ghép ẩn danh (mỗi ứng viên: giành hàng + kiểm active + canPair). */
+const ANON_MATCH_MAX_CANDIDATES = 20;
+/** Số entry quá hạn dọn mỗi lượt join — chặn để một lượt không gánh cả backlog. */
+const ANON_STALE_PURGE_BATCH = 50;
 
 /** Phase client của flow ẩn danh — map 1-1 với 4 state màn hình movie-match.html. */
 export enum MovieMatchClientState {
@@ -287,27 +291,20 @@ export class MovieMatchService {
   // ---------- flow ghép ẨN DANH (movie-match.html) ----------
 
   /**
-   * Enqueue idempotent rồi thử ghép với entry cũ nhất — cùng kỹ thuật Palm Match: advisory
-   * transaction lock serialize matcher; PK queue + PK active-participant là chốt DB cuối.
-   * Server tự chọn video từ config `MOVIE_MATCH_ANON_VIDEO_URLS` — client không gửi URL.
+   * Enqueue idempotent rồi thử ghép với entry cũ nhất. KHÔNG có khoá toàn cục: mỗi lượt giữ khoá hàng entry của
+   * CHÍNH MÌNH rồi giành entry đối tác bằng `FOR UPDATE SKIP LOCKED` (`tryMatchAnon`) nên các lượt join song
+   * song không xếp hàng sau nhau; PK queue + PK active-participant là chốt DB cuối. Hai người vào cùng một
+   * lúc có thể bỏ lỡ nhau (mỗi bên thấy bên kia đang bị khoá) — lượt poll `getAnonCurrent` tiếp theo thử ghép
+   * lại. Server tự chọn video từ config `MOVIE_MATCH_ANON_VIDEO_URLS` — client không gửi URL.
    */
   async joinAnonQueue(userId: string): Promise<MovieMatchAnonStateView> {
     return this.dataSource.transaction(async (manager) => {
-      await this.lockAnonMatcher(manager);
       await this.expireAnonForUser(manager, userId);
 
       const activeState = await this.anonActiveState(manager, userId);
       if (activeState) return activeState;
 
-      const maxWaitSeconds = this.config.getOrThrow(
-        'MOVIE_MATCH_QUEUE_MAX_WAIT_SECONDS',
-        { infer: true },
-      );
-      const queueCutoff = new Date(Date.now() - maxWaitSeconds * 1000);
-      await manager.query(
-        'DELETE FROM movie_match_queue_entries WHERE queued_at < $1',
-        [queueCutoff],
-      );
+      await this.purgeStaleAnonEntries(manager);
       await manager
         .createQueryBuilder()
         .insert()
@@ -315,49 +312,7 @@ export class MovieMatchService {
         .values({ userId })
         .orIgnore()
         .execute();
-
-      const candidates = (await manager.query(
-        `SELECT user_id FROM movie_match_queue_entries
-         WHERE user_id <> $1 ORDER BY queued_at ASC, user_id ASC LIMIT 20`,
-        [userId],
-      )) as Array<{ user_id: string }>;
-
-      let partnerId: string | undefined;
-      for (const candidate of candidates) {
-        const candidateActive = await manager.findOneBy(
-          MovieSessionActiveParticipant,
-          { userId: candidate.user_id },
-        );
-        if (candidateActive) {
-          await manager.delete(MovieMatchQueueEntry, {
-            userId: candidate.user_id,
-          });
-          continue;
-        }
-        // Re-check block/report ĐÚNG LÚC ghép — không tin state thời điểm enqueue.
-        if (await this.safetyService.canPair(userId, candidate.user_id)) {
-          partnerId = candidate.user_id;
-          break;
-        }
-      }
-
-      if (!partnerId) {
-        const queued = await manager.findOneByOrFail(MovieMatchQueueEntry, {
-          userId,
-        });
-        return {
-          state: MovieMatchClientState.Queued,
-          queuedAt: queued.queuedAt.toISOString(),
-        };
-      }
-
-      const session = await this.createAnonSession(manager, userId, partnerId);
-      await manager.delete(MovieMatchQueueEntry, [userId, partnerId]);
-      await manager.insert(MovieSessionActiveParticipant, [
-        { userId, sessionId: session.id },
-        { userId: partnerId, sessionId: session.id },
-      ]);
-      return this.anonView(session, userId);
+      return this.tryMatchAnon(manager, userId);
     });
   }
 
@@ -378,17 +333,16 @@ export class MovieMatchService {
         await manager.delete(MovieMatchQueueEntry, { userId });
         return { state: MovieMatchClientState.Idle };
       }
-      return {
-        state: MovieMatchClientState.Queued,
-        queuedAt: queued.queuedAt.toISOString(),
-      };
+      // Tự chữa: hai người join cùng lúc có thể bỏ lỡ nhau (SKIP LOCKED) — mỗi lượt poll thử ghép lại.
+      return this.tryMatchAnon(manager, userId);
     });
   }
 
   /** Huỷ queue hoặc dismiss session (đang active → huỷ cho CẢ HAI, không để bên kia chờ vô hạn). */
   async dismissAnonCurrent(userId: string): Promise<MovieMatchAnonStateView> {
     return this.dataSource.transaction(async (manager) => {
-      await this.lockAnonMatcher(manager);
+      // Không cần khoá toàn cục: nếu entry đang bị một lượt ghép giữ khoá thì DELETE chờ lượt đó commit rồi
+      // thấy hàng đã mất và đọc active-participant bên dưới (đã được ghép → huỷ cho cả hai).
       await manager.delete(MovieMatchQueueEntry, { userId });
       const active = await manager.findOneBy(MovieSessionActiveParticipant, {
         userId,
@@ -676,10 +630,120 @@ export class MovieMatchService {
 
   // ---- helper flow ẩn danh ----
 
-  private async lockAnonMatcher(manager: EntityManager): Promise<void> {
-    await manager.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
-      MOVIE_MATCH_ADVISORY_LOCK_KEY,
+  /**
+   * Dọn entry quá hạn chờ — có chặn (50 hàng) và `SKIP LOCKED` nên không chặn/không bị chặn bởi lượt ghép khác;
+   * `idx_movie_match_queue_order` phục vụ quét theo `queued_at`.
+   */
+  private async purgeStaleAnonEntries(manager: EntityManager): Promise<void> {
+    const maxWaitSeconds = this.config.getOrThrow(
+      'MOVIE_MATCH_QUEUE_MAX_WAIT_SECONDS',
+      { infer: true },
+    );
+    await manager.query(
+      `DELETE FROM movie_match_queue_entries
+        WHERE user_id IN (
+          SELECT user_id FROM movie_match_queue_entries
+           WHERE queued_at < $1
+           ORDER BY queued_at ASC
+           LIMIT $2
+           FOR UPDATE SKIP LOCKED
+        )`,
+      [new Date(Date.now() - maxWaitSeconds * 1000), ANON_STALE_PURGE_BATCH],
+    );
+  }
+
+  /**
+   * Một lượt thử ghép cho `userId` (đã có entry). QUY TẮC "người MỚI HƠN giành người CŨ HƠN": chỉ xét các entry cũ
+   * hơn mình theo (queued_at, user_id) và giành bằng `FOR UPDATE SKIP LOCKED` (không bao giờ chờ nên không
+   * deadlock; ứng viên cũ nhất còn rảnh được chọn trước = FIFO). Không khoá hàng của chính mình khi tìm: nếu
+   * mình khoá sớm thì mọi người mới hơn đều thấy mình "đang bị khoá" và bỏ qua → cả hàng đợi poll cùng lúc sẽ
+   * không ai ghép được. Sau khi chọn được đối tác mới xoá entry của mình (DELETE chờ nếu một lượt mới hơn đang
+   * giành mình; lượt đó commit xong thì DELETE không còn hàng → nhả đối tác, dựng lại state). Mọi cạnh chờ đều đi
+   * từ cũ sang mới nên không có chu trình. Cặp (cũ, mới) bị bỏ lỡ do khoá tạm thời sẽ được ghép ở lượt poll kế
+   * tiếp của người MỚI hơn.
+   */
+  private async tryMatchAnon(
+    manager: EntityManager,
+    userId: string,
+  ): Promise<MovieMatchAnonStateView> {
+    const own = (await manager.query(
+      `SELECT queued_at FROM movie_match_queue_entries WHERE user_id = $1`,
+      [userId],
+    )) as Array<{ queued_at: Date }>;
+    const ownEntry = own[0];
+    if (ownEntry === undefined) {
+      return (
+        (await this.anonActiveState(manager, userId)) ?? {
+          state: MovieMatchClientState.Idle,
+        }
+      );
+    }
+
+    const maxWaitSeconds = this.config.getOrThrow(
+      'MOVIE_MATCH_QUEUE_MAX_WAIT_SECONDS',
+      { infer: true },
+    );
+    const cutoff = new Date(Date.now() - maxWaitSeconds * 1000);
+    const skipped: string[] = [];
+    let partnerId: string | undefined;
+    for (let i = 0; i < ANON_MATCH_MAX_CANDIDATES; i += 1) {
+      const rows = (await manager.query(
+        // So sánh (queued_at, user_id) NGAY TRONG SQL (đủ độ chính xác micro giây; truyền qua JS Date sẽ cắt
+        // về mili giây và hai bên có thể cùng coi nhau là "không cũ hơn").
+        `SELECT c.user_id FROM movie_match_queue_entries c
+          WHERE (c.queued_at, c.user_id) < (
+                  SELECT o.queued_at, o.user_id FROM movie_match_queue_entries o WHERE o.user_id = $1
+                )
+            AND c.queued_at >= $2 AND c.user_id <> ALL($3::uuid[])
+          ORDER BY c.queued_at ASC, c.user_id ASC
+          LIMIT 1
+          FOR UPDATE OF c SKIP LOCKED`,
+        [userId, cutoff, skipped],
+      )) as Array<{ user_id: string }>;
+      const candidateId = rows[0]?.user_id;
+      if (candidateId === undefined) break;
+
+      const candidateActive = await manager.findOneBy(
+        MovieSessionActiveParticipant,
+        { userId: candidateId },
+      );
+      if (candidateActive) {
+        await manager.delete(MovieMatchQueueEntry, { userId: candidateId });
+        skipped.push(candidateId);
+        continue;
+      }
+      // Re-check block/report ĐÚNG LÚC ghép — không tin state thời điểm enqueue. Chạy trên transaction này.
+      if (await this.safetyService.canPair(userId, candidateId, manager)) {
+        partnerId = candidateId;
+        break;
+      }
+      skipped.push(candidateId);
+    }
+
+    if (partnerId === undefined) {
+      return {
+        state: MovieMatchClientState.Queued,
+        queuedAt: ownEntry.queued_at.toISOString(),
+      };
+    }
+
+    // Xoá entry của chính mình để "chốt" lượt ghép. Nếu một lượt mới hơn đang giành mình thì DELETE chờ nó
+    // commit rồi không còn hàng → bỏ lượt này (nhả đối tác) và dựng lại state từ bảng active.
+    const claimed = await manager.delete(MovieMatchQueueEntry, { userId });
+    if (!claimed.affected) {
+      return (
+        (await this.anonActiveState(manager, userId)) ?? {
+          state: MovieMatchClientState.Idle,
+        }
+      );
+    }
+    const session = await this.createAnonSession(manager, userId, partnerId);
+    await manager.delete(MovieMatchQueueEntry, { userId: partnerId });
+    await manager.insert(MovieSessionActiveParticipant, [
+      { userId, sessionId: session.id },
+      { userId: partnerId, sessionId: session.id },
     ]);
+    return this.anonView(session, userId);
   }
 
   private async createAnonSession(

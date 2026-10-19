@@ -55,6 +55,7 @@ docs/06) — không cần guard đăng ký thật.
 
 `PALM_MATCH_TARGET_NAME_MAX_LENGTH` (mặc định 50).
 
-Hàng đợi ghép ẩn danh dùng cùng kỹ thuật với Movie Match: một khoá advisory transaction toàn cục
-(`PALM_MATCH_ADVISORY_LOCK_KEY`). Giới hạn đã biết và điều kiện để đổi: xem mục Queue/matcher của
+Hàng đợi ghép ẩn danh dùng cùng kỹ thuật với Movie Match: không còn khoá advisory toàn cục — người mới hơn giành
+người cũ hơn bằng `FOR UPDATE SKIP LOCKED`, người đang chờ tự thử ghép lại mỗi lượt poll (`getCurrent`), `canPair` chạy
+trên cùng transaction. Cơ chế và giới hạn còn lại: xem mục Queue/matcher của
 [movie-match-service.md](./movie-match-service.md).

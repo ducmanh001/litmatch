@@ -100,16 +100,20 @@ Ngoài phiên xem chung giữa bạn bè (§ 2-5), Movie Match có flow ghép ng
 mockup: search → watch → rating → result. Plan chi tiết + bảng giả định:
 `docs/plans/2026-07-15-ui-contract-completion.md § Movie Match ghép ẩn danh`.
 
-- **Queue/matcher**: `movie_match_queue_entries` (PK user_id) + advisory transaction lock
-  (`litmatch:movie-match:pairing`) + PK `movie_session_active_participants.user_id` — cùng kỹ
-  thuật Palm Match. `SafetyService.canPair` re-check ĐÚNG LÚC ghép.
-  **Giới hạn đã biết:** mọi lượt vào/ra hàng đợi (của Movie Match ẩn danh và của Palm Match, mỗi
-  bên một khoá) xếp hàng qua MỘT khoá toàn cục, nên việc ghép tuần tự hoá trên toàn hệ thống. Đổi
-  lại có FIFO đúng, không ghép trùng người và code đơn giản; đủ cho tải pilot. Khi số đo thật cho
-  thấy thời gian chờ khoá hoặc độ trễ `enqueue` vượt SLO đã chốt thì mới đổi: chuyển hàng đợi sang
-  Redis shard như Matching chính (chia nhỏ pool ghép là đánh đổi cần quyết định sản phẩm). Không chia
-  khoá theo bucket trước khi có tiêu chí ghép (vùng/tuổi) để bucket có nghĩa, vì bucket tuỳ ý chỉ làm
-  hai người không bao giờ gặp nhau.
+- **Queue/matcher**: `movie_match_queue_entries` (PK user_id, index `idx_movie_match_queue_order` theo `(queued_at, user_id)`) +
+  PK `movie_session_active_participants.user_id` — cùng kỹ thuật Palm Match. `SafetyService.canPair` re-check ĐÚNG LÚC ghép
+  và chạy trên CHÍNH transaction đó (không mượn thêm kết nối pool).
+  **Không có khoá toàn cục** (ADR 0013 / plan 2026-10-17 § 7a): quy tắc "người MỚI hơn giành người CŨ HƠN" — mỗi lượt
+  `tryMatchAnon` chọn entry cũ nhất còn rảnh và cũ hơn mình bằng `FOR UPDATE SKIP LOCKED` (không bao giờ chờ nên không
+  deadlock), rồi xoá entry của chính mình để chốt; nếu lúc đó một lượt mới hơn đang giành mình thì DELETE chờ nó commit
+  và lượt này nhả đối tác. Mọi cạnh chờ đi từ cũ sang mới nên không có chu trình. Không khoá hàng của chính mình trong
+  lúc tìm (nếu khoá thì cả hàng đợi poll cùng lúc sẽ bỏ qua nhau và không ai ghép được). Hai người vào cùng lúc có thể
+  bỏ lỡ nhau vì đối tác đang bị khoá; `getAnonCurrent` của người đang queued thử ghép lại nên lượt poll kế tiếp ghép
+  được. Entry quá hạn được dọn mỗi lượt join (tối đa 50 hàng, `SKIP LOCKED`).
+  **Giới hạn còn lại:** FIFO chính xác khi tuần tự, xấp xỉ khi đồng thời; hàng đợi vẫn ở Postgres (mỗi lượt poll của
+  người đang chờ chạy ≥2 câu lệnh); khi số đo thật cho thấy Postgres là nút thắt thì chuyển hàng đợi sang Redis shard
+  như Matching chính. Không chia khoá theo bucket trước khi có tiêu chí ghép (vùng/tuổi) vì bucket tuỳ ý chỉ làm hai
+  người không bao giờ gặp nhau.
 - **Session**: tái dùng `movie_sessions` với cột additive `mode`
   (`friend|anonymous`), `expires_at` (deadline, lazy expiry → mở phase rating),
   `watch_ended_at` ("Kết thúc"/hết giờ), `low_rating`/`high_rating`

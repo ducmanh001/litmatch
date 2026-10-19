@@ -324,6 +324,7 @@ export class SoulMatchService {
             matched: await this.friendService.areFriends(
               user.userId,
               partnerId,
+              manager,
             ),
           };
         }
@@ -340,6 +341,7 @@ export class SoulMatchService {
         let matched = await this.friendService.areFriends(
           user.userId,
           partnerId,
+          manager,
         );
         if (dto.verdict === SoulMatchVerdict.Like) {
           const partnerRating = await manager.findOneBy(SoulMatchRating, {

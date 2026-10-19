@@ -30,5 +30,3 @@ export const PALM_ZODIAC_SIGNS: readonly PalmZodiacSign[] = [
   { key: 'aquarius', symbol: '♒', name: 'Bảo Bình' },
   { key: 'pisces', symbol: '♓', name: 'Song Ngư' },
 ] as const;
-
-export const PALM_MATCH_ADVISORY_LOCK_KEY = 'litmatch:palm-match:pairing';

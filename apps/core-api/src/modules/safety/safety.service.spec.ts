@@ -288,6 +288,17 @@ describe('SafetyService', () => {
       blockRepo.query.mockRejectedValue(new Error('db down'));
       await expect(service.canPair('a', 'b')).rejects.toThrow('db down');
     });
+
+    it('có truyền manager → chạy trên transaction của caller, KHÔNG mượn thêm kết nối từ repo (tránh cạn pool khi đang giữ transaction)', async () => {
+      const manager = {
+        query: jest.fn(async () => [{ unpairable: true }]),
+      };
+
+      expect(await service.canPair('a', 'b', manager as never)).toBe(false);
+
+      expect(manager.query).toHaveBeenCalledTimes(1);
+      expect(blockRepo.query).not.toHaveBeenCalled();
+    });
   });
 
   describe('setReportStatus — moderation queue (Admin)', () => {

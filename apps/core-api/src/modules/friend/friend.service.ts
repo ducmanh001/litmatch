@@ -178,10 +178,22 @@ export class FriendService {
     return { created: result.raw.length > 0 };
   }
 
-  async areFriends(userAId: string, userBId: string): Promise<boolean> {
+  /**
+   * `manager`: chạy trên transaction của caller (cùng kết nối). Caller đang giữ transaction PHẢI truyền vào —
+   * nếu không, mỗi lần gọi mượn thêm một kết nối pool thứ hai và dưới tải cao các transaction đang chờ kết nối
+   * đó giữ hết pool (cạn pool).
+   */
+  async areFriends(
+    userAId: string,
+    userBId: string,
+    manager?: EntityManager,
+  ): Promise<boolean> {
     if (userAId === userBId) return false;
     const [userLowId, userHighId] = canonicalPair(userAId, userBId);
-    return this.friendshipRepo.exists({ where: { userLowId, userHighId } });
+    const repo = manager
+      ? manager.getRepository(Friendship)
+      : this.friendshipRepo;
+    return repo.exists({ where: { userLowId, userHighId } });
   }
 
   /**
