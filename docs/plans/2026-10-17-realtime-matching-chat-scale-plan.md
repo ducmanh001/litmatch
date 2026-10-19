@@ -233,10 +233,23 @@ snapshot nợ cũ vẫn khớp, không tăng nợ; (c) hai lần fail do môi tr
 gateway e2e không mở cổng trong 30 s; `nx show project` vượt 45 s timeout cứng của `verify.mjs`) — chạy lại từng gate
 một mình sau khi làm nóng Nx graph.
 
+Đợt follow-up (C9–C11, 2026-10-19), cùng Postgres 16 + Redis 7 thật:
+
+| Lệnh                                                     | Kết quả                                                                                                                                                                                                                                                        |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm agent:verify core` (full)                          | PASS: `agent:check`, `agent:test`, `openapi:check`, `format:check`, lint; test core-api 110 suite / 1.153 test không skip (gồm integration notification-retention, friend gộp thông báo với Redis thật, soul-match, auth/OTP); build                           |
+| `nx e2e core-api-e2e` (riêng, `DATABASE_URL` trỏ DB tạm) | PASS 4 suite / 12 test; toàn bộ migration chạy qua CLI TypeORM `--transaction each`, gồm `RetentionIndexes1758000000000` (CREATE INDEX CONCURRENTLY). Lần đầu trong `agent:verify` hụt vì thiếu `DATABASE_URL` (trỏ Postgres local đang tắt), không phải do mã |
+| `pnpm agent:verify frontend` (full)                      | PASS: lint, test (admin, web 14 file, api-client 86 file), build, kiểm bundle admin 118,41/180 KiB; spec login web/admin có ca "phản hồi OTP không có code"                                                                                                    |
+| `pnpm agent:verify infra`                                | PASS: `doctor`, `release:profile-check` (compose/hosted/k8s sau khi thêm biến OTP, retention, gộp thông báo)                                                                                                                                                   |
+| `pnpm docs:check`, `pnpm format:check`                   | PASS sau khi sinh lại `docs/generated`                                                                                                                                                                                                                         |
+
+Lỗi do các lượt chạy này bắt được (đã sửa): format web/admin chưa chạy prettier; eslint `preserve-caught-error` (thiếu `cause`);
+test fake scheduler không `clearInterval` làm Jest treo; migration retention cần bảng `notifications` trong DB test.
+
 Chưa kiểm chứng: tải ở quy mô triệu socket; hành vi trình duyệt khi Redis chớp (client không biết đã lỡ
 event — dựa vào REST polling); số µs trên Redis production; giả định hồ sơ giới tính/preference thật;
-đường nóng của các module chưa audit cho quy mô này (short-video, mini-game, soul/movie/palm-match, avatar, mood,
-admin). `signaling.sharded.integration` chỉ chạy khi có hai Redis khác nhau (`INTEGRATION_REDIS_SHARD_URLS`; không
+kế hoạch truy vấn thật của các nút thắt ở § 7a (chỉ đọc mã, chưa `EXPLAIN`); retention `delete` trên dữ liệu thật (mới có
+test và dry-run); gửi SMS thật qua cổng của nhà cung cấp. `signaling.sharded.integration` chỉ chạy khi có hai Redis khác nhau (`INTEGRATION_REDIS_SHARD_URLS`; không
 đặt biến thì spec tự skip) — lượt chạy cuối đã chạy với hai container.
 
 ## 10. Nhật ký review độc lập
