@@ -469,7 +469,7 @@ describe('MatchingService (unit — mock repo/capabilities/economy)', () => {
         'matching:queue:voice:VN:5',
         String(expectedScore),
         'ticket-1',
-        'XX',
+        'XX_LT',
       );
       expect(result.replayed).toBe(false);
     });
@@ -502,7 +502,7 @@ describe('MatchingService (unit — mock repo/capabilities/economy)', () => {
         expect.any(String),
         expect.any(String),
         'ticket-1',
-        'XX',
+        'XX_LT',
       );
     });
 

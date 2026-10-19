@@ -781,6 +781,121 @@ d('Vòng đời dữ liệu (Postgres thật, toàn bộ migration)', () => {
     });
   });
 
+  describe('mood: bảo vệ trạng thái đang hiệu lực khi cấu hình TTL bị giảm', () => {
+    const jobRun = () =>
+      new MoodRetentionJob(ds, configStub, schedulerStub, meter).runOnce();
+    const keys = async (): Promise<string[]> =>
+      (
+        (await q(
+          `SELECT idempotency_key FROM mood_status_events ORDER BY idempotency_key`,
+        )) as Array<{ idempotency_key: string }>
+      ).map((row) => row.idempotency_key);
+    /** `set` với expires_at đã snapshot lúc tạo (không phụ thuộc cấu hình TTL hiện tại). */
+    const insertSet = (
+      key: string,
+      userId: string,
+      createdDaysAgo: number,
+      expiresInDays: number,
+    ) =>
+      q(
+        `INSERT INTO mood_status_events (user_id, kind, preset_id, expires_at, idempotency_key, created_at)
+         VALUES ($1, 'set', gen_random_uuid(), now() + make_interval(days => $2::int), $3,
+                 now() - make_interval(days => $4::int))`,
+        [userId, expiresInDays, key, createdDaysAgo],
+      );
+    const insertClear = (key: string, userId: string, createdDaysAgo: number) =>
+      q(
+        `INSERT INTO mood_status_events (user_id, kind, idempotency_key, created_at)
+         VALUES ($1, 'clear', $2, now() - make_interval(days => $3::int))`,
+        [userId, key, createdDaysAgo],
+      );
+    const newUser = async (): Promise<string> =>
+      ((await q(`SELECT gen_random_uuid() AS id`)) as Array<{ id: string }>)[0]
+        .id;
+
+    it('giảm TTL xuống 24 giờ, retention 1 ngày: mood tạo 3 ngày trước nhưng expires_at snapshot còn 4 ngày NGHĨA LÀ còn hiệu lực → KHÔNG bị xoá; mood đã hết hạn cùng tuổi thì bị xoá', async () => {
+      const live = await newUser();
+      const dead = await newUser();
+      await insertSet('live', live, 3, 4);
+      await insertSet('expired', dead, 3, -1);
+      resetConfig({ MOOD_STATUS_TTL_HOURS: 24, MOOD_EVENT_RETENTION_DAYS: 1 });
+
+      await jobRun();
+
+      expect(await keys()).toEqual(['live']);
+    });
+
+    it('KHÔNG làm mood cũ hiện lại: clear / set-hết-hạn MỚI HƠN đang che một set còn hạn cũ hơn được giữ, dù đã quá tuổi', async () => {
+      const user = await newUser();
+      await insertSet('a-old-live', user, 6, 2); // còn hiệu lực 2 ngày nữa
+      await insertSet('b-expired-set', user, 4, -1); // mới hơn, đã hết hạn
+      await insertClear('c-clear', user, 3); // mới nhất: tắt mood
+      // một user khác không bị ảnh hưởng: sự kiện cũ của họ vẫn bị xoá
+      const other = await newUser();
+      await insertClear('other-old', other, 5);
+      resetConfig({ MOOD_STATUS_TTL_HOURS: 24, MOOD_EVENT_RETENTION_DAYS: 1 });
+
+      await jobRun();
+
+      // c-clear và b-expired-set đủ tuổi nhưng đang che a-old-live: xoá chúng thì mood a hiện lại
+      expect(await keys()).toEqual(['a-old-live', 'b-expired-set', 'c-clear']);
+      const current = (await q(
+        `SELECT kind FROM mood_status_events WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1`,
+        [user],
+      )) as Array<{ kind: string }>;
+      expect(current[0]?.kind).toBe('clear'); // mood hiện tại vẫn là "đã tắt"
+
+      // Khi set cũ hết hạn, toàn bộ chuỗi tự đủ điều kiện ở lần quét sau.
+      await q(
+        `UPDATE mood_status_events SET expires_at = now() - interval '1 minute' WHERE idempotency_key = 'a-old-live'`,
+      );
+      await jobRun();
+      expect(await keys()).toEqual([]);
+    });
+
+    it('set còn hạn và clear CÙNG created_at: clear (đang che set) được giữ, mood hiện tại không đổi sau retention', async () => {
+      const user = await newUser();
+      await q(
+        `INSERT INTO mood_status_events (user_id, kind, preset_id, expires_at, idempotency_key, created_at)
+         VALUES ($1, 'set', gen_random_uuid(), now() + interval '4 days', 'tie-set', now() - interval '3 days')`,
+        [user],
+      );
+      await q(
+        `INSERT INTO mood_status_events (user_id, kind, idempotency_key, created_at)
+         SELECT $1, 'clear', 'tie-clear', created_at FROM mood_status_events WHERE idempotency_key = 'tie-set'`,
+        [user],
+      );
+      resetConfig({
+        MOOD_STATUS_TTL_HOURS: 24,
+        MOOD_EVENT_RETENTION_DAYS: 1,
+        RETENTION_BATCH_SIZE: 1,
+        RETENTION_MAX_BATCHES_PER_TICK: 10,
+      });
+
+      await jobRun();
+
+      expect(await keys()).toEqual(['tie-clear', 'tie-set']);
+    });
+
+    it('bảo vệ này giữ nguyên qua ranh giới lô: batch nhỏ hơn số dòng đủ tuổi vẫn không xoá dòng đang che mood còn hạn', async () => {
+      const user = await newUser();
+      await insertSet('z-live', user, 8, 3);
+      for (let index = 0; index < 5; index += 1) {
+        await insertClear(`y-clear-${index}`, user, 7 - index);
+      }
+      resetConfig({
+        MOOD_STATUS_TTL_HOURS: 24,
+        MOOD_EVENT_RETENTION_DAYS: 1,
+        RETENTION_BATCH_SIZE: 2,
+        RETENTION_MAX_BATCHES_PER_TICK: 10,
+      });
+
+      await jobRun();
+
+      expect(await count('mood_status_events')).toBe(6); // không dòng nào bị xoá
+    });
+  });
+
   describe('feed: story sweeper xoá hết backlog trong MỘT tick', () => {
     it('xoá 1.300 story hết hạn (3 lô) cùng story_views cascade; story còn hạn được giữ', async () => {
       await q(

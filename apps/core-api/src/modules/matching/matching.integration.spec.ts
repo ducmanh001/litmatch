@@ -1032,6 +1032,59 @@ d('Matching integration (Postgres + Redis thật)', () => {
       );
     });
 
+    it('speed-up KHÁC hoàn tất giữa lúc matcher đọc DB và lúc ghi lại score → lệnh ghi đến muộn với boost cũ KHÔNG được ghi đè score mới hơn', async () => {
+      const a = await createUser('boostrace-a');
+      await fund(a.id);
+      const ta = await join(a);
+      const shard = matchingShardKey(MatchType.Voice, 'VN', ta.ageBand);
+      // Dựng đúng trạng thái "đã bị claim": ticket rời Redis, matcher còn giữ score lúc claim (chưa có boost nào).
+      const scoreAtClaim = ta.enqueuedAt.getTime();
+      await redis.zrem(shard, ta.id);
+      // Speed-up #1 hoàn tất khi ticket đang vắng mặt: chỉ ghi được DB (XX_LT bỏ qua vì member không có trong Redis).
+      await matching.speedup(auth(a.id), ta.id, 'sp-first');
+
+      // Rào chắn NGAY SAU lần đọc DB của bước 2 và TRƯỚC lệnh Redis của nó (bước 1 NX đã khôi phục member): speed-up #2
+      // hoàn tất trọn vẹn cả DB lẫn Redis. Lịch reviewer tái hiện: NX -> đọc B1 -> speed-up B2 xong -> ghi muộn score(B1).
+      const realFind = ds.manager.find.bind(ds.manager) as unknown as (
+        target: unknown,
+        options?: unknown,
+      ) => Promise<unknown[]>;
+      let lateSpeedupDone = false;
+      const find = jest.spyOn(ds.manager, 'find').mockImplementation((async (
+        target: unknown,
+        options?: unknown,
+      ) => {
+        const rows = await realFind(target, options);
+        if (target === MatchTicket && !lateSpeedupDone) {
+          lateSpeedupDone = true;
+          await matching.speedup(auth(a.id), ta.id, 'sp-late');
+        }
+        return rows;
+      }) as unknown as typeof ds.manager.find);
+      try {
+        await (
+          worker as unknown as {
+            requeueClaimed(
+              shard: string,
+              claimed: Array<{ id: string; score: number }>,
+              strict: boolean,
+            ): Promise<void>;
+          }
+        ).requeueClaimed(shard, [{ id: ta.id, score: scoreAtClaim }], true);
+      } finally {
+        find.mockRestore();
+      }
+
+      expect(lateSpeedupDone).toBe(true);
+      const freshA = await ds
+        .getRepository(MatchTicket)
+        .findOneByOrFail({ id: ta.id });
+      expect(freshA.priorityBoostMs).toBe(600_000);
+      expect(await redis.zscore(shard, ta.id)).toBe(
+        String(freshA.enqueuedAt.getTime() - 600_000),
+      );
+    });
+
     it('cache cặp-không-ghép-được bật: wake-up kế tiếp không hỏi canPair lại (chỉ làm CHẬM sau khi bỏ chặn, không cho ghép cặp bị cấm)', async () => {
       CONFIG['MATCHING_MATCHER_UNPAIRABLE_CACHE_MS'] = 60_000;
       const canPair = jest.spyOn(policyStub, 'canPair');

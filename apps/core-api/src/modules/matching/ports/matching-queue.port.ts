@@ -4,11 +4,17 @@
  * the Redis sorted-set/index operations required by the matcher.
  */
 export interface MatchingQueuePort {
+  /**
+   * `NX`: chỉ thêm khi chưa có. `XX`: chỉ cập nhật khi đã có. `XX_LT` (= `ZADD XX LT`): chỉ cập nhật khi đã có VÀ score mới
+   * NHỎ HƠN score hiện tại. Score = enqueuedAt + trustPenalty − priorityBoost, trong đó enqueuedAt/trustPenalty là snapshot lúc
+   * tạo và boost chỉ tăng, nên score của một ticket chỉ có thể GIẢM trong đời nó: mọi lần "đặt lại score từ DB" phải dùng
+   * `XX_LT` để một lần ghi đến MUỘN với giá trị cũ không bao giờ ghi đè score đã được speed-up mới hơn hạ xuống.
+   */
   enqueue(
     shard: string,
     score: string,
     ticketId: string,
-    mode: 'NX' | 'XX',
+    mode: 'NX' | 'XX' | 'XX_LT',
   ): Promise<void>;
   remove(shard: string, ticketId: string): Promise<void>;
   /**

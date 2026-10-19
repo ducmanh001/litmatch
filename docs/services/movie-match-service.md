@@ -114,6 +114,12 @@ mockup: search → watch → rating → result. Plan chi tiết + bảng giả �
   lấy đầu transaction, không toàn cục): thiếu nó, lượt thứ hai đọc "chưa active" trước khi lượt đầu commit rồi chèn lại entry sau
   khi user đã được ghép — trả `queued` cho user đã active và để lại entry thừa. Khoá chỉ giữ một khoá mỗi transaction và lấy
   TRƯỚC mọi khoá khác nên không tạo chu trình chờ; lượt sau chờ rồi trả đúng phiên vừa ghép.
+  **Khoá theo user không đủ khi mình là bên bị giành**: một user KHÁC có thể giành entry của mình bằng `SKIP LOCKED` giữa lúc mình
+  kiểm tra "chưa active" và lúc chèn entry, commit phiên; lượt join của mình khi đó chèn LẠI entry và trả `queued` cho user đã
+  active. Nên sau khi chèn, `joinAnonQueue` khoá hàng queue của CHÍNH MÌNH (`SELECT … FOR UPDATE`; chờ nếu người kia đang giữ, từ đó
+  `SKIP LOCKED` của người khác bỏ qua mình) rồi KIỂM LẠI active ở ranh giới ghi: nếu đã bị ghép thì dọn entry vừa chèn và trả đúng
+  phiên đang xem (test: dừng lượt join ngay sau lần kiểm tra đầu, để user khác ghép, rồi thả). Hệ quả: hai lượt join đồng thời có thể
+  bỏ lỡ nhau lâu hơn một chút khi lượt join lặp khoá entry đã có — poll kế tiếp ghép lại.
   **Giới hạn còn lại:** FIFO chính xác khi tuần tự, xấp xỉ khi đồng thời; hàng đợi vẫn ở Postgres (mỗi lượt poll của
   người đang chờ chạy ≥2 câu lệnh); khi số đo thật cho thấy Postgres là nút thắt thì chuyển hàng đợi sang Redis shard
   như Matching chính. Không chia khoá theo bucket trước khi có tiêu chí ghép (vùng/tuổi) vì bucket tuỳ ý chỉ làm hai

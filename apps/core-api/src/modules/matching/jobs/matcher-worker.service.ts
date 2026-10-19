@@ -638,11 +638,16 @@ export class MatcherWorkerService
    * speed-up hoàn tất sau lúc claim chỉ ghi được DB (`ZADD XX` của nó bỏ qua vì member đang không nằm trong Redis),
    * nên trả lại bằng score cũ sẽ xoá mất lượt boost đã trả tiền. Cách làm:
    * 1. `NX` bằng score đã đọc — khôi phục sự hiện diện ngay (`NX` phòng trùng);
-   * 2. đọc lại `priorityBoostMs` từ DB và đặt score TUYỆT ĐỐI bằng `XX`. Từ bước 1 member đã có trong Redis nên
-   *    speed-up mới tự `ZADD XX` đúng; speed-up đã ghi DB trước bước đọc thì được bước này bắt. Không còn khe hở nào
-   *    giữa hai bên, và `XX` tuyệt đối nên chạy lại bao nhiêu lần cũng không boost đôi.
+   * 2. đọc lại `priorityBoostMs` từ DB và đặt score TUYỆT ĐỐI bằng `XX_LT` (`ZADD XX LT`). Từ bước 1 member đã có trong
+   *    Redis nên speed-up mới tự ghi đúng; speed-up đã ghi DB trước bước đọc thì được bước này bắt.
+   *    Vì sao `LT` mà không chỉ `XX`: giữa bước đọc DB và lệnh Redis của bước này, một speed-up KHÁC có thể hoàn tất cả
+   *    DB lẫn Redis; `XX` thuần để lệnh đến muộn (giá trị đọc cũ hơn) ghi đè score đã hạ xuống. Score chỉ có thể giảm trong
+   *    đời ticket (boost chỉ tăng; enqueuedAt và trustPenalty là snapshot lúc tạo) nên `LT` chặn đúng loại ghi lỗi thời
+   *    đó mà vẫn cho mọi lần hạ score hợp lệ qua, và chạy lại bao nhiêu lần cũng không boost đôi.
    * `strict`: lỗi bước 1 được ném lên (đường thường); đường lỗi transaction chỉ ghi nhận để lỗi gốc đi tiếp. Bước 2 luôn
-   * best-effort: DB lỗi thì còn score đã đọc, và sweeper dựng lại score từ DB cho ticket queued thiếu trong Redis.
+   * best-effort: DB lỗi thì ticket giữ score đã đọc lúc claim (có thể thiếu boost vừa mua trong khoảng đó) cho tới khi
+   * speed-up được gọi lại với cùng Idempotency-Key — replay đặt lại score từ DB (matching.service.ts, bước 4). KHÔNG có job
+   * nào dựng lại score từ DB (ticket-sweeper chỉ expire ticket quá hạn và thêm ticket requeue MỚI bằng `NX`).
    */
   private async requeueClaimed(
     shard: string,
@@ -673,7 +678,7 @@ export class MatcherWorkerService
               shardKeyOfTicket(row),
               String(ticketScore(row)),
               row.id,
-              'XX',
+              'XX_LT',
             ),
           ),
       );

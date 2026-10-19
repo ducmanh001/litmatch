@@ -45,8 +45,13 @@ export class RedisMatchingQueue implements MatchingQueuePort {
     shard: string,
     score: string,
     ticketId: string,
-    mode: 'NX' | 'XX',
+    mode: 'NX' | 'XX' | 'XX_LT',
   ): Promise<void> {
+    if (mode === 'XX_LT') {
+      // Redis >= 6.2: XX + LT cùng một lệnh nguyên tử (chỉ hạ score của member đang có).
+      await this.redis.zadd(shard, 'XX', 'LT', score, ticketId);
+      return;
+    }
     await this.redis.zadd(shard, mode, score, ticketId);
   }
 

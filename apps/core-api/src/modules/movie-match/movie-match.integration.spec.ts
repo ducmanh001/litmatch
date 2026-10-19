@@ -816,4 +816,63 @@ d('Movie Match integration (Postgres thật)', () => {
       ).resolves.toBeUndefined();
     });
   });
+  it('join replay vẫn trả phiên đang xem khi một user KHÁC ghép mình sau lần kiểm tra trạng thái đầu tiên; không để lại hàng queue thừa', async () => {
+    const [b, d] = await Promise.all([
+      createUser('movie-race-b'),
+      createUser('movie-race-d'),
+    ]);
+    expect((await movieMatch.joinAnonQueue(b.id)).state).toBe(
+      MovieMatchClientState.Queued,
+    );
+    type ActiveStateFn = (manager: unknown, userId: string) => Promise<unknown>;
+    const internals = movieMatch as unknown as {
+      anonActiveState: ActiveStateFn;
+    };
+    const original = internals.anonActiveState.bind(movieMatch);
+    let observed!: () => void;
+    let resume!: () => void;
+    let blocked = false;
+    const checked = new Promise<void>((resolve) => {
+      observed = resolve;
+    });
+    const allowed = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
+    const spy = jest
+      .spyOn(internals, 'anonActiveState')
+      .mockImplementation(async (manager, userId) => {
+        const active = await original(manager, userId);
+        if (userId === b.id && !active && !blocked) {
+          blocked = true;
+          observed();
+          await allowed;
+        }
+        return active;
+      });
+    let replay: Promise<{ state: MovieMatchClientState }> | undefined;
+    try {
+      replay = movieMatch.joinAnonQueue(b.id);
+      const outcome = replay.then(
+        (value) => ({ value }),
+        (error: unknown) => ({ error }),
+      );
+      await checked;
+      const paired = await movieMatch.joinAnonQueue(d.id);
+      expect(paired.state).toBe(MovieMatchClientState.Watching);
+      resume();
+
+      const result = await outcome;
+      expect('error' in result).toBe(false);
+      expect(
+        (result as { value: { state: MovieMatchClientState } }).value.state,
+      ).toBe(MovieMatchClientState.Watching);
+      expect(
+        await ds.getRepository(MovieMatchQueueEntry).countBy({ userId: b.id }),
+      ).toBe(0);
+    } finally {
+      resume();
+      await replay?.catch(() => undefined);
+      spy.mockRestore();
+    }
+  });
 });

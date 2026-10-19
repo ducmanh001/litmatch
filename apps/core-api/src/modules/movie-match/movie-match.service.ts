@@ -299,8 +299,12 @@ export class MovieMatchService {
    * video từ config `MOVIE_MATCH_ANON_VIDEO_URLS` — client không gửi URL.
    *
    * Các lượt join của CÙNG một user (bấm đúp, hai tab) được tuần tự hoá bằng khoá advisory THEO USER: nếu không,
-   * lượt thứ hai đọc "chưa active" trước khi lượt đầu commit rồi chèn lại entry sau khi user đã được ghép — trả
-   * `queued` cho user đã active và để lại entry thừa trong hàng đợi.
+   * lượt thứ hai đọc "chưa active" trước khi lượt đầu commit rồi chèn lại entry sau khi user đã được ghép.
+   *
+   * Khoá advisory KHÔNG đủ khi người được chọn là bên bị giành: một user KHÁC có thể giành entry của mình bằng
+   * `FOR UPDATE SKIP LOCKED` trong `tryMatchAnon` giữa lúc mình kiểm tra "chưa active" và lúc chèn entry, commit phiên
+   * active; mình chèn LẠI entry rồi trả `queued`, để lại hàng queue thừa. Nên sau khi chèn, khoá hàng queue của CHÍNH MÌNH
+   * (chờ nếu người kia đang giữ; từ đây không ai giành được mình, `SKIP LOCKED` bỏ qua) rồi KIỂM LẠI active ở ranh giới ghi.
    */
   async joinAnonQueue(userId: string): Promise<MovieMatchAnonStateView> {
     return this.dataSource.transaction(async (manager) => {
@@ -318,6 +322,15 @@ export class MovieMatchService {
         .values({ userId })
         .orIgnore()
         .execute();
+      await manager.query(
+        `SELECT 1 FROM movie_match_queue_entries WHERE user_id = $1 FOR UPDATE`,
+        [userId],
+      );
+      const claimedMeanwhile = await this.anonActiveState(manager, userId);
+      if (claimedMeanwhile) {
+        await manager.delete(MovieMatchQueueEntry, { userId });
+        return claimedMeanwhile;
+      }
       return this.tryMatchAnon(manager, userId);
     });
   }

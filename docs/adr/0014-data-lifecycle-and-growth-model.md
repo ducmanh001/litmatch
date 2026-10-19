@@ -73,7 +73,7 @@ Ba phát hiện đổi thứ tự ưu tiên:
    - Bảng ≤ vài trăm hàng/giây xoá: retention theo lô của `common/retention` (đã có), mỗi module một job. Đã làm ở lô này:
      `refresh_tokens` (theo `expires_at`, không theo `created_at`, để hạ `AUTH_REFRESH_TTL_DAYS` không xoá nhầm token còn hạn), `phone_otps`,
      `match_daily_quotas`, `guest_match_quotas`, `outbox_events` (đã publish; dead-letter mặc định giữ vì cần người xử lý), `video_views`
-     (mặc định TẮT), `video_comments` đã xoá mềm, `mood_status_events` (hạn giữ không bao giờ ngắn hơn `MOOD_STATUS_TTL_HOURS`), kèm story
+     (mặc định TẮT), `video_comments` đã xoá mềm, `mood_status_events` (hạn giữ không bao giờ ngắn hơn `MOOD_STATUS_TTL_HOURS`; không xoá `set` còn hạn và không xoá sự kiện đang che một `set` còn hạn cũ hơn, vì xoá nó làm mood cũ hiện lại), kèm story
      sweeper xoá hết backlog trong ngân sách mỗi tick (trước đây tối đa 500 story/giờ).
    - Bảng có token xoay: **dọn cơ hội lúc ghi** (mặc định TẮT, xem "Đánh đổi bảo mật" bên dưới) — mỗi lần xoay xoá token ĐÃ XOAY cũ hơn
      `AUTH_REFRESH_ROTATED_RETENTION_DAYS` của CÙNG họ (dùng `idx_refresh_tokens_family_id`, không index mới, `FOR UPDATE SKIP LOCKED`

@@ -57,5 +57,6 @@ docs/06) — không cần guard đăng ký thật.
 
 Hàng đợi ghép ẩn danh dùng cùng kỹ thuật với Movie Match: không còn khoá advisory toàn cục — người mới hơn giành
 người cũ hơn bằng `FOR UPDATE SKIP LOCKED`, người đang chờ tự thử ghép lại mỗi lượt poll (`getCurrent`), `canPair` chạy
-trên cùng transaction; hai lượt join của cùng một user được tuần tự hoá bằng khoá advisory theo user (không toàn cục). Cơ chế và
+trên cùng transaction; hai lượt join của cùng một user được tuần tự hoá bằng khoá advisory theo user (không toàn cục), và `joinQueue` khoá hàng queue của chính mình rồi kiểm lại active
+sau khi chèn (khoá theo user không chặn một user KHÁC giành entry của mình giữa lúc kiểm tra và lúc chèn). Cơ chế và
 giới hạn còn lại: xem mục Queue/matcher của [movie-match-service.md](./movie-match-service.md).

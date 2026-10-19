@@ -116,8 +116,13 @@ export class PalmMatchService {
    * thấy bên kia đang bị khoá) — lượt poll `getCurrent` tiếp theo thử ghép lại.
    *
    * Các lượt join của CÙNG một user (bấm đúp, hai tab) được tuần tự hoá bằng khoá advisory THEO USER: nếu không,
-   * lượt thứ hai đọc "chưa active" trước khi lượt đầu commit rồi chèn lại entry sau khi user đã được ghép — trả
-   * `queued` cho user đã active và để lại entry thừa trong hàng đợi.
+   * lượt thứ hai đọc "chưa active" trước khi lượt đầu commit rồi chèn lại entry sau khi user đã được ghép.
+   *
+   * Khoá advisory KHÔNG đủ khi người được chọn là bên bị giành: một user KHÁC (D) có thể giành entry của mình (B) bằng
+   * `FOR UPDATE SKIP LOCKED` trong `tryMatch` ngay giữa lúc B kiểm tra "chưa active" và lúc B chèn entry, commit phiên
+   * active; B tiếp tục chèn LẠI entry và trả `queued` cho user đã active, để lại một hàng queue thừa. Vì vậy sau khi chèn,
+   * B khoá hàng queue của CHÍNH MÌNH (chờ nếu D đang giữ nó; từ đây không ai giành được B nữa, `SKIP LOCKED` bỏ qua) rồi
+   * KIỂM LẠI active ở ranh giới ghi: nếu D đã ghép B thì dọn entry vừa chèn và trả đúng phiên đang active.
    */
   async joinQueue(userId: string): Promise<PalmMatchStateView> {
     return this.dataSource.transaction(async (manager) => {
@@ -135,6 +140,15 @@ export class PalmMatchService {
         .values({ userId })
         .orIgnore()
         .execute();
+      await manager.query(
+        `SELECT 1 FROM palm_match_queue_entries WHERE user_id = $1 FOR UPDATE`,
+        [userId],
+      );
+      const claimedMeanwhile = await this.activeState(manager, userId);
+      if (claimedMeanwhile) {
+        await manager.delete(PalmMatchQueueEntry, { userId });
+        return claimedMeanwhile;
+      }
       return this.tryMatch(manager, userId);
     });
   }

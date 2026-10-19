@@ -531,4 +531,62 @@ d('Palm Match integration (Postgres thật)', () => {
       expect(await staleLeft()).toBe(0);
     });
   });
+  it('join replay vẫn trả phiên active khi một user KHÁC ghép mình sau lần kiểm tra trạng thái đầu tiên; không để lại hàng queue thừa', async () => {
+    const [b, d] = await Promise.all([
+      createUser('palm-race-b'),
+      createUser('palm-race-d'),
+    ]);
+    expect((await palmMatch.joinQueue(b.id)).state).toBe(
+      PalmMatchClientState.Queued,
+    );
+    // Dừng B NGAY SAU lần đọc "chưa active" đầu tiên của lượt join lặp; D join và ghép B; rồi thả B.
+    type ActiveStateFn = (manager: unknown, userId: string) => Promise<unknown>;
+    const internals = palmMatch as unknown as { activeState: ActiveStateFn };
+    const original = internals.activeState.bind(palmMatch);
+    let observed!: () => void;
+    let resume!: () => void;
+    let blocked = false;
+    const checked = new Promise<void>((resolve) => {
+      observed = resolve;
+    });
+    const allowed = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
+    const spy = jest
+      .spyOn(internals, 'activeState')
+      .mockImplementation(async (manager, userId) => {
+        const active = await original(manager, userId);
+        if (userId === b.id && !active && !blocked) {
+          blocked = true;
+          observed();
+          await allowed;
+        }
+        return active;
+      });
+    let replay: Promise<{ state: PalmMatchClientState }> | undefined;
+    try {
+      replay = palmMatch.joinQueue(b.id);
+      const outcome = replay.then(
+        (value) => ({ value }),
+        (error: unknown) => ({ error }),
+      );
+      await checked;
+      const paired = await palmMatch.joinQueue(d.id);
+      expect(paired.state).toBe(PalmMatchClientState.Active);
+      resume();
+
+      const result = await outcome;
+      expect('error' in result).toBe(false);
+      expect(
+        (result as { value: { state: PalmMatchClientState } }).value.state,
+      ).toBe(PalmMatchClientState.Active);
+      expect(
+        await ds.getRepository(PalmMatchQueueEntry).countBy({ userId: b.id }),
+      ).toBe(0);
+    } finally {
+      resume();
+      await replay?.catch(() => undefined);
+      spy.mockRestore();
+    }
+  });
 });

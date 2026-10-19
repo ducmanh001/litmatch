@@ -51,7 +51,7 @@ reveal + Friend list.
 
 ## 3.1 Vòng đời dữ liệu
 
-`mood_status_events` chỉ có nghĩa trong `MOOD_STATUS_TTL_HOURS`; `MoodRetentionJob` xoá sự kiện cũ hơn `MOOD_EVENT_RETENTION_DAYS` (mặc định 7) khi `RETENTION_MODE=delete` (ADR 0014; `dry-run` chỉ đếm). Hạn giữ THỰC TẾ = `max(MOOD_EVENT_RETENTION_DAYS, ceil(MOOD_STATUS_TTL_HOURS / 24) + 1)` nên nâng TTL trạng thái lên (vd 336 giờ) không bao giờ làm job xoá sự kiện của trạng thái còn sống. `idempotency_key` UNIQUE chỉ bảo vệ trong khoảng đó.
+`mood_status_events` chỉ có nghĩa trong `MOOD_STATUS_TTL_HOURS`; `MoodRetentionJob` xoá sự kiện cũ hơn `MOOD_EVENT_RETENTION_DAYS` (mặc định 7) khi `RETENTION_MODE=delete` (ADR 0014; `dry-run` chỉ đếm). Hạn giữ THỰC TẾ = `max(MOOD_EVENT_RETENTION_DAYS, ceil(MOOD_STATUS_TTL_HOURS / 24) + 1)` nên nâng TTL trạng thái lên (vd 336 giờ) không bao giờ làm job xoá sự kiện của trạng thái còn sống. `expires_at` được snapshot lúc set, nên GIẢM TTL sau đó vẫn để lại mood cũ còn hiệu lực: job không xoá một `set` còn hạn, và cũng không xoá sự kiện MỚI HƠN (`clear` hoặc `set` đã hết hạn) đang che một `set` còn hạn cũ hơn HOẶC CÙNG `created_at` của cùng user (reader chỉ `ORDER BY created_at DESC`, không có tie-breaker, nên cùng timestamp phải coi là có thể che; xoá nó sẽ làm mood cũ hiện lại vì mood hiện tại = sự kiện mới nhất). Các dòng đó tự đủ điều kiện xoá ở lần quét sau khi mood còn hạn hết hạn. `idempotency_key` UNIQUE chỉ bảo vệ trong khoảng đó.
 
 ## 4. Preset-only W1 — không có moderation
 
