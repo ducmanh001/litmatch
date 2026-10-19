@@ -2,7 +2,6 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { Roles } from '@litmatch/common-dtos';
 import { DomainException } from '@litmatch/common-exceptions';
-import { randomUUID } from 'node:crypto';
 import { DataSource, Repository } from 'typeorm';
 
 import { AuditLogService } from '../../common/audit/audit-log.service';
@@ -11,7 +10,6 @@ import { Report, ReportStatus, SafetyService } from '../safety';
 import { Gift, GiftService } from '../gift';
 import { EconomyService } from '../economy';
 import { ShortVideoService, Video } from '../short-video';
-import { NotificationService } from '../notification';
 import { PartyRoomCloseReason, PartyRoomService } from '../party-room';
 import { SupportService, SupportTicketStatus } from '../support';
 
@@ -19,6 +17,10 @@ import { AdminErrors } from './admin.errors';
 import { BroadcastAudience } from './dto/admin-config.dto';
 import { AdminPermission, ADMIN_PERMISSION_LABELS } from './admin.constants';
 import { AdminRolePermission } from './entities/admin-role-permission.entity';
+import {
+  BroadcastStatus,
+  NotificationBroadcast,
+} from './entities/notification-broadcast.entity';
 
 import type { UserPage, UserPageFilter } from '../user';
 import type { ReportPage, ReportPageFilter } from '../safety';
@@ -45,7 +47,6 @@ export class AdminService {
     private readonly shortVideoService: ShortVideoService,
     private readonly partyRoomService: PartyRoomService,
     private readonly supportService: SupportService,
-    private readonly notificationService: NotificationService,
     private readonly auditLogService: AuditLogService,
   ) {}
 
@@ -417,53 +418,52 @@ export class AdminService {
     });
   }
 
+  /**
+   * Xếp hàng một broadcast (ADR 0013) — KHÔNG gửi trong request: nạp hết user vào RAM rồi ghi hàng triệu dòng
+   * trong một transaction làm request treo. `BroadcastDispatchJob` gửi dần ở nền theo lô; tiến độ xem qua
+   * `getBroadcast`. Dòng broadcast và audit `queued` ghi cùng transaction.
+   */
   async broadcastNotification(
     actorUserId: string,
     input: { title: string; body: string; audience: BroadcastAudience },
-  ): Promise<{ broadcastId: string; recipientCount: number }> {
-    const activeUserIds = await this.userService.listActiveUserIds();
-    const activeVipUserIds = new Set(
-      input.audience === BroadcastAudience.All
-        ? []
-        : await this.economyService.listActiveVipUserIds(),
-    );
-    const recipientIds = activeUserIds.filter((userId) => {
-      if (input.audience === BroadcastAudience.All) return true;
-      const isVip = activeVipUserIds.has(userId);
-      return input.audience === BroadcastAudience.Vip ? isVip : !isVip;
-    });
-    const broadcastId = randomUUID();
-
-    const notifications = await this.dataSource.transaction(async (manager) => {
-      const created = await this.notificationService.createBroadcastWithManager(
-        manager,
-        recipientIds,
-        { title: input.title, body: input.body },
+  ): Promise<{ broadcastId: string; status: BroadcastStatus }> {
+    return this.dataSource.transaction(async (manager) => {
+      const repo = manager.getRepository(NotificationBroadcast);
+      const broadcast = await repo.save(
+        repo.create({
+          actorUserId,
+          title: input.title,
+          body: input.body,
+          audience: input.audience,
+          status: BroadcastStatus.Queued,
+        }),
       );
       await this.auditLogService.record(
         {
           actorUserId,
-          action: 'notification.broadcast.sent',
+          action: 'notification.broadcast.queued',
           targetType: 'notification_broadcast',
-          targetId: broadcastId,
-          metadata: {
-            audience: input.audience,
-            recipientCount: recipientIds.length,
-            title: input.title,
-          },
+          targetId: broadcast.id,
+          metadata: { audience: input.audience, title: input.title },
         },
         manager,
       );
-      return created;
+      return { broadcastId: broadcast.id, status: broadcast.status };
     });
+  }
 
-    // In-app đã commit; push là best-effort và không được rollback broadcast đã ghi.
-    await Promise.all(
-      notifications.map((notification) =>
-        this.notificationService.sendPush(notification),
-      ),
-    );
-    return { broadcastId, recipientCount: recipientIds.length };
+  async getBroadcast(broadcastId: string): Promise<NotificationBroadcast> {
+    const broadcast = await this.dataSource
+      .getRepository(NotificationBroadcast)
+      .findOneBy({ id: broadcastId });
+    if (broadcast === null) {
+      throw new DomainException(
+        AdminErrors.BROADCAST_NOT_FOUND,
+        'Không tìm thấy lần gửi thông báo',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    return broadcast;
   }
 
   async hasPermission(

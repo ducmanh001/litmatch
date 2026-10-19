@@ -14,11 +14,13 @@ import { SupportModule } from '../support';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { AdminRolePermission } from './entities/admin-role-permission.entity';
+import { NotificationBroadcast } from './entities/notification-broadcast.entity';
+import { BroadcastDispatchJob } from './jobs/broadcast-dispatch.job';
 import { AdminPermissionGuard } from './services/admin-permission.guard';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([AdminRolePermission]),
+    TypeOrmModule.forFeature([AdminRolePermission, NotificationBroadcast]),
     UserModule,
     SafetyModule,
     GiftModule,
@@ -30,6 +32,6 @@ import { AdminPermissionGuard } from './services/admin-permission.guard';
     AuditModule,
   ],
   controllers: [AdminController],
-  providers: [AdminService, AdminPermissionGuard],
+  providers: [AdminService, AdminPermissionGuard, BroadcastDispatchJob],
 })
 export class AdminModule {}

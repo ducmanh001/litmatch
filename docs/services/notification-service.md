@@ -84,6 +84,29 @@ Config: `ANALYTICS_ENABLED`, `ANALYTICS_PROVIDER` (`posthog` | `disabled`), `POS
 - `DELETE /notifications/web-push/subscription` — huỷ browser endpoint của chính user.
 - `POST /notifications/:id/read` — đánh dấu đã đọc, idempotent, chỉ chủ sở hữu.
 
+### 6.1 Admin broadcast chạy nền (`admin_broadcast`, ADR 0013)
+
+`POST /admin/notifications/broadcast` (quyền `ManageConfig`) **chỉ xếp hàng**: ghi một dòng `notification_broadcasts` (`queued`) + audit
+`notification.broadcast.queued` cùng transaction rồi trả `202 { broadcastId, status }` — không nạp user vào RAM, không ghi hàng triệu dòng
+trong request. `GET /admin/notifications/broadcast/:id` trả tiến độ (`status`, `recipientCount` tăng dần, `lastError`).
+
+`BroadcastDispatchJob` (module Admin, cluster singleton, mỗi `ADMIN_BROADCAST_JOB_INTERVAL_MS`) duyệt user active theo keyset
+`users.id`, mỗi lô `ADMIN_BROADCAST_BATCH_SIZE` người, tối đa `ADMIN_BROADCAST_MAX_BATCHES_PER_TICK` lô mỗi tick (trần lý thuyết
+5.000 người/giây khi tick xong trong 2 giây; thực tế thấp hơn tuỳ tốc độ ghi DB và push — chưa đo). Với mỗi lô: đọc trang user + lọc VIP/Free (`EconomyService.filterActiveVipUserIds`, theo lô)
+**trước** transaction; trong transaction ngắn chỉ khoá dòng broadcast (kiểm tra cursor còn như lúc đọc), INSERT lô thông báo và cập
+nhật `cursor_user_id`/`recipient_count` — nên **đúng-một-lần cho in-app**: pod chết giữa chừng thì tick sau chạy tiếp từ cursor đã
+commit; hai runner chồng nhau (failover) không gửi trùng một lô. Trang ngắn hơn lô thì hoàn tất ngay (audit
+`notification.broadcast.completed` kèm số người nhận thật).
+
+- **Tập người nhận** = user `active` đã tồn tại lúc tạo broadcast (so sánh `created_at` theo mili giây); tài khoản đăng ký sau đó và
+  user bị ban không nhận. Audience `vip`/`free` tính theo ví **tại lúc lô được xử lý**, không phải lúc bấm gửi.
+- **Push** vẫn best-effort, gửi SAU khi lô commit, tối đa 20 lời gọi đồng thời mỗi lô. Pod chết giữa commit và push thì lô đó
+  mất push nhưng vẫn có thông báo in-app. Push theo từng người là điểm nghẽn thật ở quy mô triệu — cần provider hỗ trợ
+  topic/batch (quyết định riêng).
+- **Lỗi**: lô lỗi rollback sạch, ghi `failure_count`/`last_error` và thử lại tick sau; 5 lần liên tiếp thì `failed` + audit
+  `notification.broadcast.failed` (không chặn broadcast sau). Chưa có huỷ/pause và chưa có `Idempotency-Key`: bấm gửi hai
+  lần tạo hai broadcast.
+
 ## 7. Ngoài scope GĐ4
 
 - Native device-token registration/rotation và preference theo từng loại notification — cần contract

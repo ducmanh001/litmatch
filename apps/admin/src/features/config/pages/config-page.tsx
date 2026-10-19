@@ -212,11 +212,7 @@ function NotifyComposerCard() {
             {
               onSuccess: (result) => {
                 if (result === undefined) return;
-                showToast(
-                  t('config.notificationSent', {
-                    count: result.recipientCount.toLocaleString(),
-                  }),
-                );
+                showToast(t('config.notificationQueued'));
                 setTitle('');
                 setBody('');
               },

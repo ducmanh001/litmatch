@@ -8,6 +8,10 @@ import {
 } from 'class-validator';
 
 import { IapProvider, VipTier } from '../../economy';
+import {
+  BroadcastAudience,
+  BroadcastStatus,
+} from '../entities/notification-broadcast.entity';
 
 import type { IapProductCatalogView, VipPlanCatalogView } from '../../economy';
 
@@ -48,11 +52,7 @@ export class SetCatalogActiveDto {
   active!: boolean;
 }
 
-export enum BroadcastAudience {
-  All = 'all',
-  Vip = 'vip',
-  Free = 'free',
-}
+export { BroadcastAudience };
 
 export class BroadcastNotificationDto {
   @ApiProperty({ maxLength: 120 })
@@ -72,7 +72,23 @@ export class BroadcastNotificationDto {
   audience!: BroadcastAudience;
 }
 
+/** Broadcast chạy nền: response chỉ xác nhận đã xếp hàng; tiến độ lấy qua GET .../broadcast/:id. */
 export class BroadcastNotificationResultDto {
   @ApiProperty() broadcastId!: string;
+  @ApiProperty({ enum: BroadcastStatus }) status!: BroadcastStatus;
+}
+
+export class BroadcastStatusDto {
+  @ApiProperty() broadcastId!: string;
+  @ApiProperty({ enum: BroadcastStatus }) status!: BroadcastStatus;
+  @ApiProperty({ enum: BroadcastAudience }) audience!: BroadcastAudience;
+  /** Số người đã nhận tới thời điểm hiện tại (tăng dần khi job nền chạy). */
   @ApiProperty() recipientCount!: number;
+  @ApiProperty({ type: String, format: 'date-time' }) createdAt!: Date;
+  @ApiProperty({ type: String, format: 'date-time', nullable: true })
+  startedAt!: Date | null;
+  @ApiProperty({ type: String, format: 'date-time', nullable: true })
+  completedAt!: Date | null;
+  /** Chỉ có khi lô gần nhất lỗi; rỗng khi đang chạy bình thường. */
+  @ApiProperty({ type: String, nullable: true }) lastError!: string | null;
 }

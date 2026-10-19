@@ -106,13 +106,28 @@ export class UserService {
     return this.userRepo.find({ where: { id: In(uniqueIds) } });
   }
 
-  /** Recipient composition cho admin broadcast; banned không bao giờ nhận thông báo mới. */
-  async listActiveUserIds(): Promise<string[]> {
-    const users = await this.userRepo.find({
-      select: { id: true },
-      where: { status: UserStatus.Active },
+  /**
+   * Một trang người nhận cho admin broadcast: user active, duyệt keyset theo `id` (không OFFSET, không nạp cả
+   * bảng vào RAM). `createdAtOrBefore` chốt tập người nhận tại lúc tạo broadcast — tài khoản đăng ký sau đó
+   * không nhận (độ chính xác mili giây); banned không bao giờ nhận thông báo mới.
+   */
+  async listActiveUserIdsPage(input: {
+    afterId: string | null;
+    createdAtOrBefore: Date;
+    limit: number;
+  }): Promise<string[]> {
+    const qb = this.userRepo.createQueryBuilder('u').select('u.id', 'id');
+    qb.where('u.status = :status', { status: UserStatus.Active });
+    qb.andWhere("date_trunc('milliseconds', u.createdAt) <= :cutoff", {
+      cutoff: input.createdAtOrBefore,
     });
-    return users.map((user) => user.id);
+    if (input.afterId !== null)
+      qb.andWhere('u.id > :afterId', { afterId: input.afterId });
+    const rows = await qb
+      .orderBy('u.id', 'ASC')
+      .limit(input.limit)
+      .getRawMany<{ id: string }>();
+    return rows.map((row) => row.id);
   }
 
   async listStaff(): Promise<User[]> {

@@ -12,6 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  ApiAcceptedResponse,
   ApiBearerAuth,
   ApiOkResponse,
   ApiOperation,
@@ -57,6 +58,7 @@ import {
   AdminVipPlanDto,
   BroadcastNotificationDto,
   BroadcastNotificationResultDto,
+  BroadcastStatusDto,
   SetCatalogActiveDto,
 } from './dto/admin-config.dto';
 import {
@@ -489,17 +491,37 @@ export class AdminController {
 
   @Post('notifications/broadcast')
   @RequireAdminPermission(AdminPermission.ManageConfig)
-  @HttpCode(HttpStatus.OK)
+  @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({
     summary:
-      'Gửi thông báo in-app + push best-effort theo audience — chỉ admin',
+      'Xếp hàng broadcast thông báo in-app + push best-effort theo audience — gửi dần ở nền, chỉ admin',
   })
-  @ApiOkResponse({ type: BroadcastNotificationResultDto })
+  @ApiAcceptedResponse({ type: BroadcastNotificationResultDto })
   broadcastNotification(
     @CurrentUser() actor: AuthenticatedUser,
     @Body() body: BroadcastNotificationDto,
   ): Promise<BroadcastNotificationResultDto> {
     return this.adminService.broadcastNotification(actor.userId, body);
+  }
+
+  @Get('notifications/broadcast/:id')
+  @RequireAdminPermission(AdminPermission.ManageConfig)
+  @ApiOperation({ summary: 'Tiến độ một lần broadcast thông báo — chỉ admin' })
+  @ApiOkResponse({ type: BroadcastStatusDto })
+  async getBroadcast(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<BroadcastStatusDto> {
+    const broadcast = await this.adminService.getBroadcast(id);
+    return {
+      broadcastId: broadcast.id,
+      status: broadcast.status,
+      audience: broadcast.audience,
+      recipientCount: broadcast.recipientCount,
+      createdAt: broadcast.createdAt,
+      startedAt: broadcast.startedAt,
+      completedAt: broadcast.completedAt,
+      lastError: broadcast.lastError,
+    };
   }
 
   @Get('permissions')

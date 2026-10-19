@@ -248,6 +248,9 @@ export interface CoreApiEnv {
   VIDEO_COUNTER_BUFFER_ENABLED: boolean;
   VIDEO_COUNTER_FLUSH_INTERVAL_MS: number;
   VIDEO_COUNTER_FLUSH_BATCH: number;
+  ADMIN_BROADCAST_JOB_INTERVAL_MS: number;
+  ADMIN_BROADCAST_BATCH_SIZE: number;
+  ADMIN_BROADCAST_MAX_BATCHES_PER_TICK: number;
   THROTTLE_TTL_SECONDS: number;
   THROTTLE_LIMIT: number;
   THROTTLE_STORAGE: 'memory' | 'redis';
@@ -907,6 +910,25 @@ export const coreApiEnvSchema = Joi.object({
     .min(10)
     .max(5_000)
     .default(500),
+
+  // Broadcast thông báo của admin chạy nền (ADR 0013): mỗi tick gửi tối đa BATCH_SIZE × MAX_BATCHES_PER_TICK người
+  // (mặc định 500 × 20 mỗi 2 giây = trần lý thuyết 5.000 người/giây khi tick xong trong 2 giây; thực tế thấp hơn tuỳ tốc độ
+  // ghi DB và push, chưa đo). Tăng lô/số lô nếu DB còn dư tải ghi, giảm nếu push provider nghẽn; lô > 1.000 bị chặn.
+  ADMIN_BROADCAST_JOB_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(500)
+    .max(60_000)
+    .default(2_000),
+  ADMIN_BROADCAST_BATCH_SIZE: Joi.number()
+    .integer()
+    .min(10)
+    .max(1_000)
+    .default(500),
+  ADMIN_BROADCAST_MAX_BATCHES_PER_TICK: Joi.number()
+    .integer()
+    .min(1)
+    .max(200)
+    .default(20),
 
   THROTTLE_TTL_SECONDS: Joi.number().integer().min(1).default(60),
   THROTTLE_LIMIT: Joi.number().integer().min(1).default(100),

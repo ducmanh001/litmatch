@@ -108,6 +108,29 @@ describe('coreApiEnvSchema invariants', () => {
     });
   });
 
+  describe('admin broadcast chạy nền (ADR 0013)', () => {
+    const value = (key: string, input?: unknown) =>
+      coreApiEnvSchema.extract(key).validate(input);
+
+    it('chu kỳ, lô và số lô mỗi tick có mặc định hữu hạn và bị chặn khoảng an toàn', () => {
+      expect(value('ADMIN_BROADCAST_JOB_INTERVAL_MS').value).toBe(2_000);
+      expect(value('ADMIN_BROADCAST_JOB_INTERVAL_MS', 499).error).toBeDefined();
+      expect(
+        value('ADMIN_BROADCAST_JOB_INTERVAL_MS', 60_001).error,
+      ).toBeDefined();
+      expect(value('ADMIN_BROADCAST_BATCH_SIZE').value).toBe(500);
+      expect(value('ADMIN_BROADCAST_BATCH_SIZE', 9).error).toBeDefined();
+      expect(value('ADMIN_BROADCAST_BATCH_SIZE', 1_001).error).toBeDefined();
+      expect(value('ADMIN_BROADCAST_MAX_BATCHES_PER_TICK').value).toBe(20);
+      expect(
+        value('ADMIN_BROADCAST_MAX_BATCHES_PER_TICK', 0).error,
+      ).toBeDefined();
+      expect(
+        value('ADMIN_BROADCAST_MAX_BATCHES_PER_TICK', 201).error,
+      ).toBeDefined();
+    });
+  });
+
   describe('giao mã OTP (ADR 0013)', () => {
     // Chỉ các khoá liên quan: `when` tham chiếu NODE_ENV/AUTH_OTP_DELIVERY cần có anh em trong cùng object.
     const otpEnvSchema = Joi.object({

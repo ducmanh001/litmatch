@@ -206,7 +206,7 @@ The service catalog names every top-level Core API module and links module-speci
 - Status: `implemented`
 - Owner: core-api/user
 - Contracts: `openapi/core-api.json`, `docs/01-product-features.md`, `docs/06-domain-rules.md`
-- Implementation evidence: `apps/core-api/src/modules/user/user.service.ts:404` — contains `Ngày sinh là dữ liệu profile tự chọn`; `apps/core-api/src/modules/user/dto/update-profile.dto.ts:40` — contains `không cho ngày trong tương lai`
+- Implementation evidence: `apps/core-api/src/modules/user/user.service.ts:419` — contains `Ngày sinh là dữ liệu profile tự chọn`; `apps/core-api/src/modules/user/dto/update-profile.dto.ts:40` — contains `không cho ngày trong tương lai`
 - Verification evidence (automated-test-source): `apps/core-api/src/modules/user/user.service.spec.ts:64` — contains `birthDate không phải access gate`
 
 ### Hosted analytics with quota controls and an explicit privacy warning

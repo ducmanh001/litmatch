@@ -6049,7 +6049,7 @@
           }
         },
         "responses": {
-          "200": {
+          "202": {
             "description": "",
             "content": {
               "application/json": {
@@ -6068,7 +6068,42 @@
           }
         },
         "security": [{ "bearer": [] }],
-        "summary": "Gửi thông báo in-app + push best-effort theo audience — chỉ admin",
+        "summary": "Xếp hàng broadcast thông báo in-app + push best-effort theo audience — gửi dần ở nền, chỉ admin",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/notifications/broadcast/{id}": {
+      "get": {
+        "operationId": "AdminController_getBroadcast",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BroadcastStatusDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Tiến độ một lần broadcast thông báo — chỉ admin",
         "tags": ["admin"]
       }
     },
@@ -9007,9 +9042,46 @@
         "type": "object",
         "properties": {
           "broadcastId": { "type": "string" },
-          "recipientCount": { "type": "number" }
+          "status": {
+            "type": "string",
+            "enum": ["queued", "running", "completed", "failed"]
+          }
         },
-        "required": ["broadcastId", "recipientCount"]
+        "required": ["broadcastId", "status"]
+      },
+      "BroadcastStatusDto": {
+        "type": "object",
+        "properties": {
+          "broadcastId": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["queued", "running", "completed", "failed"]
+          },
+          "audience": { "type": "string", "enum": ["all", "vip", "free"] },
+          "recipientCount": { "type": "number" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "lastError": { "type": "string", "nullable": true }
+        },
+        "required": [
+          "broadcastId",
+          "status",
+          "audience",
+          "recipientCount",
+          "createdAt",
+          "startedAt",
+          "completedAt",
+          "lastError"
+        ]
       },
       "AdminRolePermissionDto": {
         "type": "object",

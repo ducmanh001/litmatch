@@ -2623,8 +2623,25 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Gửi thông báo in-app + push best-effort theo audience — chỉ admin */
+    /** Xếp hàng broadcast thông báo in-app + push best-effort theo audience — gửi dần ở nền, chỉ admin */
     post: operations['AdminController_broadcastNotification'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/notifications/broadcast/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Tiến độ một lần broadcast thông báo — chỉ admin */
+    get: operations['AdminController_getBroadcast'];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -4115,7 +4132,23 @@ export interface components {
     };
     BroadcastNotificationResultDto: {
       broadcastId: string;
+      /** @enum {string} */
+      status: 'queued' | 'running' | 'completed' | 'failed';
+    };
+    BroadcastStatusDto: {
+      broadcastId: string;
+      /** @enum {string} */
+      status: 'queued' | 'running' | 'completed' | 'failed';
+      /** @enum {string} */
+      audience: 'all' | 'vip' | 'free';
       recipientCount: number;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      startedAt: string | null;
+      /** Format: date-time */
+      completedAt: string | null;
+      lastError: string | null;
     };
     AdminRolePermissionDto: {
       /** @enum {string} */
@@ -8858,13 +8891,39 @@ export interface operations {
       };
     };
     responses: {
-      200: {
+      202: {
         headers: {
           [name: string]: unknown;
         };
         content: {
           'application/json': {
             data: components['schemas']['BroadcastNotificationResultDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_getBroadcast: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['BroadcastStatusDto'];
             meta?: {
               [key: string]: unknown;
             };

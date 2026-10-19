@@ -182,9 +182,10 @@ const vietnamese = {
   'config.packageUpdated': '{{action}} “{{name}}”',
   'config.composeNotification': 'Soạn thông báo đẩy',
   'config.notificationHint':
-    'Tạo thông báo in-app cho đúng nhóm người nhận; push được gửi best-effort sau khi dữ liệu đã lưu thành công.',
+    'Xếp hàng thông báo in-app cho đúng nhóm người nhận, hệ thống gửi dần ở nền; push được gửi best-effort sau khi dữ liệu đã lưu thành công.',
   'config.requiredNotification': 'Vui lòng nhập tiêu đề và nội dung',
-  'config.notificationSent': 'Đã gửi thông báo tới {{count}} người',
+  'config.notificationQueued':
+    'Đã xếp hàng thông báo — hệ thống sẽ gửi dần ở nền',
   'config.title': 'Tiêu đề',
   'config.titlePlaceholder': 'VD: Ưu đãi nạp Diamond cuối tuần',
   'config.audience': 'Đối tượng nhận',
@@ -437,9 +438,10 @@ const english: Record<MessageKey, string> = {
   'config.packageUpdated': '{{action}} “{{name}}”',
   'config.composeNotification': 'Compose push notification',
   'config.notificationHint':
-    'Create an in-app notification for the selected audience; push is delivered best-effort after the data is saved successfully.',
+    'Queue an in-app notification for the selected audience; it is delivered gradually in the background, and push is best-effort after the data is saved successfully.',
   'config.requiredNotification': 'Enter a title and message',
-  'config.notificationSent': 'Notification sent to {{count}} people',
+  'config.notificationQueued':
+    'Notification queued — it will be delivered in the background',
   'config.title': 'Title',
   'config.titlePlaceholder': 'E.g. Weekend Diamond top-up offer',
   'config.audience': 'Audience',

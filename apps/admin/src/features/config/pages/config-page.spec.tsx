@@ -88,7 +88,7 @@ describe('ConfigPage', () => {
 
   it('gửi thông báo đủ dữ liệu — gọi API và reset sau success', async () => {
     const post = vi.spyOn(apiClient, 'POST').mockResolvedValue({
-      data: { data: { broadcastId: 'b1', recipientCount: 12 } },
+      data: { data: { broadcastId: 'b1', status: 'queued' } },
     } as never);
     renderPage();
     await screen.findByText('com.litmatch.diamond.100');
