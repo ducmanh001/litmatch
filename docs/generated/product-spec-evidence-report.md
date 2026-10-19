@@ -63,15 +63,15 @@ The service catalog names every top-level Core API module and links module-speci
 - Owner: core-api/auth
 - Contracts: `openapi/core-api.json`, `docs/06-domain-rules.md`, `docs/adr/0007-httponly-cookie-refresh-token.md`
 - Implementation evidence: `apps/core-api/src/modules/auth/auth.controller.ts:39` — contains `@Controller('auth')`; `apps/core-api/src/modules/auth/controllers/auth-upgrade.controller.ts:32` — contains `@Controller('auth/upgrade')`
-- Verification evidence (automated-test-source): `apps/core-api/src/modules/auth/auth.service.spec.ts:171` — contains `social upgrade giữ userId`
+- Verification evidence (automated-test-source): `apps/core-api/src/modules/auth/auth.service.spec.ts:193` — contains `social upgrade giữ userId`
 
 ### Server-derived runtime availability contract for frontend providers
 
 - Status: `implemented`
 - Owner: core-api/app with admin/web consumers
 - Contracts: `openapi/core-api.json`, `docs/12-frontend-architecture.md`, `.env.example`
-- Implementation evidence: `apps/core-api/src/app/capabilities.controller.ts:10` — contains `@Controller('capabilities')`; `apps/core-api/src/app/capabilities.service.ts:29` — contains `getCapabilities(): CapabilitiesDto`
-- Verification evidence (automated-test-source): `apps/core-api/src/app/capabilities.service.spec.ts:35` — contains `derives configured providers`; `apps/web/src/shared/capabilities/api.spec.tsx:9` — contains `capabilities`
+- Implementation evidence: `apps/core-api/src/app/capabilities.controller.ts:10` — contains `@Controller('capabilities')`; `apps/core-api/src/app/capabilities.service.ts:31` — contains `getCapabilities(): CapabilitiesDto`
+- Verification evidence (automated-test-source): `apps/core-api/src/app/capabilities.service.spec.ts:36` — contains `derives configured providers`; `apps/web/src/shared/capabilities/api.spec.tsx:9` — contains `capabilities`
 
 ### Wallet, IAP catalog, VIP and double-entry ledger
 
@@ -127,7 +127,7 @@ The service catalog names every top-level Core API module and links module-speci
 - Owner: core-api/friend
 - Contracts: `openapi/core-api.json`, `docs/services/friend-service.md`, `docs/services/streak-service.md`
 - Implementation evidence: `apps/core-api/src/modules/friend/friend.controller.ts:48` — contains `export class FriendController`; `apps/core-api/src/modules/friend/services/streak.service.ts:58` — contains `StreakService`
-- Verification evidence (automated-test-source): `apps/core-api/src/modules/friend/friend.integration.spec.ts:11` — contains `Friend`
+- Verification evidence (automated-test-source): `apps/core-api/src/modules/friend/friend.integration.spec.ts:13` — contains `Friend`
 
 ### Feed, reactions, comments and expiring stories
 

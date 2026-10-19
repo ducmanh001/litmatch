@@ -14,6 +14,10 @@ const MESSAGES = {
     vi: 'Mã xác thực (OTP) của bạn là',
     en: 'Your one-time password (OTP) is',
   },
+  'auth.otpSent': {
+    vi: 'Đã gửi mã xác thực (OTP) qua SMS tới số điện thoại của bạn.',
+    en: 'We sent a verification code (OTP) to your phone by SMS.',
+  },
   'analytics.consentTitle': {
     vi: 'Cho phép phân tích trải nghiệm?',
     en: 'Allow experience analytics?',
@@ -483,8 +487,8 @@ const MESSAGES = {
     en: 'Guest accounts are available.',
   },
   'auth.otpUnavailable': {
-    vi: 'API chưa trả về mã OTP hợp lệ. Hãy thử lại sau khi máy chủ sẵn sàng.',
-    en: 'The API did not return a valid OTP. Please try again when the server is ready.',
+    vi: 'API trả về phản hồi OTP không hợp lệ. Hãy thử lại sau khi máy chủ sẵn sàng.',
+    en: 'The API returned an invalid OTP response. Please try again when the server is ready.',
   },
   'auth.providerUnavailable': {
     vi: 'Provider chưa sẵn sàng.',

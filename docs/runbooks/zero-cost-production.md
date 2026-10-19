@@ -1,7 +1,7 @@
 # Release production chi phí 0 — single-node alpha/beta
 
 Profile này giữ toàn bộ capability self-hosted, gồm phone OTP không dùng SMS (mã trả trực tiếp
-qua API để client toast/tự điền), Google/guest login, admin, realtime, LiveKit, in-app
+qua API để client toast/tự điền — mặc định `AUTH_OTP_DELIVERY=response`, xem § 6), Google/guest login, admin, realtime, LiveKit, in-app
 notification, audit, metrics/log và analytics. Ba capability cần vendor production bị tắt
 fail-closed: store IAP, external push và video upload/transcode. Không có fake provider nào chạy
 dưới `NODE_ENV=production`.
@@ -128,6 +128,13 @@ Nếu đã đổi `POSTGRES_USER`/`POSTGRES_DB`, thay hai giá trị trong lện
 
 ## 6. Giới hạn và ngưỡng nâng cấp
 
+- **Phone OTP trả mã trong response** (quyết định alpha chi phí 0): ai biết số điện thoại đều đăng nhập
+  được tài khoản của số đó, và core-api log lỗi mỗi lần khởi động khi `AUTH_OTP_DELIVERY=response` ở
+  production. Trước khi mở công khai, đặt trong `deploy/production/.env` rồi deploy lại một trong hai:
+  `AUTH_OTP_DELIVERY=disabled` (tắt đăng nhập SĐT, chỉ Google/guest — không tốn phí) hoặc
+  `AUTH_OTP_DELIVERY=sms-http` kèm `AUTH_OTP_SMS_HTTP_URL` (https) và `AUTH_OTP_SMS_HTTP_TOKEN`; cổng nhận
+  `POST { to, message, reference }` và trả 2xx khi đã nhận gửi (ADR 0013). Admin đầu tiên tạo qua Google
+  (§ 5) nên không bị khoá khi tắt SĐT.
 - Một VM là một failure domain: không HA, deploy có thể gián đoạn ngắn và LiveKit cạnh tranh CPU
   với Kafka/PostgreSQL. Đây là alpha/beta, không phải topology scale.
 - Oracle có thể hết capacity hoặc đổi free quota; luôn kiểm tra trang cost/quota hiện tại trước

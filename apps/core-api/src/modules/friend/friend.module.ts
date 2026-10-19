@@ -12,11 +12,15 @@ import { Message } from './entities/message.entity';
 import { ProfileFollow } from './entities/profile-follow.entity';
 import { ProfileChatContact } from './entities/profile-chat-contact.entity';
 import { StreakWarningJob } from './jobs/streak-warning.job';
+import { FriendMetrics } from './services/friend.metrics';
 import {
+  FRIEND_NOTIFY_GATE,
   FRIEND_REDIS,
+  friendNotifyGateProvider,
   friendRedisProvider,
 } from './redis/friend-redis.provider';
 import { ConversationService } from './services/conversation.service';
+import { FriendMessageNotifier } from './services/friend-message-notifier.service';
 import { ProfileSocialService } from './services/profile-social.service';
 import { StreakService } from './services/streak.service';
 import { NotificationModule } from '../notification';
@@ -26,6 +30,7 @@ import { MediaModule } from '../media';
 import { User } from '../user';
 
 import type { RealtimePublisherPort } from '../../common/realtime/realtime-publisher.port';
+import type { WindowGatePort } from '../../common/redis/window-gate.port';
 
 /**
  * Friend (docs/services/friend-service.md): Friendship (từ Soul Match) + Chat 1-1 lâu dài
@@ -53,20 +58,25 @@ import type { RealtimePublisherPort } from '../../common/realtime/realtime-publi
   controllers: [FriendController, ProfileSocialController],
   providers: [
     FriendService,
+    FriendMessageNotifier,
+    FriendMetrics,
     ConversationService,
     ProfileSocialService,
     StreakService,
     StreakWarningJob,
     friendRedisProvider,
+    friendNotifyGateProvider,
   ],
   exports: [FriendService, ProfileSocialService],
 })
 export class FriendModule implements OnApplicationShutdown {
   constructor(
     @Inject(FRIEND_REDIS) private readonly redis: RealtimePublisherPort,
+    @Inject(FRIEND_NOTIFY_GATE) private readonly notifyGate: WindowGatePort,
   ) {}
 
   async onApplicationShutdown(): Promise<void> {
     await this.redis.close?.();
+    await this.notifyGate.close?.();
   }
 }

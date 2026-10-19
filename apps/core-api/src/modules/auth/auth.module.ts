@@ -13,11 +13,14 @@ import { PhoneSearchController } from './controllers/phone-search.controller';
 import { AuthIdentity } from './entities/auth-identity.entity';
 import { PhoneOtp } from './entities/phone-otp.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
+import { AuthMetrics } from './services/auth.metrics';
+import { HttpOtpSender } from './services/http-otp-sender';
 import { OtpService } from './services/otp.service';
 import { SocialVerifierService } from './services/social-verifier';
 import { TokenService } from './services/token.service';
 import { GuestDeviceTokenService } from './services/guest-device-token.service';
 import { PhoneSearchService } from './services/phone-search.service';
+import { OtpSenderPort } from './ports/otp-sender.port';
 import { RefreshSessionPort } from './ports/refresh-session.port';
 import { TypeOrmRefreshSessionAdapter } from './repositories/typeorm-refresh-session.adapter';
 
@@ -38,6 +41,9 @@ import { TypeOrmRefreshSessionAdapter } from './repositories/typeorm-refresh-ses
     AuthService,
     TokenService,
     OtpService,
+    AuthMetrics,
+    HttpOtpSender,
+    { provide: OtpSenderPort, useExisting: HttpOtpSender },
     SocialVerifierService,
     GuestDeviceTokenService,
     PhoneSearchService,

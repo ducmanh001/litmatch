@@ -196,10 +196,8 @@ d('Movie Match integration (Postgres thật)', () => {
         recordActivity: async () => ({ streak: {}, milestoneHit: null }),
       } as never,
       safety,
-      {
-        create: async () => ({ id: 'notif-stub' }),
-        sendPush: async () => undefined,
-      } as never,
+      // stub FriendMessageNotifier — suite này không gọi sendMessage
+      { notify: async () => undefined } as never,
       configStub,
       { publish: async () => 1 } as never,
     );

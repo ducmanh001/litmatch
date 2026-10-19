@@ -31,6 +31,7 @@ const vietnamese = {
   'auth.googleLoginUnavailable':
     'Đăng nhập bằng Google hiện chưa khả dụng. Vui lòng thử phương thức khác.',
   'auth.otpCode': 'Mã xác thực (OTP) của bạn là {{code}}',
+  'auth.otpSent': 'Đã gửi mã xác thực (OTP) qua SMS tới số điện thoại của bạn.',
   'auth.checkingMethods': 'Đang kiểm tra phương thức đăng nhập…',
   'auth.signInPhoneOrGoogle': 'Đăng nhập bằng số điện thoại hoặc Google',
   'auth.enterOtpSentTo': 'Nhập mã OTP đã gửi tới {{phone}}',
@@ -286,6 +287,7 @@ const english: Record<MessageKey, string> = {
   'auth.googleLoginUnavailable':
     'Google sign-in is currently unavailable. Please use another method.',
   'auth.otpCode': 'Your verification code (OTP) is {{code}}',
+  'auth.otpSent': 'We sent a verification code (OTP) to your phone by SMS.',
   'auth.checkingMethods': 'Checking sign-in methods…',
   'auth.signInPhoneOrGoogle': 'Sign in with your phone number or Google',
   'auth.enterOtpSentTo': 'Enter the OTP sent to {{phone}}',

@@ -3030,10 +3030,10 @@ export interface components {
     };
     OtpRequestedDto: {
       /**
-       * @description Mã OTP 6 chữ số — không gửi SMS, client dùng để hiển thị và tự điền
+       * @description Mã OTP 6 chữ số — CHỈ có khi AUTH_OTP_DELIVERY=response (dev/test/e2e) để client hiển thị và tự điền. Khi mã được gửi qua SMS (sms-http) trường này vắng mặt.
        * @example 123456
        */
-      code: string;
+      code?: string;
       /** @description TTL của OTP vừa tạo (giây) — client hiển thị đếm ngược */
       ttlSeconds: number;
     };

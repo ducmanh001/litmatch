@@ -45,7 +45,9 @@ export const DEFAULTS = {
   stmtsPerPairAfter: 12, // đọc mã: 2 đọc cửa sổ, canPair lọc (1), BEGIN, khoá ticket, đọc user, canPair dưới lock (1), INSERT, UPDATE ticket, 2 notification, COMMIT
   stmtsPerSoulMessage: 6, // đọc mã
   stmtsPerFriendMessageBefore: 18, // đọc mã
-  stmtsPerFriendMessageAfter: 13, // đọc mã: bỏ ~5 câu lệnh transaction streak ở đường nhanh
+  stmtsPerFriendMessageAfter: 13, // đọc mã: bỏ ~5 câu lệnh transaction streak ở đường nhanh (CHƯA tính cổng gộp thông báo bên dưới)
+  friendNotifyWindowSeconds: 60, // FRIEND_MESSAGE_NOTIFY_WINDOW_SECONDS (ADR 0013); 0 = tắt gộp
+  stmtsSavedPerGatedFriendMessage: 3, // đọc mã: tin bị gộp bỏ đọc member state + INSERT notification + đọc web-push subscription
   friendChatShare: 0.5, // giả định: nửa số tin là chat bạn bè, nửa là chat ẩn danh Soul
   pgStmtsPerSecPerPrimary: 20_000, // giả định: cần pgbench/thực đo trên instance đích
   pgTargetUtilization: 0.5,
@@ -100,12 +102,22 @@ export function computeModel(overrides = {}) {
 
   const friendMsgs = messagesPerSec * p.friendChatShare;
   const soulMsgs = messagesPerSec - friendMsgs;
+  // Cổng gộp thông báo: mỗi chuỗi (người gửi → người nhận) chỉ tin đầu tiên trong cửa sổ mở cổng.
+  const msgsPerWindowPerChatter =
+    p.messagesPerChatterPerSec * p.friendNotifyWindowSeconds;
+  const notifyOpenFraction =
+    p.friendNotifyWindowSeconds > 0
+      ? Math.min(1, 1 / Math.max(1, msgsPerWindowPerChatter))
+      : 1;
+  const stmtsPerFriendMessageAfter =
+    p.stmtsPerFriendMessageAfter -
+    p.stmtsSavedPerGatedFriendMessage * (1 - notifyOpenFraction);
   const stmtsBefore =
     friendMsgs * p.stmtsPerFriendMessageBefore +
     soulMsgs * p.stmtsPerSoulMessage +
     matchesPerSecPeak * p.stmtsPerPairBefore;
   const stmtsAfter =
-    friendMsgs * p.stmtsPerFriendMessageAfter +
+    friendMsgs * stmtsPerFriendMessageAfter +
     soulMsgs * p.stmtsPerSoulMessage +
     matchesPerSecPeak * p.stmtsPerPairAfter;
   const pgBudget = p.pgStmtsPerSecPerPrimary * p.pgTargetUtilization;
@@ -143,6 +155,13 @@ export function computeModel(overrides = {}) {
       messagesPerDay: Math.round(messagesPerDay),
       gbPerDayMessages: round((messagesPerDay * p.bytesPerMessageRow) / 1e9, 1),
       gbPerDayMatches: round((p.matchesPerDay * p.bytesPerMatchRows) / 1e9, 1),
+      // Mỗi tin bạn bè từng tạo một notification; cổng gộp chỉ cho tin đầu mỗi cửa sổ.
+      friendNotificationInsertsPerSecBefore: round(friendMsgs, 1),
+      friendNotificationInsertsPerSecAfter: round(
+        friendMsgs * notifyOpenFraction,
+        1,
+      ),
+      friendNotificationReductionPct: round((1 - notifyOpenFraction) * 100, 1),
     },
     postgres: {
       stmtsPerSecBefore: Math.round(stmtsBefore),
@@ -200,6 +219,7 @@ export function renderReport(model) {
     '',
     '## Chat và dữ liệu',
     `- ${c.messagesPerSec} tin/giây → ${n(c.messagesPerDay)} tin/ngày ≈ ${c.gbPerDayMessages} GB/ngày (bảng message); ghép đôi ≈ ${c.gbPerDayMatches} GB/ngày (ticket + session + notification).`,
+    `- Notification tin bạn bè: ${n(c.friendNotificationInsertsPerSecBefore)} → ${n(c.friendNotificationInsertsPerSecAfter)} insert/giây (cổng gộp ${model.inputs.friendNotifyWindowSeconds}s, ít hơn ${c.friendNotificationReductionPct}%).`,
     `- Postgres: ${n(d.stmtsPerSecBefore)} → ${n(d.stmtsPerSecAfter)} câu lệnh/giây ở cao điểm; ngân sách ${n(d.budgetPerPrimary)}/primary → ${d.primariesBefore} → ${d.primariesAfter} primary.`,
     '',
     '## API (hai cách hiểu "10 triệu đồng thời")',

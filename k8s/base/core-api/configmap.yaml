@@ -44,6 +44,9 @@ data:
   AUTH_OTP_MAX_ATTEMPTS: '5'
   AUTH_OTP_REQUESTS_PER_HOUR: '5'
   AUTH_PHONE_OTP_ENABLED: 'true'
+  # Fail-closed cho profile K8s (ADR 0013): không trả mã OTP trong response. Đặt 'sms-http' + AUTH_OTP_SMS_HTTP_URL/TOKEN
+  # (Secret) khi có cổng SMS; 'disabled' = chỉ Google/social/guest. ('response' chỉ cho dev/e2e — lộ mã cho bất kỳ ai.)
+  AUTH_OTP_DELIVERY: 'disabled'
   AUTH_GOOGLE_CLIENT_ID: ''
   AUTH_APPLE_CLIENT_ID: ''
   AUTH_FACEBOOK_APP_ID: ''
@@ -133,6 +136,8 @@ data:
 
   # --- friend chat 1-1 ---
   FRIEND_MESSAGE_MAX_LENGTH: '2000'
+  # Gộp thông báo tin nhắn theo (người nhận, hội thoại); 0 = mỗi tin một thông báo (ADR 0013)
+  FRIEND_MESSAGE_NOTIFY_WINDOW_SECONDS: '60'
 
   # --- livekit (URL thường trỏ Service ClusterIP của media-server trong cùng namespace —
   # xem k8s/base/media-server/service.yaml; key/secret nằm ở Secret vì là credential) ---
@@ -155,6 +160,17 @@ data:
   PARTY_TOKEN_TTL_SECONDS: '120'
   PARTY_EMPTY_ROOM_TIMEOUT_SECONDS: '300'
   PARTY_SWEEPER_INTERVAL_MS: '30000'
+
+  # --- retention dữ liệu vận hành (ADR 0013) ---
+  # 'dry-run' = chỉ đếm hàng đủ điều kiện (gauge retention_eligible_rows{rule}); đổi sang 'delete' sau khi đã xem số
+  # liệu và chấp nhận các hạn bên dưới (xoá không hoàn tác). 'off' = không chạy job.
+  RETENTION_MODE: 'dry-run'
+  RETENTION_INTERVAL_MS: '60000'
+  RETENTION_BATCH_SIZE: '5000'
+  RETENTION_MAX_BATCHES_PER_TICK: '20'
+  RETENTION_BATCH_PAUSE_MS: '50'
+  NOTIFICATION_READ_RETENTION_DAYS: '90'
+  NOTIFICATION_UNREAD_RETENTION_DAYS: '365'
   PARTY_STALE_ROOM_SECONDS: '120'
   PARTY_TITLE_MAX_LENGTH: '100'
   PARTY_HOST_DISCONNECT_GRACE_SECONDS: '15'

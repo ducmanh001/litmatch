@@ -2,3 +2,5 @@
 export { AuthModule } from './auth.module';
 export { AuthProvider } from './entities/auth-identity.entity';
 export { GuestDeviceTokenService } from './services/guest-device-token.service';
+export { isPhoneOtpUsable } from './services/phone-otp-delivery';
+export type { OtpDeliveryMode } from './services/phone-otp-delivery';

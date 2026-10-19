@@ -50,6 +50,11 @@ export interface CoreApiEnv {
   AUTH_GUEST_DEVICE_TOKEN_SECRET: string;
   AUTH_GUEST_DEVICE_TOKEN_TTL_DAYS: number;
   AUTH_PHONE_OTP_ENABLED: boolean;
+  AUTH_OTP_DELIVERY: 'response' | 'sms-http' | 'disabled';
+  AUTH_OTP_SMS_HTTP_URL: string;
+  AUTH_OTP_SMS_HTTP_TOKEN: string;
+  AUTH_OTP_SMS_HTTP_TIMEOUT_MS: number;
+  AUTH_OTP_SMS_TEMPLATE: string;
   AUTH_GOOGLE_CLIENT_ID: string;
   AUTH_APPLE_CLIENT_ID: string;
   AUTH_FACEBOOK_APP_ID: string;
@@ -149,6 +154,7 @@ export interface CoreApiEnv {
   SOUL_RATING_WINDOW_SECONDS: number;
   SOUL_CHAT_MESSAGE_MAX_LENGTH: number;
   FRIEND_MESSAGE_MAX_LENGTH: number;
+  FRIEND_MESSAGE_NOTIFY_WINDOW_SECONDS: number;
   PROFILE_DIRECT_MESSAGE_DAILY_FIRST_CHAT_THRESHOLD: number;
   STREAK_MILESTONE_DAYS: string;
   STREAK_WARNING_HOURS: number;
@@ -218,6 +224,13 @@ export interface CoreApiEnv {
   MOOD_STATUS_TTL_HOURS: number;
   STORY_TTL_HOURS: number;
   STORY_SWEEPER_INTERVAL_MS: number;
+  RETENTION_MODE: 'off' | 'dry-run' | 'delete';
+  RETENTION_INTERVAL_MS: number;
+  RETENTION_BATCH_SIZE: number;
+  RETENTION_MAX_BATCHES_PER_TICK: number;
+  RETENTION_BATCH_PAUSE_MS: number;
+  NOTIFICATION_READ_RETENTION_DAYS: number;
+  NOTIFICATION_UNREAD_RETENTION_DAYS: number;
   VIDEO_CAPTION_MAX_LENGTH: number;
   VIDEO_UPLOAD_ENABLED: boolean;
   VIDEO_MODERATION_MODE: 'pre' | 'post';
@@ -314,6 +327,45 @@ export const coreApiEnvSchema = Joi.object({
   AUTH_GUEST_DEVICE_TOKEN_SECRET: Joi.string().min(32).required(),
   AUTH_GUEST_DEVICE_TOKEN_TTL_DAYS: Joi.number().integer().min(1).default(30),
   AUTH_PHONE_OTP_ENABLED: Joi.boolean().default(true),
+  // Cách giao mã OTP (ADR 0013). `response`: trả mã trong response HTTP để client tự điền — ai biết số
+  // điện thoại cũng đăng nhập được, nên CHỈ hợp lý cho dev/test/e2e và profile alpha chi phí 0 (runbook
+  // zero-cost-production, nơi đây là quyết định có chủ đích); production sẽ log lỗi mỗi lần khởi động.
+  // `sms-http`: POST tới cổng SMS (AUTH_OTP_SMS_HTTP_URL), response không chứa mã. `disabled`: tắt đăng
+  // nhập bằng số điện thoại. Mặc định `response` để không khoá đăng nhập của deployment đang chạy; đóng
+  // lỗ hổng = đặt `sms-http` hoặc `disabled` ở production (k8s/base đã đặt `disabled`).
+  AUTH_OTP_DELIVERY: Joi.string()
+    .valid('response', 'sms-http', 'disabled')
+    .default('response'),
+  // Cổng SMS (chỉ dùng khi AUTH_OTP_DELIVERY=sms-http): production bắt buộc https. Body JSON
+  // `{ to, message, reference }`, header `Authorization: Bearer <TOKEN>` nếu có token.
+  AUTH_OTP_SMS_HTTP_URL: Joi.string()
+    .allow('')
+    .default('')
+    .when('AUTH_OTP_DELIVERY', {
+      is: 'sms-http',
+      then: Joi.string()
+        .invalid('')
+        .when('NODE_ENV', {
+          is: 'production',
+          then: Joi.string().uri({ scheme: 'https' }),
+          otherwise: Joi.string().uri({ scheme: ['http', 'https'] }),
+        })
+        .required(),
+    }),
+  AUTH_OTP_SMS_HTTP_TOKEN: Joi.string().allow('').default(''),
+  AUTH_OTP_SMS_HTTP_TIMEOUT_MS: Joi.number()
+    .integer()
+    .min(500)
+    .max(10_000)
+    .default(3_000),
+  // Nội dung SMS; `{code}` bắt buộc, `{minutes}` tuỳ chọn. Không dấu để vừa một SMS GSM-7 (rẻ hơn).
+  AUTH_OTP_SMS_TEMPLATE: Joi.string()
+    .min(10)
+    .max(300)
+    .pattern(/\{code\}/u, 'phải chứa {code}')
+    .default(
+      'Ma OTP Litmatch cua ban la {code}. Het han sau {minutes} phut. Khong chia se ma nay cho bat ky ai.',
+    ),
   AUTH_GOOGLE_CLIENT_ID: Joi.string().allow('').default(''),
   AUTH_APPLE_CLIENT_ID: Joi.string().allow('').default(''),
   AUTH_FACEBOOK_APP_ID: Joi.string().allow('').default(''),
@@ -544,6 +596,14 @@ export const coreApiEnvSchema = Joi.object({
     .min(1)
     .max(4000)
     .default(2000),
+  // Gộp thông báo tin nhắn bạn bè: trong mỗi cửa sổ chỉ tin ĐẦU TIÊN của (người nhận, hội thoại) tạo
+  // notification + push; tin sau vẫn lưu + realtime + tính unread. 0 = tắt gộp (mỗi tin một thông báo
+  // như trước). Tối đa 1 giờ để push không bị nuốt quá lâu.
+  FRIEND_MESSAGE_NOTIFY_WINDOW_SECONDS: Joi.number()
+    .integer()
+    .min(0)
+    .max(3600)
+    .default(60),
 
   // Profile social actions — từ người bắt chuyện đầu tiên thứ N+1 trong ngày UTC,
   // mở chat trực tiếp cần một Gift để tạo khác biệt cho profile được quan tâm nhiều.
@@ -757,6 +817,39 @@ export const coreApiEnvSchema = Joi.object({
     .integer()
     .min(60_000)
     .default(3_600_000),
+
+  // Retention (ADR 0013): xoá dữ liệu vận hành cũ theo lô để bảng không phình vô hạn. `off` (mặc định) không
+  // chạy job; `dry-run` chỉ đếm hàng đủ điều kiện (gauge retention_eligible_rows{rule}) để xem tác động
+  // trước; `delete` xoá thật. Số ngày 0 = giữ vĩnh viễn bảng/quy tắc đó. Mỗi lô là một câu lệnh ngắn,
+  // tối đa BATCH_SIZE × MAX_BATCHES_PER_TICK hàng mỗi tick (mặc định ~1.600 hàng/giây).
+  RETENTION_MODE: Joi.string().valid('off', 'dry-run', 'delete').default('off'),
+  RETENTION_INTERVAL_MS: Joi.number().integer().min(10_000).default(60_000),
+  RETENTION_BATCH_SIZE: Joi.number()
+    .integer()
+    .min(100)
+    .max(50_000)
+    .default(5_000),
+  RETENTION_MAX_BATCHES_PER_TICK: Joi.number()
+    .integer()
+    .min(1)
+    .max(1_000)
+    .default(20),
+  RETENTION_BATCH_PAUSE_MS: Joi.number()
+    .integer()
+    .min(0)
+    .max(5_000)
+    .default(50),
+  // Notification đã đọc / chưa đọc (đọc hội thoại không đánh dấu notification đã đọc nên cần hạn riêng cho chưa đọc).
+  NOTIFICATION_READ_RETENTION_DAYS: Joi.number()
+    .integer()
+    .min(0)
+    .max(3_650)
+    .default(90),
+  NOTIFICATION_UNREAD_RETENTION_DAYS: Joi.number()
+    .integer()
+    .min(0)
+    .max(3_650)
+    .default(365),
 
   // Video ngắn — W5, hướng Momo (docs/services/short-video-service.md)
   VIDEO_CAPTION_MAX_LENGTH: Joi.number().integer().min(1).default(500),

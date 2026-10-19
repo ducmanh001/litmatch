@@ -202,7 +202,8 @@ d('Feed integration (Postgres thật)', () => {
       conversationService,
       streakService,
       safety,
-      notification as never,
+      // thông báo tin nhắn bạn bè không phải trọng tâm suite này — stub FriendMessageNotifier
+      { notify: async () => undefined } as never,
       configStub,
       // stub publish — realtime friend.message/streak không phải trọng tâm suite này
       { publish: async () => 1 } as never,

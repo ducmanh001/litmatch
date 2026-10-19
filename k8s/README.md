@@ -96,6 +96,12 @@ rồi `kubectl apply -k k8s/overlays/production`. `media-server` dùng image Liv
   DNS-hợp-lệ, TLD `.invalid`) — điền hostname thật theo môi trường. TLS/cert-manager là follow-on
   (ADR 0004 § Hệ quả), chưa khai `tls:` ở đây. Cluster thật phải cài nginx-ingress controller
   trước khi apply (không nằm trong manifest này).
+- **Đăng nhập bằng số điện thoại ([ADR 0013](../docs/adr/0013-scale-readiness-policies.md))**: ConfigMap đặt
+  `AUTH_OTP_DELIVERY: 'disabled'` (không trả mã OTP trong response). Trước khi apply lên cluster đang chạy, đặt
+  `AUTH_GOOGLE_CLIENT_ID` (admin đăng nhập bằng Google hoặc SĐT; thiếu cả hai thì chỉ còn guest) hoặc chuyển
+  `AUTH_OTP_DELIVERY: 'sms-http'` kèm `AUTH_OTP_SMS_HTTP_URL` (https) và `AUTH_OTP_SMS_HTTP_TOKEN` trong Secret.
+  Retention dữ liệu vận hành mặc định `RETENTION_MODE: 'dry-run'` (chỉ đếm); đổi sang `delete` sau khi xem gauge
+  `retention_eligible_rows`.
 - **ConfigMap của core-api liệt kê đủ 76/86 biến** trong `CoreApiEnv`
   (số cũ "74/84" trong bản trước đã lệch 1 so với thực tế — đã đối chiếu lại bằng script diff
   lúc thêm `LIVEKIT_REGION_URLS`: 86 = 76 ConfigMap + 10 Secret, 0 thiếu, 0 thừa)

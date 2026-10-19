@@ -196,11 +196,18 @@ export function LoginForm() {
       body: { phone },
     });
     const otp = res.data?.data;
-    if (otp === undefined || !/^\d{6}$/u.test(otp.code)) {
+    // `code` chỉ có ở chế độ thử nghiệm (máy chủ trả mã để tự điền); khi mã gửi qua SMS thì vắng mặt.
+    if (
+      otp === undefined ||
+      (otp.code !== undefined && !/^\d{6}$/u.test(otp.code))
+    ) {
       throw new Error(t('auth.otpUnavailable'));
     }
     return otp;
   };
+
+  const otpToast = (code: string | undefined) =>
+    code === undefined ? t('auth.otpSent') : `${t('auth.otpCreated')} ${code}`;
 
   const requestOtp = useMutation({
     mutationFn: async (localPhone: string) => {
@@ -212,10 +219,10 @@ export function LoginForm() {
       return { phone, otp: await postOtpRequest(phone) };
     },
     onSuccess: ({ phone, otp }) => {
-      pendingOtpRef.current = otp.code;
+      pendingOtpRef.current = otp.code ?? null;
       setPhase({ step: 'code', phone });
       setResendCooldown(RESEND_COOLDOWN_SECONDS);
-      showToast(`${t('auth.otpCreated')} ${otp.code}`);
+      showToast(otpToast(otp.code));
     },
   });
 
@@ -224,9 +231,9 @@ export function LoginForm() {
   const resendOtp = useMutation({
     mutationFn: postOtpRequest,
     onSuccess: (otp) => {
-      applyOtpCode(otp.code);
+      if (otp.code !== undefined) applyOtpCode(otp.code);
       setResendCooldown(RESEND_COOLDOWN_SECONDS);
-      showToast(`${t('auth.otpCreated')} ${otp.code}`);
+      showToast(otpToast(otp.code));
     },
   });
 

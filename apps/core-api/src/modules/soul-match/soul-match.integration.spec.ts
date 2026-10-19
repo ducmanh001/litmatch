@@ -235,7 +235,8 @@ d('Soul Match integration (Postgres thật)', () => {
       } as never,
       // stub — guard block test riêng ở suite friend.integration, suite này không chạm block
       { isBlocked: async () => false } as never,
-      notificationStub as never,
+      // stub FriendMessageNotifier — thông báo tin nhắn test riêng ở suite friend.integration
+      { notify: async () => undefined } as never,
       configStub,
       // stub publish — luồng realtime friend.message test riêng ở suite friend.integration
       { publish: async () => 1 } as never,

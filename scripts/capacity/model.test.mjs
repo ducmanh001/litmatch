@@ -82,6 +82,28 @@ test('streak đường nhanh và canPair một truy vấn giảm câu lệnh Pos
   assert.equal(noFriendChat.stmtsPerSecAfter, noFriendChat.stmtsPerSecBefore);
 });
 
+test('cổng gộp thông báo: bật cửa sổ giảm ≥80% insert notification ở tải chat đề bài; tắt (0) thì bằng trước', () => {
+  const on = computeModel();
+  assert.ok(on.chat.friendNotificationReductionPct >= 80);
+  assert.ok(
+    on.chat.friendNotificationInsertsPerSecAfter <
+      on.chat.friendNotificationInsertsPerSecBefore / 5,
+  );
+
+  const off = computeModel({ friendNotifyWindowSeconds: 0 });
+  assert.equal(off.chat.friendNotificationReductionPct, 0);
+  assert.equal(
+    off.chat.friendNotificationInsertsPerSecAfter,
+    off.chat.friendNotificationInsertsPerSecBefore,
+  );
+  // Gộp thông báo làm giảm thêm câu lệnh Postgres so với chỉ có đường nhanh streak.
+  assert.ok(on.postgres.stmtsPerSecAfter < off.postgres.stmtsPerSecAfter);
+
+  // Chat thưa (< 1 tin mỗi cửa sổ) thì cổng luôn mở — không có gì để gộp.
+  const sparse = computeModel({ messagesPerChatterPerSec: 0.01 });
+  assert.equal(sparse.chat.friendNotificationReductionPct, 0);
+});
+
 test('báo cáo nêu rõ đây không phải số đo và có đủ các mục', () => {
   const report = renderReport(computeModel());
   for (const heading of [

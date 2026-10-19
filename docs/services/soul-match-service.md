@@ -81,6 +81,11 @@ Quyết định đã chốt (đổi được bằng config/slice sau, không ph�
   `UserStatus.Banned` tại thời điểm gửi (§ 10.0.C — ban giữa chừng phải cắt ngay).
 - Đọc: cursor pagination chuẩn `@litmatch/common-dtos` (`buildCursorPage`), phase
   `chatting|rating`.
+- **Không có retention tự động (ADR 0013)**: phòng của cặp đã là bạn không bao giờ đóng (`matched` giữ phase
+  `chatting`, vẫn đọc/gửi được) và `rate()` chỉ import lịch sử sang chat bạn bè một lần lúc mutual like, nên tin gửi
+  sau đó chỉ nằm ở bảng này; đồng thời message là bằng chứng cho Report/T&S (entity: "KHÔNG xoá dữ liệu"). Xoá theo
+  tuổi sẽ làm mất lịch sử phòng đang dùng và bằng chứng của report đang mở. Retention chỉ an toàn khi giới hạn ở
+  phòng đã đóng, không còn report mở và đã import xong — cần quy tắc của Soul Match + Safety, chưa làm.
 
 ## 5. API (`api/v1/soul-match`)
 

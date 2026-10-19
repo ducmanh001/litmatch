@@ -97,6 +97,26 @@ describe('LoginPage', () => {
     expect(screen.getByLabelText('Mã OTP')).toHaveValue('123456');
   });
 
+  it('mã gửi qua SMS (response không có code) → báo đã gửi SMS và để trống ô mã', async () => {
+    vi.spyOn(apiClient, 'POST').mockResolvedValue({
+      data: { data: { ttlSeconds: 300 } },
+    } as never);
+    renderLogin();
+
+    await userEvent.type(
+      await screen.findByLabelText('Số điện thoại'),
+      '912345678',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Gửi mã OTP' }));
+
+    expect(
+      await screen.findByText(
+        'Đã gửi mã xác thực (OTP) qua SMS tới số điện thoại của bạn.',
+      ),
+    ).toBeVisible();
+    expect(screen.getByLabelText('Mã OTP')).toHaveValue('');
+  });
+
   it('Google disabled vẫn hiện nút, bấm hiện message endpoint và không gọi login API', async () => {
     runtimeCapabilities.auth.google = {
       status: 'disabled',

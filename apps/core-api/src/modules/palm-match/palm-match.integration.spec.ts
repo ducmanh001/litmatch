@@ -180,7 +180,8 @@ d('Palm Match integration (Postgres thật)', () => {
       ),
       { recordActivity: async () => ({}) } as never,
       safety,
-      { create: async () => ({ id: 'notification-stub' }) } as never,
+      // stub FriendMessageNotifier — suite này không kiểm tra thông báo tin nhắn
+      { notify: async () => undefined } as never,
       configStub,
       { publish: async () => 1 } as never,
     );

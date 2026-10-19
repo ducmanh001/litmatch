@@ -1,6 +1,8 @@
+import Redis from 'ioredis';
 import { DataSource } from 'typeorm';
 
 import { addDaysUtc, todayUtc } from '../../common/date/utc-date';
+import { RedisWindowGateAdapter } from '../../common/redis/redis-window-gate.adapter';
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
 import { InitAuthUser1751900000000 } from '../../database/migrations/1751900000000-init-auth-user';
 import { UserProfilePreferences1755800000000 } from '../../database/migrations/1755800000000-user-profile-preferences';
@@ -29,6 +31,7 @@ import { Message } from './entities/message.entity';
 import { ProfileFollow } from './entities/profile-follow.entity';
 import { ProfileChatContact } from './entities/profile-chat-contact.entity';
 import { ConversationService } from './services/conversation.service';
+import { FriendMessageNotifier } from './services/friend-message-notifier.service';
 import { ProfileSocialService } from './services/profile-social.service';
 import { StreakService } from './services/streak.service';
 import { MatchSession } from '../matching/entities/match-session.entity';
@@ -63,6 +66,7 @@ jest.setTimeout(60_000);
 
 const CONFIG: Record<string, unknown> = {
   FRIEND_MESSAGE_MAX_LENGTH: 20,
+  FRIEND_MESSAGE_NOTIFY_WINDOW_SECONDS: 60,
   SAFETY_REMATCH_COOLDOWN_DAYS: 30,
   SAFETY_REPORT_COOLDOWN_DAYS: 7,
   SAFETY_TRUST_PENALTY_PER_REPORT: 5,
@@ -86,7 +90,11 @@ d('Friend integration (Postgres thật)', () => {
   let safety: SafetyService;
   let streakService: StreakService;
   let profileSocial: ProfileSocialService;
-  const notificationCreateSpy = jest.fn(async () => ({ id: 'notif-stub' }));
+  const notificationCreateSpy = jest.fn<Promise<{ id: string }>, [unknown?]>(
+    async () => ({ id: 'notif-stub' }),
+  );
+  const notificationPushSpy = jest.fn(async () => undefined);
+  let redis: Redis;
 
   async function createUser(nickname: string): Promise<User> {
     const repo = ds.getRepository(User);
@@ -208,17 +216,23 @@ d('Friend integration (Postgres thật)', () => {
       userServiceStub,
       configStub,
     );
+    // Gộp thông báo chạy trên Redis THẬT (SET NX EX); notification/push là spy đếm được.
+    redis = new Redis(process.env['REDIS_URL'] ?? 'redis://localhost:6379', {
+      maxRetriesPerRequest: 1,
+    });
+    const messageNotifier = new FriendMessageNotifier(
+      ds.getRepository(ConversationMemberState),
+      { create: notificationCreateSpy, sendPush: notificationPushSpy } as never,
+      configStub,
+      new RedisWindowGateAdapter(redis),
+    );
     friend = new FriendService(
       ds.getRepository(Friendship),
       ds.getRepository(ConversationMemberState),
       conversationService,
       streakService,
       safety,
-      // Spy đếm được — suite mute cần khẳng định notification BỊ BỎ QUA khi người nhận mute
-      {
-        create: notificationCreateSpy,
-        sendPush: async () => undefined,
-      } as never,
+      messageNotifier,
       configStub,
       // stub publish — realtime end-to-end đã test ở suite signaling-gateway
       { publish: async () => 1 } as never,
@@ -236,6 +250,7 @@ d('Friend integration (Postgres thật)', () => {
 
   afterAll(async () => {
     await ds?.destroy();
+    await redis?.quit();
   });
 
   it('ensureFriendship tạo ĐÚNG 1 Friendship + ĐÚNG 1 Conversation cho 1 cặp (bất biến spec § 1)', async () => {
@@ -704,6 +719,119 @@ d('Friend integration (Postgres thật)', () => {
       notificationCreateSpy.mockClear();
       await friend.sendMessage(a.id, conv.id, 'goi co bao', 'mu-2');
       expect(notificationCreateSpy).toHaveBeenCalledTimes(1);
+    });
+
+    describe('gộp thông báo tin nhắn (ADR 0013) — Redis thật', () => {
+      const setWindow = (seconds: number): (() => void) => {
+        const previous = CONFIG['FRIEND_MESSAGE_NOTIFY_WINDOW_SECONDS'];
+        CONFIG['FRIEND_MESSAGE_NOTIFY_WINDOW_SECONDS'] = seconds;
+        return () => {
+          CONFIG['FRIEND_MESSAGE_NOTIFY_WINDOW_SECONDS'] = previous;
+        };
+      };
+      const gateKey = (recipientId: string, conversationId: string) =>
+        `friend:msg-notify:${recipientId}:${conversationId}`;
+
+      it('100 tin liên tiếp → ĐÚNG 1 notification + 1 push; tin vẫn lưu đủ và unread đếm đủ', async () => {
+        const [a, b] = await Promise.all([
+          createUser('co-burst-a'),
+          createUser('co-burst-b'),
+        ]);
+        await ensureFriendship(a, b);
+        const conv = await friend.getConversationWithFriend(a.id, b.id);
+        notificationCreateSpy.mockClear();
+        notificationPushSpy.mockClear();
+
+        // Tin dài tối đa 20 ký tự (CONFIG) — `m<i>` luôn hợp lệ
+        for (let i = 1; i <= 100; i += 1) {
+          await friend.sendMessage(a.id, conv.id, `m${i}`, `co-burst-${i}`);
+        }
+
+        expect(notificationCreateSpy).toHaveBeenCalledTimes(1);
+        expect(notificationPushSpy).toHaveBeenCalledTimes(1);
+        expect(notificationCreateSpy.mock.calls[0]).toEqual([
+          expect.objectContaining({
+            userId: b.id,
+            payload: expect.objectContaining({ preview: 'm1' }),
+          }),
+        ]);
+        expect(
+          await ds.getRepository(Message).countBy({ conversationId: conv.id }),
+        ).toBe(100);
+        expect((await friend.listFriends(b.id))[0]?.unreadCount).toBe(100);
+        // Cổng có TTL thật (không treo vĩnh viễn nếu quên dọn)
+        const ttl = await redis.ttl(gateKey(b.id, conv.id));
+        expect(ttl).toBeGreaterThan(0);
+        expect(ttl).toBeLessThanOrEqual(60);
+      });
+
+      it('cổng theo (người nhận, hội thoại): chiều ngược lại và hội thoại khác có cổng riêng', async () => {
+        const [a, b, c] = await Promise.all([
+          createUser('co-scope-a'),
+          createUser('co-scope-b'),
+          createUser('co-scope-c'),
+        ]);
+        await ensureFriendship(a, b);
+        await ensureFriendship(a, c);
+        const convAB = await friend.getConversationWithFriend(a.id, b.id);
+        const convAC = await friend.getConversationWithFriend(a.id, c.id);
+        notificationCreateSpy.mockClear();
+
+        await friend.sendMessage(a.id, convAB.id, 'a->b 1', 'co-scope-1');
+        await friend.sendMessage(a.id, convAB.id, 'a->b 2', 'co-scope-2'); // gộp
+        await friend.sendMessage(b.id, convAB.id, 'b->a 1', 'co-scope-3'); // người nhận khác
+        await friend.sendMessage(a.id, convAC.id, 'a->c 1', 'co-scope-4'); // hội thoại khác
+
+        const recipients = notificationCreateSpy.mock.calls
+          .map(([input]) => (input as { userId: string }).userId)
+          .sort();
+        expect(recipients).toEqual([a.id, b.id, c.id].sort());
+      });
+
+      it('hết cửa sổ (TTL thật) → tin kế tiếp lại thông báo', async () => {
+        const restore = setWindow(1);
+        try {
+          const [a, b] = await Promise.all([
+            createUser('co-ttl-a'),
+            createUser('co-ttl-b'),
+          ]);
+          await ensureFriendship(a, b);
+          const conv = await friend.getConversationWithFriend(a.id, b.id);
+          notificationCreateSpy.mockClear();
+
+          await friend.sendMessage(a.id, conv.id, 'ttl 1', 'co-ttl-1');
+          await friend.sendMessage(a.id, conv.id, 'ttl 2', 'co-ttl-2');
+          expect(notificationCreateSpy).toHaveBeenCalledTimes(1);
+
+          await new Promise((resolve) => setTimeout(resolve, 1_300));
+          await friend.sendMessage(a.id, conv.id, 'ttl 3', 'co-ttl-3');
+          expect(notificationCreateSpy).toHaveBeenCalledTimes(2);
+        } finally {
+          restore();
+        }
+      });
+
+      it('FRIEND_MESSAGE_NOTIFY_WINDOW_SECONDS=0 → mỗi tin một thông báo (đường lùi), không chạm cổng', async () => {
+        const restore = setWindow(0);
+        try {
+          const [a, b] = await Promise.all([
+            createUser('co-off-a'),
+            createUser('co-off-b'),
+          ]);
+          await ensureFriendship(a, b);
+          const conv = await friend.getConversationWithFriend(a.id, b.id);
+          notificationCreateSpy.mockClear();
+
+          for (let i = 1; i <= 3; i += 1) {
+            await friend.sendMessage(a.id, conv.id, `off${i}`, `co-off-${i}`);
+          }
+
+          expect(notificationCreateSpy).toHaveBeenCalledTimes(3);
+          expect(await redis.exists(gateKey(b.id, conv.id))).toBe(0);
+        } finally {
+          restore();
+        }
+      });
     });
 
     it('IDOR: người ngoài conversation gọi mark-read/mute → CÙNG 404 CONVERSATION_NOT_FOUND', async () => {

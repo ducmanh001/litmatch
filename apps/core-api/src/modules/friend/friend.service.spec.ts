@@ -47,7 +47,7 @@ describe('FriendService (unit — mock repo/conversationService/redis)', () => {
     listMessages: jest.Mock;
   };
   let safetyService: { isBlocked: jest.Mock };
-  let notificationService: { create: jest.Mock; sendPush: jest.Mock };
+  let messageNotifier: { notify: jest.Mock };
   let streakService: { recordActivity: jest.Mock };
   let redis: { publish: jest.Mock };
   let service: FriendService;
@@ -63,10 +63,7 @@ describe('FriendService (unit — mock repo/conversationService/redis)', () => {
       createQueryBuilder: jest.fn(),
     };
     safetyService = { isBlocked: jest.fn(async () => false) };
-    notificationService = {
-      create: jest.fn(async (input) => ({ id: 'notif-1', ...input })),
-      sendPush: jest.fn(async () => undefined),
-    };
+    messageNotifier = { notify: jest.fn(async () => undefined) };
     conversationService = {
       findByPair: jest.fn(async () => makeConversation()),
       findById: jest.fn(async () => makeConversation()),
@@ -98,7 +95,7 @@ describe('FriendService (unit — mock repo/conversationService/redis)', () => {
       conversationService as unknown as ConversationService,
       streakService as unknown as StreakService,
       safetyService as never,
-      notificationService as never,
+      messageNotifier as never,
       configStub,
       redis as never,
     );
@@ -325,25 +322,31 @@ describe('FriendService (unit — mock repo/conversationService/redis)', () => {
       expect(message.id).toBe('msg-1');
     });
 
-    it('người nhận đã mute → KHÔNG tạo notification, message vẫn gửi + realtime đủ 2 bên', async () => {
-      memberStateRepo.findOne.mockResolvedValue({
+    it('gửi xong → giao quyết định thông báo cho FriendMessageNotifier với người nhận/hội thoại/preview đúng', async () => {
+      const message = await service.sendMessage(USER_A, 'conv-1', 'hi', 'k1');
+      expect(message.id).toBe('msg-1');
+      expect(messageNotifier.notify).toHaveBeenCalledTimes(1);
+      expect(messageNotifier.notify).toHaveBeenCalledWith({
         conversationId: 'conv-1',
-        userId: USER_B,
-        lastReadAt: null,
-        mutedAt: new Date(),
+        senderUserId: USER_A,
+        recipientId: USER_B,
+        preview: 'hi',
       });
+    });
+
+    it('notifier lỗi → KHÔNG làm fail message đã gửi thành công, realtime vẫn đủ 2 bên', async () => {
+      messageNotifier.notify.mockRejectedValue(new Error('db down'));
       const message = await service.sendMessage(USER_A, 'conv-1', 'hi', 'k1');
       expect(message.id).toBe('msg-1');
       expect(redis.publish).toHaveBeenCalledTimes(2);
-      expect(notificationService.create).not.toHaveBeenCalled();
     });
 
-    it('người nhận không mute → vẫn tạo notification như cũ', async () => {
-      const message = await service.sendMessage(USER_A, 'conv-1', 'hi', 'k1');
-      expect(message.id).toBe('msg-1');
-      expect(notificationService.create).toHaveBeenCalledWith(
-        expect.objectContaining({ userId: USER_B }),
-      );
+    it('chặn block/độ dài → KHÔNG tới bước thông báo', async () => {
+      safetyService.isBlocked.mockResolvedValue(true);
+      await expect(
+        service.sendMessage(USER_A, 'conv-1', 'hi', 'k1'),
+      ).rejects.toBeInstanceOf(DomainException);
+      expect(messageNotifier.notify).not.toHaveBeenCalled();
     });
   });
 });

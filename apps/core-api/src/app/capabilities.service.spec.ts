@@ -5,6 +5,7 @@ const BASE_CONFIG = {
   NODE_ENV: 'development',
   CAPABILITY_MAINTENANCE_FEATURES: '',
   AUTH_PHONE_OTP_ENABLED: true,
+  AUTH_OTP_DELIVERY: 'response',
   AUTH_GOOGLE_CLIENT_ID: 'google-client',
   AUTH_APPLE_CLIENT_ID: '',
   AUTH_FACEBOOK_APP_ID: 'facebook-app',
@@ -64,6 +65,24 @@ describe('CapabilitiesService', () => {
       CapabilityStatus.Disabled,
     );
     expect(capabilities.auth.phoneOtp.status).toBe(CapabilityStatus.Beta);
+  });
+
+  it('phone OTP: sms-http là kênh thật (Enabled), disabled hoặc tắt cờ thì Disabled, response chỉ là thử nghiệm', () => {
+    const status = (overrides: Record<string, unknown>) =>
+      createService(overrides).getCapabilities().auth.phoneOtp.status;
+
+    expect(
+      status({ AUTH_OTP_DELIVERY: 'sms-http', NODE_ENV: 'production' }),
+    ).toBe(CapabilityStatus.Enabled);
+    expect(status({ AUTH_OTP_DELIVERY: 'response' })).toBe(
+      CapabilityStatus.Beta,
+    );
+    expect(status({ AUTH_OTP_DELIVERY: 'disabled' })).toBe(
+      CapabilityStatus.Disabled,
+    );
+    expect(
+      status({ AUTH_OTP_DELIVERY: 'sms-http', AUTH_PHONE_OTP_ENABLED: false }),
+    ).toBe(CapabilityStatus.Disabled);
   });
 
   it('requires the complete payOS and Facebook configuration', () => {
