@@ -198,9 +198,9 @@ có `statement_timeout`/`idle_in_transaction_session_timeout` trong mã, pool Po
 | THẤP | ✔ **ĐÃ SỬA (C14)** Bug thật: phân trang hàng chờ duyệt video sắp ASC nhưng cursor dùng `<` nên trang 2 lặp trang 1; `deleteComment` video không điều kiện `deletedAt IS NULL` nên bấm đúp trừ `comment_count` hai lần | `short-video.service.ts`                                                                            | Cursor `>` so sánh theo `date_trunc('milliseconds')` (cursor chỉ mang mili giây); `UPDATE … WHERE deleted_at IS NULL` rồi chỉ trừ khi `affected`                                                                                    |
 
 Không đọc: notification/friend/safety/matching (chỉ các hàm được gọi), `RedisThrottlerStorage` (K8s bật nên mỗi request
-HTTP ≥1 lệnh Redis trên `REDIS_URL` đơn), payOS/webhook/refund, avatar/mood chi tiết. Thứ tự đề xuất: (1) bỏ advisory lock
-toàn cục + index Movie/Palm, (2) `areFriends` trong transaction soul rate, (3) counter đệm + ranking short-video,
-(4) broadcast thành job nền, (5) đối soát tăng dần, rồi mới tới cache đọc và gift/party.
+HTTP ≥1 lệnh Redis trên `REDIS_URL` đơn), payOS/webhook/refund, avatar/mood chi tiết. Thứ tự đề xuất (1)–(5) — bỏ advisory lock
+toàn cục + index Movie/Palm, `areFriends` trong transaction soul rate, counter đệm + ranking short-video,
+broadcast thành job nền, đối soát tăng dần — **đã làm đủ theo thứ tự này (C12–C17)**; còn lại: cache đọc và gift/party.
 
 ## 8. Triển khai và lùi
 
@@ -252,9 +252,22 @@ một mình sau khi làm nóng Nx graph.
 Lỗi do các lượt chạy này bắt được (đã sửa): format web/admin chưa chạy prettier; eslint `preserve-caught-error` (thiếu `cause`);
 test fake scheduler không `clearInterval` làm Jest treo; migration retention cần bảng `notifications` trong DB test.
 
+Đợt audit (C12–C17, 2026-10-19), cùng Postgres 16 + Redis 7 thật (mỗi hạng mục chạy gate riêng rồi commit riêng):
+
+| Lệnh                                                                               | Kết quả                                                                                                                                                                                                                                                                          |
+| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm agent:verify core` (full), lần cuối sau mọi sửa mã                           | PASS: `agent:check`, `agent:test`, `openapi:check`, `format:check`, lint; test core-api 110 suite / 1.196 test không skip; build; e2e 4 suite / 12 test (toàn bộ migration chạy qua CLI, gồm `1758200000000` và `1758400000000` dùng CREATE INDEX CONCURRENTLY, `1758300000000`) |
+| `pnpm agent:verify economy` (full) sau C17                                         | PASS: test core-api 110 suite / 1.195 test; có test unit cho cửa sổ/chia cửa sổ/dựng lại/lỗi giữa cửa sổ và test tích hợp trên Postgres thật (lệch, bút toán bù, transaction commit muộn)                                                                                        |
+| `pnpm agent:verify frontend` (full) sau C16                                        | PASS: lint, test (14 file / 64 test và 86 file / 319 test), build, kiểm bundle; OpenAPI + api-client đã sinh lại                                                                                                                                                                 |
+| `pnpm agent:verify infra`                                                          | PASS 151/151 (một lượt fail 2 test do timeout khi máy đang tải — git status và stage runner quá hạn; chạy lại riêng thì PASS)                                                                                                                                                    |
+| `EXPLAIN (ANALYZE, BUFFERS)` C17 trên 300.000 transaction / 600.000 entry tổng hợp | Cửa sổ tăng dần 1 phút: BRIN `idx_transactions_created_at_brin` + `idx_ledger_entries_transaction`, **3,7 ms / 167 buffer**; aggregate toàn bảng cũ: Parallel Seq Scan, **100,8 ms / 16.019 buffer** và tăng tuyến tính theo lịch sử                                             |
+
+Lỗi do các lượt chạy này bắt được (đã sửa): spec seed demo short-video tự liệt kê migration nên thiếu `rank_computed_at` sau C14;
+plugin Nx load treo 2 giờ 20 (dừng daemon, `nx reset`, `NX_DAEMON=false`); các spec dựng tay `AdminService` phải bỏ tham số đã gỡ.
+
 Chưa kiểm chứng: tải ở quy mô triệu socket; hành vi trình duyệt khi Redis chớp (client không biết đã lỡ
 event — dựa vào REST polling); số µs trên Redis production; giả định hồ sơ giới tính/preference thật;
-kế hoạch truy vấn thật của các nút thắt ở § 7a (chỉ đọc mã, chưa `EXPLAIN`); retention `delete` trên dữ liệu thật (mới có
+kế hoạch truy vấn thật của các nút thắt ở § 7a (chỉ `EXPLAIN` được C17 trên dữ liệu tổng hợp; các mục khác mới chỉ có test); thông lượng thật của job broadcast (mới có trần lý thuyết 5.000 người/giây); retention `delete` trên dữ liệu thật (mới có
 test và dry-run); gửi SMS thật qua cổng của nhà cung cấp. `signaling.sharded.integration` chỉ chạy khi có hai Redis khác nhau (`INTEGRATION_REDIS_SHARD_URLS`; không
 đặt biến thì spec tự skip) — lượt chạy cuối đã chạy với hai container.
 
@@ -300,3 +313,20 @@ từng điểm với mã:
 
 Reviewer xác nhận không có: xoá nhầm hàng, rò mã OTP khi `sms-http` (response/log/lỗi/header/OpenAPI), SSRF qua sender, thêm
 đường liệt kê số điện thoại, hay thông báo bị nhân đôi do race (SET NX EX nguyên tử).
+
+Đợt audit C12–C17 (2026-10-19): một reviewer độc lập (model sonnet, chỉ đọc mã, không chạy test) duyệt cả năm hạng mục, không có lỗi mức cao;
+trả 6 điểm, đã đối chiếu từng điểm với mã:
+
+| #   | Phát hiện                                                                                                                                                                                                           | Xử lý                                                                                                                                                                                                                                                  |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | TRUNG BÌNH — kiểm tăng dần có thể giấu lệch tới 24h: transaction commit quá LAG, transaction chèn tay với `created_at` quá khứ, hay entry lẻ vào `transaction_id` cũ không rơi vào cửa sổ nào; `LAG_MS=0` được phép | Đúng. Giữ thiết kế (cộng thêm cửa sổ chồng lấp làm tăng chi phí mỗi tick); ghi rõ điểm mù trong `economy-service.md`; lưới an toàn là lần dựng lại định kỳ; `LAG=0` chỉ dùng cho test, mặc định 5 phút. Code ghi sổ chuẩn không tạo các trường hợp này |
+| 2   | THẤP — ranking ghi lại cùng video nhiều lần mỗi tick khi catalogue nhỏ hơn lô × số lô, vòng lặp không dừng sớm                                                                                                      | Đúng. Mốc `clock_timestamp()` đầu tick + điều kiện `rank_computed_at < mốc`; test tích hợp bắt được lỗi cũ (kỳ vọng 3, thực tế 200 lần ghi)                                                                                                            |
+| 3   | THẤP — counter đệm: (A) timeout Redis mơ hồ vừa vào đệm vừa cộng DB; (B) `HINCRBY`+`SADD` là pipeline nên có thể để lại hash mồ côi                                                                                 | (B) Đúng, đổi sang `MULTI`. (A) Chấp nhận và ghi tài liệu: không phân biệt được timeout mơ hồ với lỗi thật ở client, counter chỉ là số hiển thị xấp xỉ                                                                                                 |
+| 4   | THẤP — docs nói "pod mới lên làm leader" nhưng khoá singleton giành lại mỗi tick, mỗi pod có tổng riêng                                                                                                             | Đúng. Sửa mô tả; chi phí ≈ N pod × 1 lần quét toàn bộ mỗi chu kỳ dựng lại                                                                                                                                                                              |
+| 5   | THẤP — tắt cờ counter khi đệm còn delta làm delta nằm lại Redis; shutdown chỉ xả một lô                                                                                                                             | Ghi tài liệu (tắt cờ sau khi tập `video:counter:dirty` rỗng). Delta chưa xả vẫn nằm trong Redis cho job của pod khác; chỉ mất nếu pod chết giữa lúc drain và UPDATE                                                                                    |
+| 6   | THẤP — `GET .../broadcast/:id` trả `lastError` nguyên văn (≤ 500 ký tự)                                                                                                                                             | Chấp nhận: chỉ admin có `ManageConfig`; thông điệp lỗi DB không chứa secret                                                                                                                                                                            |
+
+Reviewer xác nhận không có lỗi trong: hàng đợi Movie/Palm (mọi cạnh chờ đi từ cũ sang mới nên không chu trình; hai phiên cho một user bị chặn bởi DELETE hàng của chính mình + khoá chính participant;
+so sánh `(queued_at, user_id)` trong SQL nên không lệch ms/µs), `areFriends`/`canPair` trên transaction của soul rate, job broadcast (kiểm cursor dưới `FOR UPDATE` ở READ COMMITTED,
+keyset `uuid`, `[rows, rowCount]` của `UPDATE … RETURNING`, không vòng lặp vô hạn, quyền của endpoint mới), các cửa sổ của đối soát (không hở, không chồng, round-trip text µs chính xác,
+trạng thái chỉ đổi sau khi cửa sổ tính xong, không có đường báo lệch giả), ranking vs flush (không deadlock), cursor phân trang, và các migration CONCURRENTLY.
