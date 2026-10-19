@@ -74,30 +74,32 @@ test('tổng là dung lượng bảng tại năm N: không dọn ≥ mặc đị
   );
 });
 
-test('công suất xoá mặc định: refresh_tokens vào gấp ~2× công suất nên backlog làm phình bảng; tăng RETENTION_* thì hết backlog', () => {
+test('công suất xoá mặc định đủ cho refresh_tokens (< 1×); với mặc định CŨ (20 lô) thì vào gấp ~2× công suất và backlog làm phình bảng', () => {
   const model = computeDataGrowth();
   const refresh = table(model, 'refresh_tokens');
-  // 5.000 × 20 / 60 s = 144 triệu hàng/ngày/quy tắc; refresh_tokens vào ~289,6 triệu/ngày
-  assert.ok(refresh.capacityRatio > 1.9 && refresh.capacityRatio < 2.1);
-  assert.ok(refresh.tbAfterYearsDefault > refresh.tbAfterYearsDefaultTuned * 5);
+  // 5.000 × 60 / 60 s = 432 triệu hàng/ngày/quy tắc; refresh_tokens vào ~289,6 triệu/ngày
+  assert.ok(refresh.capacityRatio > 0.6 && refresh.capacityRatio < 0.75);
   assert.ok(
-    model.totals.tbAfterYearsDefault > model.totals.tbAfterYearsDefaultTuned,
+    Math.abs(refresh.tbAfterYearsDefault - refresh.tbAfterYearsDefaultTuned) <
+      1e-9,
   );
   assert.ok(
     model.totals.tbAfterYearsDefaultTuned >=
       model.totals.tbAfterYearsRecommended,
   );
-  // đủ công suất (≥ hàng vào) thì không còn backlog
-  const tuned = computeDataGrowth({ retentionMaxBatchesPerTick: 60 });
+  // mặc định cũ (20 lô = 144 triệu/ngày): không theo kịp, backlog tích lại
+  const old = computeDataGrowth({ retentionMaxBatchesPerTick: 20 });
+  const oldRefresh = table(old, 'refresh_tokens');
+  assert.ok(oldRefresh.capacityRatio > 1.9 && oldRefresh.capacityRatio < 2.1);
   assert.ok(
-    Math.abs(
-      table(tuned, 'refresh_tokens').tbAfterYearsDefault -
-        table(tuned, 'refresh_tokens').tbAfterYearsDefaultTuned,
-    ) < 1e-9,
+    oldRefresh.tbAfterYearsDefault > oldRefresh.tbAfterYearsDefaultTuned * 5,
   );
+  assert.ok(
+    old.totals.tbAfterYearsDefault > old.totals.tbAfterYearsDefaultTuned,
+  );
+  assert.match(renderReport(old), /refresh_tokens 2.0×/u);
   // bảng không do job xoá (sweeper, phân vùng) không bị tính công suất job
   assert.equal(table(model, 'story_views').capacityRatio, 0);
-  assert.match(renderReport(model), /refresh_tokens 2\.0×/u);
 });
 
 test('vòng đời mặc định phản ánh đúng mã: mục CẦN QUYẾT ĐỊNH để mặc định TẮT', () => {

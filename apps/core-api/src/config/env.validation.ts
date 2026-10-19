@@ -230,6 +230,7 @@ export interface CoreApiEnv {
   RETENTION_INTERVAL_MS: number;
   RETENTION_BATCH_SIZE: number;
   RETENTION_MAX_BATCHES_PER_TICK: number;
+  RETENTION_MAX_CONCURRENT_JOBS: number;
   RETENTION_BATCH_PAUSE_MS: number;
   NOTIFICATION_READ_RETENTION_DAYS: number;
   NOTIFICATION_UNREAD_RETENTION_DAYS: number;
@@ -866,11 +867,19 @@ export const coreApiEnvSchema = Joi.object({
     .min(100)
     .max(50_000)
     .default(5_000),
+  // 60 lô × 5.000 = 300.000 hàng/tick/quy tắc ≈ 432 triệu hàng/ngày — đủ cho refresh_tokens ở quy mô đề bài (~290 triệu/ngày,
+  // ADR 0014); mặc định cũ 20 chỉ xoá được 144 triệu/ngày nên backlog tăng mãi. Tick vẫn bị chặn bởi ngân sách 30 giây.
   RETENTION_MAX_BATCHES_PER_TICK: Joi.number()
     .integer()
     .min(1)
     .max(1_000)
-    .default(20),
+    .default(60),
+  // Số tick retention tối đa chạy CÙNG LÚC trong một process (mỗi tick giữ ≤ 2 kết nối pool); tick vượt ngân sách bị bỏ.
+  RETENTION_MAX_CONCURRENT_JOBS: Joi.number()
+    .integer()
+    .min(1)
+    .max(6)
+    .default(2),
   RETENTION_BATCH_PAUSE_MS: Joi.number()
     .integer()
     .min(0)

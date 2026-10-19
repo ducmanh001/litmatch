@@ -69,7 +69,9 @@ describe('coreApiEnvSchema invariants', () => {
       expect(value('RETENTION_BATCH_SIZE').value).toBe(5_000);
       expect(value('RETENTION_BATCH_SIZE', 99).error).toBeDefined();
       expect(value('RETENTION_BATCH_SIZE', 50_001).error).toBeDefined();
-      expect(value('RETENTION_MAX_BATCHES_PER_TICK').value).toBe(20);
+      expect(value('RETENTION_MAX_BATCHES_PER_TICK').value).toBe(60);
+      expect(value('RETENTION_MAX_CONCURRENT_JOBS').value).toBe(2);
+      expect(value('RETENTION_MAX_CONCURRENT_JOBS', 0).error).toBeDefined();
       expect(value('RETENTION_MAX_BATCHES_PER_TICK', 0).error).toBeDefined();
       expect(value('RETENTION_BATCH_PAUSE_MS').value).toBe(50);
       expect(value('RETENTION_BATCH_PAUSE_MS', 0).error).toBeUndefined();

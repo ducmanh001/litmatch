@@ -2,6 +2,7 @@ import type { Logger } from '@nestjs/common';
 import type { SchedulerRegistry } from '@nestjs/schedule';
 import type { DataSource, QueryRunner } from 'typeorm';
 
+import type { ConcurrencyBudget } from './concurrency-budget';
 import {
   isRuntimeActive,
   recordRuntimeBackgroundSkip,
@@ -16,6 +17,11 @@ interface ClusterSingletonOptions {
    */
   dataSource: DataSource;
   followerRetryMs?: number;
+  /**
+   * Ngân sách đồng thời dùng chung giữa các job nền của process: lấy TRƯỚC khi mở query runner (vì runner giữ một kết nối
+   * pool suốt tick). Hết ngân sách thì bỏ tick, không chờ.
+   */
+  budget?: ConcurrencyBudget;
 }
 
 /**
@@ -100,10 +106,19 @@ export class ManagedInterval {
         await options.task();
         return;
       }
-      await this.runClusterSingleton({
-        ...options,
-        clusterSingleton,
-      });
+      const release = clusterSingleton.budget?.tryAcquire();
+      if (clusterSingleton.budget !== undefined && release === undefined) {
+        recordRuntimeBackgroundSkip(options.jobName);
+        return;
+      }
+      try {
+        await this.runClusterSingleton({
+          ...options,
+          clusterSingleton,
+        });
+      } finally {
+        release?.();
+      }
     } finally {
       this.scheduledRunInFlight = false;
     }

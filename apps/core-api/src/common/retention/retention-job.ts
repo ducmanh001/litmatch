@@ -8,6 +8,7 @@ import type { SchedulerRegistry } from '@nestjs/schedule';
 import type { Meter } from '@opentelemetry/api';
 import type { DataSource } from 'typeorm';
 
+import { ConcurrencyBudget } from '../scheduling/concurrency-budget';
 import { ManagedInterval } from '../scheduling/managed-interval';
 import { purgeInBatches } from './batched-purge';
 import { recordRetention } from './retention-metrics';
@@ -28,6 +29,22 @@ const RETENTION_TICK_BUDGET_MS = 30_000;
  * thêm kết nối cho task — sáu job đồng loạt có thể chiếm trọn pool 10 kết nối trong lúc xoá backlog. FNV-1a theo tên nên
  * mỗi job luôn cùng một độ lệch giữa các lần khởi động và giữa các pod.
  */
+let sharedBudget: ConcurrencyBudget | undefined;
+/**
+ * Ngân sách DÙNG CHUNG cho mọi job retention trong process (admission control): tối đa `RETENTION_MAX_CONCURRENT_JOBS` tick chạy
+ * cùng lúc, mỗi tick giữ ≤ 2 kết nối pool, nên retention không bao giờ chiếm quá 2 × N kết nối — phần còn lại của pool luôn dành
+ * cho request. Tick bị từ chối được bỏ và thử lại ở chu kỳ sau. Giới hạn của lần tạo đầu tiên là giới hạn của process.
+ */
+export function retentionBudget(limit: number): ConcurrencyBudget {
+  sharedBudget ??= new ConcurrencyBudget(limit);
+  return sharedBudget;
+}
+
+/** Chỉ cho test: đặt lại ngân sách dùng chung giữa các test. */
+export function resetRetentionBudgetForTests(): void {
+  sharedBudget = undefined;
+}
+
 export function staggerOffsetMs(jobName: string, intervalMs: number): number {
   let hash = 0x811c9dc5;
   for (let index = 0; index < jobName.length; index += 1) {
@@ -83,7 +100,14 @@ export abstract class RetentionJob
         logger: this.logger,
         errorMessage: `Job retention ${this.jobName} lỗi`,
         skipWhenIdle: true,
-        clusterSingleton: { dataSource: this.dataSource },
+        clusterSingleton: {
+          dataSource: this.dataSource,
+          budget: retentionBudget(
+            this.config.getOrThrow('RETENTION_MAX_CONCURRENT_JOBS', {
+              infer: true,
+            }),
+          ),
+        },
       });
     const offsetMs = staggerOffsetMs(this.jobName, intervalMs);
     if (offsetMs === 0) {

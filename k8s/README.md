@@ -191,8 +191,9 @@ Mỗi pod core-api giữ tối đa `DATABASE_POOL_MAX` kết nối tới Postgre
   lỗi thay vì chờ vô hạn (driver pg mặc định không có timeout).
 - Job retention (6 job: thông báo, auth, ghép đôi, economy, short-video, mood) chung `RETENTION_INTERVAL_MS`, nên mỗi job
   bắt đầu lệch một khoảng tất định theo hash của TÊN job (0 – 1 chu kỳ) để không đồng loạt chiếm kết nối lúc khởi động.
-  Khi có backlog mỗi tick chạy tới 30 giây nên các job vẫn có thể chồng nhau: ngân sách xấu nhất ≈ 2 kết nối × số job
-  đang chạy cùng lúc (cộng story sweeper) — đặt `DATABASE_POOL_MAX` đủ cho phần đó, hoặc nâng `RETENTION_INTERVAL_MS`.
+  Khi có backlog mỗi tick chạy tới 30 giây, nhưng ngân sách đồng thời dùng chung `RETENTION_MAX_CONCURRENT_JOBS` (mặc định 2) chặn
+  tick thứ ba (bị bỏ trước khi lấy kết nối, thử lại chu kỳ sau): retention giữ ≤ 2 × 2 kết nối pool (cộng story sweeper, không
+  thuộc ngân sách này). Đặt `DATABASE_POOL_MAX` đủ cho phần đó.
 - Tổng kết nối ≈ số pod tối đa (kể cả pod surge lúc rollout) × `DATABASE_POOL_MAX` + migration/công cụ
   vận hành. Ví dụ: base `maxReplicas: 10` + `maxSurge: 1` = 11 pod × 10 = 110; overlay production và
   production-region-b `maxReplicas: 15` → 16 × 10 = 160. Postgres mặc định `max_connections = 100` và dành 3

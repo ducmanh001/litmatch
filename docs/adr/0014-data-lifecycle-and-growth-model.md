@@ -31,22 +31,21 @@ hay lưu trữ lạnh. Trước đây chỉ có `bytesPerMessageRow: 400` (giả
 
 Kết quả mặc định (chưa gồm WAL, replica, backup, bloat, ảnh/video), 3 năm:
 
-| Bảng                                          | Hàng/ngày             | TB/năm (không dọn) | Giữ (ngày): mặc định → khuyến nghị      | TB sau 3 năm: mặc định (RETENTION_* mặc định)              | TB sau 3 năm: khuyến nghị (RETENTION_* đã tăng) |
-| --------------------------------------------- | --------------------- | ------------------ | --------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------- |
-| `refresh_tokens`                              | 290 triệu             | **41,7**           | 37 (TTL 30 + 7) → ≈ 14 **[QUYẾT ĐỊNH]** | 65,1                                                       | 1,6                                             |
-| `video_views`                                 | 144 triệu             | 10,8               | ∞ → 180 **[QUYẾT ĐỊNH]**                | 32,3                                                       | 5,3                                             |
-| `messages` (chat bạn bè)                      | 43 triệu              | 6,7                | ∞ → 180 + archive **[QUYẾT ĐỊNH]**      | 20,1                                                       | 3,3                                             |
-| `story_views`                                 | 96 triệu              | 6,1                | 2 (sweeper, cascade theo story)         | 0,03                                                       | 0,03                                            |
-| `soul_chat_messages`                          | 43 triệu              | 5,4                | ∞ → 90 **[QUYẾT ĐỊNH]**                 | 16,2                                                       | 1,3                                             |
-| `notifications`                               | 32 triệu              | 4,4                | ≈ 200 (đọc 90 / chưa đọc 365, C10)      | 2,4                                                        | 2,4                                             |
-| `match_tickets` / `match_sessions`            | 24 / 10 triệu         | 4,0 / 0,8          | ∞ → 30 / 90 **[QUYẾT ĐỊNH, phân vùng]** | 12,1 / 2,5                                                 | 0,3 / 0,2                                       |
-| `outbox_events` (relay tắt ở mọi profile)     | 4,8 triệu             | 0,7                | ∞ → 7 **[QUYẾT ĐỊNH]**                  | 2,1                                                        | 0,01                                            |
-| `reactions`, `transactions`, `ledger_entries` | 36 / 4,8 / 10,6 triệu | 2,3 / 1,0 / 0,8    | ∞ (trạng thái / sổ cái append-only)     | 7,0 / 2,9 / 2,5                                            | 7,0 / 2,9 / 2,5                                 |
-| **Tổng (cả 25 bảng)**                         |                       | **89,1**           |                                         | **174,8** (còn +35,8/năm; 113,9 nếu `RETENTION_*` đã tăng) | **30,8** (còn +5,2/năm)                         |
+| Bảng                                          | Hàng/ngày             | TB/năm (không dọn) | Giữ (ngày): mặc định → khuyến nghị      | TB sau 3 năm: mặc định (RETENTION_* mặc định) | TB sau 3 năm: khuyến nghị (RETENTION_* đã tăng) |
+| --------------------------------------------- | --------------------- | ------------------ | --------------------------------------- | --------------------------------------------- | ----------------------------------------------- |
+| `refresh_tokens`                              | 290 triệu             | **41,7**           | 37 (TTL 30 + 7) → ≈ 14 **[QUYẾT ĐỊNH]** | 4,2                                           | 1,6                                             |
+| `video_views`                                 | 144 triệu             | 10,8               | ∞ → 180 **[QUYẾT ĐỊNH]**                | 32,3                                          | 5,3                                             |
+| `messages` (chat bạn bè)                      | 43 triệu              | 6,7                | ∞ → 180 + archive **[QUYẾT ĐỊNH]**      | 20,1                                          | 3,3                                             |
+| `story_views`                                 | 96 triệu              | 6,1                | 2 (sweeper, cascade theo story)         | 0,03                                          | 0,03                                            |
+| `soul_chat_messages`                          | 43 triệu              | 5,4                | ∞ → 90 **[QUYẾT ĐỊNH]**                 | 16,2                                          | 1,3                                             |
+| `notifications`                               | 32 triệu              | 4,4                | ≈ 200 (đọc 90 / chưa đọc 365, C10)      | 2,4                                           | 2,4                                             |
+| `match_tickets` / `match_sessions`            | 24 / 10 triệu         | 4,0 / 0,8          | ∞ → 30 / 90 **[QUYẾT ĐỊNH, phân vùng]** | 12,1 / 2,5                                    | 0,3 / 0,2                                       |
+| `outbox_events` (relay tắt ở mọi profile)     | 4,8 triệu             | 0,7                | ∞ → 7 **[QUYẾT ĐỊNH]**                  | 2,1                                           | 0,01                                            |
+| `reactions`, `transactions`, `ledger_entries` | 36 / 4,8 / 10,6 triệu | 2,3 / 1,0 / 0,8    | ∞ (trạng thái / sổ cái append-only)     | 7,0 / 2,9 / 2,5                               | 7,0 / 2,9 / 2,5                                 |
+| **Tổng (cả 25 bảng)**                         |                       | **89,1**           |                                         | **113,9** (còn +35,8/năm)                     | **30,8** (còn +5,2/năm)                         |
 
-Không dọn gì: 89,1 TB/năm → **267,4 TB sau 3 năm**. Với vòng đời mặc định của mã và `RETENTION_*` mặc định: **174,8 TB** sau 3 năm, trong đó ≈ 61 TB là BACKLOG của `refresh_tokens`
-(công suất xoá mặc định 144 triệu hàng/ngày/quy tắc, hàng vào 290 triệu/ngày = 2,0× nên phần xoá không kịp tích lại ≈ 146 triệu hàng/ngày ≈ 21 TB/năm);
-nếu `RETENTION_*` đã tăng đủ thì 113,9 TB. Cả hai VẪN tăng ≈ 36 TB/năm vì các mục CẦN QUYẾT ĐỊNH chưa bật. Chấp nhận mọi khuyến nghị: 30,8 TB sau 3 năm và còn tăng ≈ 5 TB/năm (sổ cái, lượt thích, bình luận,
+Không dọn gì: 89,1 TB/năm → **267,4 TB sau 3 năm**. Với vòng đời mặc định của mã và `RETENTION_*` mặc định (60 lô × 5.000 = 432 triệu hàng/ngày/quy tắc, `refresh_tokens` vào 290 triệu/ngày = 0,67×): **113,9 TB** sau 3 năm.
+Với mặc định CŨ (20 lô = 144 triệu/ngày, 2,0×) con số là ≈ 175 TB vì ≈ 61 TB là backlog của `refresh_tokens` (≈ 21 TB/năm) — đó là lý do đã nâng mặc định lên 60. VẪN tăng ≈ 36 TB/năm vì các mục CẦN QUYẾT ĐỊNH chưa bật. Chấp nhận mọi khuyến nghị: 30,8 TB sau 3 năm và còn tăng ≈ 5 TB/năm (sổ cái, lượt thích, bình luận,
 `gift_events` — phần "giữ vĩnh viễn", cần kế hoạch archive riêng, không xoá).
 
 Ba phát hiện đổi thứ tự ưu tiên:
@@ -55,7 +54,7 @@ Ba phát hiện đổi thứ tự ưu tiên:
    15 phút khi đang mở app) là một INSERT + một UPDATE trên bảng có 5 index (khoá chính, hash UNIQUE, user, họ, `expires_at`),
    ≈ 3.350 hàng/giây trung bình ở quy mô đề bài (≈ 3.330 lần xoay + ≈ 19 đăng nhập mới). Trước ADR này không hàng nào bị xoá.
    Mặc định của mã giữ MỌI hàng đủ `TTL + GRACE` = 37 ngày (≈ 4,2 TB ở trạng thái ổn định NẾU job xoá theo kịp; ở `RETENTION_*` mặc định
-   job chỉ xoá được 144 triệu hàng/ngày nên bảng không bao giờ ổn định, xem dòng cảnh báo của `pnpm capacity:data`); chỉ khi chấp nhận
+   với mặc định cũ 20 lô job chỉ xoá được 144 triệu hàng/ngày nên bảng không bao giờ ổn định; mặc định mới 60 lô xoá được 432 triệu/ngày); chỉ khi chấp nhận
    dọn-lúc-xoay (mục bên dưới) mới xuống ≈ 1,6 TB, và con số đó phụ thuộc họ token sống bao lâu.
 2. Chat không phải bảng lớn nhất: với đề bài (10.000 người chat, ~86 triệu tin/ngày chia đôi chat bạn bè / ẩn danh) `messages` + `soul_chat_messages` ≈ 12 TB/năm.
 3. **`outbox_events` tăng vô hạn khi relay tắt** — relay tắt ở MỌI profile (env mặc định, K8s, compose production, hosted-free): sự kiện không
@@ -98,12 +97,11 @@ Ba phát hiện đổi thứ tự ưu tiên:
    `AUTH_REFRESH_ROTATED_RETENTION_DAYS`, `OUTBOX_DEAD_LETTER_RETENTION_DAYS`. Story sweeper không chịu `RETENTION_MODE`. Các job
    retention bắt đầu lệch nhau một khoảng tất định theo hash của tên job (0 – 1 chu kỳ) để sáu job singleton ít khi chiếm kết nối cùng
    lúc (mỗi job giữ 1 kết nối cho advisory lock + 1 cho task; xem `k8s/README.md` § Ngân sách kết nối). Đây là GIẢM XÁC SUẤT, không loại trừ:
-   ở chu kỳ 60 giây các độ lệch là 4 / 33 / 48 / 51 / 54 / 54 giây (bốn job trong vòng 6 giây), và khi mỗi tick dùng hết ngân sách
-   30 giây (xả backlog đầu tiên sau khi bật `delete`) năm job có thể giữ cả pool 10 kết nối. Lần chạy đầu của mỗi job đến sau
+   ở chu kỳ 60 giây các độ lệch là 4 / 33 / 48 / 51 / 54 / 54 giây (bốn job trong vòng 6 giây). Chốt chặn thật là ngân sách đồng thời dùng chung
+   `RETENTION_MAX_CONCURRENT_JOBS` (mặc định 2): tick thứ ba chạy chồng bị bỏ, nên dù mỗi tick dùng hết ngân sách 30 giây retention cũng chỉ giữ ≤ 4 kết nối pool. Lần chạy đầu của mỗi job đến sau
    `độ lệch + 1 chu kỳ`.
 5. **Công suất xoá phải cấu hình theo tải**:
-   - Job retention: mặc định 5.000 hàng × 20 lô / 60 giây ≈ 1.667 hàng/giây mỗi quy tắc — thấp hơn nhu cầu `refresh_tokens` (~3.350/giây = 2,0× công suất:
-     KHÔNG theo kịp, backlog ≈ 146 triệu hàng/ngày) và bằng đúng `video_views` (~1.670/giây = 1,0×, không có biên cho giờ cao điểm) ở quy mô đề bài. `pnpm capacity:data` in cảnh báo; tăng `RETENTION_MAX_BATCHES_PER_TICK` (tối đa 1.000)
+   - Job retention: mặc định 5.000 hàng × 60 lô / 60 giây = 5.000 hàng/giây (432 triệu/ngày) mỗi quy tắc — nhu cầu `refresh_tokens` ~3.350/giây (0,67×) và `video_views` ~1.670/giây (0,33×) ở quy mô đề bài, còn biên nhưng chưa tới 2× của giờ cao điểm cho `refresh_tokens`. Mặc định CŨ 20 lô (1.667/giây) không theo kịp `refresh_tokens` (2,0×). Tick vẫn bị chặn bởi ngân sách 30 giây, và toàn process chỉ chạy tối đa `RETENTION_MAX_CONCURRENT_JOBS` (mặc định 2) tick retention cùng lúc (ngân sách đồng thời dùng chung: tick vượt ngân sách bị BỎ trước khi lấy kết nối, thử lại chu kỳ sau — retention không bao giờ chiếm quá 2 × 2 kết nối pool). `pnpm capacity:data` in cảnh báo; tăng `RETENTION_MAX_BATCHES_PER_TICK` (tối đa 1.000)
      hoặc `RETENTION_BATCH_SIZE` (tối đa 50.000) và theo dõi autovacuum.
    - Story sweeper: lô 500 story, ngân sách 30 giây/tick, nghỉ 50 ms là HẰNG SỐ trong mã — `RETENTION_*` không điều chỉnh được, chỉ
      `STORY_SWEEPER_INTERVAL_MS` (mặc định 1 giờ). **ĐO** (`scripts/capacity/bench/story-sweeper.mjs`: 12.000 story × 100 lượt xem = 1,2 triệu hàng cascade, hàng xen kẽ ngẫu nhiên, dữ liệu
@@ -156,7 +154,7 @@ Quyết định mặc định: **không bật**. Bật chỉ sau khi chủ bảo
 
 ## Hệ quả
 
-- Với 10 triệu CCU: không dọn → 89 TB/năm và 267 TB sau 3 năm; mã mặc định (khi bật `delete`, `RETENTION_*` mặc định) → 175 TB sau 3 năm (114 TB nếu `RETENTION_*` đã tăng đủ) và còn tăng 36 TB/năm;
+- Với 10 triệu CCU: không dọn → 89 TB/năm và 267 TB sau 3 năm; mã mặc định (khi bật `delete`) → 114 TB sau 3 năm (≈ 175 TB với mặc định cũ 20 lô) và còn tăng 36 TB/năm;
   chấp nhận mọi khuyến nghị → 31 TB sau 3 năm, còn tăng ≈ 5 TB/năm — phần "giữ vĩnh viễn" (sổ cái, lượt thích, bình luận, `gift_events`)
   cần kế hoạch archive riêng, không xoá. (Các con số là dung lượng bảng tại năm 3, không so với tốc độ tăng mỗi năm.)
 - Xoá theo lô tạo tải ghi thêm (WAL, vacuum): phải theo dõi `n_dead_tup`, độ trễ replica và thời gian autovacuum trên môi trường thật.

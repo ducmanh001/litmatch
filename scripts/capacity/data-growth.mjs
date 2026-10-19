@@ -75,7 +75,7 @@ export const SCENARIO = {
   refreshGraceDays: 7, // AUTH_REFRESH_RETENTION_GRACE_DAYS mặc định (job xoá token hết hạn quá hạn này)
   refreshRotatedPurgeDays: 7, // AUTH_REFRESH_ROTATED_RETENTION_DAYS KHUYẾN NGHỊ (mặc định trong mã là 0 = tắt)
   retentionBatchSize: 5_000, // RETENTION_BATCH_SIZE mặc định
-  retentionMaxBatchesPerTick: 20, // RETENTION_MAX_BATCHES_PER_TICK mặc định
+  retentionMaxBatchesPerTick: 60, // RETENTION_MAX_BATCHES_PER_TICK mặc định (trước đây 20: xoá không kịp refresh_tokens)
   retentionIntervalSeconds: 60, // RETENTION_INTERVAL_MS mặc định (giây)
   phoneLoginShare: 0.05, // tỉ lệ DAU đăng nhập bằng OTP điện thoại mỗi ngày
   otpRequestsPerLogin: 1.3,

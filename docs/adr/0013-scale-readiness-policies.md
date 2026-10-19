@@ -70,7 +70,7 @@ chọn chính sách cho agent; ADR này ghi lại lựa chọn, vì sao, và đi
   danh sách hội thoại. Theo dõi `friend_message_notifications_total{outcome}`; `gate_error` tăng nghĩa là
   Redis lỗi và hệ thống đang fail-open.
 - Retention xoá dữ liệu không hoàn tác: luôn bật `dry-run` trước, đọc gauge `retention_eligible_rows{rule}`,
-  rồi mới `delete`. Thông lượng mặc định ≈1.600 hàng/giây/quy tắc (tối đa 30 s mỗi tick); tăng
+  rồi mới `delete`. Thông lượng mặc định 5.000 hàng/giây/quy tắc (ADR 0014; trước đây ≈1.600) (tối đa 30 s mỗi tick); tăng
   `RETENTION_BATCH_SIZE`/`RETENTION_MAX_BATCHES_PER_TICK` nếu backlog còn (log "còn backlog"). Xoá đều đặn cần
   vacuum kịp: migration đặt `autovacuum_vacuum_scale_factor=0.02` cho `notifications`. `migration:revert` chỉ gỡ
   index không CONCURRENTLY (revert của TypeORM luôn chạy trong transaction).

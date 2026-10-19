@@ -49,6 +49,7 @@ describe('RetentionJob (khung chung, ADR 0013)', () => {
       RETENTION_INTERVAL_MS: 60_000,
       RETENTION_BATCH_SIZE: 100,
       RETENTION_MAX_BATCHES_PER_TICK: 3,
+      RETENTION_MAX_CONCURRENT_JOBS: 2,
       RETENTION_BATCH_PAUSE_MS: 0,
     };
     query = jest.fn().mockResolvedValue([{ n: 0 }]);
