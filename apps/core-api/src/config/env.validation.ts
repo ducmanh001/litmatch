@@ -27,12 +27,16 @@ export interface CoreApiEnv {
   DATABASE_URL: string;
   DATABASE_POOL_MAX: number;
   DATABASE_POOL_ACQUIRE_TIMEOUT_MS: number;
+  DATABASE_STATEMENT_TIMEOUT_MS: number;
+  HTTP_MAX_CONCURRENT_REQUESTS: number;
   REDIS_URL: string;
   /**
    * Redis từng shard của mặt phẳng realtime (publish `realtime:user:*` + đọc presence), phân theo
    * userId. Rỗng = một shard là `REDIS_URL`. PHẢI trùng danh sách + thứ tự với signaling-gateway.
    */
   REALTIME_REDIS_URLS: string;
+  /** Ordered physical queue shards; empty retains REDIS_URL. Change only with a coordinated drain/rebuild. */
+  MATCHING_REDIS_URLS: string;
   KAFKA_BROKERS: string;
   EVENT_BUS_KAFKA_REQUEST_TIMEOUT_MS: number;
   EVENT_BUS_KAFKA_RETRIES: number;
@@ -92,12 +96,17 @@ export interface CoreApiEnv {
   ECONOMY_STORE_HTTP_TIMEOUT_MS: number;
   ECONOMY_OUTBOX_RELAY_ENABLED: boolean;
   ECONOMY_OUTBOX_RELAY_INTERVAL_MS: number;
+  ECONOMY_OUTBOX_RELAY_MAX_BATCHES_PER_TICK: number;
+  ECONOMY_OUTBOX_RELAY_TICK_BUDGET_MS: number;
   ECONOMY_OUTBOX_MAX_ATTEMPTS: number;
   ECONOMY_RECONCILIATION_ENABLED: boolean;
   ECONOMY_RECONCILIATION_INTERVAL_MS: number;
   ECONOMY_RECONCILIATION_FAST_INTERVAL_MS: number;
   ECONOMY_RECONCILIATION_LAG_MS: number;
   ECONOMY_RECONCILIATION_FULL_INTERVAL_MS: number;
+  ECONOMY_RECONCILIATION_BATCH_SIZE: number;
+  ECONOMY_RECONCILIATION_MAX_BATCHES_PER_TICK: number;
+  ECONOMY_RECONCILIATION_TICK_BUDGET_MS: number;
   ECONOMY_APPLE_WEBHOOK_VERIFIER: 'dev' | 'store';
   ECONOMY_APPLE_ROOT_CA_PEM: string;
   ECONOMY_GOOGLE_RTDN_VERIFIER: 'dev' | 'store';
@@ -133,6 +142,8 @@ export interface CoreApiEnv {
    */
   MATCHING_MATCHER_UNPAIRABLE_CACHE_MS: number;
   MATCHING_SWEEPER_INTERVAL_MS: number;
+  MATCHING_QUEUE_REPAIR_INTERVAL_MS: number;
+  MATCHING_QUEUE_REPAIR_BATCH_SIZE: number;
   MATCHING_QUEUE_MAX_WAIT_SECONDS: number;
   MATCHING_CONFIRM_TIMEOUT_SECONDS: number;
   MATCHING_AGE_BAND_SIZE: number;
@@ -170,6 +181,9 @@ export interface CoreApiEnv {
   CALLING_PENDING_TIMEOUT_SECONDS: number;
   CALLING_RECONNECT_WINDOW_SECONDS: number;
   CALLING_TICKER_INTERVAL_MS: number;
+  CALLING_JOB_LEASE_MS: number;
+  CALLING_TICK_BUDGET_MS: number;
+  CALLING_CLEANUP_CONCURRENCY: number;
   CALLING_TOKEN_TTL_SECONDS: number;
   PARTY_MAX_SPEAKERS: number;
   PARTY_MAX_MEMBERS: number;
@@ -305,6 +319,16 @@ export const coreApiEnvSchema = Joi.object({
   // Sàn 5: mỗi job nền singleton (ManagedInterval) giữ 1 kết nối cho advisory lock suốt lúc chạy và task
   // của nó cần thêm 1 kết nối nữa, nên pool nhỏ hơn dễ bị job tự chiếm hết.
   DATABASE_POOL_MAX: Joi.number().integer().min(5).max(100).default(10),
+  DATABASE_STATEMENT_TIMEOUT_MS: Joi.number()
+    .integer()
+    .min(100)
+    .max(120_000)
+    .default(15_000),
+  HTTP_MAX_CONCURRENT_REQUESTS: Joi.number()
+    .integer()
+    .min(0)
+    .max(10_000)
+    .default(0),
   // Thời hạn chờ lấy một kết nối khi pool đã đầy; hết hạn thì lỗi thay vì chờ vô hạn.
   DATABASE_POOL_ACQUIRE_TIMEOUT_MS: Joi.number()
     .integer()
@@ -315,6 +339,7 @@ export const coreApiEnvSchema = Joi.object({
     .uri({ scheme: ['redis', 'rediss'] })
     .default('redis://localhost:6379'),
   REALTIME_REDIS_URLS: realtimeRedisUrlsSchema(),
+  MATCHING_REDIS_URLS: realtimeRedisUrlsSchema(),
   KAFKA_BROKERS: Joi.string().default('localhost:9092'),
   EVENT_BUS_KAFKA_REQUEST_TIMEOUT_MS: Joi.number()
     .integer()
@@ -471,6 +496,16 @@ export const coreApiEnvSchema = Joi.object({
     .min(1)
     .max(100)
     .default(5),
+  ECONOMY_OUTBOX_RELAY_MAX_BATCHES_PER_TICK: Joi.number()
+    .integer()
+    .min(1)
+    .max(100)
+    .default(10),
+  ECONOMY_OUTBOX_RELAY_TICK_BUDGET_MS: Joi.number()
+    .integer()
+    .min(100)
+    .max(30_000)
+    .default(1000),
   ECONOMY_RECONCILIATION_ENABLED: Joi.boolean().default(true),
   ECONOMY_RECONCILIATION_INTERVAL_MS: Joi.number()
     .integer()
@@ -497,6 +532,21 @@ export const coreApiEnvSchema = Joi.object({
     .integer()
     .min(3_600_000)
     .default(86_400_000),
+  ECONOMY_RECONCILIATION_BATCH_SIZE: Joi.number()
+    .integer()
+    .min(1)
+    .max(10_000)
+    .default(2000),
+  ECONOMY_RECONCILIATION_MAX_BATCHES_PER_TICK: Joi.number()
+    .integer()
+    .min(1)
+    .max(1000)
+    .default(10),
+  ECONOMY_RECONCILIATION_TICK_BUDGET_MS: Joi.number()
+    .integer()
+    .min(100)
+    .max(30_000)
+    .default(1000),
 
   // payOS web top-up: credential chỉ ở core-api; URL callback chỉ phục vụ UX, không credit.
   PAYOS_CLIENT_ID: Joi.string().allow('').default(''),
@@ -588,6 +638,15 @@ export const coreApiEnvSchema = Joi.object({
     .max(600_000)
     .default(30_000),
   MATCHING_SWEEPER_INTERVAL_MS: Joi.number().integer().min(500).default(5000),
+  MATCHING_QUEUE_REPAIR_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(1000)
+    .default(5000),
+  MATCHING_QUEUE_REPAIR_BATCH_SIZE: Joi.number()
+    .integer()
+    .min(1)
+    .max(5000)
+    .default(500),
   MATCHING_QUEUE_MAX_WAIT_SECONDS: Joi.number().integer().min(5).default(120),
   MATCHING_CONFIRM_TIMEOUT_SECONDS: Joi.number().integer().min(3).default(15),
   MATCHING_AGE_BAND_SIZE: Joi.number().integer().min(1).default(5),
@@ -691,6 +750,17 @@ export const coreApiEnvSchema = Joi.object({
   CALLING_PENDING_TIMEOUT_SECONDS: Joi.number().integer().min(5).default(60),
   CALLING_RECONNECT_WINDOW_SECONDS: Joi.number().integer().min(5).default(30),
   CALLING_TICKER_INTERVAL_MS: Joi.number().integer().min(200).default(1000),
+  CALLING_JOB_LEASE_MS: Joi.number()
+    .integer()
+    .min(30_000)
+    .max(300_000)
+    .default(30_000),
+  CALLING_TICK_BUDGET_MS: Joi.number()
+    .integer()
+    .min(100)
+    .max(30_000)
+    .default(1000),
+  CALLING_CLEANUP_CONCURRENCY: Joi.number().integer().min(1).max(10).default(2),
   CALLING_TOKEN_TTL_SECONDS: Joi.number().integer().min(30).default(120),
 
   // Party Room — Giai đoạn 3 (docs/services/party-room-service.md § 7)

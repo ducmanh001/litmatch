@@ -646,8 +646,8 @@ export class MatcherWorkerService
    *    đó mà vẫn cho mọi lần hạ score hợp lệ qua, và chạy lại bao nhiêu lần cũng không boost đôi.
    * `strict`: lỗi bước 1 được ném lên (đường thường); đường lỗi transaction chỉ ghi nhận để lỗi gốc đi tiếp. Bước 2 luôn
    * best-effort: DB lỗi thì ticket giữ score đã đọc lúc claim (có thể thiếu boost vừa mua trong khoảng đó) cho tới khi
-   * speed-up được gọi lại với cùng Idempotency-Key — replay đặt lại score từ DB (matching.service.ts, bước 4). KHÔNG có job
-   * nào dựng lại score từ DB (ticket-sweeper chỉ expire ticket quá hạn và thêm ticket requeue MỚI bằng `NX`).
+   * QueueRepairService quét lại ticket sống và refresh score từ DB; client replay cùng Idempotency-Key cũng đặt lại
+   * score ngay (matching.service.ts, bước 4). Ticket-sweeper chỉ expire hoặc thêm ticket requeue MỚI bằng `NX`.
    */
   private async requeueClaimed(
     shard: string,

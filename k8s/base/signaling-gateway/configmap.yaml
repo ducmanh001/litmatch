@@ -15,11 +15,17 @@ data:
   # Điểm mở: điền domain FE thật khi có — KHÔNG dùng '*'
   CORS_ORIGINS: ''
   WS_MAX_CONNECTIONS_PER_USER: '3'
+  WS_MAX_CONNECTIONS_PER_PROCESS: '2000'
+  WS_MAX_CONCURRENT_HANDSHAKES: '64'
   WS_CONNECTION_LEASE_MS: '90000'
   # 0 = lease/3. Ở quy mô triệu socket, tăng lease + chu kỳ để giảm tải gia hạn trên Redis (docs/services/realtime-gateway.md § 7).
   WS_CONNECTION_LEASE_REFRESH_MS: '0'
   # user = chỉ SUBSCRIBE user có socket trên pod (mặc định); pattern = PSUBSCRIBE realtime:user:* (đường lùi).
   WS_FANOUT_MODE: 'user'
+  WS_OUTBOUND_MAX_PACKETS: '128'
+  WS_OUTBOUND_MAX_BYTES: '1048576'
+  WS_OUTBOUND_TOTAL_MAX_PACKETS: '16384'
+  WS_OUTBOUND_TOTAL_MAX_BYTES: '134217728'
   SENTRY_DSN: ''
   SENTRY_RELEASE: ''
   OTEL_EXPORTER_OTLP_ENDPOINT: ''

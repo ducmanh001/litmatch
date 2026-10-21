@@ -1,13 +1,29 @@
-# media-server vẫn replicas: 1 ở production cho tới khi có ADR networking RTC multi-node (xem
-# k8s/base/media-server/deployment.yaml + k8s/README.md) — chỉ nới resource cho node lớn hơn.
+# Two LiveKit nodes for availability; one room still lives on one node.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: media-server
   namespace: litmatch
 spec:
+  replicas: 2
+  # Native LiveKit drain can take up to the pod grace period.
+  progressDeadlineSeconds: 18600
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   template:
     spec:
+      # LiveKit drains rooms on SIGTERM; Kubernetes kills after this finite deadline.
+      terminationGracePeriodSeconds: 18000
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: media-server
+              topologyKey: kubernetes.io/hostname
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001

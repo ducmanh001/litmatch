@@ -1,8 +1,8 @@
 /**
- * Ngân sách đồng thời DÙNG CHUNG trong một process (admission control cho job nền). Mỗi lần chạy của job cluster-singleton giữ
- * một kết nối pool cho advisory lock cộng thêm kết nối cho task, nên N job nền chạy chồng nhau có thể chiếm hết pool và làm
- * request HTTP chờ kết nối. `tryAcquire` KHÔNG chờ và KHÔNG xếp hàng: hết ngân sách thì tick đó bị bỏ (tick sau thử lại) — hàng
- * đợi luôn có trần bằng 0 nên không thể phình, và việc chậm lại rơi vào job nền chứ không phải request người dùng.
+ * Ngân sách đồng thời dùng chung giữa các caller giữ cùng instance trong một process.
+ * `tryAcquire` không chờ và không xếp hàng: HTTP caller trả 503 khi hết chỗ;
+ * job nền bỏ tick và thử lại sau. Job cluster-singleton còn giữ kết nối cho
+ * advisory lock, vì vậy ngân sách của job phải dành chỗ cho cả lock và task.
  */
 export class ConcurrencyBudget {
   private inFlight = 0;

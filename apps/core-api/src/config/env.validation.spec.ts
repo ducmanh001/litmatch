@@ -297,6 +297,24 @@ describe('coreApiEnvSchema invariants', () => {
     expect(schema.validate(120_001).error).toBeDefined();
   });
 
+  it.each([
+    ['DATABASE_STATEMENT_TIMEOUT_MS', 15000, 100, 120000],
+    ['CALLING_TICK_BUDGET_MS', 1000, 100, 30000],
+    ['CALLING_CLEANUP_CONCURRENCY', 2, 1, 10],
+    ['HTTP_MAX_CONCURRENT_REQUESTS', 0, 0, 10000],
+  ] as const)(
+    '%s validates a finite resource budget',
+    (key, value, minimum, maximum) => {
+      const schema = coreApiEnvSchema.extract(key);
+      expect(schema.validate(undefined).value).toBe(value);
+      expect(schema.validate(minimum).error).toBeUndefined();
+      expect(schema.validate(maximum).error).toBeUndefined();
+      for (const invalid of [minimum - 1, maximum + 1, Infinity, 1.5]) {
+        expect(schema.validate(invalid).error).toBeDefined();
+      }
+    },
+  );
+
   it('throttle storage mặc định memory và chỉ nhận memory hoặc redis', () => {
     const schema = coreApiEnvSchema.extract('THROTTLE_STORAGE');
     expect(schema.validate(undefined).value).toBe('memory');

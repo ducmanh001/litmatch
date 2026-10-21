@@ -23,6 +23,18 @@ Mọi transition khác throw `MATCHING_TICKET_INVALID_TRANSITION`.
 
 ## 2. Sharding & Redis queue (docs/03 § 3.8.B)
 
+`MATCHING_REDIS_URLS` là danh sách Redis vật lý có thứ tự (rỗng dùng `REDIS_URL`). Hash của logical
+queue chọn một Redis duy nhất nên claim hai ticket vẫn atomic. Một Redis lỗi không ngăn matcher
+đọc active queues của các shard còn khỏe. Mọi pod phải có cùng danh sách/thứ tự; đổi topology
+phải drain/dừng admissions và matcher, loại bỏ projection cũ rồi rebuild đồng bộ (ADR 0015).
+
+`QueueRepairService` quét ticket queued còn trong hạn bằng cursor `(enqueued_at, id)` bền vững,
+khôi phục `NX` rồi refresh score `XX_LT` theo DB mới nhất, đánh dấu shard active và đánh thức matcher.
+Tối đa `MATCHING_QUEUE_REPAIR_BATCH_SIZE` ticket mỗi `MATCHING_QUEUE_REPAIR_INTERVAL_MS`; không
+phụ thuộc client retry hoặc HTTP activity. Thời gian hồi phục phụ thuộc số ticket sống và ngân sách
+scan. Lỗi một Redis được retry ở vòng scan kế tiếp. DB state recheck vẫn chặn ghép trùng khi repair
+đồng thời với claim/cancel/speed-up; lease/Redis không thay thế tính đúng đắn trong Postgres.
+
 - Shard key: `matching:queue:{matchType}:{region}:{ageBand}` — `ageBand = floor(age / MATCHING_AGE_BAND_SIZE)`. `matchType` ∈ `soul|voice`.
 - Cấu trúc: **Sorted Set**, member = `ticketId`, score = `enqueuedAtMs - speedupBoostMs` (speed-up trừ `MATCHING_PRIORITY_BOOST_MS` khỏi score → nổi lên đầu hàng đợi, score càng nhỏ càng được ghép trước).
 - Danh sách shard đang hoạt động: Set `matching:shards:active` (thêm khi enqueue, dọn khi shard rỗng) để matcher worker không phải quét toàn bộ keyspace.

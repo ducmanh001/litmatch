@@ -2,6 +2,8 @@
 
 - **Ngày**: 2026-07-13
 - **Trạng thái**: Accepted (mở rộng [ADR 0001](./0001-livekit-self-host-lam-media-server.md))
+- **Production replica restriction superseded by**: [ADR 0015](./0015-bounded-runtime-recovery.md).
+  Host networking and the single-node room limit remain applicable.
 - **Liên quan**: [docs/03-architecture.md § 3.5/3.8.A](../03-architecture.md), `k8s/base/media-server/deployment.yaml`, `k8s/README.md`
 
 ## Bối cảnh

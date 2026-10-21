@@ -47,6 +47,8 @@ import { HealthController } from './health.controller';
 import { ReadinessService } from './readiness.service';
 import { CapabilitiesController } from './capabilities.controller';
 import { CapabilitiesService } from './capabilities.service';
+import { postgresRuntimeOptions } from '../database/postgres-runtime-options';
+import { RequestConcurrencyInterceptor } from '../common/interceptors/request-concurrency.interceptor';
 
 @Module({
   imports: [
@@ -67,16 +69,7 @@ import { CapabilitiesService } from './capabilities.service';
       useFactory: (config: ConfigService<CoreApiEnv, true>) => ({
         type: 'postgres' as const,
         url: config.getOrThrow('DATABASE_URL', { infer: true }),
-        // Trần kết nối của MỖI pod: tổng = số pod × giá trị này (k8s/README.md, ngân sách kết nối).
-        poolSize: config.getOrThrow('DATABASE_POOL_MAX', { infer: true }),
-        // Hết kết nối trong pool thì request/job lỗi sau thời hạn này thay vì chờ vô hạn (pg mặc định không
-        // timeout). Job singleton giữ 1 kết nối suốt lúc chạy nên pool nhỏ có thể tự khoá nếu không có hạn này.
-        connectTimeoutMS: config.getOrThrow(
-          'DATABASE_POOL_ACQUIRE_TIMEOUT_MS',
-          {
-            infer: true,
-          },
-        ),
+        ...postgresRuntimeOptions(config),
         autoLoadEntities: true,
         synchronize: false, // schema chỉ đổi qua migration (docs/04)
         namingStrategy: new SnakeNamingStrategy(),
@@ -155,6 +148,7 @@ import { CapabilitiesService } from './capabilities.service';
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_INTERCEPTOR, useClass: ResponseEnvelopeInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: RequestConcurrencyInterceptor },
     { provide: APP_FILTER, useClass: GlobalExceptionFilter },
   ],
 })

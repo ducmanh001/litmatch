@@ -1,6 +1,25 @@
 import { signalingEnvSchema } from './env.validation';
 
 describe('signalingEnvSchema invariants', () => {
+  it.each([
+    ['WS_MAX_CONNECTIONS_PER_PROCESS', 2_000, 1, 100_000],
+    ['WS_MAX_CONCURRENT_HANDSHAKES', 64, 1, 1_024],
+    ['WS_OUTBOUND_MAX_PACKETS', 128, 1, 4096],
+    ['WS_OUTBOUND_MAX_BYTES', 1_048_576, 1024, 16_777_216],
+    ['WS_OUTBOUND_TOTAL_MAX_PACKETS', 16_384, 1, 1_000_000],
+    ['WS_OUTBOUND_TOTAL_MAX_BYTES', 134_217_728, 1024, 1_073_741_824],
+  ] as const)(
+    '%s has a bounded positive integer budget',
+    (key, fallback, min, max) => {
+      const schema = signalingEnvSchema.extract(key);
+      expect(schema.validate(undefined).value).toBe(fallback);
+      expect(schema.validate(min).error).toBeUndefined();
+      expect(schema.validate(max).error).toBeUndefined();
+      for (const invalid of [0, min - 1, max + 1, 1.5, 'unlimited']) {
+        expect(schema.validate(invalid).error).toBeDefined();
+      }
+    },
+  );
   it('chấp nhận Redis TLS managed và từ chối protocol không phải Redis', () => {
     const schema = signalingEnvSchema.extract('REDIS_URL');
     expect(

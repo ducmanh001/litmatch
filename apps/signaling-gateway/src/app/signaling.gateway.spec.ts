@@ -34,6 +34,7 @@ interface FakeRefresher {
 function makeGateway(
   verifyImpl?: jest.Mock,
   previousSecret = '',
+  overrides: Partial<SignalingEnv> = {},
 ): {
   gateway: SignalingGateway;
   connectionQuota: ConnectionQuotaService;
@@ -54,7 +55,9 @@ function makeGateway(
       throw new Error(`missing config ${key}`);
     },
     get: (key: string) =>
-      key === 'JWT_SECRET_PREVIOUS' ? previousSecret : undefined,
+      key === 'JWT_SECRET_PREVIOUS'
+        ? previousSecret
+        : overrides[key as keyof SignalingEnv],
   } as unknown as ConfigService<SignalingEnv, true>;
   const connectionQuota = {
     leaseMs: 90_000,
@@ -98,7 +101,12 @@ function makeGateway(
   // gán server mock (bình thường do @WebSocketServer inject sau afterInit). Relay chỉ được đi qua
   // `server.local` — mock không có `server.to` để một lần quay lại emit toàn cụm sẽ fail ngay.
   Object.assign(gateway, {
-    server: { local: { to }, adapter: { rooms } },
+    server: {
+      name: '/signaling',
+      sockets: new Map([['socket-1', makeSocket()]]),
+      local: { to },
+      adapter: { rooms },
+    },
     fanout,
     refresher,
   });
@@ -214,7 +222,7 @@ describe('SignalingGateway (unit — fanout thuần, không business logic)', ()
         'realtime:user:user-9',
         JSON.stringify({ event: 'soul.message', data: { sessionId: 's1' } }),
       );
-      expect(to).toHaveBeenCalledWith('user:user-9');
+      expect(to).toHaveBeenCalledWith('socket-1');
       expect(emit).toHaveBeenCalledWith('soul.message', { sessionId: 's1' });
     });
 
@@ -254,6 +262,135 @@ describe('SignalingGateway (unit — fanout thuần, không business logic)', ()
   it('ping trả pong (giữ smoke test skeleton)', () => {
     const { gateway } = makeGateway();
     expect(gateway.ping()).toEqual({ event: 'pong', data: 'pong' });
+  });
+
+  describe('process admission capacity', () => {
+    it('includes connected sockets and returns capacity exactly once on disconnect', async () => {
+      const { gateway } = makeGateway(undefined, '', {
+        WS_MAX_CONNECTIONS_PER_PROCESS: 1,
+      });
+      const first = makeSocket('t');
+      await gateway.admit(first);
+      gateway.handleConnection(first);
+      await expect(gateway.admit(makeSocket('t'))).rejects.toThrow(
+        'CONNECTION_QUOTA_UNAVAILABLE',
+      );
+      gateway.handleDisconnect(first);
+      gateway.handleDisconnect(first);
+      await expect(gateway.admit(makeSocket('t'))).resolves.toBeUndefined();
+      await expect(gateway.admit(makeSocket('t'))).rejects.toThrow(
+        'CONNECTION_QUOTA_UNAVAILABLE',
+      );
+    });
+
+    it('bounds asynchronous JWT work even after the pending transport closes', async () => {
+      let confirm!: (value: { sub: string }) => void;
+      const verify = jest
+        .fn()
+        .mockReturnValueOnce(
+          new Promise<{ sub: string }>((resolve) => {
+            confirm = resolve;
+          }),
+        )
+        .mockResolvedValue({ sub: 'user-1' });
+      const { gateway, connectionQuota } = makeGateway(verify, '', {
+        WS_MAX_CONCURRENT_HANDSHAKES: 1,
+      });
+      const first = makeSocket('t');
+      const pending = gateway.admit(first);
+      const rejected = expect(pending).rejects.toThrow(
+        'CONNECTION_QUOTA_UNAVAILABLE',
+      );
+      (first.conn as unknown as EventEmitter).emit('close');
+      await expect(gateway.admit(makeSocket('t'))).rejects.toThrow(
+        'CONNECTION_QUOTA_UNAVAILABLE',
+      );
+      expect(verify).toHaveBeenCalledTimes(1);
+      confirm({ sub: 'user-1' });
+      await rejected;
+      expect(connectionQuota.acquire).not.toHaveBeenCalled();
+      await expect(gateway.admit(makeSocket('t'))).resolves.toBeUndefined();
+    });
+
+    it.each(['quota', 'fanout'])(
+      'keeps asynchronous capacity while a closed transport awaits %s',
+      async (stage) => {
+        const { gateway, connectionQuota, fanout } = makeGateway(
+          undefined,
+          '',
+          {
+            WS_MAX_CONCURRENT_HANDSHAKES: 1,
+          },
+        );
+        let confirm!: () => void;
+        const waiting = new Promise<void>((resolve) => {
+          confirm = resolve;
+        });
+        if (stage === 'quota') {
+          jest
+            .mocked(connectionQuota.acquire)
+            .mockReturnValueOnce(waiting.then(() => true));
+        } else {
+          fanout.subscribeUser.mockReturnValueOnce(waiting);
+        }
+        const first = makeSocket('t');
+        const pending = gateway.admit(first);
+        const rejected = expect(pending).rejects.toThrow(
+          'CONNECTION_QUOTA_UNAVAILABLE',
+        );
+        await new Promise((resolve) => setImmediate(resolve));
+        Object.assign(first.conn, { readyState: 'closed' });
+        (first.conn as unknown as EventEmitter).emit('close');
+        await expect(gateway.admit(makeSocket('t'))).rejects.toThrow(
+          'CONNECTION_QUOTA_UNAVAILABLE',
+        );
+        confirm();
+        await rejected;
+        await expect(gateway.admit(makeSocket('t'))).resolves.toBeUndefined();
+      },
+    );
+
+    it.each(['jwt', 'quota', 'fanout'])(
+      'returns capacity after %s rejection',
+      async (stage) => {
+        const verify = jest.fn().mockResolvedValue({ sub: 'user-1' });
+        const { gateway, connectionQuota, fanout } = makeGateway(verify, '', {
+          WS_MAX_CONNECTIONS_PER_PROCESS: 1,
+          WS_MAX_CONCURRENT_HANDSHAKES: 1,
+        });
+        if (stage === 'jwt')
+          verify.mockRejectedValueOnce(new Error('bad token'));
+        if (stage === 'quota') {
+          jest.mocked(connectionQuota.acquire).mockResolvedValueOnce(false);
+        }
+        if (stage === 'fanout') {
+          fanout.subscribeUser.mockRejectedValueOnce(new Error('timeout'));
+        }
+        await expect(gateway.admit(makeSocket('t'))).rejects.toThrow();
+        await expect(gateway.admit(makeSocket('t'))).resolves.toBeUndefined();
+      },
+    );
+
+    it('closes pending sockets on shutdown and rejects late authentication completion', async () => {
+      let confirm!: (value: { sub: string }) => void;
+      const verify = jest.fn(
+        () =>
+          new Promise<{ sub: string }>((resolve) => {
+            confirm = resolve;
+          }),
+      );
+      const { gateway, connectionQuota } = makeGateway(verify);
+      const socket = makeSocket('t');
+      const pending = gateway.admit(socket);
+      const rejected = expect(pending).rejects.toThrow(
+        'CONNECTION_QUOTA_UNAVAILABLE',
+      );
+      await gateway.onModuleDestroy();
+      expect(socket.conn.close).toHaveBeenCalledWith(true);
+      confirm({ sub: 'user-1' });
+      await rejected;
+      expect(connectionQuota.acquire).not.toHaveBeenCalled();
+    });
   });
 
   describe('handshake — JWT → quota lease → subscribe Redis', () => {

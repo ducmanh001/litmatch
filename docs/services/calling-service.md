@@ -72,8 +72,10 @@ Client không được tự gửi cờ
 ## 4. Ticker — timer ở server (docs/10 § Calling: KHÔNG tin timer client)
 
 `CallTickerService` interval `CALLING_TICKER_INTERVAL_MS`, mỗi tick chỉ lấy `id` theo batch:
-`pending` dùng index `(status, created_at)`, còn `active` dùng partial index
-`(updated_at, id) WHERE status='active'` để không sort/quét toàn bộ tập call đang sống:
+`pending` dùng index `(status, created_at)`, reconnect dùng `(reconnect_started_at, id)`;
+free-limit dùng partial index `(started_at, id)` chỉ chứa Voice Match active không reconnect.
+Predicate deadline và thứ tự đều theo `started_at`, tránh lọc toàn bộ tập active còn mới khi
+chưa có call quá hạn. Migration mới build index concurrently; không sửa migration cũ.
 
 - `pending` quá `CALLING_PENDING_TIMEOUT_SECONDS` kể từ `createdAt` → end `pending_timeout`.
 - `active` có participant bị mất kết nối: trong `CALLING_RECONNECT_WINDOW_SECONDS` (default
@@ -85,9 +87,41 @@ Client không được tự gửi cờ
 - **Race webhook-vs-tick**: danh sách ID chỉ là ứng viên; dưới lock phải kiểm lại đúng predicate
   pending timeout / reconnect timeout / free limit. Call vừa active hoặc đã reconnect không bị
   kết thúc bởi kết quả SELECT cũ.
+- Tác vụ nền chọn ứng viên trong transaction ngắn với `FOR UPDATE SKIP LOCKED` trước `LIMIT`,
+  rồi nhả lock chọn ngay. Khi thực hiện transition cũng bỏ qua row vừa bị khóa lại; một nhóm
+  row đang bận không chặn các call phía sau. Endpoint trực tiếp vẫn dùng row lock bình thường.
 - Cleanup retry chỉ lấy tối đa 100 call `ended AND cleanup_pending` qua partial index `(updated_at, id)`.
   Lỗi được đưa về cuối hàng để không bỏ đói room khác. Cleanup là at-least-once và idempotent;
   transition, metric kết thúc và lần publish realtime chỉ phát sinh ở nhánh `justEnded`.
+
+Timer và cleanup là hai `ManagedInterval` riêng trong mỗi pod `core-api` (ADR 0015), không còn
+cluster singleton. Mỗi lượt atomically claim tối đa 100 call bằng `UPDATE ... SKIP LOCKED`, với
+`timer_claim_until` / `cleanup_claim_until` riêng. Nhiều pod nhận các batch rời nhau; worker chết
+thì lease hết hạn theo đồng hồ DB (`CALLING_JOB_LEASE_MS`, mặc định 30 giây). Khi tác vụ đã kết thúc,
+lease được thả bằng so sánh timestamp chính xác, kể cả nhánh lỗi hoặc skip do lock; chỉ crash mới
+phải chờ TTL. State transition vẫn được recheck dưới row lock, lease không phải exactly-once.
+Timer chỉ
+terminal hoá call và để marker cho cleanup; không chờ SFU. Mỗi vòng timer có ngân sách
+`CALLING_TICK_BUDGET_MS` (mặc định 1 giây), luân phiên pending/reconnect/free-limit khi hết ngân
+sách để backlog một nhóm không bỏ đói nhóm khác. Cleanup mặc định tối đa hai tác vụ đồng thời,
+luôn bị chặn trên ở `floor(DATABASE_POOL_MAX / 4)` (tối thiểu một); hết ngân sách hoặc shutdown
+thì không khởi động thêm tác vụ. Các I/O đã bắt đầu vẫn chờ driver kết thúc/timeout: đây là
+deadline hợp tác, không phải cam kết hủy ngay mọi lệnh đang chạy. Endpoint end trực tiếp vẫn
+thử cleanup ngay; marker bền vững giữ việc còn lại khi lỗi hoặc process chết.
+
+Mọi `ManagedInterval` có cluster singleton hoặc `databaseAdmission` đều đi qua admission FIFO dùng chung theo từng
+`DataSource` trước khi tạo `QueryRunner`: waiter không giữ connection, mỗi job chỉ có một waiter,
+`stop()` huỷ được waiter. Với pool `P`, admission dành một connection cho HTTP và hai cho timer
+cuộc gọi; mỗi slot job thường được tính như một claim cộng tối đa `1 + floor(P/4)` worker, nên
+pool 5 có một slot thường và pool 10 có hai slot thường. Calling ticker dùng lane `critical` riêng
+(một tick), vì vậy cleanup/SFU chậm không chặn timer; các job thường vẫn xếp hàng công bằng. Đây
+là ngân sách cho các job được đăng ký qua `ManagedInterval`, không phải giới hạn tuyệt đối cho mọi
+truy vấn ad-hoc hoặc mọi request ngoài scheduler.
+
+Nếu SELECT ứng viên đã tiêu hết ngân sách, vẫn thử ít nhất một ứng viên (trừ khi shutdown) để
+truy vấn chậm không gây starvation vô hạn; các lệnh SQL có timeout runtime riêng. Khi toàn bộ
+lượt cleanup đã thử đều lỗi, job nghỉ ngẫu nhiên 2,5–5 giây trước khi thử lại; timer cuộc gọi vẫn
+chạy độc lập. Đây là backoff theo process, không phải lịch retry bền vững cho từng room.
 
 ## 5. Realtime & API
 
@@ -123,7 +157,7 @@ tim được giữ sau refetch/reload; trước mutual like `friendUserId` luôn
 `livekit.yaml`; dev = devkey), `CALLING_FREE_CALL_SECONDS` (default 420 — đúng 7 phút),
 `CALLING_PENDING_TIMEOUT_SECONDS`
 (default 60), `CALLING_RECONNECT_WINDOW_SECONDS` (default 30), `CALLING_TICKER_INTERVAL_MS`
-(default 1000), `CALLING_TOKEN_TTL_SECONDS` (default 120).
+(default 1000), `CALLING_JOB_LEASE_MS` (default 30000), `CALLING_TOKEN_TTL_SECONDS` (default 120).
 
 Khi test điện thoại, `LIVEKIT_URL` phải là `wss://` public, không phải `ws://localhost`; còn
 `LIVEKIT_API_URL` của core-api vẫn là DNS nội bộ tới SFU. Tunnel HTTP chỉ giải quyết signaling,

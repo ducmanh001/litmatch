@@ -3,6 +3,7 @@ import type { SchedulerRegistry } from '@nestjs/schedule';
 import type { DataSource, QueryRunner } from 'typeorm';
 
 import type { ConcurrencyBudget } from './concurrency-budget';
+import { acquireBackgroundDatabaseAdmission } from './background-database-admission';
 import {
   isRuntimeActive,
   recordRuntimeBackgroundSkip,
@@ -17,6 +18,8 @@ interface ClusterSingletonOptions {
    */
   dataSource: DataSource;
   followerRetryMs?: number;
+  /** Reserved claim + task connections for the sequential calling timer only. */
+  priority?: 'critical';
   /**
    * Ngân sách đồng thời dùng chung giữa các job nền của process: lấy TRƯỚC khi mở query runner (vì runner giữ một kết nối
    * pool suốt tick). Hết ngân sách thì bỏ tick, không chờ.
@@ -32,6 +35,8 @@ export class ManagedInterval {
   private running = false;
   private scheduledRunInFlight = false;
   private clusterRetryAfter = 0;
+  private generation = 0;
+  private cancelAdmission: (() => void) | undefined;
   private registration:
     { scheduler: SchedulerRegistry; jobName: string } | undefined;
 
@@ -46,11 +51,14 @@ export class ManagedInterval {
       /** Skip this periodic backstop while the alpha process is idle. */
       skipWhenIdle?: boolean;
       clusterSingleton?: ClusterSingletonOptions;
+      /** Pool admission without a cluster lock; the task owns distributed claims. */
+      databaseAdmission?: ClusterSingletonOptions;
     },
   ): void {
+    const generation = ++this.generation;
     const interval = setInterval(
       () =>
-        void this.runScheduled(options).catch((error: unknown) =>
+        void this.runScheduled(options, generation).catch((error: unknown) =>
           options.logger.error({ err: `${error}` }, options.errorMessage),
         ),
       options.intervalMs,
@@ -60,6 +68,9 @@ export class ManagedInterval {
   }
 
   stop(): void {
+    this.generation += 1;
+    this.cancelAdmission?.();
+    this.cancelAdmission = undefined;
     if (this.registration === undefined) return;
     const { scheduler, jobName } = this.registration;
     if (scheduler.doesExist('interval', jobName)) {
@@ -79,15 +90,19 @@ export class ManagedInterval {
     }
   }
 
-  private async runScheduled(options: {
-    jobName: string;
-    intervalMs: number;
-    task: () => Promise<unknown>;
-    clusterSingleton?: ClusterSingletonOptions;
-    skipWhenIdle?: boolean;
-  }): Promise<void> {
+  private async runScheduled(
+    options: {
+      jobName: string;
+      intervalMs: number;
+      task: () => Promise<unknown>;
+      clusterSingleton?: ClusterSingletonOptions;
+      databaseAdmission?: ClusterSingletonOptions;
+      skipWhenIdle?: boolean;
+    },
+    generation: number,
+  ): Promise<void> {
     // setInterval does not await async callbacks. Keep slow ticks from piling up in one process.
-    if (this.scheduledRunInFlight) return;
+    if (this.scheduledRunInFlight || generation !== this.generation) return;
     if (options.skipWhenIdle && !isRuntimeActive()) {
       recordRuntimeBackgroundSkip(options.jobName);
       return;
@@ -102,22 +117,36 @@ export class ManagedInterval {
     this.scheduledRunInFlight = true;
     try {
       const clusterSingleton = options.clusterSingleton;
-      if (clusterSingleton === undefined) {
+      const databaseAdmission = clusterSingleton ?? options.databaseAdmission;
+      if (databaseAdmission === undefined) {
         await options.task();
         return;
       }
-      const release = clusterSingleton.budget?.tryAcquire();
-      if (clusterSingleton.budget !== undefined && release === undefined) {
-        recordRuntimeBackgroundSkip(options.jobName);
-        return;
-      }
+      const admission = acquireBackgroundDatabaseAdmission(
+        databaseAdmission.dataSource,
+        databaseAdmission.priority,
+      );
+      this.cancelAdmission = admission.cancel;
+      const releaseAdmission = await admission.ready;
+      if (this.cancelAdmission === admission.cancel)
+        this.cancelAdmission = undefined;
       try {
-        await this.runClusterSingleton({
-          ...options,
-          clusterSingleton,
-        });
+        // stop() also covers the microtask between granting admission and opening the runner.
+        if (releaseAdmission === undefined || generation !== this.generation)
+          return;
+        const release = databaseAdmission.budget?.tryAcquire();
+        if (databaseAdmission.budget !== undefined && release === undefined) {
+          recordRuntimeBackgroundSkip(options.jobName);
+          return;
+        }
+        try {
+          if (clusterSingleton === undefined) await options.task();
+          else await this.runClusterSingleton({ ...options, clusterSingleton });
+        } finally {
+          release?.();
+        }
       } finally {
-        release?.();
+        releaseAdmission?.();
       }
     } finally {
       this.scheduledRunInFlight = false;

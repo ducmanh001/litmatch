@@ -49,6 +49,26 @@ thì REST polling tiếp tục làm fallback. Logout hủy timer và callback mu
 được mở lại kết nối. Refetch phục hồi chạy sau sự kiện namespace `connect` (đã auth/join room),
 kể cả khi kết nối lại qua retry admission, không chạy sớm ở sự kiện transport `reconnect`.
 
+Mỗi socket có ngân sách gửi `WS_OUTBOUND_MAX_PACKETS` (mặc định 128) và
+`WS_OUTBOUND_MAX_BYTES` (mặc định 1 MiB). Khi gửi thêm event sẽ vượt trần, gateway đóng transport
+của socket chậm để client reconnect và đọc bù trạng thái qua REST; socket khoẻ trong room vẫn được
+phục vụ. Đây là giới hạn hàng đợi/đang gửi ở ứng dụng và transport, không phải ACK của client.
+Tracker bắt đầu ở lần relay đầu tiên; bộ đếm giữ packet tới khi WebSocket writer drain hoặc
+HTTP polling response finish, gồm UTF-8 payload và overhead bảo thủ. Giới hạn áp dụng lúc relay,
+không phải trần heap/kernel buffer hay bộ điều tiết control packet của Engine.IO.
+`signaling_slow_consumers_total` đếm transport bị đóng vì vượt ngân sách. Metric relay thành
+công chỉ xác nhận gateway đã emit, không chứng minh client đã nhận event.
+
+Mỗi process còn có ngân sách tổng `WS_OUTBOUND_TOTAL_MAX_PACKETS` (mặc định 16.384) và
+`WS_OUTBOUND_TOTAL_MAX_BYTES` (mặc định 128 MiB), tính cả packet đang xếp hàng và đang ghi của
+mọi socket trên pod. Trước mỗi recipient, gateway đặt chỗ trước rồi mới enqueue; khi thiếu chỗ,
+transport có backlog lâu nhất được đóng tối đa 32 lần để nhường chỗ cho recipient hiện tại. Nếu
+event tự nó lớn hơn ngân sách hoặc vẫn không đủ chỗ sau giới hạn evict, event bị bỏ và ghi
+`signaling_outbound_pressure_total{result="dropped"}`. Các gauge
+`signaling_outbound_packets`/`signaling_outbound_bytes` là bộ đếm ứng dụng theo process, không
+phải cam kết giới hạn RSS/kernel buffer; vì vậy giá trị phải được cấu hình theo memory limit của
+pod và số process thực tế.
+
 ## 4. Producer hiện có (core-api)
 
 | Nơi publish                                          | Event             | Người nhận                   |
@@ -68,6 +88,24 @@ Mỗi module publish bằng Redis client riêng của mình (docs/05 § 5.3) qua
 
 ## 5. Gateway (apps/signaling-gateway)
 
+- Process admission has two finite limits: `WS_MAX_CONNECTIONS_PER_PROCESS=2000` counts
+  authenticated plus pending namespace sockets; `WS_MAX_CONCURRENT_HANDSHAKES=64` bounds
+  asynchronous JWT verification, Redis quota acquisition and fanout subscription together.
+  Both slots are reserved before JWT work, with no waiting queue. Capacity exhaustion returns
+  the existing retryable `CONNECTION_QUOTA_UNAVAILABLE`, preserving browser jitter/backoff and
+  REST fallback; the per-user Redis quota still returns `CONNECTION_LIMIT` when full.
+  Connection reservations are released on rejection, transport close, disconnect and shutdown.
+  Closing a transport during admission does not release its asynchronous work slot until that
+  chain settles, preventing reconnect from bypassing the concurrency cap. Shutdown closes
+  pending transports as well as connected sockets and prevents late work from admitting them.
+  `signaling_connections_reserved` and `signaling_handshakes_inflight` expose these budgets.
+  These limits bound namespace application state, not unauthenticated TCP/Engine.IO handshakes;
+  ingress connection/rate limits and Socket.IO transport timeouts remain required.
+- The defaults are conservative starting limits, not measured socket capacity. Measure memory,
+  event-loop delay, fanout and lease throughput under representative workload before raising
+  them. Size replicas from measured sustainable sockets per process with failure and rollout
+  headroom; configure and validate the Custom Metrics adapter before using connection metrics
+  for HPA. CPU/memory HPA alone is not a capacity proof.
 - Namespace `/signaling`; handshake `auth.token` = access token của core-api; fail →
   `connect_error: UNAUTHORIZED` (không thành connection — không tồn tại socket vô danh).
 - Quota connection/user là lease trong Redis (`signaling:connection-quota:{userId}`), acquire
@@ -119,7 +157,7 @@ Mỗi module publish bằng Redis client riêng của mình (docs/05 § 5.3) qua
 - `relay()` kiểm tra room cục bộ TRƯỚC khi parse JSON: event cho user không còn socket trên pod
   (đến muộn sau `UNSUBSCRIBE`, hoặc ở chế độ `pattern`) bị bỏ qua gần như miễn phí.
 - Metric (OTLP): `signaling_connections_active`, `signaling_fanout_subscribed_users`,
-  `signaling_tracked_leases`, `signaling_redis_shards_ready`/`_total`, `signaling_relay_events_total{result}`, `signaling_lease_refresh_total{result}`
+  `signaling_tracked_leases`, `signaling_redis_shards_ready`/`_total`, `signaling_relay_events_total{result}`, `signaling_slow_consumers_total`, `signaling_lease_refresh_total{result}`
   — nguồn cho autoscale theo số kết nối và alert (readiness `redisSubscription` down kéo dài).
 - Socket chết được dọn bởi ping/pong mặc định của Socket.IO (`pingTimeout`) — chưa cần timer
   riêng vì gateway không giữ room state nghiệp vụ (docs/10 § Calling/Signaling).
@@ -128,6 +166,11 @@ Mỗi module publish bằng Redis client riêng của mình (docs/05 § 5.3) qua
   `REALTIME_REDIS_URLS` (§ 7), `WS_FANOUT_MODE`, `WS_CONNECTION_LEASE_MS`, `WS_CONNECTION_LEASE_REFRESH_MS`.
 
 ## 6. Cluster adapter cho Socket.IO (Giai đoạn 6 — horizontal scale)
+
+The adapter remains required for bootstrap and readiness. `REDIS_URL` is therefore a shared
+availability dependency even when `REALTIME_REDIS_URLS` shards the quota/fanout plane: a cluster
+adapter outage can make every gateway unready. Use a managed HA Redis endpoint, monitor it
+separately, and rehearse its failover. Shard readiness does not remove this dependency.
 
 `SignalingRedisAdapterService` (`apps/signaling-gateway/src/app/redis-adapter.service.ts`) mở
 **2 kết nối Redis riêng** cho `@socket.io/redis-adapter` — KHÔNG dùng chung với connection

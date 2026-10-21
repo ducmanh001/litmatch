@@ -1,7 +1,9 @@
 import type { Meter } from '@opentelemetry/api';
 
 import { EconomyMetrics } from '../economy.metrics';
+import { LedgerReconciliationCheckpoint } from './ledger-reconciliation-checkpoint';
 import { ReconciliationService } from './reconciliation.service';
+import { WalletReconciliationSampler } from './wallet-reconciliation-sampler';
 
 import type { ConfigService } from '@nestjs/config';
 import type { SchedulerRegistry } from '@nestjs/schedule';
@@ -44,11 +46,13 @@ const ENABLED_CONFIG = {
   ECONOMY_RECONCILIATION_FAST_INTERVAL_MS: 60_000,
   ECONOMY_RECONCILIATION_LAG_MS: 300_000,
   ECONOMY_RECONCILIATION_FULL_INTERVAL_MS: 86_400_000,
+  ECONOMY_RECONCILIATION_BATCH_SIZE: 1000,
+  ECONOMY_RECONCILIATION_MAX_BATCHES_PER_TICK: 4,
+  ECONOMY_RECONCILIATION_TICK_BUDGET_MS: 1000,
 };
 
 /**
- * DataSource stub: fast tier gọi cận trên cửa sổ + tổng (lần đầu dựng lại từ toàn bộ lịch sử) + orphan, deep tier
- * gọi 1 (wallet sample). `imbalances` là tổng Nợ − Có theo currency mà lần dựng lại trả về.
+ * Paging belongs to LedgerReconciliationCheckpoint; the service queries orphan receipts and wallet samples.
  */
 function stubDataSource(input: {
   imbalances?: Array<{ currency: string; imbalance: string }>;
@@ -59,23 +63,42 @@ function stubDataSource(input: {
     derived: string;
   }>;
 }): DataSource {
+  jest
+    .mocked(LedgerReconciliationCheckpoint.prototype.advance)
+    .mockResolvedValue({
+      imbalances: input.imbalances ?? [],
+      complete: true,
+      completedBefore: '2026-10-19 00:00:00+00',
+    });
   const dataSource = {
     query: jest.fn(async (sql: string) => {
-      if (sql.includes('AS "to"'))
-        return [{ to: '2026-10-19 00:00:00+00', advances: true, final: true }];
-      if (sql.includes('GROUP BY le.currency'))
-        return (input.imbalances ?? []).map(({ currency, imbalance }) => ({
-          currency,
-          delta: imbalance,
-        }));
       if (sql.includes('iap_receipts'))
         return [{ count: input.orphanCount ?? '0' }];
-      if (sql.includes('FROM sample_wallets'))
-        return input.walletMismatches ?? [];
       throw new Error(`query không nhận diện được trong stub: ${sql}`);
     }),
   } as unknown as DataSource;
   Object.assign(dataSource, {
+    transaction: async (callback: (manager: unknown) => Promise<unknown>) =>
+      callback({
+        query: jest.fn(async (sql: string) => {
+          if (sql.startsWith('SELECT state')) {
+            return [{ state: { afterUserId: null } }];
+          }
+          if (sql.includes('AS "sampledWallets"')) {
+            return [
+              {
+                sampledWallets: Math.max(
+                  1,
+                  input.walletMismatches?.length ?? 0,
+                ),
+                nextUserId: '00000000-0000-0000-0000-000000000001',
+                walletMismatches: input.walletMismatches ?? [],
+              },
+            ];
+          }
+          return [];
+        }),
+      }),
     createQueryRunner: () => ({
       connect: async () => undefined,
       startTransaction: async () => undefined,
@@ -115,7 +138,20 @@ function makeService(
 }
 
 describe('ReconciliationService', () => {
-  afterEach(() => jest.useRealTimers());
+  beforeEach(() => {
+    jest
+      .spyOn(LedgerReconciliationCheckpoint.prototype, 'advance')
+      .mockResolvedValue({
+        imbalances: [],
+        complete: true,
+        completedBefore: '2026-10-19 00:00:00+00',
+      });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
 
   describe('lập lịch 2 tier độc lập', () => {
     it('bootstrap đăng ký 2 interval riêng (fast + deep) theo đúng interval config', async () => {
@@ -209,129 +245,82 @@ describe('ReconciliationService', () => {
     });
   });
 
-  describe('đối soát tăng dần (ADR 0013)', () => {
-    type Window = { to: string; advances: boolean; final: boolean };
-    type Sum = Array<{ currency: string; delta: string }>;
+  describe('durable reconciliation progress', () => {
+    it('passes bounded paging configuration to the checkpoint on every run', async () => {
+      const { service } = makeService(stubDataSource({}));
+      await service.runFast();
+      await service.runFast();
+      const advance = jest.mocked(
+        LedgerReconciliationCheckpoint.prototype.advance,
+      );
+      expect(advance).toHaveBeenCalledTimes(2);
+      expect(advance).toHaveBeenLastCalledWith({
+        lagMs: 300_000,
+        fullIntervalMs: 86_400_000,
+        batchSize: 1000,
+        maxBatches: 4,
+        budgetMs: 1000,
+      });
+    });
 
-    /** DataSource kịch bản: mỗi câu "cận trên cửa sổ" / "tổng" lấy phần tử kế tiếp trong hàng đợi. */
-    function scripted(script: { windows: Window[]; sums: Array<Sum | Error> }) {
-      const sumCalls: Array<{ full: boolean; params: unknown[] }> = [];
-      const dataSource = {
-        query: jest.fn(async (sql: string, params: unknown[] = []) => {
-          if (sql.includes('AS "to"')) {
-            const window = script.windows.shift();
-            if (window === undefined) throw new Error('hết kịch bản window');
-            return [window];
+    it('does not report an incomplete balanced history as a successful audit', async () => {
+      const { service, metrics, metricState } = makeService(stubDataSource({}));
+      jest
+        .mocked(LedgerReconciliationCheckpoint.prototype.advance)
+        .mockResolvedValueOnce({
+          imbalances: [],
+          complete: false,
+          completedBefore: null,
+        });
+      const report = await service.runFast();
+      expect(report).toEqual({
+        currencyImbalances: [],
+        receiptsWithoutTransaction: 0,
+        ok: false,
+        complete: false,
+        completedBefore: null,
+      });
+      expect(
+        (
+          metrics as unknown as {
+            reconciliationStatusByTier: Map<string, number>;
           }
-          if (sql.includes('GROUP BY le.currency')) {
-            sumCalls.push({ full: !sql.includes('t.created_at >='), params });
-            const sum = script.sums.shift() ?? [];
-            if (sum instanceof Error) throw sum;
-            return sum;
-          }
-          if (sql.includes('iap_receipts')) return [{ count: '0' }];
-          throw new Error(`query không nhận diện được trong stub: ${sql}`);
-        }),
-      } as unknown as DataSource;
-      return { dataSource, sumCalls };
-    }
-    const window = (to: string, final = true): Window => ({
-      to,
-      advances: true,
-      final,
+        ).reconciliationStatusByTier.get('fast'),
+      ).toBe(0);
+      expect(metricState.mismatchCounter.add).not.toHaveBeenCalled();
     });
 
-    it('lần đầu dựng lại từ toàn bộ lịch sử; các lần sau chỉ cộng cửa sổ [watermark, to) và dồn tổng', async () => {
-      const { dataSource, sumCalls } = scripted({
-        windows: [window('T1'), window('T2')],
-        sums: [
-          [{ currency: 'DIA', delta: '5' }],
-          [{ currency: 'DIA', delta: '-5' }],
-        ],
+    it('exposes completion watermark only after the checkpoint catches up', async () => {
+      const { service } = makeService(stubDataSource({}));
+      jest
+        .mocked(LedgerReconciliationCheckpoint.prototype.advance)
+        .mockResolvedValueOnce({
+          imbalances: [],
+          complete: false,
+          completedBefore: null,
+        })
+        .mockResolvedValueOnce({
+          imbalances: [],
+          complete: true,
+          completedBefore: '2026-10-20 00:00:00+00',
+        });
+      expect((await service.runFast()).ok).toBe(false);
+      expect(await service.runFast()).toMatchObject({
+        ok: true,
+        complete: true,
+        completedBefore: '2026-10-20 00:00:00+00',
       });
-      const { service } = makeService(dataSource);
-
-      const first = await service.runFast();
-      expect(first.currencyImbalances).toEqual([
-        { currency: 'DIA', imbalance: '5' },
-      ]);
-      const second = await service.runFast();
-
-      expect(second.ok).toBe(true);
-      expect(sumCalls).toEqual([
-        { full: true, params: ['T1'] },
-        { full: false, params: ['T1', 'T2'] },
-      ]);
     });
 
-    it('job nghỉ lâu: chia nhiều cửa sổ trong một tick tới khi bắt kịp mốc an toàn', async () => {
-      const { dataSource, sumCalls } = scripted({
-        windows: [window('T1'), window('T2', false), window('T3', true)],
-        sums: [[], [], []],
-      });
-      const { service } = makeService(dataSource);
-
-      await service.runFast();
-      await service.runFast();
-
-      expect(sumCalls.map((call) => call.params)).toEqual([
-        ['T1'],
-        ['T1', 'T2'],
-        ['T2', 'T3'],
-      ]);
-    });
-
-    it('mốc an toàn chưa tiến (LAG chưa qua): không truy vấn tổng nào', async () => {
-      const { dataSource, sumCalls } = scripted({
-        windows: [window('T1'), { to: 'T1', advances: false, final: true }],
-        sums: [[]],
-      });
-      const { service } = makeService(dataSource);
-
-      await service.runFast();
-      expect((await service.runFast()).ok).toBe(true);
-
-      expect(sumCalls).toHaveLength(1);
-    });
-
-    it('dựng lại định kỳ: sau FULL_INTERVAL tính lại từ toàn bộ lịch sử và thay tổng cũ (bắt transaction commit muộn)', async () => {
-      jest.useFakeTimers();
-      jest.setSystemTime(new Date('2026-10-19T00:00:00Z'));
-      const { dataSource, sumCalls } = scripted({
-        windows: [window('T1'), window('T2'), window('T3')],
-        // lần 2 (trong chu kỳ) cửa sổ không thấy gì; lần 3 dựng lại thấy transaction lệch commit muộn
-        sums: [[], [], [{ currency: 'DIA', delta: '9' }]],
-      });
-      const { service } = makeService(dataSource);
-
-      expect((await service.runFast()).ok).toBe(true);
-      expect((await service.runFast()).ok).toBe(true);
-      jest.setSystemTime(new Date('2026-10-20T00:00:01Z'));
-      const rebased = await service.runFast();
-
-      expect(rebased.ok).toBe(false);
-      expect(rebased.currencyImbalances).toEqual([
-        { currency: 'DIA', imbalance: '9' },
-      ]);
-      expect(sumCalls.map((call) => call.full)).toEqual([true, false, true]);
-    });
-
-    it('lỗi DB giữa cửa sổ không làm mất cửa sổ: tick sau tính lại đúng [watermark, to)', async () => {
-      const { dataSource, sumCalls } = scripted({
-        windows: [window('T1'), window('T2'), window('T2')],
-        sums: [[], new Error('db down'), []],
-      });
-      const { service } = makeService(dataSource);
-
-      await service.runFast();
+    it('propagates a checkpoint failure and retries on the following run', async () => {
+      const ds = stubDataSource({});
+      const { service } = makeService(ds);
+      jest
+        .mocked(LedgerReconciliationCheckpoint.prototype.advance)
+        .mockRejectedValueOnce(new Error('db down'));
       await expect(service.runFast()).rejects.toThrow('db down');
+      expect(ds.query).not.toHaveBeenCalled();
       expect((await service.runFast()).ok).toBe(true);
-
-      expect(sumCalls.map((call) => call.params)).toEqual([
-        ['T1'],
-        ['T1', 'T2'],
-        ['T1', 'T2'],
-      ]);
     });
   });
 
@@ -426,8 +415,129 @@ describe('ReconciliationService', () => {
     });
   });
 
+  describe('durable rotating wallet sample', () => {
+    const firstId = '00000000-0000-0000-0000-000000000001';
+    const secondId = '00000000-0000-0000-0000-000000000002';
+
+    function samplerFixture(
+      pages: Array<
+        | {
+            sampledWallets: number;
+            nextUserId: string | null;
+            walletMismatches: Array<{
+              userId: string;
+              snapshot: string;
+              derived: string;
+            }>;
+          }
+        | Error
+      >,
+    ) {
+      let afterUserId: string | null = null;
+      let pendingCursor: string | null = null;
+      const query = jest.fn(async (sql: string, parameters: unknown[]) => {
+        if (sql.startsWith('SELECT state')) return [{ state: { afterUserId } }];
+        if (sql.includes('AS "sampledWallets"')) {
+          const page = pages.shift();
+          if (page instanceof Error) throw page;
+          return page ? [page] : [];
+        }
+        if (sql.startsWith('UPDATE runtime_job_checkpoints')) {
+          pendingCursor = (
+            JSON.parse(String(parameters[1])) as {
+              afterUserId: string | null;
+            }
+          ).afterUserId;
+        }
+        return [];
+      });
+      const transaction = jest.fn(
+        async (callback: (manager: unknown) => Promise<unknown>) => {
+          pendingCursor = afterUserId;
+          const result = await callback({ query });
+          afterUserId = pendingCursor;
+          return result;
+        },
+      );
+      const ds = { transaction } as unknown as DataSource;
+      const readParameters = () =>
+        query.mock.calls
+          .filter(([sql]) => sql.includes('AS "sampledWallets"'))
+          .map(([, parameters]) => parameters);
+      return {
+        ds,
+        query,
+        transaction,
+        cursor: () => afterUserId,
+        readParameters,
+      };
+    }
+
+    it('commits sample progress and lets a replacement sampler continue the shared cursor', async () => {
+      const mismatch = { userId: secondId, snapshot: '7', derived: '5' };
+      const { ds, cursor, readParameters } = samplerFixture([
+        { sampledWallets: 1, nextUserId: firstId, walletMismatches: [] },
+        {
+          sampledWallets: 1,
+          nextUserId: secondId,
+          walletMismatches: [mismatch],
+        },
+      ]);
+
+      expect(await new WalletReconciliationSampler(ds).sample(1)).toEqual([]);
+      expect(cursor()).toBe(firstId);
+      expect(await new WalletReconciliationSampler(ds).sample(1)).toEqual([
+        mismatch,
+      ]);
+      expect(cursor()).toBe(secondId);
+      expect(readParameters()).toEqual([
+        [null, 1],
+        [firstId, 1],
+      ]);
+    });
+
+    it('keeps failed samples at the original cursor and retries without skipping wallets', async () => {
+      const { ds, cursor, readParameters } = samplerFixture([
+        { sampledWallets: 1, nextUserId: firstId, walletMismatches: [] },
+        new Error('sample statement timed out'),
+        { sampledWallets: 1, nextUserId: secondId, walletMismatches: [] },
+      ]);
+      const sampler = new WalletReconciliationSampler(ds);
+      await sampler.sample(1);
+      await expect(sampler.sample(1)).rejects.toThrow(
+        'sample statement timed out',
+      );
+      expect(cursor()).toBe(firstId);
+      await sampler.sample(1);
+      expect(readParameters()).toEqual([
+        [null, 1],
+        [firstId, 1],
+        [firstId, 1],
+      ]);
+    });
+
+    it('rejects missing sampling metadata without committing a cursor or reporting a clean sample', async () => {
+      const { ds, cursor } = samplerFixture([]);
+      await expect(
+        new WalletReconciliationSampler(ds).sample(1),
+      ).rejects.toThrow('incomplete cursor metadata');
+      expect(cursor()).toBeNull();
+    });
+
+    it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 10_001])(
+      'rejects invalid sample size %s before opening a transaction',
+      async (size) => {
+        const { ds, transaction } = samplerFixture([]);
+        await expect(
+          new WalletReconciliationSampler(ds).sample(size),
+        ).rejects.toThrow(RangeError);
+        expect(transaction).not.toHaveBeenCalled();
+      },
+    );
+  });
+
   describe('runOnce (full sweep on-demand)', () => {
-    it('gộp fast + deep, giữ report shape cũ; job READ-ONLY — chỉ SELECT, không mutation', async () => {
+    it('combines fast and deep reports and keeps direct financial diagnostic queries read-only', async () => {
       const ds = stubDataSource({
         imbalances: [{ currency: 'DIA', imbalance: '1' }],
         orphanCount: '0',
@@ -443,7 +553,7 @@ describe('ReconciliationService', () => {
         ok: false,
       });
 
-      // Bất biến read-only: mọi câu query của job phải là SELECT thuần
+      // Checkpoint persistence is delegated/mocked above; direct ledger/receipt/wallet scans stay read-only.
       const calls = (ds.query as jest.Mock).mock.calls as Array<[string]>;
       expect(calls.length).toBeGreaterThan(0);
       for (const [sql] of calls) {

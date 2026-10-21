@@ -6,6 +6,9 @@ import { DataSource } from 'typeorm';
 
 import type { CoreApiEnv } from '../config/env.validation';
 
+const PROBE_CACHE_MS = 1_000;
+const PROBE_TIMEOUT_MS = 1_000;
+
 export interface ReadinessResult {
   status: 'ok' | 'unavailable';
   checks: {
@@ -17,6 +20,9 @@ export interface ReadinessResult {
 @Injectable()
 export class ReadinessService implements OnApplicationShutdown {
   private readonly redis: Redis;
+  private inFlight: Promise<ReadinessResult> | undefined;
+  private cached: { expiresAt: number; result: ReadinessResult } | undefined;
+  private postgresProbe: Promise<'up' | 'down'> | undefined;
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
@@ -33,7 +39,24 @@ export class ReadinessService implements OnApplicationShutdown {
     this.redis.on('error', () => undefined);
   }
 
-  async check(): Promise<ReadinessResult> {
+  check(): Promise<ReadinessResult> {
+    if (this.cached && Date.now() < this.cached.expiresAt) {
+      return Promise.resolve(this.cached.result);
+    }
+    if (this.inFlight) return this.inFlight;
+    // Probes bypass shared request throttling; coalesce and cache locally instead.
+    this.inFlight = this.probe()
+      .then((result) => {
+        this.cached = { result, expiresAt: Date.now() + PROBE_CACHE_MS };
+        return result;
+      })
+      .finally(() => {
+        this.inFlight = undefined;
+      });
+    return this.inFlight;
+  }
+
+  private async probe(): Promise<ReadinessResult> {
     const [postgres, redis] = await Promise.all([
       this.checkPostgres(),
       this.checkRedis(),
@@ -54,8 +77,18 @@ export class ReadinessService implements OnApplicationShutdown {
 
   private async checkPostgres(): Promise<'up' | 'down'> {
     try {
-      await this.withTimeout(this.dataSource.query('SELECT 1'), 1_000);
-      return 'up';
+      // The HTTP deadline does not cancel SQL. Retain the raw query until it settles,
+      // so repeated timed-out probes cannot fill the connection pool.
+      this.postgresProbe ??= this.dataSource
+        .query('SELECT 1')
+        .then(
+          () => 'up' as const,
+          () => 'down' as const,
+        )
+        .finally(() => {
+          this.postgresProbe = undefined;
+        });
+      return await this.withTimeout(this.postgresProbe, PROBE_TIMEOUT_MS);
     } catch {
       return 'down';
     }
@@ -64,7 +97,7 @@ export class ReadinessService implements OnApplicationShutdown {
   private async checkRedis(): Promise<'up' | 'down'> {
     try {
       if (this.redis.status === 'wait') await this.redis.connect();
-      await this.withTimeout(this.redis.ping(), 1_000);
+      await this.withTimeout(this.redis.ping(), PROBE_TIMEOUT_MS);
       return 'up';
     } catch {
       return 'down';

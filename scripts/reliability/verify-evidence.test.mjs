@@ -49,7 +49,12 @@ function runGate(overridesByFile = {}) {
   }
   return spawnSync(process.execPath, [fileURLToPath(script)], {
     encoding: 'utf8',
-    env: { ...process.env, RELIABILITY_EVIDENCE_DIR: directory },
+    env: {
+      ...process.env,
+      RELIABILITY_EVIDENCE_DIR: directory,
+      RELIABILITY_EXPECTED_GIT_SHA: 'a'.repeat(40),
+      RELIABILITY_EXPECTED_ENVIRONMENT: 'staging',
+    },
   });
 }
 
@@ -68,4 +73,37 @@ test('production gate rejects failed or stale evidence', () => {
   assert.match(result.stderr, /loadtest\.json/u);
   assert.match(result.stderr, /status must be pass/u);
   assert.match(result.stderr, /within 30 days/u);
+});
+
+test('production gate rejects a fresh passing artifact from a different release', () => {
+  const result = runGate({ 'game-day.json': { gitSha: 'b'.repeat(40) } });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /gitSha must match the expected release SHA/u);
+});
+
+test('production gate does not combine staging and production artifacts', () => {
+  const result = runGate({
+    'slo-dashboard.json': { environment: 'production' },
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /environment must match/u);
+});
+
+test('production gate rejects non-array checks instead of accepting substring matches', () => {
+  const result = runGate({
+    'loadtest.json': {
+      checks: 'signaling-quota multi-pod-reconnect staging-load',
+    },
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /checks must be an array/u);
+});
+
+test('production gate rejects malformed evidence links and blank owners', () => {
+  const result = runGate({
+    'loadtest.json': { runUrl: 'not-a-link', owner: ' ' },
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /runUrl must be an HTTPS link/u);
+  assert.match(result.stderr, /owner must name/u);
 });

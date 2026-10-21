@@ -7,6 +7,7 @@ import { MatchingMetrics } from './matching.metrics';
 import { MatchingService } from './matching.service';
 import { InviteService } from './services/invite.service';
 import { MatcherWorkerService } from './jobs/matcher-worker.service';
+import { QueueRepairService } from './jobs/queue-repair.service';
 import { TicketSweeperService } from './jobs/ticket-sweeper.service';
 import { InviteSweeperService } from './jobs/invite-sweeper.service';
 import { MatchingRetentionJob } from './jobs/matching-retention.job';
@@ -58,6 +59,7 @@ import type { MatchingQueuePort } from './ports/matching-queue.port';
     InviteService,
     MatchingMetrics,
     MatcherWorkerService,
+    QueueRepairService,
     MatcherWakeup,
     TicketSweeperService,
     InviteSweeperService,

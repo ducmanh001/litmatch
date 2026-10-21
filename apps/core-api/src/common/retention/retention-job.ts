@@ -31,9 +31,11 @@ const RETENTION_TICK_BUDGET_MS = 30_000;
  */
 let sharedBudget: ConcurrencyBudget | undefined;
 /**
- * Ngân sách DÙNG CHUNG cho mọi job retention trong process (admission control): tối đa `RETENTION_MAX_CONCURRENT_JOBS` tick chạy
- * cùng lúc, mỗi tick giữ ≤ 2 kết nối pool, nên retention không bao giờ chiếm quá 2 × N kết nối — phần còn lại của pool luôn dành
- * cho request. Tick bị từ chối được bỏ và thử lại ở chu kỳ sau. Giới hạn của lần tạo đầu tiên là giới hạn của process.
+ * Ngân sách DÙNG CHUNG cho mọi job retention trong process (admission control): tối đa
+ * `RETENTION_MAX_CONCURRENT_JOBS` tick chạy cùng lúc. Đây là bound bổ sung bên cạnh admission
+ * FIFO theo `DataSource` của `ManagedInterval`; nó không phải cam kết dành riêng connection cho
+ * request vì các tác vụ ad-hoc ngoài scheduler vẫn dùng chung pool. Tick bị từ chối được bỏ và
+ * thử lại ở chu kỳ sau. Giới hạn của lần tạo đầu tiên là giới hạn của process.
  */
 export function retentionBudget(limit: number): ConcurrencyBudget {
   sharedBudget ??= new ConcurrencyBudget(limit);

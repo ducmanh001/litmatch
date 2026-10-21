@@ -14,6 +14,11 @@ export type RelayResult = 'delivered' | 'no_local_room' | 'invalid';
 export class SignalingMetrics {
   private readonly connections: UpDownCounter;
   private readonly relayEvents: Counter;
+  private readonly slowConsumers: Counter;
+  private readonly outboundPressureEvents: Counter;
+  private readonly outboundPackets: ReturnType<Meter['createObservableGauge']>;
+  private readonly outboundBytes: ReturnType<Meter['createObservableGauge']>;
+  private outboundSource = { packets: 0, bytes: 0 };
   private readonly leaseRefreshes: Counter;
   private readonly fanoutUsers: ReturnType<Meter['createObservableGauge']>;
   private readonly trackedLeases: ReturnType<Meter['createObservableGauge']>;
@@ -24,9 +29,27 @@ export class SignalingMetrics {
     trackedLeases: () => 0,
     shardsReady: () => 0,
     shardsTotal: () => 0,
+    reservedConnections: () => 0,
+    pendingHandshakes: () => 0,
   };
 
   constructor(@Inject(METRICS_METER) meter: Meter) {
+    meter
+      .createObservableGauge('signaling_connections_reserved', {
+        description:
+          'Authenticated plus pending namespace admissions on this process',
+      })
+      .addCallback((result) =>
+        result.observe(this.gaugeSources.reservedConnections()),
+      );
+    meter
+      .createObservableGauge('signaling_handshakes_inflight', {
+        description:
+          'Admission chains awaiting JWT, quota or fanout completion',
+      })
+      .addCallback((result) =>
+        result.observe(this.gaugeSources.pendingHandshakes()),
+      );
     this.connections = meter.createUpDownCounter(
       'signaling_connections_active',
       {
@@ -35,8 +58,34 @@ export class SignalingMetrics {
     );
     this.relayEvents = meter.createCounter('signaling_relay_events_total', {
       description:
-        'Event Redis pod nhận, theo kết quả: delivered | no_local_room | invalid',
+        'Redis relay result: delivered = local emit, not client acknowledgement; no_local_room | invalid',
     });
+    this.slowConsumers = meter.createCounter('signaling_slow_consumers_total', {
+      description:
+        'Local transports closed before an outbound packet/byte budget would be exceeded',
+    });
+    this.outboundPressureEvents = meter.createCounter(
+      'signaling_outbound_pressure_total',
+      {
+        description: 'Aggregate outbound pressure outcomes: evicted | dropped',
+      },
+    );
+    this.outboundPackets = meter.createObservableGauge(
+      'signaling_outbound_packets',
+      { description: 'Queued and in-flight packets tracked on this pod' },
+    );
+    this.outboundPackets.addCallback((result) =>
+      result.observe(this.outboundSource.packets),
+    );
+    this.outboundBytes = meter.createObservableGauge(
+      'signaling_outbound_bytes',
+      {
+        description: 'Conservative encoded bytes tracked on this pod, not RSS',
+      },
+    );
+    this.outboundBytes.addCallback((result) =>
+      result.observe(this.outboundSource.bytes),
+    );
     this.leaseRefreshes = meter.createCounter('signaling_lease_refresh_total', {
       description:
         'Lần gia hạn lease quota/presence, theo kết quả: ok | reacquired | lost | error',
@@ -80,15 +129,27 @@ export class SignalingMetrics {
     trackedLeases(): number;
     shardsReady(): number;
     shardsTotal(): number;
+    reservedConnections(): number;
+    pendingHandshakes(): number;
   }): void {
     this.gaugeSources.fanoutUsers = sources.fanoutUsers;
     this.gaugeSources.trackedLeases = sources.trackedLeases;
     this.gaugeSources.shardsReady = sources.shardsReady;
     this.gaugeSources.shardsTotal = sources.shardsTotal;
+    this.gaugeSources.reservedConnections = sources.reservedConnections;
+    this.gaugeSources.pendingHandshakes = sources.pendingHandshakes;
   }
 
   connectionOpened(): void {
     this.safe(() => this.connections.add(1));
+  }
+
+  bindOutboundGauges(source: { packets: number; bytes: number }): void {
+    this.outboundSource = source;
+  }
+
+  outboundPressure(result: 'evicted' | 'dropped'): void {
+    this.safe(() => this.outboundPressureEvents.add(1, { result }));
   }
 
   connectionClosed(): void {
@@ -97,6 +158,10 @@ export class SignalingMetrics {
 
   relay(result: RelayResult): void {
     this.safe(() => this.relayEvents.add(1, { result }));
+  }
+
+  slowConsumer(): void {
+    this.safe(() => this.slowConsumers.add(1));
   }
 
   leaseRefresh(

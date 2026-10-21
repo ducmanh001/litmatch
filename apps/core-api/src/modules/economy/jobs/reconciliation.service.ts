@@ -13,6 +13,9 @@ import { ManagedInterval } from '../../../common/scheduling/managed-interval';
 import type { CoreApiEnv } from '../../../config/env.validation';
 import { EconomyMetrics } from '../economy.metrics';
 import { LedgerCurrency } from '../entities/ledger-account.entity';
+import { LedgerReconciliationCheckpoint } from './ledger-reconciliation-checkpoint';
+import type { LedgerReconciliationProgress } from './ledger-reconciliation-checkpoint';
+import { WalletReconciliationSampler } from './wallet-reconciliation-sampler';
 
 import type { ReconciliationTier } from '../economy.metrics';
 
@@ -20,24 +23,13 @@ const JOB_FAST = 'economy-reconciliation-fast';
 const JOB_DEEP = 'economy-reconciliation-deep';
 /** Số ví lấy mẫu đối chiếu snapshot↔ledger mỗi run — ngưỡng vận hành nội bộ, không phải rule nghiệp vụ. */
 const WALLET_SAMPLE_SIZE = 100;
-/** Mỗi lần cộng dồn tối đa 6 giờ transaction — chặn một câu aggregate quá lớn sau khi job nghỉ lâu. */
-const MAX_WINDOW_HOURS = 6;
-/** Trần số cửa sổ mỗi tick (50 × 6 giờ ≈ 12 ngày bắt kịp mỗi tick); phần còn lại để tick sau. */
-const MAX_WINDOWS_PER_TICK = 50;
-
-/** Tổng Nợ − Có cộng dồn theo currency của MỌI transaction có `created_at` < `watermark`. */
-interface LedgerBalanceState {
-  /** timestamptz dạng text do Postgres trả (giữ micro giây — Date của JS chỉ có mili giây). */
-  watermark: string;
-  imbalance: Map<string, bigint>;
-  /** Lần dựng lại gần nhất từ toàn bộ lịch sử (Date.now()). */
-  rebasedAt: number;
-}
 
 interface FastReconciliationReport {
   currencyImbalances: Array<{ currency: string; imbalance: string }>;
   receiptsWithoutTransaction: number;
   ok: boolean;
+  complete: boolean;
+  completedBefore: string | null;
 }
 
 interface DeepReconciliationReport {
@@ -69,19 +61,17 @@ interface ReconciliationReport {
  *   phải cả bảng ledger_entries; COUNT orphan chạy trên partial index gần như rỗng.
  * - deep (ECONOMY_RECONCILIATION_INTERVAL_MS): sample ví so snapshot↔derived — scan/join theo
  *   từng ví nên đắt hơn, giữ cadence thưa như cũ.
- * Tăng dần: mỗi transaction ledger cân Nợ=Có theo currency, nên tổng cộng dồn của mọi transaction cũ hơn một
- * mốc `watermark` phải bằng 0. Job giữ (trong bộ nhớ) tổng cộng dồn + watermark; mỗi tick chỉ cộng thêm cửa sổ
- * `[watermark, now() − LAG)` theo `transactions.created_at` (BRIN) rồi dịch watermark. `created_at` là giờ BẮT ĐẦU transaction
- * DB nên transaction chạy lâu có thể commit sau khi cửa sổ của nó đã qua — LAG (ECONOMY_RECONCILIATION_LAG_MS)
- * phải lớn hơn transaction ghi sổ lâu nhất. Lưới an toàn: mỗi ECONOMY_RECONCILIATION_FULL_INTERVAL_MS (và khi
- * pod lần đầu giành khoá cluster-singleton) dựng lại tổng từ TOÀN BỘ lịch sử — đây là lần duy nhất chi phí tỉ lệ với cả bảng.
- * Trạng thái chỉ ở bộ nhớ nên job vẫn READ-ONLY tuyệt đối (không bảng trạng thái, không ghi gì xuống DB).
+ * LedgerReconciliationCheckpoint pages whole transactions and persists each aggregate/cursor
+ * atomically in runtime_job_checkpoints. Both cold-start and periodic rebase are bounded;
+ * a replacement pod resumes the shared cursor. Incomplete history never reports a successful audit.
+ * LAG must exceed the longest financial transaction. Late/backdated inserts are caught by a
+ * subsequent full paged rebase; its completion time depends on backlog and configured capacity.
  *
  * Lệch = log error + metric `economy_reconciliation_*` (EconomyMetrics) để alert rule Prometheus
  * fire — metrics được push trực tiếp lên Grafana Cloud qua OTLP khi đã cấu hình.
  *
- * BẤT BIẾN: job này READ-ONLY tuyệt đối — chỉ SELECT, không auto-correct. Sửa lệch thật phải đi
- * qua reversal entry ở write path chuẩn (LedgerService), không bao giờ từ job chẩn đoán này.
+ * BẤT BIẾN: financial tables are read-only here. Only diagnostic checkpoints may be updated
+ * (ADR 0015); corrections still require reversal entries through LedgerService.
  */
 @Injectable()
 export class ReconciliationService
@@ -90,8 +80,6 @@ export class ReconciliationService
   private readonly logger = new Logger(ReconciliationService.name);
   private readonly fastJob = new ManagedInterval();
   private readonly deepJob = new ManagedInterval();
-  /** Tổng cộng dồn của tier fast, riêng từng pod (khoá singleton giành lại mỗi tick); pod chưa có thì dựng lại từ đầu. */
-  private ledgerBalance: LedgerBalanceState | undefined;
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
@@ -151,7 +139,8 @@ export class ReconciliationService
   async runFast(): Promise<FastReconciliationReport> {
     const startedAt = Date.now();
     // 1. Bất biến toàn cục: tổng Nợ = tổng Có theo từng currency (cộng dồn tăng dần)
-    const imbalances = await this.currentImbalances();
+    const progress = await this.currentImbalances();
+    const imbalances = progress.imbalances;
 
     // 2. Receipt đã credit phải có đúng 1 transaction ledger đi kèm
     const [{ count: orphanReceipts }]: Array<{ count: string }> =
@@ -162,7 +151,12 @@ export class ReconciliationService
     const report: FastReconciliationReport = {
       currencyImbalances: imbalances,
       receiptsWithoutTransaction: Number(orphanReceipts),
-      ok: imbalances.length === 0 && Number(orphanReceipts) === 0,
+      ok:
+        progress.complete &&
+        imbalances.length === 0 &&
+        Number(orphanReceipts) === 0,
+      complete: progress.complete,
+      completedBefore: progress.completedBefore,
     };
 
     for (const { currency } of imbalances)
@@ -179,7 +173,15 @@ export class ReconciliationService
       (Date.now() - startedAt) / 1000,
     );
 
-    if (!report.ok) {
+    if (
+      !progress.complete &&
+      imbalances.length === 0 &&
+      Number(orphanReceipts) === 0
+    ) {
+      this.logger.warn(
+        'Reconciliation is catching up; incomplete history is not a successful audit',
+      );
+    } else if (!report.ok) {
       this.logger.error(
         { report },
         'ĐỐI SOÁT LỆCH (fast) — tổng Nợ/Có hoặc receipt không khớp, cần điều tra ngay',
@@ -190,107 +192,27 @@ export class ReconciliationService
     return report;
   }
 
-  /**
-   * Cập nhật tổng cộng dồn rồi trả các currency đang lệch (tổng ≠ 0). Chỉ SELECT. Trạng thái chỉ đổi SAU khi một
-   * cửa sổ được tính xong, nên lỗi DB giữa chừng không làm mất/nhân đôi cửa sổ nào — tick sau tính lại đúng chỗ.
-   */
-  private async currentImbalances(): Promise<
-    Array<{ currency: string; imbalance: string }>
-  > {
-    const lagSeconds =
-      this.config.getOrThrow('ECONOMY_RECONCILIATION_LAG_MS', { infer: true }) /
-      1000;
-    const fullIntervalMs = this.config.getOrThrow(
-      'ECONOMY_RECONCILIATION_FULL_INTERVAL_MS',
-      { infer: true },
-    );
-    const current = this.ledgerBalance;
-    if (
-      current === undefined ||
-      Date.now() - current.rebasedAt >= fullIntervalMs
-    ) {
-      const startedAt = Date.now();
-      const { to } = await this.nextWindow(null, lagSeconds);
-      const imbalance = await this.sumImbalance(null, to);
-      this.ledgerBalance = { watermark: to, imbalance, rebasedAt: Date.now() };
-      this.logger.log(
-        `Đối soát ledger: dựng lại tổng từ toàn bộ lịch sử tới ${to} (${Date.now() - startedAt} ms)`,
-      );
-    } else {
-      for (let i = 0; i < MAX_WINDOWS_PER_TICK; i += 1) {
-        const { to, advances, final } = await this.nextWindow(
-          current.watermark,
-          lagSeconds,
-        );
-        if (!advances) break;
-        const delta = await this.sumImbalance(current.watermark, to);
-        for (const [currency, amount] of delta) {
-          current.imbalance.set(
-            currency,
-            (current.imbalance.get(currency) ?? 0n) + amount,
-          );
-        }
-        current.watermark = to;
-        if (final) break;
-      }
-    }
-    return [...(this.ledgerBalance?.imbalance ?? [])]
-      .filter(([, amount]) => amount !== 0n)
-      .map(([currency, amount]) => ({
-        currency,
-        imbalance: amount.toString(),
-      }));
-  }
-
-  /**
-   * Cận trên cửa sổ kế tiếp, tính bằng đồng hồ DB (không lệch đồng hồ giữa pod và DB): `now() − LAG`, và tối đa
-   * `MAX_WINDOW_HOURS` sau watermark. `from = null` là lần dựng lại (không giới hạn độ dài).
-   */
-  private async nextWindow(
-    from: string | null,
-    lagSeconds: number,
-  ): Promise<{ to: string; advances: boolean; final: boolean }> {
-    const [row]: Array<{ to: string; advances: boolean; final: boolean }> =
-      await this.dataSource.query(
-        `SELECT w.hi::text AS "to",
-                ($1::timestamptz IS NULL OR w.hi > $1::timestamptz) AS advances,
-                ($1::timestamptz IS NULL OR w.hi = w.safe) AS final
-           FROM (
-             SELECT s.safe,
-                    CASE WHEN $1::timestamptz IS NULL THEN s.safe
-                         ELSE LEAST($1::timestamptz + make_interval(hours => $3::int), s.safe) END AS hi
-               FROM (SELECT now() - make_interval(secs => $2::double precision) AS safe) s
-           ) w`,
-        [from, lagSeconds, MAX_WINDOW_HOURS],
-      );
-    return row;
-  }
-
-  /**
-   * Tổng Nợ − Có theo currency của các transaction có `created_at` trong `[from, to)` (`from = null` → từ đầu).
-   * Theo transaction (không theo từng entry) để cửa sổ luôn chứa TRỌN các transaction đã cân — cắt giữa chừng sẽ
-   * báo lệch giả. Hai câu SQL riêng (không `$1 IS NULL OR …`) để planner dùng được BRIN cho cửa sổ hẹp.
-   */
-  private async sumImbalance(
-    from: string | null,
-    to: string,
-  ): Promise<Map<string, bigint>> {
-    const select = `SELECT le.currency,
-                SUM(CASE WHEN le.direction = 'debit' THEN le.amount ELSE -le.amount END)::text AS delta
-           FROM transactions t
-           JOIN ledger_entries le ON le.transaction_id = t.id`;
-    const rows: Array<{ currency: string; delta: string }> =
-      from === null
-        ? await this.dataSource.query(
-            `${select} WHERE t.created_at < $1::timestamptz GROUP BY le.currency`,
-            [to],
-          )
-        : await this.dataSource.query(
-            `${select} WHERE t.created_at >= $1::timestamptz AND t.created_at < $2::timestamptz
-              GROUP BY le.currency`,
-            [from, to],
-          );
-    return new Map(rows.map((row) => [row.currency, BigInt(row.delta)]));
+  private currentImbalances(): Promise<LedgerReconciliationProgress> {
+    return new LedgerReconciliationCheckpoint(this.dataSource).advance({
+      lagMs: this.config.getOrThrow('ECONOMY_RECONCILIATION_LAG_MS', {
+        infer: true,
+      }),
+      fullIntervalMs: this.config.getOrThrow(
+        'ECONOMY_RECONCILIATION_FULL_INTERVAL_MS',
+        { infer: true },
+      ),
+      batchSize: this.config.getOrThrow('ECONOMY_RECONCILIATION_BATCH_SIZE', {
+        infer: true,
+      }),
+      maxBatches: this.config.getOrThrow(
+        'ECONOMY_RECONCILIATION_MAX_BATCHES_PER_TICK',
+        { infer: true },
+      ),
+      budgetMs: this.config.getOrThrow(
+        'ECONOMY_RECONCILIATION_TICK_BUDGET_MS',
+        { infer: true },
+      ),
+    });
   }
 
   /** Tier đắt: sample ví so snapshot↔derived từ ledger. Giữ cadence thưa (interval cũ). */
@@ -298,34 +220,9 @@ export class ReconciliationService
     sampleWallets = WALLET_SAMPLE_SIZE,
   ): Promise<DeepReconciliationReport> {
     const startedAt = Date.now();
-    // 3. Sample ví mới cập nhật gần nhất: snapshot phải khớp derive từ ledger
-    const walletMismatches: Array<{
-      userId: string;
-      snapshot: string;
-      derived: string;
-    }> = await this.dataSource.query(
-      `
-        WITH sample_wallets AS (
-          SELECT user_id, balance
-            FROM wallets
-           ORDER BY updated_at DESC
-           LIMIT $1
-        )
-        SELECT w.user_id AS "userId", w.balance::text AS snapshot, COALESCE(d.derived, 0)::text AS derived
-        FROM sample_wallets w
-        LEFT JOIN (
-          SELECT la.user_id,
-                 SUM(CASE WHEN le.direction = 'credit' THEN le.amount ELSE -le.amount END) AS derived
-          FROM ledger_entries le
-          JOIN ledger_accounts la ON la.id = le.account_id
-          JOIN sample_wallets sw ON sw.user_id = la.user_id
-          WHERE la.kind = 'user_wallet'
-          GROUP BY la.user_id
-        ) d ON d.user_id = w.user_id
-        WHERE w.balance <> COALESCE(d.derived, 0)
-        `,
-      [sampleWallets],
-    );
+    const walletMismatches = await new WalletReconciliationSampler(
+      this.dataSource,
+    ).sample(sampleWallets);
 
     const report: DeepReconciliationReport = {
       walletMismatches,
@@ -355,7 +252,7 @@ export class ReconciliationService
     return report;
   }
 
-  /** Full sweep on-demand (test/tool vận hành): fast + deep gộp, giữ report shape cũ. */
+  /** Combined bounded diagnostic run; deep is a rotating wallet sample, not a full-fleet audit. */
   async runOnce(
     sampleWallets = WALLET_SAMPLE_SIZE,
   ): Promise<ReconciliationReport> {

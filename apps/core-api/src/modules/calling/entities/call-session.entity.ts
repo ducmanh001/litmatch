@@ -38,6 +38,10 @@ export enum CallEndReason {
 @Index('idx_call_sessions_active_updated', ['updatedAt', 'id'], {
   where: "status = 'active'",
 })
+@Index('idx_call_sessions_voice_deadline', ['startedAt', 'id'], {
+  where:
+    "status = 'active' AND call_kind = 'voice_match' AND reconnect_started_at IS NULL AND started_at IS NOT NULL",
+})
 @Index('idx_call_sessions_reconnect_started', ['reconnectStartedAt', 'id'], {
   where: "status = 'active' AND reconnect_started_at IS NOT NULL",
 })
@@ -45,6 +49,13 @@ export enum CallEndReason {
   where: "status = 'ended' AND cleanup_pending = true",
 })
 export class CallSession extends BaseAppEntity {
+  /** Worker leases are disposable coordination metadata, never business state. */
+  @Column({ type: 'timestamptz', nullable: true })
+  timerClaimUntil!: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  cleanupClaimUntil!: Date | null;
+
   @Column({ type: 'uuid', nullable: true })
   matchSessionId!: string | null;
 

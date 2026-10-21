@@ -59,9 +59,14 @@ kubectl -n litmatch rollout undo deployment/core-api
 ```
 
 `strategy.rollingUpdate.maxUnavailable: 0` cho core-api/signaling-gateway — deploy mới không giảm
-capacity đang phục vụ. `media-server` dùng `strategy: Recreate` (xem lý do trong
-`base/media-server/deployment.yaml`) — deploy media-server có downtime ngắn theo thiết kế, vì
-1 room chỉ nằm trên 1 pod và replicas mặc định là 1.
+capacity đang phục vụ. Base/staging `media-server` giữ một replica với `Recreate`.
+Production overlays dùng hai replica, `RollingUpdate` với `maxSurge: 0`, `maxUnavailable: 1`,
+và required pod anti-affinity theo hostname để không trùng cổng hostNetwork. PDB production
+giữ ít nhất một pod cho voluntary eviction; PDB không ngăn crash hoặc điều khiển rollout Deployment.
+LiveKit nhận SIGTERM để drain room hiện có; grace period 18.000 giây và progress deadline
+18.600 giây cho phép rollout chờ drain. Theo [hướng dẫn Kubernetes của LiveKit](https://docs.livekit.io/transport/self-hosting/kubernetes/),
+drain cần khoảng chờ dài. Pipeline/rollout watchdog phải cho phép thời gian này. Hết grace thì
+Kubernetes cưỡng bức dừng pod; room trên pod crash hoặc hết grace không tự chuyển sang node khác.
 
 ### Đổi tag image (CI)
 
@@ -176,12 +181,40 @@ Cập nhật 2026-10-17: gateway nay xuất `signaling_connections_active` (UpDo
 cùng `signaling_fanout_subscribed_users`, `signaling_tracked_leases`, `signaling_relay_events_total{result}`,
 `signaling_lease_refresh_total{result}`; matcher xuất `matching_matcher_windows_total{outcome}`. Tên metric
 đã có để làm nguồn cho `prometheus-adapter` nhưng **cấu hình adapter/HPA vẫn chưa làm** (chưa kiểm chứng
-trên cụm thật). `maxReplicas: 20` của gateway chỉ đủ cho ~1 triệu socket với 50.000 socket/pod (giả định):
-nâng trần chỉ khi đã có số đo, và chia Redis theo userId (`REALTIME_REDIS_URLS`, đặt trong Secret của cả
-core-api và signaling-gateway) trước khi tăng số pod — xem
+trên cụm thật). Gateway admission mặc định giới hạn 2.000 socket đã xác thực + đang chờ/process
+(`WS_MAX_CONNECTIONS_PER_PROCESS`) và 64 handshake bất đồng bộ/process (`WS_MAX_CONCURRENT_HANDSHAKES`),
+không có hàng chờ; quá tải dùng lỗi retryable `CONNECTION_QUOTA_UNAVAILABLE`. Các gauge
+`signaling_connections_reserved` và `signaling_handshakes_inflight` phản ánh cả tải đang admission.
+Các ngưỡng này chưa phải capacity đã đo. Suy ra số replica cần thiết từ socket/process bền vững
+đã benchmark và headroom khi mất pod/rollout; `maxReplicas` chỉ là giới hạn autoscale.
+Tăng trần chỉ khi có số đo và cài/kiểm chứng Custom Metrics adapter; chia Redis theo userId
+(`REALTIME_REDIS_URLS`, đặt trong Secret của cả core-api và signaling-gateway) trước khi tăng pod.
+`REDIS_URL` của Socket.IO cluster adapter vẫn là dependency HA chung cho bootstrap/readiness,
+kể cả khi quota/fanout đã chia shard — xem
 `docs/services/realtime-gateway.md` § 7 và `docs/plans/2026-10-17-realtime-matching-chat-scale-plan.md` § 7.
 
 ## Ngân sách kết nối Postgres
+
+HTTP có admission cap theo pod: `HTTP_MAX_CONCURRENT_REQUESTS=0` suy ra `4 × DATABASE_POOL_MAX`
+(mặc định 40 handler đang xử lý). Hết chỗ trả 503 + `Retry-After: 1` trước khi chạy handler,
+không tạo thêm hàng chờ ứng dụng; probe health được miễn để tránh vòng lặp rollout khi quá tải.
+Slot được nhả khi request hoàn tất/lỗi hoặc Observable bị hủy. Guard/middleware phía trước
+interceptor vẫn cần ingress/rate limit; đây không phải trần tổng kết nối TCP hay mọi tác vụ nền.
+Probe health không dùng shared request throttle: các kubelet/proxy có thể chung IP khi số pod tăng.
+Readiness coalesce probe theo process, cache kết quả một giây và chỉ giữ tối đa một SQL probe
+chưa hoàn tất, kể cả khi HTTP probe đã hết hạn; tránh vòng lặp 429 hoặc làm đầy pool do probe chậm.
+
+Runtime đặt `DATABASE_STATEMENT_TIMEOUT_MS=15000`: PostgreSQL hủy mỗi SQL quá hạn, kể cả khi
+đang chờ row lock; transaction bị lỗi phải rollback. Pool vẫn có acquire timeout riêng
+`DATABASE_POOL_ACQUIRE_TIMEOUT_MS`. Hai giới hạn này áp dụng cho API và các worker dùng runtime
+DataSource; không phải deadline tổng của toàn bộ request. Migration CLI dùng DataSource riêng,
+không kế thừa statement timeout của runtime để tránh ngắt DDL/index build dài. Theo dõi query bị
+hủy và chỉnh cấu hình sau khi đo tải; không tăng pool hoặc timeout để che truy vấn nghẽn.
+
+Core API/gateway ưu tiên trải replica theo node và zone bằng `ScheduleAnyway`. Quy tắc này giúp
+scheduler phân tán khi có nhiều failure domain, vẫn cho alpha một node chạy được; không bảo đảm
+HA nếu cluster chỉ có một node/zone hoặc không có đủ tài nguyên. Cần kiểm chứng placement và
+node/zone failure trên cluster thật trước khi gọi deployment là HA.
 
 Mỗi pod core-api giữ tối đa `DATABASE_POOL_MAX` kết nối tới Postgres (mặc định 10, sàn 5). Hai điều cần nhớ:
 
@@ -223,7 +256,7 @@ proxy chia chung MỘT bucket cho mỗi route; core-api ghi cảnh báo lúc boo
 
 - hops 0. Quota guest theo mạng cũng dùng `req.ip`, nên giá trị này ảnh hưởng cả hai.
 
-## media-server (LiveKit) — vì sao KHÔNG có HPA, vì sao replicas: 1
+## media-server (LiveKit) — nhiều node production, không có HPA
 
 Đọc kỹ `docs/03-architecture.md § 3.5` trước khi đổi phần này:
 
@@ -240,11 +273,15 @@ proxy chia chung MỘT bucket cho mỗi route; core-api ghi cảnh báo lúc boo
   Node, tối đa 1 pod media-server / Node; firewall Node phải mở dải UDP cho client (điều kiện hạ
   tầng lúc deploy thật). Phương án NodePort per-pod bị loại (cần cơ chế gán/khám phá port động
   chưa có trong repo — lý do đầy đủ trong ADR).
-- `replicas: 1` **vẫn là mặc định, vẫn không có HorizontalPodAutoscaler** — ADR 0005 chỉ gỡ
-  blocker _networking_ cho multi-node; trần "một room vừa một node" (per-room resource,
-  `docs/03 § 3.8.A`) là trục khác và **chưa có benchmark thật** (`loadtest/party-room-livekit.sh`
-  chưa từng chạy trên hạ tầng production — `docs/07-roadmap.md` mục 1). Tăng replica là quyết
-  định riêng sau khi có số liệu.
+- Base/dev/staging giữ `replicas: 1`; production và production-region-b khai hai replica
+  trên hai hostname khác nhau nhằm giảm phạm vi lỗi node và drain từng pod. Đây là cấu hình
+  sẵn sàng triển khai, chưa phải bằng chứng capacity. Không có HPA cho media. Cần ít nhất hai
+  node đủ resource, cổng RTC/metrics trống, địa chỉ ICE công khai đúng và firewall phù hợp;
+  thiếu node thứ hai thì pod phải Pending, không được bỏ anti-affinity để ép cùng node.
+  Cả hai pod dùng chung Redis LiveKit, cùng credentials và endpoint client/control đúng.
+  Một room vẫn vừa một node và không migrate khi crash; phải benchmark
+  `loadtest/party-room-livekit.sh` theo publishers/subscribers/codec/bitrate trước triển khai thật.
+  Region B vẫn là scaffold chưa provision.
 - `LIVEKIT_URL` của core-api trỏ `Service` ClusterIP `media-server.litmatch.svc.cluster.local:7880`
   — dùng được cho core-api gọi **control API** (mint token, tạo/xoá room) trong cluster. Đường
   client **kết nối trực tiếp RTC** (docs/03 § 3.7: "client nối thẳng LiveKit bằng token TTL ngắn")
@@ -309,8 +346,8 @@ compute provider cho cluster của bất kỳ region nào — việc đó vẫn 
    ([ADR 0004](../docs/adr/0004-api-gateway-nginx-ingress.md)); còn follow-on TLS/cert-manager
    (chưa khai `tls:` trong Ingress).
 2. ~~Networking RTC multi-node LiveKit~~ — **ĐÃ CHỐT: `hostNetwork: true`**
-   ([ADR 0005](../docs/adr/0005-livekit-hostnetwork-rtc.md)); tăng `media-server` lên nhiều
-   replicas vẫn chờ benchmark thật (trần room-per-node là trục khác, xem ADR).
+   ([ADR 0005](../docs/adr/0005-livekit-hostnetwork-rtc.md)); production overlays có hai
+   replica để giảm phạm vi lỗi, vẫn cần benchmark và kiểm chứng network/drain trước deploy.
 3. Công cụ quản lý Secret cụ thể cho cluster thật (sealed-secrets vs external-secrets/Vault) —
    chưa chốt, chỉ khai tên key cần điền.
 4. HPA theo custom metric (Prometheus + `prometheus-adapter`) — follow-up, chưa làm ở PR này.

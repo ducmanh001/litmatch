@@ -32,6 +32,8 @@ data:
   # phải < max_connections của Postgres (hoặc đặt PgBouncer ở giữa) — xem k8s/README.md mục "Ngân sách kết nối Postgres".
   DATABASE_POOL_MAX: '10'
   DATABASE_POOL_ACQUIRE_TIMEOUT_MS: '10000'
+  DATABASE_STATEMENT_TIMEOUT_MS: '15000'
+  HTTP_MAX_CONCURRENT_REQUESTS: '0'
 
   # KAFKA_BROKERS không chứa credential (SASL nếu bật thì phải chuyển sang Secret) — trỏ managed
   # Kafka ngoài cluster, giả định theo yêu cầu task (không deploy Kafka trong k8s manifest này).
@@ -78,12 +80,17 @@ data:
   ECONOMY_STORE_HTTP_TIMEOUT_MS: '10000'
   ECONOMY_OUTBOX_RELAY_ENABLED: 'false'
   ECONOMY_OUTBOX_RELAY_INTERVAL_MS: '2000'
+  ECONOMY_OUTBOX_RELAY_MAX_BATCHES_PER_TICK: '10'
+  ECONOMY_OUTBOX_RELAY_TICK_BUDGET_MS: '1000'
   ECONOMY_RECONCILIATION_ENABLED: 'true'
   ECONOMY_RECONCILIATION_INTERVAL_MS: '300000'
   ECONOMY_RECONCILIATION_FAST_INTERVAL_MS: '60000'
   # Bất biến Nợ=Có kiểm tăng dần: LAG > transaction ghi sổ lâu nhất; FULL = chu kỳ dựng lại tổng từ toàn bộ lịch sử
   ECONOMY_RECONCILIATION_LAG_MS: '300000'
   ECONOMY_RECONCILIATION_FULL_INTERVAL_MS: '86400000'
+  ECONOMY_RECONCILIATION_BATCH_SIZE: '2000'
+  ECONOMY_RECONCILIATION_MAX_BATCHES_PER_TICK: '10'
+  ECONOMY_RECONCILIATION_TICK_BUDGET_MS: '1000'
 
   # --- economy: refund/chargeback ---
   ECONOMY_APPLE_WEBHOOK_VERIFIER: 'store'
@@ -105,6 +112,8 @@ data:
 
   # --- matching (docs/03 § 3.8.B) ---
   MATCHING_MATCHER_INTERVAL_MS: '10000'
+  MATCHING_QUEUE_REPAIR_INTERVAL_MS: '5000'
+  MATCHING_QUEUE_REPAIR_BATCH_SIZE: '500'
   MATCHING_MATCHER_BATCH_SIZE: '20'
   # Cửa sổ ứng viên đầu shard (2 = hành vi cũ) và số shard drain song song mỗi pod (≤ 1/4 DATABASE_POOL_MAX).
   MATCHING_MATCHER_CANDIDATE_WINDOW: '32'
@@ -155,6 +164,9 @@ data:
   CALLING_PENDING_TIMEOUT_SECONDS: '60'
   CALLING_RECONNECT_WINDOW_SECONDS: '30'
   CALLING_TICKER_INTERVAL_MS: '1000'
+  CALLING_JOB_LEASE_MS: '30000'
+  CALLING_TICK_BUDGET_MS: '1000'
+  CALLING_CLEANUP_CONCURRENCY: '2'
   CALLING_TOKEN_TTL_SECONDS: '120'
 
   # --- party room (docs/03 § 3.8.A — cap cứng, không nới khi chưa có load test) ---

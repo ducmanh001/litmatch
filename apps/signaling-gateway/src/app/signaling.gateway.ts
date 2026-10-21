@@ -17,9 +17,11 @@ import {
 import { captureSentryException } from '@litmatch/observability';
 import { randomUUID } from 'node:crypto';
 
+import { ConnectionAdmissionBudget } from './connection-admission-budget';
 import { ConnectionQuotaService } from './connection-quota.service';
 import { verifyJwtWithRotation } from './jwt-rotation';
 import { LeaseRefresher } from './lease-refresher';
+import { OutboundBudget, OutboundTotalBudget } from './outbound-budget';
 import { RealtimeFanout } from './realtime-fanout';
 import { SignalingMetrics } from './signaling.metrics';
 import type { Namespace, Socket } from 'socket.io';
@@ -38,6 +40,7 @@ const CONNECTION_LIMIT_ERROR = 'CONNECTION_LIMIT';
 const CONNECTION_QUOTA_UNAVAILABLE_ERROR = 'CONNECTION_QUOTA_UNAVAILABLE';
 
 interface SocketData {
+  capacityCleanup?: () => void;
   userId?: string;
   quotaLeaseId?: string;
   quotaPreconnectCleanup?: () => void;
@@ -71,6 +74,15 @@ export class SignalingGateway
     { userId: string; client: Socket }
   >();
   private shuttingDown = false;
+  private readonly admissionBudget: ConnectionAdmissionBudget;
+  private readonly admittedClients = new Set<Socket>();
+  private readonly outboundBudgets = new WeakMap<
+    Socket['conn'],
+    OutboundBudget
+  >();
+  private readonly outboundMaxPackets: number;
+  private readonly outboundMaxBytes: number;
+  private readonly outboundTotal: OutboundTotalBudget;
 
   @WebSocketServer()
   private readonly server!: Namespace;
@@ -84,8 +96,25 @@ export class SignalingGateway
     private readonly connectionQuota: ConnectionQuotaService,
     private readonly metrics: SignalingMetrics,
   ) {
+    this.admissionBudget = new ConnectionAdmissionBudget(
+      config.get('WS_MAX_CONNECTIONS_PER_PROCESS', { infer: true }) ?? 2_000,
+      config.get('WS_MAX_CONCURRENT_HANDSHAKES', { infer: true }) ?? 64,
+    );
     this.previousJwtSecret =
       config.get('JWT_SECRET_PREVIOUS', { infer: true }) || undefined;
+    this.outboundMaxPackets =
+      config.get('WS_OUTBOUND_MAX_PACKETS', { infer: true }) ?? 128;
+    this.outboundMaxBytes =
+      config.get('WS_OUTBOUND_MAX_BYTES', { infer: true }) ?? 1_048_576;
+    this.outboundTotal = new OutboundTotalBudget(
+      config.get('WS_OUTBOUND_TOTAL_MAX_PACKETS', { infer: true }) ?? 16_384,
+      config.get('WS_OUTBOUND_TOTAL_MAX_BYTES', { infer: true }) ?? 134_217_728,
+      (result) => {
+        this.metrics.outboundPressure(result);
+        if (result === 'evicted') this.metrics.slowConsumer();
+      },
+    );
+    this.metrics.bindOutboundGauges(this.outboundTotal);
   }
 
   afterInit(server: Namespace): void {
@@ -141,11 +170,14 @@ export class SignalingGateway
       trackedLeases: () => this.refresher?.size ?? 0,
       shardsReady: () => this.shardStatus().serving,
       shardsTotal: () => this.connectionQuota.shardCount,
+      reservedConnections: () => this.admissionBudget.connections,
+      pendingHandshakes: () => this.admissionBudget.pendingHandshakes,
     });
   }
 
   async onModuleDestroy(): Promise<void> {
     this.shuttingDown = true;
+    this.admissionBudget.close();
     this.refresher?.stop();
     // Trước khi ngắt socket: mỗi socket rời sẽ không còn kéo theo một lệnh UNSUBSCRIBE riêng.
     this.fanout?.beginClose();
@@ -153,7 +185,14 @@ export class SignalingGateway
     this.activeLeases.clear();
     // Stop the transport before freeing its global slot. Nest disposes Socket.IO only after
     // module-destroy hooks, so release-first would temporarily admit >3 across replicas.
-    for (const [, { client }] of leases) client.conn.close(true);
+    const clients = new Set([
+      ...this.admittedClients,
+      ...leases.map(([, { client }]) => client),
+    ]);
+    for (const client of clients) {
+      client.conn.close(true);
+      this.releaseCapacity(client);
+    }
     await this.connectionQuota.releaseMany(
       leases.map(([leaseId, { userId }]) => ({ userId, leaseId })),
     );
@@ -194,6 +233,13 @@ export class SignalingGateway
   }
 
   handleConnection(client: Socket): void {
+    if (this.shuttingDown || client.conn.readyState === 'closed') {
+      this.abortQuotaAdmission(client);
+      this.releaseFanout(client);
+      this.releaseCapacity(client);
+      client.conn.close(true);
+      return;
+    }
     const data = client.data as SocketData;
     const userId = data.userId;
     if (!userId) {
@@ -217,6 +263,7 @@ export class SignalingGateway
   }
 
   handleDisconnect(client: Socket): void {
+    this.releaseCapacity(client);
     const data = client.data as SocketData;
     if (data.connectionCounted) {
       data.connectionCounted = false;
@@ -252,19 +299,45 @@ export class SignalingGateway
   /** Thân middleware handshake (public để unit test): JWT → quota lease → subscribe Redis. */
   async admit(client: Socket): Promise<void> {
     if (this.shuttingDown) throw new Error(CONNECTION_QUOTA_UNAVAILABLE_ERROR);
-    await this.authenticate(client);
-    const userId = (client.data as SocketData).userId;
-    if (!userId) throw new Error(RealtimeConnectionErrors.Unauthorized);
-    if (!(await this.admitConnection(client, userId))) {
-      throw new Error(CONNECTION_LIMIT_ERROR);
-    }
+    const admission = this.admissionBudget.reserve();
+    if (!admission) throw new Error(CONNECTION_QUOTA_UNAVAILABLE_ERROR);
+    const data = client.data as SocketData;
+    const cleanup = () => {
+      admission.releaseConnection();
+      this.admittedClients.delete(client);
+      client.conn.off('close', cleanup);
+      if (data.capacityCleanup === cleanup) data.capacityCleanup = undefined;
+    };
+    data.capacityCleanup = cleanup;
+    this.admittedClients.add(client);
+    client.conn.once('close', cleanup);
     try {
+      if (client.conn.readyState === 'closed') {
+        throw new Error(CONNECTION_QUOTA_UNAVAILABLE_ERROR);
+      }
+      await this.authenticate(client);
+      if (!admission.active || this.shuttingDown) {
+        throw new Error(CONNECTION_QUOTA_UNAVAILABLE_ERROR);
+      }
+      const userId = data.userId;
+      if (!userId) throw new Error(RealtimeConnectionErrors.Unauthorized);
+      if (!(await this.admitConnection(client, userId))) {
+        throw new Error(CONNECTION_LIMIT_ERROR);
+      }
       await this.admitFanout(client, userId);
     } catch (error) {
       // Socket sẽ không bao giờ `connect` → trả lease ngay thay vì đợi transport đóng.
       this.abortQuotaAdmission(client);
+      cleanup();
       throw error;
+    } finally {
+      // Transport closure cannot free this slot while JWT/Redis work is still pending.
+      admission.finishHandshake();
     }
+  }
+
+  private releaseCapacity(client: Socket): void {
+    (client.data as SocketData).capacityCleanup?.();
   }
 
   /** Verify JWT từ `handshake.auth.token` — gán userId vào socket.data (public để unit test). */
@@ -430,8 +503,50 @@ export class SignalingGateway
       this.metrics.relay('invalid');
       return;
     }
-    this.server.local.to(room).emit(envelope.event, envelope.data);
-    this.metrics.relay('delivered');
+    const nextBytes = OutboundBudget.eventBytes(
+      this.server.name,
+      envelope.event,
+      envelope.data,
+    );
+    // An event larger than the entire pod budget cannot be admitted by evicting anyone.
+    if (!this.outboundTotal.fitsAlone(nextBytes)) {
+      this.metrics.outboundPressure('dropped');
+      return;
+    }
+    let delivered = false;
+    for (const id of this.server.adapter.rooms.get(room) ?? []) {
+      const client = this.server.sockets.get(id);
+      if (!client || client.conn.readyState !== 'open') continue;
+      let budget = this.outboundBudgets.get(client.conn);
+      if (!budget) {
+        budget = new OutboundBudget(client.conn, this.outboundTotal);
+        this.outboundBudgets.set(client.conn, budget);
+      }
+      if (
+        !budget.allows(
+          nextBytes,
+          this.outboundMaxPackets,
+          this.outboundMaxBytes,
+        )
+      ) {
+        this.metrics.slowConsumer();
+        // Discard the queue; a namespace DISCONNECT would disable automatic reconnect.
+        // Engine.IO close synchronously removes this socket from local rooms before the emit.
+        budget.evict();
+        continue;
+      }
+      const cancel = budget.reserve(nextBytes);
+      if (!cancel) continue;
+      try {
+        // Emit separately so every recipient reserves capacity BEFORE enqueue, including the
+        // first event on a connection. local is essential: all pods already receive Redis relay.
+        this.server.local.to(id).emit(envelope.event, envelope.data);
+        delivered = true;
+      } finally {
+        cancel(); // only releases a reservation if emit did not create an Engine.IO packet
+      }
+    }
+    if (delivered) this.metrics.relay('delivered');
   }
 
   /** Room còn socket nào trên pod này không (`undefined` adapter = không biết → cứ emit). */

@@ -18,6 +18,8 @@ import { VoiceMatchCompletion1756000000000 } from '../../database/migrations/175
 import { CallingReconnectWindow1756500000000 } from '../../database/migrations/1756500000000-calling-reconnect-window';
 import { FriendCalling1757200000000 } from '../../database/migrations/1757200000000-friend-calling';
 import { CallCleanupRetry1758900000000 } from '../../database/migrations/1758900000000-call-cleanup-retry';
+import { CallFreeDeadlineIndex1759000000000 } from '../../database/migrations/1759000000000-call-free-deadline-index';
+import { CallWorkerClaims1759150000000 } from '../../database/migrations/1759150000000-call-worker-claims';
 import { MatchingDailyEntitlements1757100000000 } from '../../database/migrations/1757100000000-matching-daily-entitlements';
 
 import { CallingService } from './calling.service';
@@ -90,6 +92,10 @@ const CONFIG: Record<string, unknown> = {
   CALLING_PENDING_TIMEOUT_SECONDS: 3600,
   CALLING_RECONNECT_WINDOW_SECONDS: 30,
   CALLING_TICKER_INTERVAL_MS: 1000,
+  CALLING_TICK_BUDGET_MS: 1000,
+  CALLING_JOB_LEASE_MS: 30_000,
+  CALLING_CLEANUP_CONCURRENCY: 2,
+  DATABASE_POOL_MAX: 10,
   USER_DEFAULT_AVATAR_ID: 'default-01',
 };
 const configStub = {
@@ -277,8 +283,11 @@ d('Calling integration (Postgres thật)', () => {
         CallingReconnectWindow1756500000000,
         FriendCalling1757200000000,
         CallCleanupRetry1758900000000,
+        CallFreeDeadlineIndex1759000000000,
+        CallWorkerClaims1759150000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
+      extra: { lock_timeout: 1500 },
       migrationsTransactionMode: 'each',
       synchronize: false,
       dropSchema: true,
@@ -365,6 +374,74 @@ d('Calling integration (Postgres thật)', () => {
     friendPairs.clear();
   });
 
+  async function tick(instance: CallTickerService): Promise<void> {
+    await instance.runOnce();
+    await instance.runCleanupOnce();
+  }
+
+  it('uses the deadline range index with many fresh calls and few overdue calls', async () => {
+    const runner = ds.createQueryRunner();
+    await runner.connect();
+    try {
+      // TypeORM revert uses a transaction even for a transaction=false migration.
+      await runner.startTransaction();
+      await new CallFreeDeadlineIndex1759000000000().down(runner);
+      await runner.commitTransaction();
+      await new CallFreeDeadlineIndex1759000000000().up(runner);
+    } finally {
+      if (runner.isTransactionActive) await runner.rollbackTransaction();
+      await runner.release();
+    }
+    const [a, b] = await Promise.all([
+      createUser('plan-a'),
+      createUser('plan-b'),
+    ]);
+    try {
+      await ds.query(
+        `
+        INSERT INTO call_sessions (id, room_name, user_a_id, user_b_id, status, call_kind, started_at)
+        SELECT gen_random_uuid(), 'deadline-plan-' || i, $1, $2, 'active', 'voice_match',
+          CASE WHEN i <= 5 THEN now() - interval '500 seconds' ELSE now() END
+          FROM generate_series(1, 5000) AS i
+      `,
+        [a.id, b.id],
+      );
+      await ds.query('ANALYZE call_sessions');
+      const plans = await ds.query(
+        `
+        EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
+        SELECT id FROM call_sessions
+         WHERE status = 'active' AND call_kind = 'voice_match'
+           AND reconnect_started_at IS NULL AND started_at IS NOT NULL
+           AND started_at <= now() - make_interval(secs => $1)
+         ORDER BY started_at, id LIMIT 100 FOR UPDATE SKIP LOCKED
+      `,
+        [420],
+      );
+      interface Plan {
+        'Index Name'?: string;
+        'Index Cond'?: string;
+        Plans?: Plan[];
+      }
+      const nodes: Plan[] = [];
+      const visit = (plan: Plan) => {
+        nodes.push(plan);
+        plan.Plans?.forEach(visit);
+      };
+      visit(plans[0]['QUERY PLAN'][0].Plan);
+      expect(nodes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            'Index Name': 'idx_call_sessions_voice_deadline',
+            'Index Cond': expect.stringContaining('started_at'),
+          }),
+        ]),
+      );
+    } finally {
+      await ds.query('DELETE FROM call_sessions WHERE user_a_id = $1', [a.id]);
+    }
+  });
+
   async function recoverBeforeTickerLock(
     callId: string,
     reason: CallEndReason,
@@ -374,15 +451,15 @@ d('Calling integration (Postgres thật)', () => {
     let recovered = false;
     const spy = jest
       .spyOn(calling, 'endById')
-      .mockImplementation(async (id, endReason, guard) => {
+      .mockImplementation(async (id, endReason, guard, options) => {
         if (id === callId && endReason === reason && !recovered) {
           recovered = true;
           await recover();
         }
-        return original(id, endReason, guard);
+        return original(id, endReason, guard, options);
       });
     try {
-      await ticker.runOnce();
+      await tick(ticker);
       expect(recovered).toBe(true);
       expect(
         await ds.getRepository(CallSession).findOneByOrFail({ id: callId }),
@@ -463,6 +540,101 @@ d('Calling integration (Postgres thật)', () => {
     expect(deletedRooms).not.toContain(call.roomName);
   });
 
+  it.each(['pending', 'reconnect', 'free-limit', 'cleanup'] as const)(
+    '%s skips an older locked row and progresses another call, then retries after unlock',
+    async (stage) => {
+      const calls: CallSession[] = [];
+      for (const suffix of ['locked', 'available']) {
+        const [a, b] = await Promise.all([
+          createUser(`${stage}-${suffix}-a`),
+          createUser(`${stage}-${suffix}-b`),
+        ]);
+        if (stage === 'pending') {
+          const session = await createVoiceSession(a, b);
+          const { call } = await calling.joinCall(auth(a.id), session.id);
+          calls.push(call);
+          await ds.query(
+            "UPDATE call_sessions SET created_at = now() - interval '2 hours' WHERE id = $1",
+            [call.id],
+          );
+        } else {
+          const call = await activeCall(a, b, 430);
+          calls.push(call);
+          if (stage === 'reconnect') {
+            await calling.handleWebhookEvent({
+              event: 'participant_left',
+              roomName: call.roomName,
+              participantIdentity: b.id,
+            });
+            await ds.query(
+              "UPDATE call_sessions SET reconnect_started_at = now() - interval '31 seconds' WHERE id = $1",
+              [call.id],
+            );
+          } else if (stage === 'cleanup') {
+            await calling.endById(call.id, CallEndReason.Completed, undefined, {
+              deferCleanup: true,
+            });
+          }
+        }
+      }
+      const [locked, available] = calls;
+      await ds.query(
+        "UPDATE call_sessions SET updated_at = now() - interval '3 hours', created_at = now() - interval '3 hours', reconnect_started_at = CASE WHEN reconnect_started_at IS NULL THEN NULL ELSE now() - interval '1 hour' END WHERE id = $1",
+        [locked.id],
+      );
+      const runner = ds.createQueryRunner();
+      await runner.connect();
+      await runner.startTransaction();
+      try {
+        await runner.query(
+          'SELECT id FROM call_sessions WHERE id = $1 FOR UPDATE',
+          [locked.id],
+        );
+        // A regression must fail quickly rather than hang while this test owns the row lock.
+        expect(
+          await calling.endById(locked.id, CallEndReason.Completed, undefined, {
+            skipLocked: true,
+            deferCleanup: true,
+          }),
+        ).toEqual({ call: null, justEnded: false });
+        const tickDeadline = new CallTickerService(
+          ds,
+          configStub,
+          schedulerStub,
+          calling,
+        );
+        await (stage === 'cleanup'
+          ? tickDeadline.runCleanupOnce()
+          : tickDeadline.runOnce());
+        const fresh = await ds
+          .getRepository(CallSession)
+          .findOneByOrFail({ id: available.id });
+        expect(fresh.status).toBe(CallSessionStatus.Ended);
+        if (stage === 'cleanup') expect(fresh.cleanupPending).toBe(false);
+        expect(deletedRooms).not.toContain(locked.roomName);
+        if (stage !== 'cleanup') {
+          expect(
+            (
+              await ds
+                .getRepository(CallSession)
+                .findOneByOrFail({ id: locked.id })
+            ).status,
+          ).not.toBe(CallSessionStatus.Ended);
+        }
+      } finally {
+        await runner.rollbackTransaction();
+        await runner.release();
+      }
+      await tick(tickerB);
+      expect(
+        await ds.getRepository(CallSession).findOneByOrFail({ id: locked.id }),
+      ).toMatchObject({
+        status: CallSessionStatus.Ended,
+        cleanupPending: false,
+      });
+    },
+  );
+
   it('committed call end retains cleanup after a one-time Matching failure, then ticker retries it', async () => {
     const [a, b] = await Promise.all([
       createUser('cleanup-db-a'),
@@ -491,7 +663,7 @@ d('Calling integration (Postgres thật)', () => {
         ).status,
       ).toBe(MatchSessionStatus.Confirmed);
       expect(deletedRooms).not.toContain(call.roomName);
-      await tickerB.runOnce();
+      await tick(tickerB);
       expect(
         (
           await ds
@@ -524,7 +696,7 @@ d('Calling integration (Postgres thật)', () => {
         (await ds.getRepository(CallSession).findOneByOrFail({ id: call.id }))
           .cleanupPending,
       ).toBe(true);
-      await tickerB.runOnce();
+      await tick(tickerB);
       expect(
         (await ds.getRepository(CallSession).findOneByOrFail({ id: call.id }))
           .cleanupPending,
@@ -553,7 +725,7 @@ d('Calling integration (Postgres thật)', () => {
       schedulerStub,
       calling,
     );
-    await restartedTicker.runOnce();
+    await tick(restartedTicker);
     expect(
       (await ds.getRepository(CallSession).findOneByOrFail({ id: call.id }))
         .cleanupPending,
@@ -610,7 +782,7 @@ d('Calling integration (Postgres thật)', () => {
     const before = await balanceOf(a.id);
     const call = await activeCall(a, b, 430); // 430s > free 420s
 
-    await ticker.runOnce();
+    await tick(ticker);
 
     const fresh = await ds
       .getRepository(CallSession)
@@ -628,7 +800,7 @@ d('Calling integration (Postgres thật)', () => {
     const call = await activeCall(a, b, 15);
 
     await calling.endCall(auth(a.id), call.id);
-    await Promise.all([ticker.runOnce(), tickerB.runOnce()]);
+    await Promise.all([tick(ticker), tick(tickerB)]);
 
     expect(await balanceOf(a.id)).toBe(1200);
     expect(await balanceOf(b.id)).toBe(1200);
@@ -670,7 +842,7 @@ d('Calling integration (Postgres thật)', () => {
         { id: first.call.id },
         { startedAt: new Date(Date.now() - 60 * 60 * 1000) },
       );
-    await ticker.runOnce();
+    await tick(ticker);
 
     const fresh = await ds
       .getRepository(CallSession)
@@ -689,7 +861,7 @@ d('Calling integration (Postgres thật)', () => {
       [call.id],
     );
 
-    await ticker.runOnce();
+    await tick(ticker);
 
     const fresh = await ds
       .getRepository(CallSession)
@@ -718,7 +890,7 @@ d('Calling integration (Postgres thật)', () => {
     const polled = await calling.getCall(auth(a.id), call.id);
     expect(polled.status).toBe(CallSessionStatus.Active);
     expect(polled.reconnectStartedAt).toEqual(disconnected.reconnectStartedAt);
-    await ticker.runOnce();
+    await tick(ticker);
     let fresh = await ds
       .getRepository(CallSession)
       .findOneByOrFail({ id: call.id });
@@ -731,7 +903,7 @@ d('Calling integration (Postgres thật)', () => {
       `UPDATE call_sessions SET reconnect_started_at = now() - interval '31 seconds' WHERE id = $1`,
       [call.id],
     );
-    await ticker.runOnce();
+    await tick(ticker);
     fresh = await ds
       .getRepository(CallSession)
       .findOneByOrFail({ id: call.id });
@@ -784,7 +956,7 @@ d('Calling integration (Postgres thật)', () => {
       roomName: call.roomName,
       participantIdentity: b.id,
     });
-    await ticker.runOnce();
+    await tick(ticker);
 
     const resumed = await ds
       .getRepository(CallSession)
@@ -873,7 +1045,7 @@ d('Calling integration (Postgres thật)', () => {
     expect(resumed.startedAt!.getTime()).toBeGreaterThanOrEqual(
       call.startedAt!.getTime() + 31_000,
     );
-    await ticker.runOnce();
+    await tick(ticker);
 
     const fresh = await ds
       .getRepository(CallSession)
@@ -981,7 +1153,7 @@ d('Calling integration (Postgres thật)', () => {
     expect(result.disconnectedBAt).toEqual(beforeSnapshot.disconnectedBAt);
     expect(result.reconnectStartedAt).not.toBeNull();
     expect(result.startedAt).toEqual(beforeSnapshot.startedAt);
-    await ticker.runOnce();
+    await tick(ticker);
     const fresh = await ds
       .getRepository(CallSession)
       .findOneByOrFail({ id: call.id });

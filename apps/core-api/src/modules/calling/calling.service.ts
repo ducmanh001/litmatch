@@ -444,11 +444,15 @@ export class CallingService {
     callId: string,
     reason: CallEndReason,
     shouldEnd?: (call: CallSession) => boolean,
+    options?: { deferCleanup?: boolean; skipLocked?: boolean },
   ): Promise<EndCallResult> {
     const result = await this.dataSource.transaction(async (manager) => {
       const call = await manager.findOne(CallSession, {
         where: { id: callId },
-        lock: { mode: 'pessimistic_write' },
+        lock: {
+          mode: 'pessimistic_write',
+          ...(options?.skipLocked ? { onLocked: 'skip_locked' as const } : {}),
+        },
       });
       if (!call) return { call: null, justEnded: false };
       if (call.status === CallSessionStatus.Ended) {
@@ -487,7 +491,7 @@ export class CallingService {
       this.metrics.recordEnded(result.call.endReason ?? reason);
       await this.publishCallEnded(result.call);
     }
-    if (result.call?.cleanupPending) {
+    if (result.call?.cleanupPending && !options?.deferCleanup) {
       try {
         await this.cleanupEndedCall(result.call);
         result.call.cleanupPending = false;

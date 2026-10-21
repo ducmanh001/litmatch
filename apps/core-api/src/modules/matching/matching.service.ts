@@ -195,8 +195,8 @@ export class MatchingService {
       throw err;
     }
 
-    // Redis SAU khi DB commit: nếu bước này fail, ticket là "zombie DB" — client retry cùng key
-    // sẽ re-enqueue (nhánh replay ở trên), sweeper là chốt chặn cuối (expire quá hạn).
+    // Redis SAU commit: client replay repairs immediately; QueueRepairService also restores live
+    // tickets without client participation. Sweeper expires tickets past their queue deadline.
     await this.ensureEnqueued(ticket);
     return ticket;
   }
