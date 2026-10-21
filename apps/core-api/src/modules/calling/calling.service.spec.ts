@@ -301,14 +301,7 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
   describe('GET call — đối soát participant và reaction đã lưu', () => {
     it('webhook bị mất nhưng user đã thật sự ở room → pending chuyển active', async () => {
       const pending = makeCall();
-      const active = makeCall({
-        status: CallSessionStatus.Active,
-        joinedAAt: new Date(),
-        startedAt: new Date(),
-      });
-      callRepo.findOneBy
-        .mockResolvedValueOnce(pending)
-        .mockResolvedValueOnce(active);
+      callRepo.findOneBy.mockResolvedValue(pending);
       livekit.listParticipantIdentities.mockResolvedValue([
         me.userId,
         PARTNER_ID,
@@ -318,10 +311,41 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
       const result = await service.getCall(me, pending.id);
 
       expect(result.status).toBe(CallSessionStatus.Active);
-      expect(manager.save).toHaveBeenCalledTimes(2);
+      expect(result.joinedAAt).toBeInstanceOf(Date);
+      expect(result.joinedBAt).toBeInstanceOf(Date);
+      expect(result.startedAt).toBeInstanceOf(Date);
+      expect(result.reconnectStartedAt).toBeNull();
     });
 
-    it('active nhưng participant đối phương biến mất → tự kết thúc, không treo call', async () => {
+    it('stale pending SFU presence cannot override activation followed by disconnect', async () => {
+      const pending = makeCall();
+      const startedAt = new Date(Date.now() - 10_000);
+      const grace = new Date(Date.now() - 5_000);
+      const disconnected = makeCall({
+        status: CallSessionStatus.Active,
+        startedAt,
+        joinedAAt: startedAt,
+        joinedBAt: startedAt,
+        reconnectStartedAt: grace,
+        disconnectedBAt: grace,
+      });
+      callRepo.findOneBy.mockResolvedValue(pending);
+      manager.findOne.mockResolvedValue(disconnected);
+      livekit.listParticipantIdentities.mockResolvedValue([
+        me.userId,
+        PARTNER_ID,
+      ]);
+
+      const result = await service.getCall(me, pending.id);
+
+      expect(result.status).toBe(CallSessionStatus.Active);
+      expect(result.reconnectStartedAt).toEqual(grace);
+      expect(result.disconnectedBAt).toEqual(grace);
+      expect(result.startedAt).toEqual(startedAt);
+      expect(manager.save).not.toHaveBeenCalled();
+    });
+
+    it('active missing partner opens persisted reconnect grace without ending', async () => {
       const active = makeCall({
         status: CallSessionStatus.Active,
         startedAt: new Date(Date.now() - 2_000),
@@ -332,9 +356,164 @@ describe('CallingService (unit — mock repo/matching/livekit)', () => {
 
       const result = await service.getCall(me, active.id);
 
-      expect(result.status).toBe(CallSessionStatus.Ended);
-      expect(result.endReason).toBe(CallEndReason.Completed);
-      expect(livekit.deleteRoom).toHaveBeenCalledWith(active.roomName);
+      expect(result.status).toBe(CallSessionStatus.Active);
+      expect(result.reconnectStartedAt).toBeInstanceOf(Date);
+      expect(result.disconnectedBAt).toEqual(result.reconnectStartedAt);
+      expect(result.endReason).toBeNull();
+      expect(livekit.deleteRoom).not.toHaveBeenCalled();
+      expect(manager.findOne).toHaveBeenCalledWith(CallSession, {
+        where: { id: active.id },
+        lock: { mode: 'pessimistic_write' },
+      });
+    });
+
+    it('disconnect → repeated GET preserves grace → rejoin resumes the same call', async () => {
+      const startedAt = new Date(Date.now() - 60_000);
+      const active = makeCall({ status: CallSessionStatus.Active, startedAt });
+      callRepo.findOneBy.mockResolvedValue(active);
+      manager.findOne.mockResolvedValue(active);
+      livekit.listParticipantIdentities.mockResolvedValue([me.userId]);
+      await service.handleWebhookEvent({
+        event: 'participant_left',
+        roomName: active.roomName,
+        participantIdentity: PARTNER_ID,
+      });
+      const grace = new Date(Date.now() - 5_000);
+      active.reconnectStartedAt = grace;
+      active.disconnectedBAt = grace;
+
+      await service.getCall(me, active.id);
+      await service.getCall(me, active.id);
+      expect(active.status).toBe(CallSessionStatus.Active);
+      expect(active.reconnectStartedAt).toEqual(grace);
+      await service.handleWebhookEvent({
+        event: 'participant_joined',
+        roomName: active.roomName,
+        participantIdentity: PARTNER_ID,
+      });
+
+      expect(active.status).toBe(CallSessionStatus.Active);
+      expect(active.reconnectStartedAt).toBeNull();
+      expect(active.disconnectedBAt).toBeNull();
+      expect(active.startedAt!.getTime()).toBeGreaterThanOrEqual(
+        startedAt.getTime() + 5_000,
+      );
+      expect(livekit.deleteRoom).not.toHaveBeenCalled();
+    });
+
+    it('stale SFU absence cannot reopen grace after a concurrent rejoin commits', async () => {
+      const grace = new Date(Date.now() - 5_000);
+      const observed = makeCall({
+        status: CallSessionStatus.Active,
+        startedAt: new Date(Date.now() - 60_000),
+        reconnectStartedAt: grace,
+        disconnectedBAt: grace,
+      });
+      const rejoined = makeCall({
+        status: CallSessionStatus.Active,
+        startedAt: new Date(observed.startedAt!.getTime() + 5_000),
+      });
+      callRepo.findOneBy
+        .mockResolvedValueOnce(observed)
+        .mockResolvedValue(rejoined);
+      livekit.listParticipantIdentities.mockResolvedValue([me.userId]);
+      manager.findOne.mockResolvedValue(rejoined);
+
+      const result = await service.getCall(me, observed.id);
+
+      expect(result.status).toBe(CallSessionStatus.Active);
+      expect(result.reconnectStartedAt).toBeNull();
+      expect(result.disconnectedBAt).toBeNull();
+      expect(manager.save).not.toHaveBeenCalled();
+      expect(livekit.deleteRoom).not.toHaveBeenCalled();
+    });
+
+    it('expired persisted grace is left for the ticker and is not extended by GET', async () => {
+      const grace = new Date(Date.now() - 31_000);
+      const active = makeCall({
+        status: CallSessionStatus.Active,
+        reconnectStartedAt: grace,
+        disconnectedBAt: grace,
+      });
+      callRepo.findOneBy.mockResolvedValue(active);
+      manager.findOne.mockResolvedValue(active);
+      livekit.listParticipantIdentities.mockResolvedValue([me.userId]);
+
+      const result = await service.getCall(me, active.id);
+
+      expect(result.status).toBe(CallSessionStatus.Active);
+      expect(result.reconnectStartedAt).toEqual(grace);
+      expect(livekit.deleteRoom).not.toHaveBeenCalled();
+    });
+
+    it('SFU presence resumes persisted grace when joined webhooks were lost', async () => {
+      const startedAt = new Date(Date.now() - 60_000);
+      const grace = new Date(Date.now() - 5_000);
+      const active = makeCall({
+        status: CallSessionStatus.Active,
+        startedAt,
+        reconnectStartedAt: grace,
+        disconnectedAAt: grace,
+        disconnectedBAt: grace,
+      });
+      callRepo.findOneBy.mockResolvedValue(active);
+      manager.findOne.mockResolvedValue(active);
+      livekit.listParticipantIdentities.mockResolvedValue([
+        me.userId,
+        PARTNER_ID,
+      ]);
+
+      const result = await service.getCall(me, active.id);
+
+      expect(result.status).toBe(CallSessionStatus.Active);
+      expect(result.reconnectStartedAt).toBeNull();
+      expect(result.disconnectedAAt).toBeNull();
+      expect(result.disconnectedBAt).toBeNull();
+      expect(result.startedAt!.getTime()).toBeGreaterThanOrEqual(
+        startedAt.getTime() + 5_000,
+      );
+      expect(livekit.deleteRoom).not.toHaveBeenCalled();
+    });
+
+    it('stale SFU presence cannot clear a newer disconnect committed under the row lock', async () => {
+      const grace = new Date(Date.now() - 5_000);
+      const observed = makeCall({
+        status: CallSessionStatus.Active,
+        startedAt: new Date(Date.now() - 60_000),
+        reconnectStartedAt: grace,
+        disconnectedBAt: grace,
+      });
+      const disconnected = makeCall({
+        ...observed,
+        disconnectedAAt: new Date(),
+      });
+      callRepo.findOneBy.mockResolvedValue(observed);
+      manager.findOne.mockResolvedValue(disconnected);
+      livekit.listParticipantIdentities.mockResolvedValue([
+        me.userId,
+        PARTNER_ID,
+      ]);
+
+      const result = await service.getCall(me, observed.id);
+
+      expect(result.reconnectStartedAt).toEqual(grace);
+      expect(result.disconnectedAAt).not.toBeNull();
+      expect(result.disconnectedBAt).toEqual(grace);
+      expect(manager.save).not.toHaveBeenCalled();
+    });
+
+    it('unavailable SFU keeps the stored call and reconnect grace unchanged', async () => {
+      const active = makeCall({ status: CallSessionStatus.Active });
+      callRepo.findOneBy.mockResolvedValue(active);
+      livekit.listParticipantIdentities.mockRejectedValue(
+        new Error('SFU offline'),
+      );
+
+      await expect(service.getCall(me, active.id)).resolves.toBe(active);
+
+      expect(active.reconnectStartedAt).toBeNull();
+      expect(manager.save).not.toHaveBeenCalled();
+      expect(livekit.deleteRoom).not.toHaveBeenCalled();
     });
 
     it('GET trả lại reaction đã lưu để reload vẫn giữ trạng thái tim', async () => {

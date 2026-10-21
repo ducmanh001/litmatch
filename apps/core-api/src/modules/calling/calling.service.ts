@@ -274,7 +274,7 @@ export class CallingService {
         HttpStatus.NOT_FOUND,
       );
     }
-    call = await this.reconcileCallWithLivekit(call, user.userId);
+    call = await this.reconcileCallWithLivekit(call);
     return call;
   }
 
@@ -542,11 +542,10 @@ export class CallingService {
   /**
    * Webhook là kênh chính; đối soát RoomService là backstop cho cấu hình webhook lỗi/mất mạng.
    * Pending chỉ được chuyển khi LiveKit xác nhận member thật sự có mặt. Active mà đối phương
-   * không còn trong room thì chốt ended để client không treo màn hình vô hạn.
+   * không còn trong room thì mở reconnect grace; ticker chốt khi quá hạn.
    */
   private async reconcileCallWithLivekit(
     call: CallSession,
-    userId: string,
   ): Promise<CallSession> {
     let identities: string[];
     try {
@@ -560,27 +559,71 @@ export class CallingService {
       return call;
     }
 
-    if (call.status === CallSessionStatus.Pending) {
-      // RoomService đã là nguồn sự thật cho cả room: ghi nhận mọi identity hợp lệ mà
-      // LiveKit trả về, không phụ thuộc việc browser của phía còn lại có đang poll hay không.
-      const memberIds = identities.filter(
-        (identity) => identity === call.userAId || identity === call.userBId,
-      );
-      if (memberIds.length === 0) return call;
-      for (const identity of memberIds) {
-        await this.markJoined(call.id, identity);
-      }
-      return (await this.callRepo.findOneBy({ id: call.id })) ?? call;
-    }
+    return call.status === CallSessionStatus.Ended
+      ? call
+      : this.reconcileParticipants(call, identities);
+  }
 
-    if (call.status === CallSessionStatus.Active) {
-      const partnerId = call.userAId === userId ? call.userBId : call.userAId;
-      if (!identities.includes(partnerId)) {
-        const ended = await this.endById(call.id, CallEndReason.Completed);
-        return ended.call ?? call;
+  private async reconcileParticipants(
+    observed: CallSession,
+    identities: string[],
+  ): Promise<CallSession> {
+    if (
+      observed.status === CallSessionStatus.Pending &&
+      !identities.includes(observed.userAId) &&
+      !identities.includes(observed.userBId)
+    )
+      return observed;
+    if (
+      observed.status === CallSessionStatus.Active &&
+      !observed.reconnectStartedAt &&
+      identities.includes(observed.userAId) &&
+      identities.includes(observed.userBId)
+    )
+      return observed;
+
+    return this.dataSource.transaction(async (manager) => {
+      const call = await manager.findOne(CallSession, {
+        where: { id: observed.id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!call) return observed;
+      // SFU I/O runs outside the lock. Ignore both presence and absence observations
+      // if a webhook changed this call while the snapshot was in flight.
+      const unchanged = (
+        [
+          'updatedAt',
+          'joinedAAt',
+          'joinedBAt',
+          'startedAt',
+          'reconnectStartedAt',
+          'disconnectedAAt',
+          'disconnectedBAt',
+        ] as const
+      ).every((field) => call[field]?.getTime() === observed[field]?.getTime());
+      if (call.status !== observed.status || !unchanged) return call;
+
+      const now = new Date();
+      for (const identity of [call.userAId, call.userBId]) {
+        if (identities.includes(identity))
+          this.recordParticipantJoined(call, identity, now);
       }
-    }
-    return call;
+      if (call.status === CallSessionStatus.Active) {
+        call.disconnectedAAt = identities.includes(call.userAId)
+          ? null
+          : (call.disconnectedAAt ?? now);
+        call.disconnectedBAt = identities.includes(call.userBId)
+          ? null
+          : (call.disconnectedBAt ?? now);
+        if (call.disconnectedAAt || call.disconnectedBAt) {
+          call.reconnectStartedAt ??= now;
+        } else {
+          this.resumeCallTimer(call, now);
+        }
+      }
+      await manager.save(call);
+      return call;
+    });
   }
 
   /**
@@ -629,42 +672,53 @@ export class CallingService {
       if (!call || call.status === CallSessionStatus.Ended) return;
 
       const now = new Date();
-      if (identity === call.userAId) call.joinedAAt = call.joinedAAt ?? now;
-      else if (identity === call.userBId)
-        call.joinedBAt = call.joinedBAt ?? now;
-      else return; // identity lạ — token chỉ mint cho member nên đây là event không liên quan
-
-      if (
-        call.joinedAAt &&
-        call.joinedBAt &&
-        call.status === CallSessionStatus.Pending
-      ) {
-        call.status = CallSessionStatus.Active;
-        call.startedAt = call.startedAt ?? now; // mốc giới hạn Voice Match (spec § 4)
-      }
-
+      if (!this.recordParticipantJoined(call, identity, now)) return;
       if (call.status === CallSessionStatus.Active) {
-        if (identity === call.userAId) call.disconnectedAAt = null;
-        if (identity === call.userBId) call.disconnectedBAt = null;
-
-        // Chỉ resume khi cả 2 đã quay lại. Mốc này cũng giúp reconnect sau
-        // room_finished không làm mất phần thời gian đã dùng trước đó.
-        if (
-          call.reconnectStartedAt &&
-          call.disconnectedAAt === null &&
-          call.disconnectedBAt === null &&
-          call.startedAt
-        ) {
-          const pausedMs = Math.max(
-            0,
-            now.getTime() - call.reconnectStartedAt.getTime(),
-          );
-          call.startedAt = new Date(call.startedAt.getTime() + pausedMs);
-          call.reconnectStartedAt = null;
-        }
+        this.resumeCallTimer(call, now);
       }
       await manager.save(call);
     });
+  }
+
+  /** In-memory mutation shared by locked webhook and SFU reconciliation transactions. */
+  private recordParticipantJoined(
+    call: CallSession,
+    identity: string,
+    now: Date,
+  ): boolean {
+    if (identity === call.userAId) call.joinedAAt ??= now;
+    else if (identity === call.userBId) call.joinedBAt ??= now;
+    else return false;
+    if (
+      call.status === CallSessionStatus.Pending &&
+      call.joinedAAt &&
+      call.joinedBAt
+    ) {
+      call.status = CallSessionStatus.Active;
+      call.startedAt ??= now;
+    }
+    if (call.status === CallSessionStatus.Active) {
+      if (identity === call.userAId) call.disconnectedAAt = null;
+      if (identity === call.userBId) call.disconnectedBAt = null;
+    }
+    return true;
+  }
+
+  /** Resume only once both members return, excluding the pause from the server timer. */
+  private resumeCallTimer(call: CallSession, now: Date): void {
+    if (
+      !call.reconnectStartedAt ||
+      !call.startedAt ||
+      call.disconnectedAAt !== null ||
+      call.disconnectedBAt !== null
+    )
+      return;
+    const pausedMs = Math.max(
+      0,
+      now.getTime() - call.reconnectStartedAt.getTime(),
+    );
+    call.startedAt = new Date(call.startedAt.getTime() + pausedMs);
+    call.reconnectStartedAt = null;
   }
 
   private async markDisconnected(

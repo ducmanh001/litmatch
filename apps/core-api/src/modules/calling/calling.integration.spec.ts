@@ -714,6 +714,10 @@ d('Calling integration (Postgres thật)', () => {
       roomName: call.roomName,
       participantIdentity: b.id,
     });
+    const disconnected = await calling.getCall(auth(a.id), call.id);
+    const polled = await calling.getCall(auth(a.id), call.id);
+    expect(polled.status).toBe(CallSessionStatus.Active);
+    expect(polled.reconnectStartedAt).toEqual(disconnected.reconnectStartedAt);
     await ticker.runOnce();
     let fresh = await ds
       .getRepository(CallSession)
@@ -747,6 +751,244 @@ d('Calling integration (Postgres thật)', () => {
     expect(deletedRooms.filter((r) => r === call.roomName).length).toBe(
       cleanupsAfterFirst,
     ); // không dọn thêm
+  });
+
+  it('disconnect → GET → rejoin retains active call and pauses its server timer', async () => {
+    const [a, b] = await Promise.all([
+      createUser('get-a'),
+      createUser('get-b'),
+    ]);
+    const call = await activeCall(a, b, 2);
+    await calling.handleWebhookEvent({
+      event: 'participant_left',
+      roomName: call.roomName,
+      participantIdentity: b.id,
+    });
+    await ds.query(
+      "UPDATE call_sessions SET reconnect_started_at = now() - interval '5 seconds' WHERE id = $1",
+      [call.id],
+    );
+    const probe = jest
+      .spyOn(livekitStub, 'listParticipantIdentities')
+      .mockResolvedValueOnce([a.id]);
+    let duringGrace: CallSession;
+    try {
+      duringGrace = await calling.getCall(auth(a.id), call.id);
+    } finally {
+      probe.mockRestore();
+    }
+    expect(duringGrace.status).toBe(CallSessionStatus.Active);
+    expect(duringGrace.reconnectStartedAt).not.toBeNull();
+    await calling.handleWebhookEvent({
+      event: 'participant_joined',
+      roomName: call.roomName,
+      participantIdentity: b.id,
+    });
+    await ticker.runOnce();
+
+    const resumed = await ds
+      .getRepository(CallSession)
+      .findOneByOrFail({ id: call.id });
+    expect(resumed.status).toBe(CallSessionStatus.Active);
+    expect(resumed.reconnectStartedAt).toBeNull();
+    expect(resumed.disconnectedBAt).toBeNull();
+    expect(resumed.startedAt!.getTime()).toBeGreaterThanOrEqual(
+      call.startedAt!.getTime() + 5_000,
+    );
+    expect(deletedRooms).not.toContain(call.roomName);
+  });
+
+  it('SFU GET snapshot finishing after a committed rejoin cannot reopen reconnect grace', async () => {
+    const [a, b] = await Promise.all([
+      createUser('race-get-a'),
+      createUser('race-get-b'),
+    ]);
+    const call = await activeCall(a, b, 2);
+    await calling.handleWebhookEvent({
+      event: 'participant_left',
+      roomName: call.roomName,
+      participantIdentity: b.id,
+    });
+    let observationStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      observationStarted = resolve;
+    });
+    let finishObservation!: (identities: string[]) => void;
+    const snapshot = new Promise<string[]>((resolve) => {
+      finishObservation = resolve;
+    });
+    const probe = jest
+      .spyOn(livekitStub, 'listParticipantIdentities')
+      .mockImplementationOnce(() => {
+        observationStarted();
+        return snapshot;
+      });
+    const pendingGet = calling.getCall(auth(a.id), call.id);
+    try {
+      await started;
+      await calling.handleWebhookEvent({
+        event: 'participant_joined',
+        roomName: call.roomName,
+        participantIdentity: b.id,
+      });
+    } finally {
+      finishObservation([a.id]);
+      probe.mockRestore();
+    }
+    const result = await pendingGet;
+
+    expect(result.status).toBe(CallSessionStatus.Active);
+    expect(result.reconnectStartedAt).toBeNull();
+    expect(result.disconnectedBAt).toBeNull();
+    expect(deletedRooms).not.toContain(call.roomName);
+  });
+
+  it('SFU recovers lost joined webhooks, accounts the pause and prevents ticker ending a healthy call', async () => {
+    const [a, b] = await Promise.all([
+      createUser('sfu-resume-a'),
+      createUser('sfu-resume-b'),
+    ]);
+    const call = await activeCall(a, b, 425);
+    await calling.handleWebhookEvent({
+      event: 'room_finished',
+      roomName: call.roomName,
+      participantIdentity: null,
+    });
+    await ds.query(
+      "UPDATE call_sessions SET reconnect_started_at = now() - interval '31 seconds' WHERE id = $1",
+      [call.id],
+    );
+    const probe = jest
+      .spyOn(livekitStub, 'listParticipantIdentities')
+      .mockResolvedValueOnce([a.id, b.id]);
+    let resumed: CallSession;
+    try {
+      resumed = await calling.getCall(auth(a.id), call.id);
+    } finally {
+      probe.mockRestore();
+    }
+    expect(resumed.reconnectStartedAt).toBeNull();
+    expect(resumed.disconnectedAAt).toBeNull();
+    expect(resumed.disconnectedBAt).toBeNull();
+    expect(resumed.startedAt!.getTime()).toBeGreaterThanOrEqual(
+      call.startedAt!.getTime() + 31_000,
+    );
+    await ticker.runOnce();
+
+    const fresh = await ds
+      .getRepository(CallSession)
+      .findOneByOrFail({ id: call.id });
+    expect(fresh.status).toBe(CallSessionStatus.Active);
+    expect(deletedRooms).not.toContain(call.roomName);
+  });
+
+  it('stale SFU presence cannot clear a concurrent disconnect committed while fetching participants', async () => {
+    const [a, b] = await Promise.all([
+      createUser('sfu-stale-a'),
+      createUser('sfu-stale-b'),
+    ]);
+    const call = await activeCall(a, b, 2);
+    await calling.handleWebhookEvent({
+      event: 'participant_left',
+      roomName: call.roomName,
+      participantIdentity: b.id,
+    });
+    let observationStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      observationStarted = resolve;
+    });
+    let finishObservation!: (identities: string[]) => void;
+    const snapshot = new Promise<string[]>((resolve) => {
+      finishObservation = resolve;
+    });
+    const probe = jest
+      .spyOn(livekitStub, 'listParticipantIdentities')
+      .mockImplementationOnce(() => {
+        observationStarted();
+        return snapshot;
+      });
+    const pendingGet = calling.getCall(auth(a.id), call.id);
+    try {
+      await started;
+      await calling.handleWebhookEvent({
+        event: 'participant_left',
+        roomName: call.roomName,
+        participantIdentity: a.id,
+      });
+    } finally {
+      finishObservation([a.id, b.id]);
+      probe.mockRestore();
+    }
+    const result = await pendingGet;
+
+    expect(result.status).toBe(CallSessionStatus.Active);
+    expect(result.reconnectStartedAt).not.toBeNull();
+    expect(result.disconnectedAAt).not.toBeNull();
+    expect(result.disconnectedBAt).not.toBeNull();
+    expect(deletedRooms).not.toContain(call.roomName);
+  });
+
+  it('pending SFU snapshot cannot override webhook activation followed by a newer disconnect', async () => {
+    const [a, b] = await Promise.all([
+      createUser('sfu-pending-a'),
+      createUser('sfu-pending-b'),
+    ]);
+    const session = await createVoiceSession(a, b);
+    const { call } = await calling.joinCall(auth(a.id), session.id);
+    expect(call.status).toBe(CallSessionStatus.Pending);
+    let observationStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      observationStarted = resolve;
+    });
+    let finishObservation!: (identities: string[]) => void;
+    const snapshot = new Promise<string[]>((resolve) => {
+      finishObservation = resolve;
+    });
+    const probe = jest
+      .spyOn(livekitStub, 'listParticipantIdentities')
+      .mockImplementationOnce(() => {
+        observationStarted();
+        return snapshot;
+      });
+    const pendingGet = calling.getCall(auth(a.id), call.id);
+    let beforeSnapshot!: CallSession;
+    try {
+      await started;
+      for (const identity of [a.id, b.id]) {
+        await calling.handleWebhookEvent({
+          event: 'participant_joined',
+          roomName: call.roomName,
+          participantIdentity: identity,
+        });
+      }
+      await calling.handleWebhookEvent({
+        event: 'participant_left',
+        roomName: call.roomName,
+        participantIdentity: b.id,
+      });
+      beforeSnapshot = await ds
+        .getRepository(CallSession)
+        .findOneByOrFail({ id: call.id });
+    } finally {
+      finishObservation([a.id, b.id]);
+      probe.mockRestore();
+    }
+    const result = await pendingGet;
+    expect(result.status).toBe(CallSessionStatus.Active);
+    expect(result.reconnectStartedAt).toEqual(
+      beforeSnapshot.reconnectStartedAt,
+    );
+    expect(result.disconnectedBAt).toEqual(beforeSnapshot.disconnectedBAt);
+    expect(result.reconnectStartedAt).not.toBeNull();
+    expect(result.startedAt).toEqual(beforeSnapshot.startedAt);
+    await ticker.runOnce();
+    const fresh = await ds
+      .getRepository(CallSession)
+      .findOneByOrFail({ id: call.id });
+    expect(fresh.status).toBe(CallSessionStatus.Active);
+    expect(fresh.reconnectStartedAt).toEqual(beforeSnapshot.reconnectStartedAt);
+    expect(fresh.startedAt).toEqual(beforeSnapshot.startedAt);
+    expect(deletedRooms).not.toContain(call.roomName);
   });
 
   it('IDOR: người ngoài session/call nhận CÙNG 404', async () => {

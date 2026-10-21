@@ -60,7 +60,13 @@ timer tiếp tục; quá grace mới end `completed`. Event khác bỏ qua. Room
 `GET /calling/calls/:id` có backstop đối soát bằng `RoomServiceClient.listParticipants`: nếu
 webhook bị mất, mọi identity member đang thật sự có mặt sẽ được ghi nhận như
 `participant_joined` (không phụ thuộc browser bên kia có đang poll); khi call đã `active` mà đối
-phương không còn trong LiveKit, API chốt `ended(completed)`. Client không được tự gửi cờ
+phương không còn trong LiveKit, API mở hoặc giữ nguyên reconnect grace đã lưu trong DB,
+không gia hạn cửa sổ qua mỗi lần poll. Ticker mới chốt `ended(completed)` khi quá grace.
+Khi cả hai member hiện diện, đối soát cũng phục hồi timer và loại khoảng tạm dừng dù webhook
+rejoin bị mất. Cả call pending và active đều kiểm lại status và snapshot dưới cùng row lock:
+kết quả SFU cũ không mở lại grace
+sau rejoin hoặc xoá mất disconnect mới đã commit; lỗi truy vấn SFU giữ nguyên trạng thái hiện tại.
+Client không được tự gửi cờ
 `active`/`joined`; identity đối soát lấy từ JWT và participant LiveKit.
 
 ## 4. Ticker — timer ở server (docs/10 § Calling: KHÔNG tin timer client)
