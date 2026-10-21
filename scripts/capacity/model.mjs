@@ -22,7 +22,9 @@ export const DEFAULTS = {
   matchesPerDay: 10_000_000, // đề bài — hiểu là mỗi ngày (giả định: đề bài không nêu cửa sổ thời gian)
   // --- Hành vi (giả định) ---
   socketsPerUser: 1.1, // giả định: nhiều tab/thiết bị
-  socketsPerPod: 50_000, // giả định: cần benchmark Socket.IO thật trên node đích
+  socketsPerPod: 2_000, // current WS_MAX_CONNECTIONS_PER_PROCESS admission ceiling; sustainable capacity still requires measurement
+  gatewayMaxReplicas: 30, // production HPA ceiling, not a capacity certification
+  gatewayHeadroomFraction: 0.25, // planning reserve for failure/rollout/churn; not a measured guarantee
   messagesPerChatterPerSec: 0.3, // giả định: ~1 tin / 3 giây khi đang chat
   matchPeakFactor: 10, // giả định: giờ cao điểm / trung bình ngày
   voiceShare: 0.5, // giả định
@@ -51,12 +53,14 @@ export const DEFAULTS = {
   friendChatShare: 0.5, // giả định: nửa số tin là chat bạn bè, nửa là chat ẩn danh Soul
   pgStmtsPerSecPerPrimary: 20_000, // giả định: cần pgbench/thực đo trên instance đích
   pgTargetUtilization: 0.5,
+  pgConfiguredWritePrimaries: 1, // runtime has one DATABASE_URL; extra writer routing is not implemented
   bytesPerMessageRow: 400, // giả định: hàng + index
   bytesPerMatchRows: 1_100, // giả định: 2 ticket + 1 session + 2 notification
   chatHoursPerDay: 8, // giả định: số giờ/ngày tải chat ở mức đỉnh
   // --- Media (giả định) ---
   participantsPerMediaNode: 2_000, // giả định: audio-only; cần benchmark LiveKit riêng (docs/03 § 3.5)
   mediaTargetUtilization: 0.6,
+  mediaConfiguredNodes: 2, // production overlay replicas; node capacity still requires measurement
   // --- API ---
   reqPerCcuPerSecRepoModel: 0.2, // docs/plans/2026-10-08: mô hình minh hoạ của repo
   activeFraction: 0.01, // giả định cho kịch bản B: chỉ 1% socket đang thao tác
@@ -68,6 +72,36 @@ const round = (value, digits = 1) => Number(value.toFixed(digits));
 
 export function computeModel(overrides = {}) {
   const p = { ...DEFAULTS, ...overrides };
+  for (const [key, value] of Object.entries(p)) {
+    if (!Number.isFinite(value) || value < 0)
+      throw new Error(`${key} must be a non-negative finite number`);
+  }
+  for (const key of [
+    'socketsPerPod',
+    'leaseMs',
+    'leaseRefreshDivisor',
+    'msPerPair',
+    'pgStmtsPerSecPerPrimary',
+    'participantsPerMediaNode',
+    'redisTargetUtilization',
+    'pgTargetUtilization',
+    'mediaTargetUtilization',
+  ]) {
+    if (p[key] === 0) throw new Error(`${key} must be greater than zero`);
+  }
+  for (const key of [
+    'voiceShare',
+    'friendChatShare',
+    'activeFraction',
+    'gatewayHeadroomFraction',
+    'redisTargetUtilization',
+    'pgTargetUtilization',
+    'mediaTargetUtilization',
+  ]) {
+    if (p[key] > 1) throw new Error(`${key} must be at most one`);
+  }
+  if (p.gatewayHeadroomFraction === 1)
+    throw new Error('gatewayHeadroomFraction must be less than one');
 
   const sockets = p.ccu * p.socketsPerUser;
   const pods = ceil(sockets / p.socketsPerPod);
@@ -129,6 +163,19 @@ export function computeModel(overrides = {}) {
     realtime: {
       sockets: Math.round(sockets),
       gatewayPods: pods,
+      configuredGatewaySocketCeiling: p.gatewayMaxReplicas * p.socketsPerPod,
+      gatewayConfigurationFitsTarget:
+        p.gatewayMaxReplicas * p.socketsPerPod >= sockets,
+      gatewayUsableSocketCeiling: Math.floor(
+        p.gatewayMaxReplicas *
+          p.socketsPerPod *
+          (1 - p.gatewayHeadroomFraction),
+      ),
+      gatewayFitsTargetWithHeadroom:
+        p.gatewayMaxReplicas *
+          p.socketsPerPod *
+          (1 - p.gatewayHeadroomFraction) >=
+        sockets,
       leaseRefreshSeconds: refreshSeconds,
       leaseOpsPerSec: Math.round(leaseOpsPerSec),
       eventsPerSec: Math.round(eventsPerSec),
@@ -169,6 +216,9 @@ export function computeModel(overrides = {}) {
       primariesBefore: ceil(stmtsBefore / pgBudget),
       primariesAfter: ceil(stmtsAfter / pgBudget),
       budgetPerPrimary: pgBudget,
+      configuredWritePrimaries: p.pgConfiguredWritePrimaries,
+      configuredBudgetFitsModel:
+        p.pgConfiguredWritePrimaries * pgBudget >= stmtsAfter,
     },
     media: {
       concurrentCallsAtPeak: Math.round(callsConcurrent),
@@ -176,6 +226,12 @@ export function computeModel(overrides = {}) {
       nodes: ceil(
         participants / (p.participantsPerMediaNode * p.mediaTargetUtilization),
       ),
+      configuredNodes: p.mediaConfiguredNodes,
+      configuredBudgetFitsModel:
+        p.mediaConfiguredNodes *
+          p.participantsPerMediaNode *
+          p.mediaTargetUtilization >=
+        participants,
     },
     api: {
       scenarioA_repoModelRps: Math.round(p.ccu * p.reqPerCcuPerSecRepoModel),
@@ -203,6 +259,8 @@ export function renderReport(model) {
     '',
     '## Mặt phẳng realtime (Redis)',
     `- Socket: ${n(r.sockets)} → ${n(r.gatewayPods)} pod gateway (${n(model.inputs.socketsPerPod)} socket/pod, giả định).`,
+    `- Admission/HPA đã cấu hình: tối đa ${n(r.configuredGatewaySocketCeiling)} socket trước headroom; ${r.gatewayConfigurationFitsTarget ? 'đủ giới hạn số học cho mục tiêu, vẫn cần benchmark' : 'CHƯA đủ giới hạn số học cho mục tiêu'}. Không tự tăng maxReplicas hay coi admission limit là capacity đã đo.`,
+    `- Sau dự phòng ${model.inputs.gatewayHeadroomFraction * 100}%: ${n(r.gatewayUsableSocketCeiling)} socket; ${r.gatewayFitsTargetWithHeadroom ? 'đủ theo mô hình' : 'thiếu công suất theo mô hình'}.`,
     `- Gia hạn lease: ${n(r.leaseOpsPerSec)} lệnh/giây (mỗi ${r.leaseRefreshSeconds}s/socket).`,
     `- Event pub/sub: ${n(r.eventsPerSec)}/giây; PSUBSCRIBE tốn ${r.pubsubMicrosPerEventPattern} µs CPU Redis/event ở ${r.gatewayPods} pod.`,
     '',
@@ -216,11 +274,13 @@ export function renderReport(model) {
     `- ${m.pairsPerSecAvg} cặp/giây trung bình, ${m.pairsPerSecPeak} cặp/giây giờ cao điểm.`,
     `- Một pod matcher ≈ ${m.pairsPerSecPerPod} cặp/giây (${model.inputs.matcherConcurrency} worker × ${model.inputs.msPerPair} ms/cặp, giả định) → ${n(m.matcherPodsAtPeak)} pod matcher ở cao điểm.`,
     `- Voice: ${n(v.concurrentCallsAtPeak)} cuộc gọi đồng thời (${n(v.concurrentParticipants)} người) → ≥ ${n(v.nodes)} node media (${n(model.inputs.participantsPerMediaNode)} người/node, giả định).`,
+    `- Media đã cấu hình ${v.configuredNodes} node: ${v.configuredBudgetFitsModel ? 'đủ ngân sách giả định, cần benchmark' : 'CHƯA đủ ngân sách giả định'}.`,
     '',
     '## Chat và dữ liệu',
     `- ${c.messagesPerSec} tin/giây → ${n(c.messagesPerDay)} tin/ngày ≈ ${c.gbPerDayMessages} GB/ngày (bảng message); ghép đôi ≈ ${c.gbPerDayMatches} GB/ngày (ticket + session + notification).`,
     `- Notification tin bạn bè: ${n(c.friendNotificationInsertsPerSecBefore)} → ${n(c.friendNotificationInsertsPerSecAfter)} insert/giây (cổng gộp ${model.inputs.friendNotifyWindowSeconds}s, ít hơn ${c.friendNotificationReductionPct}%).`,
     `- Postgres: ${n(d.stmtsPerSecBefore)} → ${n(d.stmtsPerSecAfter)} câu lệnh/giây ở cao điểm; ngân sách ${n(d.budgetPerPrimary)}/primary → ${d.primariesBefore} → ${d.primariesAfter} primary.`,
+    `- Writer đã cấu hình ${d.configuredWritePrimaries}: ${d.configuredBudgetFitsModel ? 'đủ ngân sách giả định, cần benchmark' : 'CHƯA đủ ngân sách giả định'}. Số primary cần là quy đổi nhu cầu; runtime một DATABASE_URL chưa có routing ghi nhiều shard.`,
     '',
     '## API (hai cách hiểu "10 triệu đồng thời")',
     `- A) mô hình của repo (${model.inputs.reqPerCcuPerSecRepoModel} req/CCU/giây): ${n(a.scenarioA_repoModelRps)} RPS.`,
@@ -232,7 +292,12 @@ export function renderReport(model) {
 function parseArgs(argv) {
   const overrides = {};
   let json = false;
+  let check = false;
   for (const arg of argv) {
+    if (arg === '--check') {
+      check = true;
+      continue;
+    }
     if (arg === '--json') {
       json = true;
       continue;
@@ -248,7 +313,7 @@ function parseArgs(argv) {
       throw new Error(`Giá trị không hợp lệ: ${arg}`);
     overrides[match[1]] = value;
   }
-  return { overrides, json };
+  return { overrides, json, check };
 }
 
 if (
@@ -256,9 +321,16 @@ if (
   resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
   try {
-    const { overrides, json } = parseArgs(process.argv.slice(2));
+    const { overrides, json, check } = parseArgs(process.argv.slice(2));
     const model = computeModel(overrides);
     console.log(json ? JSON.stringify(model, null, 2) : renderReport(model));
+    if (
+      check &&
+      (!model.realtime.gatewayFitsTargetWithHeadroom ||
+        !model.postgres.configuredBudgetFitsModel ||
+        !model.media.configuredBudgetFitsModel)
+    )
+      process.exitCode = 1;
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;

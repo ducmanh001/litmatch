@@ -4,6 +4,7 @@
  *
  *   pnpm capacity:data                       # kịch bản mặc định (10 triệu CCU, số liệu tải lấy từ model.mjs)
  *   pnpm capacity:data --ccu=2000000 --years=3
+ *   pnpm capacity:data --annualGrowthRate=0.3 --years=5
  *   pnpm capacity:data --json
  *
  * Nguồn của từng con số:
@@ -29,7 +30,7 @@ const ROW_SIZES = JSON.parse(
 
 /**
  * Công suất xoá mặc định của khung retention (ADR 0013): RETENTION_BATCH_SIZE × RETENTION_MAX_BATCHES_PER_TICK mỗi quy tắc
- * mỗi RETENTION_INTERVAL_MS. Ở các giá trị mặc định (5.000 × 20 / 60 giây) = ~1.667 hàng/giây/quy tắc. Đo lại được bằng
+ * mỗi RETENTION_INTERVAL_MS. Ở các giá trị mặc định (5.000 × 60 / 60 giây) = 5.000 hàng/giây/quy tắc. Đo lại được bằng
  * `scripts/capacity/bench/retention-delete.mjs` (3 triệu hàng refresh_tokens, container cục bộ, một kết nối, trong cache): xoá
  * 533.399 hàng trong 2,9 giây ≈ 184.500 hàng/giây, 288 byte WAL/hàng, VACUUM 5,1 giây; một lần đo trước đó trên máy đang tải
  * cho ~39.800 hàng/giây (cùng 288 byte WAL/hàng) — chênh 4,6× giữa các lần chạy cho thấy đây KHÔNG phải số công suất đĩa
@@ -38,7 +39,7 @@ const ROW_SIZES = JSON.parse(
  * thấy bước chọn/xoá lô không phải điểm nghẽn TRONG ĐIỀU KIỆN LAB (một kết nối, trong cache, không ghi đồng thời); công suất
  * trên đĩa quy mô TB và dưới tải ghi thật CHƯA đo.
  */
-export const RETENTION_DEFAULT_ROWS_PER_SEC = (5_000 * 20) / 60;
+export const RETENTION_DEFAULT_ROWS_PER_SEC = (5_000 * 60) / 60;
 /** Giờ cao điểm ghi gấp ~2 lần trung bình: cảnh báo khi tốc độ xoá TRUNG BÌNH đã chạm một nửa công suất. */
 const RETENTION_HEADROOM = 0.5;
 
@@ -64,6 +65,7 @@ export const STORY_SWEEPER = {
 export const SCENARIO = {
   // --- đề bài ---
   ccu: LOAD.ccu,
+  annualGrowthRate: 0, // giả định: CCU/hành vi ghi năm đầu; tải mỗi năm sau nhân (1 + rate)
   matchesPerDay: LOAD.matchesPerDay,
   chatters: LOAD.chatters,
   // --- giả định hành vi (phải thay bằng số đo) ---
@@ -77,6 +79,11 @@ export const SCENARIO = {
   retentionBatchSize: 5_000, // RETENTION_BATCH_SIZE mặc định
   retentionMaxBatchesPerTick: 60, // RETENTION_MAX_BATCHES_PER_TICK mặc định (trước đây 20: xoá không kịp refresh_tokens)
   retentionIntervalSeconds: 60, // RETENTION_INTERVAL_MS mặc định (giây)
+  retentionTickBudgetSeconds: 30, // shared per job, not a separate budget for every rule
+  retentionBatchPauseMs: 50,
+  retentionBatchLatencyMs: 0, // unknown until measured under concurrent writes; 0 keeps the optimistic batch-count ceiling
+  retentionAdmissionFraction: 1, // measured fraction of scheduled ticks that actually run
+  retentionRuleBudgetFraction: 1, // fraction of one job's time available to this rule (several rules share a job)
   phoneLoginShare: 0.05, // tỉ lệ DAU đăng nhập bằng OTP điện thoại mỗi ngày
   otpRequestsPerLogin: 1.3,
   ticketsPerMatch: 2.4, // 2 vé/cặp + ~20% vé hết hạn không ghép được
@@ -417,6 +424,40 @@ const TB = 1024 ** 4;
 
 export function computeDataGrowth(overrides = {}, years = 3) {
   const s = { ...SCENARIO, ...overrides };
+  if (!Number.isInteger(years) || years < 1 || years > 100) {
+    throw new Error('years must be an integer from 1 to 100');
+  }
+  if (
+    !Number.isFinite(s.annualGrowthRate) ||
+    s.annualGrowthRate <= -1 ||
+    s.annualGrowthRate > 10
+  ) {
+    throw new Error('annualGrowthRate must be greater than -1 and at most 10');
+  }
+  for (const key of [
+    'retentionAdmissionFraction',
+    'retentionRuleBudgetFraction',
+  ]) {
+    if (!Number.isFinite(s[key]) || s[key] < 0 || s[key] > 1)
+      throw new Error(`${key} must be between 0 and 1`);
+  }
+  for (const key of [
+    'retentionTickBudgetSeconds',
+    'retentionBatchPauseMs',
+    'retentionBatchLatencyMs',
+  ]) {
+    if (!Number.isFinite(s[key]) || s[key] < 0)
+      throw new Error(`${key} must be a non-negative finite number`);
+  }
+  if (
+    !Number.isFinite(s.retentionIntervalSeconds) ||
+    s.retentionIntervalSeconds <= 0
+  )
+    throw new Error('retentionIntervalSeconds must be greater than zero');
+  for (const key of ['retentionBatchSize', 'retentionMaxBatchesPerTick']) {
+    if (!Number.isSafeInteger(s[key]) || s[key] < 0)
+      throw new Error(`${key} must be a non-negative safe integer`);
+  }
   // MỌI knob tải chung với model.mjs phải đi qua đây, nếu không `--chatHoursPerDay=…` chỉ là tham số chết.
   const load = computeModel({
     ccu: s.ccu,
@@ -449,20 +490,66 @@ export function computeDataGrowth(overrides = {}, years = 3) {
     notificationsPerDay,
   });
   const horizonDays = 365 * years;
-  // Dung lượng bảng tại năm N: hàng/ngày × min(vòng đời, N năm); không có vòng đời → tăng suốt N năm.
+  const finalYearFactor = (1 + s.annualGrowthRate) ** (years - 1);
+  // Piecewise-constant annual traffic; integrate only the age range still held at the horizon.
+  const arrivals = (rowsPerDay, fromDay, toDay) => {
+    let rows = 0;
+    for (let year = 0; year < years; year++) {
+      const days = Math.max(
+        0,
+        Math.min(toDay, (year + 1) * 365) - Math.max(fromDay, year * 365),
+      );
+      rows += rowsPerDay * (1 + s.annualGrowthRate) ** year * days;
+    }
+    return rows;
+  };
+  // Stock at year N integrates retained arrivals, with the workload changing at each year boundary.
   const stockRows = (rowsPerDay, days) =>
-    rowsPerDay * (days === null ? horizonDays : Math.min(days, horizonDays));
-  // Công suất xoá của MỘT quy tắc job retention (hàng/ngày). Nếu hàng vào nhiều hơn công suất, phần xoá không kịp tích thành
-  // backlog tăng mãi: stock = hàng/ngày × N năm − công suất × (N năm − vòng đời).
+    arrivals(
+      rowsPerDay,
+      days === null ? 0 : Math.max(0, horizonDays - days),
+      horizonDays,
+    );
+  // Purge capacity of one retention rule (rows/day). Excess eligible arrivals form a backlog;
+  // subsequent quieter years may drain it. No capacity or growth assumption is a runtime measurement.
+  const batchCostMs = s.retentionBatchLatencyMs + s.retentionBatchPauseMs;
+  const availableBudgetMs =
+    s.retentionTickBudgetSeconds * 1000 * s.retentionRuleBudgetFraction;
+  const batchesWithinBudget =
+    availableBudgetMs === 0
+      ? 0
+      : batchCostMs > 0
+        ? Math.floor(availableBudgetMs / batchCostMs)
+        : s.retentionMaxBatchesPerTick;
+  const effectiveBatches = Math.min(
+    s.retentionMaxBatchesPerTick,
+    batchesWithinBudget,
+  );
   const capacityRowsPerDay =
-    (s.retentionBatchSize * s.retentionMaxBatchesPerTick * 86_400) /
+    (s.retentionBatchSize *
+      effectiveBatches *
+      s.retentionAdmissionFraction *
+      86_400) /
     s.retentionIntervalSeconds;
   const stockRowsCapped = (rowsPerDay, days, capacity) => {
-    const ideal = stockRows(rowsPerDay, days);
-    if (days === null || rowsPerDay <= capacity || horizonDays <= days) {
-      return ideal;
+    const total = arrivals(rowsPerDay, 0, horizonDays);
+    if (days === null || horizonDays <= days) return total;
+    let backlog = 0;
+    let deleted = 0;
+    // Eligible arrivals are the original traffic delayed by the retention period. Backlog may
+    // grow in a busy year and drain in a quieter one; do not assume a constant arrival rate.
+    for (let year = 0; year < years; year++) {
+      const duration = Math.max(
+        0,
+        Math.min(horizonDays, days + (year + 1) * 365) - (days + year * 365),
+      );
+      if (duration === 0) continue;
+      const eligible = rowsPerDay * (1 + s.annualGrowthRate) ** year * duration;
+      const removed = Math.min(backlog + eligible, capacity * duration);
+      backlog += eligible - removed;
+      deleted += removed;
     }
-    return ideal + (rowsPerDay - capacity) * (horizonDays - days);
+    return total - deleted;
   };
   const tables = definitions.map((def) => {
     const bytesPerRow = sizes.get(def.table);
@@ -479,12 +566,14 @@ export function computeDataGrowth(overrides = {}, years = 3) {
     const jobCapacity = def.deleteVia === 'job' ? capacityRowsPerDay : Infinity;
     return {
       ...def,
+      rowsPerDayAtHorizon: def.rowsPerDay * finalYearFactor,
       recommendedDays,
       bytesPerRow: Math.round(bytesPerRow),
       gbPerDay: bytesPerDay / GB,
       tbPerYearNoRetention: (bytesPerDay * 365) / TB,
-      rowsAfterYears: def.rowsPerDay * horizonDays,
-      tbAfterYearsNoRetention: (bytesPerDay * horizonDays) / TB,
+      rowsAfterYears: stockRows(def.rowsPerDay, null),
+      tbAfterYearsNoRetention:
+        (stockRows(def.rowsPerDay, null) * bytesPerRow) / TB,
       // Vòng đời MẶC ĐỊNH với RETENTION_* mặc định: nếu công suất job nhỏ hơn hàng vào thì backlog tăng mãi.
       tbAfterYearsDefault:
         (stockRowsCapped(def.rowsPerDay, def.retentionDays, jobCapacity) *
@@ -496,17 +585,27 @@ export function computeDataGrowth(overrides = {}, years = 3) {
       // hàng vào ÷ công suất mặc định của một quy tắc job (> 1: không theo kịp ở cấu hình mặc định).
       capacityRatio:
         def.deleteVia === 'job' && bounded
-          ? def.rowsPerDay / capacityRowsPerDay
+          ? capacityRowsPerDay > 0
+            ? (def.rowsPerDay * finalYearFactor) / capacityRowsPerDay
+            : null
           : 0,
+      noPurgeCapacity:
+        def.deleteVia === 'job' && bounded && capacityRowsPerDay === 0,
       tbAfterYearsRecommended:
         (stockRows(def.rowsPerDay, recommendedDays) * bytesPerRow) / TB,
       // Phần bảng còn TĂNG tiếp mỗi năm sau khi vòng đời đã vào ổn định (bảng không có vòng đời).
       tbPerYearStillGrowingDefault:
-        def.retentionDays === null ? (bytesPerDay * 365) / TB : 0,
+        def.retentionDays === null
+          ? (bytesPerDay * finalYearFactor * 365) / TB
+          : 0,
       tbPerYearStillGrowingRecommended:
-        recommendedDays === null ? (bytesPerDay * 365) / TB : 0,
+        recommendedDays === null
+          ? (bytesPerDay * finalYearFactor * 365) / TB
+          : 0,
       // Tốc độ xoá trung bình bảng phải chịu để KHÔNG phình (nếu có vòng đời mặc định hoặc khuyến nghị).
-      deletesPerSecAvg: bounded ? def.rowsPerDay / 86_400 : 0,
+      deletesPerSecAvg: bounded
+        ? (def.rowsPerDay * finalYearFactor) / 86_400
+        : 0,
     };
   });
   const sum = (key) => tables.reduce((total, t) => total + t[key], 0);
@@ -514,6 +613,7 @@ export function computeDataGrowth(overrides = {}, years = 3) {
   return {
     inputs: { ...s, years },
     dau,
+    dauAtHorizon: dau * finalYearFactor,
     messagesPerDay,
     notificationsPerDay,
     pgVersion: ROW_SIZES.serverVersion,
@@ -524,13 +624,25 @@ export function computeDataGrowth(overrides = {}, years = 3) {
     totals: {
       tbPerYearNoRetention: sum('tbPerYearNoRetention'),
       tbAfterYearsNoRetention: sum('tbAfterYearsNoRetention'),
+      // StorySweeper is independent of RETENTION_MODE; other retention jobs only count in dry-run.
+      tbAfterYearsDryRun:
+        sum('tbAfterYearsNoRetention') -
+        storyViews.tbAfterYearsNoRetention +
+        storyViews.tbAfterYearsDefault,
       tbAfterYearsDefault: sum('tbAfterYearsDefault'),
       tbAfterYearsDefaultTuned: sum('tbAfterYearsDefaultTuned'),
       tbAfterYearsRecommended: sum('tbAfterYearsRecommended'),
       tbPerYearStillGrowingDefault: sum('tbPerYearStillGrowingDefault'),
       tbPerYearStillGrowingRecommended: sum('tbPerYearStillGrowingRecommended'),
     },
-    sweeper: sweeperAdequacy(s, storyViews.rowsPerDay),
+    retentionCapacity: {
+      effectiveBatchesPerTick: effectiveBatches,
+      rowsPerSecondPerRule: capacityRowsPerDay / 86_400,
+      hasBatchLatencyInput: s.retentionBatchLatencyMs > 0,
+      admissionFraction: s.retentionAdmissionFraction,
+      ruleBudgetFraction: s.retentionRuleBudgetFraction,
+    },
+    sweeper: sweeperAdequacy(s, storyViews.rowsPerDayAtHorizon),
   };
 }
 
@@ -545,9 +657,11 @@ export function renderReport(model) {
   const lines = [
     `Mô hình tăng trưởng dữ liệu — ${n} năm (Postgres ${model.pgVersion}, byte/hàng ĐO ${model.measuredAt?.slice(0, 10) ?? ''})`,
     `DAU ước tính = ${fmt(model.dau / 1e6)} triệu (CCU đỉnh ${fmt(model.inputs.ccu / 1e6)} triệu × ${model.inputs.avgToPeakConcurrency} ÷ ${model.inputs.activeHoursPerDau} giờ/DAU×24)`,
-    `Cột "giữ" = ngày: mặc định (mã chạy khi RETENTION_MODE=delete) → khuyến nghị (CHƯA bật). "TB sau ${n}n" là DUNG LƯỢNG BẢNG tại năm ${n}; cột (mặc định) giữ NGUYÊN RETENTION_* mặc định (job xoá không kịp thì backlog tích lại), cột (khuyến nghị) giả định RETENTION_* đã tăng đủ.`,
+    `Tải năm đầu theo inputs; mỗi năm sau nhân (1 + annualGrowthRate), hiện ${fmt(model.inputs.annualGrowthRate * 100)}%/năm. DAU năm cuối ${fmt(model.dauAtHorizon / 1e6)} triệu. Hàng/ngày và TiB/năm trong bảng là năm đầu; cảnh báo công suất dọn dùng tải năm cuối.`,
+    `Cột "giữ" = ngày: mặc định (mã chạy khi RETENTION_MODE=delete) → khuyến nghị (CHƯA bật). "TiB sau ${n}n" là DUNG LƯỢNG BẢNG tại năm ${n}; cột (mặc định) giữ NGUYÊN RETENTION_* mặc định (job xoá không kịp thì backlog tích lại), cột (khuyến nghị) giả định RETENTION_* đã tăng đủ.`,
+    `Công suất dọn giả định: ${fmt(model.retentionCapacity.rowsPerSecondPerRule, 0)} hàng/giây/quy tắc; ${model.retentionCapacity.hasBatchLatencyInput ? 'độ trễ lô do caller cung cấp, cần evidence số đo' : 'CHƯA có độ trễ lô thực đo, đây là trần lạc quan'}. Admission ${fmt(model.inputs.retentionAdmissionFraction * 100, 0)}%, phần ngân sách cho một quy tắc ${fmt(model.inputs.retentionRuleBudgetFraction * 100, 0)}%.`,
     '',
-    `bảng                    hàng/ngày  byte/hàng  GB/ngày  TB/năm  TB sau ${n}n    giữ mặc định→khuyến nghị  TB sau ${n}n (mặc định)  TB sau ${n}n (khuyến nghị)  xoá/giây | cơ chế`,
+    `bảng                    hàng/ngày  byte/hàng  GiB/ngày  TiB/năm  TiB sau ${n}n    giữ mặc định→khuyến nghị  TiB sau ${n}n (mặc định)  TiB sau ${n}n (khuyến nghị)  xoá/giây | cơ chế`,
   ];
   for (const t of model.tables) {
     lines.push(
@@ -573,15 +687,19 @@ export function renderReport(model) {
   const overDefault = model.tables.filter(
     (t) =>
       t.deleteVia === 'job' &&
-      t.deletesPerSecAvg > RETENTION_HEADROOM * RETENTION_DEFAULT_ROWS_PER_SEC,
+      t.deletesPerSecAvg >
+        RETENTION_HEADROOM * model.retentionCapacity.rowsPerSecondPerRule,
   );
   if (overDefault.length > 0) {
     const ratios = overDefault
-      .map((t) => `${t.table} ${t.capacityRatio.toFixed(1)}×`)
+      .map(
+        (t) =>
+          `${t.table} ${t.noPurgeCapacity ? 'không có công suất dọn' : `${t.capacityRatio.toFixed(1)}×`}`,
+      )
       .join(', ');
     lines.push(
       '',
-      `CẢNH BÁO: ${overDefault.map((t) => t.table).join(', ')} (hàng vào ÷ công suất mặc định một quy tắc: ${ratios}; > 1× nghĩa là KHÔNG theo kịp, backlog tăng mãi) cần xoá ≥ ${Math.round(RETENTION_HEADROOM * 100)}% công suất mặc định của khung retention (${Math.round(RETENTION_DEFAULT_ROWS_PER_SEC)} hàng/giây/quy tắc; cao điểm ghi gấp ~2× trung bình) — tăng RETENTION_MAX_BATCHES_PER_TICK/RETENTION_BATCH_SIZE (job retention) hoặc chuyển sang phân vùng + DROP.`,
+      `CẢNH BÁO: ${overDefault.map((t) => t.table).join(', ')} (hàng vào ÷ công suất một quy tắc: ${ratios}; > 1× nghĩa là KHÔNG theo kịp, backlog tăng mãi) cần xoá ≥ ${Math.round(RETENTION_HEADROOM * 100)}% công suất dọn giả định (${Math.round(model.retentionCapacity.rowsPerSecondPerRule)} hàng/giây/quy tắc; cao điểm ghi gấp ~2× trung bình) — đo lại độ trễ lô/admission, tăng ngân sách phù hợp hoặc chuyển sang phân vùng + DROP.`,
     );
   }
   const sw = model.sweeper;
@@ -596,10 +714,11 @@ export function renderReport(model) {
   const t = model.totals;
   lines.push(
     '',
-    `TỔNG (dung lượng bảng, chưa gồm WAL/replica/backup/bloat): không dọn ${fmt(t.tbPerYearNoRetention)} TB/năm → ${fmt(t.tbAfterYearsNoRetention)} TB sau ${n} năm.`,
-    `  - vòng đời MẶC ĐỊNH của mã, RETENTION_* mặc định: ${fmt(t.tbAfterYearsDefault)} TB sau ${n} năm (gồm backlog của quy tắc xoá không kịp), còn tăng ${fmt(t.tbPerYearStillGrowingDefault)} TB/năm.`,
-    `  - cùng vòng đời mặc định nếu RETENTION_* đã tăng đủ công suất: ${fmt(t.tbAfterYearsDefaultTuned)} TB sau ${n} năm.`,
-    `  - nếu chấp nhận MỌI khuyến nghị: ${fmt(t.tbAfterYearsRecommended)} TB sau ${n} năm, còn tăng ${fmt(t.tbPerYearStillGrowingRecommended)} TB/năm (sổ cái + nội dung người dùng — cần kế hoạch archive riêng).`,
+    `TỔNG (dung lượng bảng, chưa gồm WAL/replica/backup/bloat): năm đầu ghi ${fmt(t.tbPerYearNoRetention)} TiB nếu không dọn → ${fmt(t.tbAfterYearsNoRetention)} TiB sau ${n} năm với tăng trưởng tải đã chọn.`,
+    `  - profile dry-run, story sweeper chạy kịp: ${fmt(t.tbAfterYearsDryRun)} TiB sau ${n} năm.`,
+    `  - vòng đời MẶC ĐỊNH của mã, RETENTION_* mặc định: ${fmt(t.tbAfterYearsDefault)} TiB sau ${n} năm (gồm backlog của quy tắc xoá không kịp), riêng bảng giữ vĩnh viễn còn tăng ${fmt(t.tbPerYearStillGrowingDefault)} TiB/năm ở năm cuối.`,
+    `  - cùng vòng đời mặc định nếu RETENTION_* đã tăng đủ công suất: ${fmt(t.tbAfterYearsDefaultTuned)} TiB sau ${n} năm.`,
+    `  - nếu chấp nhận MỌI khuyến nghị: ${fmt(t.tbAfterYearsRecommended)} TiB sau ${n} năm, riêng bảng giữ vĩnh viễn còn tăng ${fmt(t.tbPerYearStillGrowingRecommended)} TiB/năm ở năm cuối (sổ cái + nội dung người dùng — cần kế hoạch archive riêng).`,
   );
   return lines.join('\n');
 }

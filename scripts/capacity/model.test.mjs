@@ -2,14 +2,79 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 
 import { DEFAULTS, computeModel, renderReport } from './model.mjs';
 
 const script = fileURLToPath(new URL('./model.mjs', import.meta.url));
 
-test('kịch bản mặc định: 10 triệu CCU cần 220 pod gateway và lease là chi phí Redis chính', () => {
+test('planning defaults stay aligned with production admission, writers and media replicas', () => {
+  const read = (path) =>
+    readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
+  const quota = read('k8s/base/signaling-gateway/configmap.yaml');
+  const hpa = read('k8s/overlays/production/signaling-gateway-hpa-patch.yaml');
+  const media = read('k8s/overlays/production/media-server-patch.yaml');
+  assert.equal(
+    DEFAULTS.socketsPerPod,
+    Number(quota.match(/WS_MAX_CONNECTIONS_PER_PROCESS:\s*'(\d+)'/)[1]),
+  );
+  assert.equal(
+    DEFAULTS.gatewayMaxReplicas,
+    Number(hpa.match(/maxReplicas:\s*(\d+)/)[1]),
+  );
+  assert.equal(
+    DEFAULTS.mediaConfiguredNodes,
+    Number(media.match(/replicas:\s*(\d+)/)[1]),
+  );
   const model = computeModel();
-  assert.equal(model.realtime.gatewayPods, 220);
+  assert.equal(model.realtime.gatewayUsableSocketCeiling, 45_000);
+  assert.equal(model.realtime.gatewayFitsTargetWithHeadroom, false);
+  assert.equal(model.postgres.configuredWritePrimaries, 1);
+  assert.equal(model.postgres.configuredBudgetFitsModel, false);
+  assert.equal(model.media.configuredBudgetFitsModel, false);
+});
+
+test('headroom can make a nominally sufficient socket ceiling insufficient', () => {
+  const model = computeModel({ ccu: 50_000, chatters: 1, matchesPerDay: 100 });
+  assert.equal(model.realtime.gatewayConfigurationFitsTarget, true);
+  assert.equal(model.realtime.gatewayFitsTargetWithHeadroom, false);
+});
+
+test('capacity check fails the current target and accepts a smaller modeled target without certifying runtime', () => {
+  const missing = spawnSync(process.execPath, [script, '--check', '--json'], {
+    encoding: 'utf8',
+  });
+  assert.equal(missing.status, 1, missing.stderr);
+  assert.equal(
+    JSON.parse(missing.stdout).realtime.gatewayFitsTargetWithHeadroom,
+    false,
+  );
+  const small = spawnSync(
+    process.execPath,
+    [script, '--check', '--ccu=1000', '--chatters=2', '--matchesPerDay=1000'],
+    { encoding: 'utf8' },
+  );
+  assert.equal(small.status, 0, small.stderr);
+  assert.match(small.stdout, /Không phải kết quả đo/);
+});
+
+test('invalid utilization and divisors fail instead of producing infinite capacity', () => {
+  for (const overrides of [
+    { socketsPerPod: 0 },
+    { pgTargetUtilization: 0 },
+    { mediaTargetUtilization: 2 },
+    { gatewayHeadroomFraction: 1 },
+    { leaseMs: NaN },
+  ]) {
+    assert.throws(() => computeModel(overrides), /must be/);
+  }
+});
+
+test('admission defaults expose the gap between the requested socket target and production HPA ceiling', () => {
+  const model = computeModel();
+  assert.equal(model.realtime.gatewayPods, 5500);
+  assert.equal(model.realtime.configuredGatewaySocketCeiling, 60_000);
+  assert.equal(model.realtime.gatewayConfigurationFitsTarget, false);
   assert.equal(model.realtime.leaseRefreshSeconds, 30);
   assert.equal(
     model.realtime.leaseOpsPerSec,
@@ -20,6 +85,16 @@ test('kịch bản mặc định: 10 triệu CCU cần 220 pod gateway và lease
     model.realtime.redisCores.pubsubPerUser <
       model.realtime.redisCores.leaseAfter / 10,
   );
+});
+
+test('measured capacity overrides can fit a target without implying a deployment or benchmark result', () => {
+  const model = computeModel({
+    socketsPerPod: 50_000,
+    gatewayMaxReplicas: 250,
+  });
+  assert.equal(model.realtime.gatewayPods, 220);
+  assert.equal(model.realtime.gatewayConfigurationFitsTarget, true);
+  assert.match(renderReport(model), /vẫn cần benchmark/);
 });
 
 test('subscribe theo user + gộp lô luôn cần ít shard hơn PSUBSCRIBE + EVAL từng socket', () => {

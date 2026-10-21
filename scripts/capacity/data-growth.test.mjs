@@ -16,6 +16,60 @@ import {
 const script = fileURLToPath(new URL('./data-growth.mjs', import.meta.url));
 const table = (model, name) => model.tables.find((t) => t.table === name);
 
+test('slow batches, shared rule budgets and skipped admission reduce effective purge throughput and grow backlog', () => {
+  const baseline = computeDataGrowth();
+  const constrained = computeDataGrowth({
+    retentionBatchLatencyMs: 1_000,
+    retentionAdmissionFraction: 0.5,
+    retentionRuleBudgetFraction: 0.5,
+  });
+  assert.equal(constrained.retentionCapacity.effectiveBatchesPerTick, 14);
+  assert.ok(constrained.retentionCapacity.rowsPerSecondPerRule < 600);
+  assert.ok(
+    table(constrained, 'refresh_tokens').tbAfterYearsDefault >
+      table(baseline, 'refresh_tokens').tbAfterYearsDefault,
+  );
+  assert.match(renderReport(constrained), /độ trễ lô do caller cung cấp/);
+  assert.match(renderReport(baseline), /trần lạc quan/);
+});
+
+test('no admitted ticks retains every eligible row and warns without non-finite JSON values', () => {
+  const model = computeDataGrowth({ retentionAdmissionFraction: 0 });
+  const refresh = table(model, 'refresh_tokens');
+  assert.equal(refresh.tbAfterYearsDefault, refresh.tbAfterYearsNoRetention);
+  assert.equal(refresh.noPurgeCapacity, true);
+  assert.equal(refresh.capacityRatio, null);
+  assert.equal(model.retentionCapacity.rowsPerSecondPerRule, 0);
+  assert.match(renderReport(model), /không có công suất dọn/);
+  assert.equal(
+    JSON.parse(JSON.stringify(model)).tables[0].noPurgeCapacity,
+    true,
+  );
+});
+
+test('retention timing and share inputs reject invalid capacity assumptions', () => {
+  for (const values of [
+    { retentionAdmissionFraction: 1.1 },
+    { retentionRuleBudgetFraction: -1 },
+    { retentionBatchLatencyMs: -10 },
+    { retentionTickBudgetSeconds: Infinity },
+    { retentionBatchPauseMs: NaN },
+    { retentionIntervalSeconds: 0 },
+    { retentionMaxBatchesPerTick: 0.5 },
+  ])
+    assert.throws(() => computeDataGrowth(values), /must be/);
+});
+
+test('zero rule budget means no purge even with zero batch and pause latency', () => {
+  const model = computeDataGrowth({
+    retentionRuleBudgetFraction: 0,
+    retentionBatchLatencyMs: 0,
+    retentionBatchPauseMs: 0,
+  });
+  assert.equal(model.retentionCapacity.rowsPerSecondPerRule, 0);
+  assert.equal(table(model, 'refresh_tokens').noPurgeCapacity, true);
+});
+
 test('mọi bảng của mô hình đều có byte/hàng ĐO (không có số tự đặt)', () => {
   const model = computeDataGrowth();
   assert.ok(model.tables.length >= 20);
@@ -184,14 +238,31 @@ test('khoá quota khách: mỗi khách ghi tới 3 hàng (user, device, network)
   );
 });
 
-test('không có tham số chết: nhân đôi bất kỳ knob nào của kịch bản đều đổi kết quả', () => {
+test('every scenario knob changes output in an applicable, valid workload', () => {
   // `inputs` lặp lại chính các knob nên PHẢI bỏ ra, nếu không mọi knob đều "đổi kết quả" và test vô nghĩa.
   const outputs = (overrides) =>
     JSON.stringify({ ...computeDataGrowth(overrides), inputs: undefined });
-  const baseline = outputs({});
+  const timingKeys = new Set([
+    'retentionTickBudgetSeconds',
+    'retentionBatchPauseMs',
+    'retentionBatchLatencyMs',
+    'retentionRuleBudgetFraction',
+  ]);
   const dead = Object.entries(SCENARIO)
     .filter(([, value]) => typeof value === 'number')
-    .filter(([key, value]) => outputs({ [key]: value * 2 }) === baseline)
+    .filter(([key, value]) => {
+      // Timing knobs matter when the deadline binds; fractions must remain within [0, 1].
+      const context = timingKeys.has(key)
+        ? { retentionBatchLatencyMs: 1_000 }
+        : {};
+      const current = context[key] ?? value;
+      const changed = key.endsWith('Fraction')
+        ? current / 2
+        : current === 0
+          ? 0.1
+          : current * 2;
+      return outputs({ ...context, [key]: changed }) === outputs(context);
+    })
     .map(([key]) => key);
   assert.deepEqual(dead, []);
 });
@@ -252,11 +323,78 @@ test('kịch bản nhỏ hơn thì mọi tổng nhỏ đi và không còn cảnh
 
 test('báo cáo gọi đúng tên số đo (dung lượng tại năm N, không phải "ổn định") và nêu phần còn tăng', () => {
   const report = renderReport(computeDataGrowth());
-  assert.match(report, /TB sau 3n/);
+  assert.match(report, /TiB sau 3n/);
+  assert.match(report, /profile dry-run, story sweeper chạy kịp/);
   assert.match(report, /vòng đời MẶC ĐỊNH của mã/);
   assert.match(report, /nếu chấp nhận MỌI khuyến nghị/);
   assert.match(report, /còn tăng/);
   assert.doesNotMatch(report, /ổn định/);
+});
+
+test('dry-run keeps retention-managed rows but the independent story sweeper still bounds story views', () => {
+  const model = computeDataGrowth();
+  const views = table(model, 'story_views');
+  assert.equal(
+    model.totals.tbAfterYearsDryRun,
+    model.totals.tbAfterYearsNoRetention -
+      views.tbAfterYearsNoRetention +
+      views.tbAfterYearsDefault,
+  );
+  assert.ok(model.totals.tbAfterYearsDryRun > model.totals.tbAfterYearsDefault);
+  assert.ok(
+    model.totals.tbAfterYearsDryRun < model.totals.tbAfterYearsNoRetention,
+  );
+});
+
+test('annual traffic compounds across years while retained hot history follows the final-year traffic', () => {
+  const firstYear = computeDataGrowth({}, 1);
+  const flat = computeDataGrowth({}, 3);
+  const growing = computeDataGrowth({ annualGrowthRate: 0.3 }, 3);
+  const expectedTotal =
+    firstYear.totals.tbAfterYearsNoRetention * (1 + 1.3 + 1.69);
+  assert.ok(
+    Math.abs(growing.totals.tbAfterYearsNoRetention - expectedTotal) < 1e-8,
+  );
+  assert.ok(
+    Math.abs(
+      table(growing, 'messages').tbAfterYearsRecommended -
+        table(flat, 'messages').tbAfterYearsRecommended * 1.69,
+    ) < 1e-8,
+  );
+  assert.ok(
+    growing.totals.tbAfterYearsDefault >=
+      growing.totals.tbAfterYearsDefaultTuned,
+  );
+});
+
+test('retention backlog drains after traffic falls below purge capacity', () => {
+  const forecast = computeDataGrowth(
+    {
+      ccu: 1000,
+      annualGrowthRate: -0.9,
+      retentionBatchSize: 10_000,
+      retentionMaxBatchesPerTick: 1,
+      retentionIntervalSeconds: 86_400,
+    },
+    8,
+  );
+  const tokens = table(forecast, 'refresh_tokens');
+  assert.ok(
+    Math.abs(tokens.tbAfterYearsDefault - tokens.tbAfterYearsDefaultTuned) <
+      1e-8,
+  );
+});
+
+test('forecast rejects invalid horizons and unbounded annual growth', () => {
+  for (const years of [0, -1, 1.5, 101, NaN, Infinity]) {
+    assert.throws(() => computeDataGrowth({}, years), /years/);
+  }
+  for (const annualGrowthRate of [-1, -2, NaN, Infinity, 11]) {
+    assert.throws(
+      () => computeDataGrowth({ annualGrowthRate }),
+      /annualGrowthRate/,
+    );
+  }
 });
 
 test('CLI --json in mô hình hợp lệ; tham số lạ bị từ chối', () => {

@@ -27,6 +27,7 @@
     "reliability:production-gate": "node scripts/reliability/verify-evidence.mjs",
     "reliability:test": "node --test scripts/reliability/*.test.mjs",
     "capacity:model": "node scripts/capacity/model.mjs",
+    "capacity:check": "node scripts/capacity/model.mjs --check",
     "capacity:row-sizes": "node scripts/capacity/measure-row-sizes.mjs",
     "capacity:data": "node scripts/capacity/data-growth.mjs",
     "capacity:test": "node --test scripts/capacity/*.test.mjs",

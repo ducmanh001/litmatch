@@ -34,7 +34,7 @@
  */
 import http from 'k6/http';
 import { check, sleep } from 'k6';
-import { Rate, Trend } from 'k6/metrics';
+import { Counter, Rate, Trend } from 'k6/metrics';
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:3000';
 const API_PREFIX = '/api/v1';
@@ -53,13 +53,16 @@ export const options = {
     // join call), không phải 1 endpoint đơn lẻ — điều chỉnh theo SLO thật khi có traffic production.
     'http_req_duration{endpoint:join_call}': ['p(95)<1500'],
     errors: ['rate<0.05'],
-    // Tỉ lệ ticket đạt matched trong cửa sổ chờ — ngưỡng thấp cố tình vì phụ thuộc số VU đủ đông
-    // và giả định profile guest nêu trên; đây là tín hiệu quan sát, không phải gate cứng ban đầu.
+    // Every iteration contributes one outcome, including login/queue/matching timeouts.
+    call_setup_success: ['rate>0.95'],
+    call_setup_completed: ['count>0'],
   },
 };
 
 const errorRate = new Rate('errors');
 const matchedRate = new Rate('matched');
+const callSetupSuccess = new Rate('call_setup_success');
+const callSetupCompleted = new Counter('call_setup_completed');
 const endToEndLatency = new Trend('match_to_call_joined_latency', true);
 
 function uuidv4() {
@@ -93,6 +96,16 @@ function guestLogin() {
 }
 
 export default function () {
+  let completed = false;
+  try {
+    completed = runJourney() === true;
+  } finally {
+    callSetupSuccess.add(completed);
+    if (completed) callSetupCompleted.add(1);
+  }
+}
+
+function runJourney() {
   const token = guestLogin();
   if (!token) {
     sleep(1);
@@ -114,7 +127,7 @@ export default function () {
     },
   );
   const joinOk = check(joinRes, {
-    'join queue 201 hoặc 409': (r) => r.status === 201 || r.status === 409,
+    'join queue creates a ticket': (r) => r.status === 201,
   });
   errorRate.add(!joinOk);
   if (joinRes.status !== 201) {
@@ -141,9 +154,9 @@ export default function () {
     }
   }
   matchedRate.add(ticket.status === 'matched' || ticket.status === 'confirmed');
-  if (ticket.status !== 'matched') {
-    // Timeout chưa matched (đủ ứng viên hay chưa, xem ghi chú giả định ở đầu file) — huỷ ticket
-    // cho sạch queue rồi kết thúc iteration, không coi là lỗi cứng của flow calling.
+  if (ticket.status !== 'matched' && ticket.status !== 'confirmed') {
+    errorRate.add(true);
+    // A timeout is a failed journey even if every HTTP request returned 2xx.
     http.del(`${BASE_URL}${API_PREFIX}/matching/tickets/${ticketId}`, null, {
       headers: authHeaders,
       tags: { endpoint: 'cancel_ticket' },
@@ -163,13 +176,13 @@ export default function () {
     'confirm 200/201': (r) => r.status === 200 || r.status === 201,
   });
   errorRate.add(!confirmOk);
-  if (confirmOk) ticket = JSON.parse(confirmRes.body).data;
+  if (!confirmOk) return;
+  ticket = JSON.parse(confirmRes.body).data;
 
   // 4) Poll tới `confirmed` (chờ phía kia cũng confirm) để lấy sessionId
   waited = 0;
   while (
-    ticket.status !== 'confirmed' &&
-    ticket.sessionId == null &&
+    (ticket.status !== 'confirmed' || ticket.sessionId == null) &&
     waited < MATCH_WAIT_SECONDS
   ) {
     sleep(1);
@@ -185,7 +198,12 @@ export default function () {
       ticket = JSON.parse(getRes.body).data;
     }
   }
-  if (!ticket.sessionId) {
+  if (ticket.status !== 'confirmed' || !ticket.sessionId) {
+    errorRate.add(true);
+    http.del(`${BASE_URL}${API_PREFIX}/matching/tickets/${ticketId}`, null, {
+      headers: authHeaders,
+      tags: { endpoint: 'cancel_ticket' },
+    });
     sleep(1);
     return;
   }
@@ -210,10 +228,17 @@ export default function () {
   // 6) Giữ cuộc gọi ngắn (mô phỏng), poll trạng thái vài lần thay vì realtime `call.ended`
   // (production dùng Socket.IO — xem signaling-ws.js) rồi chủ động end.
   sleep(2);
-  http.get(`${BASE_URL}${API_PREFIX}/calling/calls/${call.id}`, {
-    headers: authHeaders,
-    tags: { endpoint: 'get_call' },
+  const stateRes = http.get(
+    `${BASE_URL}${API_PREFIX}/calling/calls/${call.id}`,
+    {
+      headers: authHeaders,
+      tags: { endpoint: 'get_call' },
+    },
+  );
+  const stateOk = check(stateRes, {
+    'get call 200': (r) => r.status === 200,
   });
+  errorRate.add(!stateOk);
 
   const endRes = http.post(
     `${BASE_URL}${API_PREFIX}/calling/calls/${call.id}/end`,
@@ -223,9 +248,11 @@ export default function () {
       tags: { endpoint: 'end_call' },
     },
   );
-  check(endRes, {
+  const endOk = check(endRes, {
     'end call 200/201': (r) => r.status === 200 || r.status === 201,
   });
+  errorRate.add(!endOk);
 
   sleep(1);
+  return stateOk && endOk;
 }
