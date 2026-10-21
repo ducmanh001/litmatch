@@ -39,6 +39,7 @@ jest.mock('ioredis', () => {
     defineCommand = jest.fn();
     quotaAcquire = jest.fn();
     quotaRelease = jest.fn();
+    eval = jest.fn(async () => 1);
     pipelines: FakePipeline[] = [];
     pendingResults: Array<PipelineResult[] | null | Error> = [];
     pipeline = jest.fn(() => {
@@ -73,6 +74,7 @@ type FakeRedis = Redis & {
   defineCommand: jest.Mock;
   quotaAcquire: jest.Mock;
   quotaRelease: jest.Mock;
+  eval: jest.Mock;
   pipelines: FakePipelineShape[];
   pendingResults: Array<PipelineResult[] | null | Error>;
   quit: jest.Mock;
@@ -83,6 +85,7 @@ type FakeRedisCtor = typeof Redis & { instances: FakeRedis[] };
 function makeService(realtimeUrls = ''): {
   service: ConnectionQuotaService;
   clients: FakeRedis[];
+  coordinator: FakeRedis;
 } {
   const config = {
     getOrThrow: (key: keyof SignalingEnv) => {
@@ -95,7 +98,17 @@ function makeService(realtimeUrls = ''): {
       key === 'REALTIME_REDIS_URLS' ? realtimeUrls : undefined,
   } as unknown as ConfigService<SignalingEnv, true>;
   const service = new ConnectionQuotaService(config);
-  return { service, clients: (Redis as unknown as FakeRedisCtor).instances };
+  const instances = (Redis as unknown as FakeRedisCtor).instances;
+  const urls = realtimeUrls
+    ? realtimeUrls.split(',')
+    : ['redis://default:6379'];
+  return {
+    service,
+    clients: instances.filter((client) => urls.includes(client.url)),
+    coordinator: instances.find(
+      (client) => client.url === 'redis://default:6379',
+    )!,
+  };
 }
 
 /** userId thuộc shard `shard` trong cụm `shardCount` shard. */
@@ -112,6 +125,62 @@ function userOnShard(shard: number, shardCount: number, skip = 0): string {
 describe('ConnectionQuotaService', () => {
   beforeEach(() => {
     (Redis as unknown as FakeRedisCtor).instances = [];
+  });
+
+  it('registers placement on the shared coordinator before accepting the topology', async () => {
+    const { service, coordinator } = makeService(
+      'redis://a:6379,redis://b:6379',
+    );
+    await service.onModuleInit();
+    expect(coordinator.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      1,
+      'signaling:connection-quota-topology:v1',
+      expect.stringMatching(/^[a-f0-9]{64}$/),
+    );
+    await service.onApplicationShutdown();
+    expect(coordinator.quit).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects mixed placement instead of admitting a second quota for the same user', async () => {
+    const { service, coordinator, clients } = makeService(
+      'redis://a:6379,redis://b:6379',
+    );
+    coordinator.eval.mockResolvedValueOnce(0);
+    await expect(service.onModuleInit()).rejects.toThrow('topology changed');
+    expect(
+      clients.every((client) => client.quotaAcquire.mock.calls.length === 0),
+    ).toBe(true);
+  });
+
+  it('fails closed when the topology coordinator cannot confirm placement', async () => {
+    const { service, coordinator } = makeService();
+    coordinator.eval.mockRejectedValueOnce(new Error('coordinator down'));
+    await expect(service.onModuleInit()).rejects.toThrow('coordinator down');
+  });
+
+  it('fingerprints shard order but allows credential rotation on the same endpoints', async () => {
+    const fingerprint = async (urls: string) => {
+      (Redis as unknown as FakeRedisCtor).instances = [];
+      const { service, coordinator } = makeService(urls);
+      await service.onModuleInit();
+      return coordinator.eval.mock.calls[0][3];
+    };
+    const original = await fingerprint(
+      'redis://old:password@a:6379/0,redis://b:6379/1',
+    );
+    expect(
+      await fingerprint('redis://new:secret@a:6379/0,redis://b:6379/1'),
+    ).toBe(original);
+    expect(await fingerprint('redis://b:6379/1,redis://a:6379/0')).not.toBe(
+      original,
+    );
+    expect(await fingerprint('redis://a:6379?db=13')).not.toBe(
+      await fingerprint('redis://a:6379?db=15'),
+    );
+    expect(await fingerprint('redis://a:6379?keyPrefix=old:')).not.toBe(
+      await fingerprint('redis://a:6379?keyPrefix=new:'),
+    );
   });
 
   it('đăng ký 3 script atomic bằng defineCommand (EVALSHA) trên mỗi client', () => {

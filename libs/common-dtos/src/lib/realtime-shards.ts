@@ -10,7 +10,9 @@
  * Hợp đồng dùng chung cho producer (core-api), consumer (signaling-gateway) và reader presence:
  * cả ba PHẢI nhận cùng danh sách URL theo cùng thứ tự, nếu không event sẽ publish vào shard mà
  * không pod nào subscribe (best-effort, client còn REST polling nên không mất dữ liệu bền).
- * Đổi số shard là đổi chỗ của user — state ở đây ephemeral nên chỉ cần rolling restart cả ba.
+ * Đổi số/thứ tự/endpoint shard đổi chỗ của user và quota. Cần maintenance cutover:
+ * drain mọi gateway/publisher, chờ lease cũ hết hạn rồi cập nhật topology đồng nhất;
+ * xem docs/services/realtime-gateway.md § 7. Rolling restart với hai placement không an toàn.
  */
 
 const FNV_OFFSET_BASIS = 0x811c9dc5;

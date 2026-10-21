@@ -41,7 +41,9 @@ nghiệp vụ như Notification — docs/10 § Distributed).
 
 Rollout và hết hạn lease đóng transport Engine.IO, để Socket.IO tự reconnect bằng backoff/jitter;
 không gửi namespace DISCONNECT vốn làm client dừng tự nối lại. Browser retry lỗi admission tạm thời
-`CONNECTION_QUOTA_UNAVAILABLE` tối đa 8 lần với equal jitter, trần 30 giây/lần; `UNAUTHORIZED`
+`CONNECTION_QUOTA_UNAVAILABLE` và `CONNECTION_LIMIT` tối đa 25 lần với equal jitter, trần 30 giây/lần.
+Tổng thời gian chờ tối thiểu 315,5 giây bao phủ cả lease tối đa 300 giây khi pod chết mà chưa nhả quota;
+quota còn đầy thật sự vẫn bị server từ chối, client không được vượt trần. `UNAUTHORIZED`
 chỉ thử refresh session một lần cho tới khi connect thành công. Hết lượt hoặc bị từ chối vĩnh viễn
 thì REST polling tiếp tục làm fallback. Logout hủy timer và callback muộn của socket cũ không
 được mở lại kết nối. Refetch phục hồi chạy sau sự kiện namespace `connect` (đã auth/join room),
@@ -186,10 +188,24 @@ cả hai vẫn là CPU của MỘT Redis; chia shard theo userId là cách duy n
   được publish vào shard không pod nào subscribe và presence đọc nhầm shard: best-effort nên không mất dữ
   liệu bền, nhưng realtime "câm" — xem test `signaling.sharded.integration.spec.ts` (cần hai Redis thật,
   `INTEGRATION_REDIS_SHARD_URLS`) để kiểm chứng routing sau khi đổi cấu hình.
-- Đổi số shard = đổi chỗ của user. State ở đây ephemeral (không có dữ liệu bền) nên chỉ cần rolling
-  restart cả hai app với danh sách mới, ưu tiên giờ thấp tải. Trong cửa sổ hai app còn lệch nhau,
-  event của user bị đổi shard có thể mất (REST polling bù) và presence nhấp nháy offline tới lần gia hạn
-  lease kế tiếp (≤ `WS_CONNECTION_LEASE_REFRESH_MS`).
+- Gateway đăng ký fingerprint của danh sách endpoint/database có thứ tự tại key bền vững
+  `signaling:connection-quota-topology:v1` trên Redis điều phối `REDIS_URL`. Credential không nằm
+  trong fingerprint nên xoay password không đổi placement. Các query option của URL (trừ username/password)
+  được đưa vào fingerprint, vì ioredis cho phép `?db=...`, `?host=...`, `?keyPrefix=...` thay placement.
+  Đổi query option khác cũng cần cutover theo quy tắc bảo thủ này. Nếu fingerprint khác, bootstrap thất bại;
+  metadata không tự hết hạn khi pod dừng. Redis điều phối phải giữ key này qua failover và restore.
+  Redis này tiếp tục là dependency chung của cluster adapter/readiness (§ 6).
+- Đổi số/thứ tự/endpoint shard cần **maintenance cutover**, vì modulo remap có thể tạo hai quota
+  độc lập cho cùng user nếu gateway cũ và mới cùng chạy. Trước hết rollout phiên bản có guard với
+  danh sách hiện tại trên TẤT CẢ gateway. Sau đó chặn admission, dừng/drain TẤT CẢ gateway và publisher
+  core-api, xác nhận không còn process cũ; chờ hết lease dài nhất đã cấu hình (tối đa 300 giây).
+  Chỉ lúc đó operator mới xoá đúng key topology trên Redis điều phối, cập nhật cùng danh sách ở hai app,
+  rồi khởi động và kiểm chứng routing/quota trước khi mở traffic. Không thay Redis điều phối hoặc xoá
+  metadata trong khi còn gateway phục vụ. Rollback cũng thực hiện drain và chờ lease như trên.
+- Nếu Redis điều phối bị mất metadata, đóng admission và khôi phục fingerprint từ cấu hình đang
+  được chấp thuận trước khi thay topology. Guard bootstrap không thay thế quy trình backup/cutover,
+  không tự migrate lease hoặc bảo đảm delivery cho event trong thời gian gián đoạn. REST đọc bù
+  dữ liệu bền; kiểm chứng reconnect ở tải thật trước khi gọi cutover hoàn tất.
 - Sizing: `shard ≥ ⌈(socket ÷ chu kỳ gia hạn × µs/lệnh + event/giây × µs/event) ÷ (mục tiêu sử dụng
 × 10⁶)⌉` — dùng `pnpm capacity:model` để thay số thật; chạy lại benchmark trên chính Redis production
   trước khi tin các hằng số µs.

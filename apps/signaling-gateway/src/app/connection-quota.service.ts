@@ -11,12 +11,23 @@ import {
   realtimeShardIndex,
 } from '@litmatch/common-dtos';
 import Redis from 'ioredis';
+import { createHash } from 'node:crypto';
 
 import { signalingRedisClientOptions } from './redis-client-options';
 
 import type { SignalingEnv } from '../config/env.validation';
 
 const QUOTA_KEY_PREFIX = 'signaling:connection-quota:';
+/** Persistent on the shared adapter Redis: changing placement requires draining every gateway first. */
+const TOPOLOGY_KEY = 'signaling:connection-quota-topology:v1';
+const REGISTER_TOPOLOGY_SCRIPT = `
+local current = redis.call('GET', KEYS[1])
+if not current then
+  redis.call('SET', KEYS[1], ARGV[1])
+  return 1
+end
+return current == ARGV[1] and 1 or 0
+`;
 /** Số lease refresh/release trong một pipeline — đủ lớn để gộp round trip, đủ nhỏ để dưới commandTimeout. */
 const PIPELINE_CHUNK = 500;
 
@@ -104,6 +115,8 @@ export class ConnectionQuotaService
 {
   private readonly logger = new Logger(ConnectionQuotaService.name);
   private readonly clients: QuotaRedis[];
+  private readonly topologyClient: Redis;
+  private readonly topologyFingerprint: string;
   readonly leaseMs: number;
   readonly maxConnections: number;
 
@@ -114,11 +127,41 @@ export class ConnectionQuotaService
     this.maxConnections = config.getOrThrow('WS_MAX_CONNECTIONS_PER_USER', {
       infer: true,
     });
+    const coordinatorUrl = config.getOrThrow('REDIS_URL', { infer: true });
     const urls = parseRealtimeRedisUrls(
       config.get('REALTIME_REDIS_URLS', { infer: true }),
-      config.getOrThrow('REDIS_URL', { infer: true }),
+      coordinatorUrl,
     );
     this.clients = urls.map((url, shard) => this.createClient(url, shard));
+    this.topologyClient =
+      this.clients[urls.indexOf(coordinatorUrl)] ??
+      new Redis(coordinatorUrl, signalingRedisClientOptions());
+    if (!this.clients.includes(this.topologyClient as QuotaRedis)) {
+      this.topologyClient.on('error', (error) => {
+        this.logger.warn(
+          `Quota topology coordinator unavailable: ${String(error)}`,
+        );
+      });
+    }
+    // Credentials may rotate without moving data; order, endpoint and database determine placement.
+    const placements = urls.map((value) => {
+      const url = new URL(value);
+      // ioredis accepts query overrides such as db, host and keyPrefix.
+      // Conservatively include every non-credential option so a remap cannot share a fingerprint.
+      url.searchParams.delete('username');
+      url.searchParams.delete('password');
+      url.searchParams.sort();
+      return [
+        url.protocol,
+        url.hostname,
+        url.port || '6379',
+        url.pathname && url.pathname !== '/' ? url.pathname : '/0',
+        url.search,
+      ];
+    });
+    this.topologyFingerprint = createHash('sha256')
+      .update(JSON.stringify(placements))
+      .digest('hex');
   }
 
   get shardCount(): number {
@@ -141,9 +184,28 @@ export class ConnectionQuotaService
    */
   async onModuleInit(): Promise<void> {
     try {
-      await Promise.any(this.clients.map((client) => this.waitReady(client)));
+      await Promise.all([
+        this.registerTopology(),
+        Promise.any(this.clients.map((client) => this.waitReady(client))),
+      ]);
     } catch (error) {
       throw error instanceof AggregateError ? error.errors[0] : error;
+    }
+  }
+
+  private async registerTopology(): Promise<void> {
+    await this.waitReady(this.topologyClient);
+    const registered = await this.topologyClient.eval(
+      REGISTER_TOPOLOGY_SCRIPT,
+      1,
+      TOPOLOGY_KEY,
+      this.topologyFingerprint,
+    );
+    if (registered !== 1) {
+      // A rolling modulo remap would create two independent quotas for the same user.
+      throw new Error(
+        'Realtime quota topology changed: drain all gateways, wait for connection leases to expire, then perform the documented topology cutover',
+      );
     }
   }
 
@@ -220,14 +282,16 @@ export class ConnectionQuotaService
 
   async onApplicationShutdown(): Promise<void> {
     await Promise.all(
-      this.clients.map(async (client) => {
-        try {
-          await client.quit();
-        } catch (error) {
-          this.logger.warn(`Quota Redis quit thất bại: ${String(error)}`);
-          client.disconnect();
-        }
-      }),
+      [...new Set<Redis>([...this.clients, this.topologyClient])].map(
+        async (client) => {
+          try {
+            await client.quit();
+          } catch (error) {
+            this.logger.warn(`Quota Redis quit thất bại: ${String(error)}`);
+            client.disconnect();
+          }
+        },
+      ),
     );
   }
 
@@ -256,7 +320,7 @@ export class ConnectionQuotaService
     return client;
   }
 
-  private waitReady(client: QuotaRedis): Promise<void> {
+  private waitReady(client: Redis): Promise<void> {
     if (client.status === 'ready') return Promise.resolve();
     return new Promise<void>((resolve, reject) => {
       const cleanup = () => {
