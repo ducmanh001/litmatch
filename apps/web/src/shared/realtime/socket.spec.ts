@@ -50,11 +50,13 @@ describe('realtime socket', () => {
     realtimeMocks.socket.connected = false;
     realtimeMocks.socket.active = false;
     vi.clearAllMocks();
+    realtimeMocks.socket.connect.mockReset();
     vi.useFakeTimers();
   });
 
   afterEach(() => {
     disconnectRealtime();
+    vi.restoreAllMocks();
     vi.useRealTimers();
   });
 
@@ -114,24 +116,58 @@ describe('realtime socket', () => {
     expect(realtimeMocks.io).toHaveBeenCalledTimes(2);
   });
 
-  it('retries transient admission with one jittered timer and a finite budget', async () => {
-    connectRealtime();
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      emit('connect_error', new Error('CONNECTION_QUOTA_UNAVAILABLE'));
-      emit('connect_error', new Error('CONNECTION_QUOTA_UNAVAILABLE'));
-      expect(vi.getTimerCount()).toBe(1);
-      const cap = Math.min(30_000, 1_000 * 2 ** attempt);
-      const before = realtimeMocks.socket.connect.mock.calls.length;
-      await vi.advanceTimersByTimeAsync(cap / 2 - 1);
-      expect(realtimeMocks.socket.connect).toHaveBeenCalledTimes(before);
-      await vi.advanceTimersByTimeAsync(cap / 2 + 1);
-      expect(realtimeMocks.socket.connect).toHaveBeenCalledTimes(before + 1);
-    }
-    emit('connect_error', new Error('CONNECTION_QUOTA_UNAVAILABLE'));
-    expect(vi.getTimerCount()).toBe(0);
-  });
+  it.each(['CONNECTION_QUOTA_UNAVAILABLE', 'CONNECTION_LIMIT'])(
+    'retries %s with one jittered timer and a finite budget',
+    async (message) => {
+      connectRealtime();
+      for (let attempt = 0; attempt < 25; attempt += 1) {
+        emit('connect_error', new Error(message));
+        emit('connect_error', new Error(message));
+        expect(vi.getTimerCount()).toBe(1);
+        const cap = Math.min(30_000, 1_000 * 2 ** attempt);
+        const before = realtimeMocks.socket.connect.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(cap / 2 - 1);
+        expect(realtimeMocks.socket.connect).toHaveBeenCalledTimes(before);
+        await vi.advanceTimersByTimeAsync(cap / 2 + 1);
+        expect(realtimeMocks.socket.connect).toHaveBeenCalledTimes(before + 1);
+      }
+      emit('connect_error', new Error(message));
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
 
-  it.each(['CONNECTION_LIMIT', 'FORBIDDEN'])(
+  it.each([90_000, 300_000])(
+    'recovers after an orphaned %ims quota lease even with minimum jitter',
+    async (leaseMs) => {
+      vi.spyOn(Math, 'random').mockReturnValue(0);
+      connectRealtime();
+      const started = Date.now();
+      const recovered = vi.fn();
+      const unsubscribe = onReconnected(recovered);
+      emit('connect');
+      emit('disconnect', 'transport close');
+      realtimeMocks.socket.connect.mockImplementation(() => {
+        if (Date.now() - started < leaseMs) {
+          emit('connect_error', new Error('CONNECTION_LIMIT'));
+        } else {
+          realtimeMocks.socket.connected = true;
+          emit('connect');
+        }
+      });
+      emit('connect_error', new Error('CONNECTION_LIMIT'));
+
+      await vi.runAllTimersAsync();
+
+      expect(Date.now() - started).toBeGreaterThanOrEqual(leaseMs);
+      expect(realtimeMocks.socket.connected).toBe(true);
+      expect(recovered).toHaveBeenCalledOnce();
+      expect(realtimeMocks.refreshSession).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+      unsubscribe();
+    },
+  );
+
+  it.each(['FORBIDDEN', 'UNKNOWN_ERROR'])(
     'does not retry permanent rejection %s',
     async (message) => {
       connectRealtime();
@@ -152,13 +188,16 @@ describe('realtime socket', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('logout cancels a pending admission retry', async () => {
-    connectRealtime();
-    emit('connect_error', new Error('CONNECTION_QUOTA_UNAVAILABLE'));
-    disconnectRealtime();
-    await vi.runAllTimersAsync();
-    expect(realtimeMocks.socket.connect).toHaveBeenCalledOnce();
-  });
+  it.each(['CONNECTION_QUOTA_UNAVAILABLE', 'CONNECTION_LIMIT'])(
+    'logout cancels a pending %s retry',
+    async (message) => {
+      connectRealtime();
+      emit('connect_error', new Error(message));
+      disconnectRealtime();
+      await vi.runAllTimersAsync();
+      expect(realtimeMocks.socket.connect).toHaveBeenCalledOnce();
+    },
+  );
 
   it('refreshes auth once, backs off reconnect, and stops if refreshed auth is still rejected', async () => {
     realtimeMocks.refreshSession.mockResolvedValue(true);

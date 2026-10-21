@@ -25,7 +25,9 @@ let socket: Socket | null = null;
 let cancelRecovery: (() => void) | null = null;
 /** Namespace middleware failures do not trigger Socket.IO's transport reconnection. */
 const QUOTA_UNAVAILABLE_ERROR = 'CONNECTION_QUOTA_UNAVAILABLE';
-const MAX_ADMISSION_RETRIES = 8;
+const CONNECTION_LIMIT_ERROR = 'CONNECTION_LIMIT';
+// Minimum equal jitter spans 315.5s, beyond the maximum supported 300s quota lease.
+const MAX_ADMISSION_RETRIES = 25;
 const RETRY_BASE_MS = 1_000;
 const RETRY_MAX_MS = 30_000;
 let realtimeConnected = false;
@@ -99,12 +101,15 @@ function getSocket(): Socket {
     current.on('connect_error', (error: Error) => {
       if (socket !== current) return;
       setRealtimeConnected(false);
-      if (error.message === QUOTA_UNAVAILABLE_ERROR) {
+      if (
+        error.message === QUOTA_UNAVAILABLE_ERROR ||
+        error.message === CONNECTION_LIMIT_ERROR
+      ) {
         retryAdmission();
         return;
       }
       cancelRetry();
-      // CONNECTION_LIMIT and unknown namespace rejections are terminal for this connection.
+      // Unknown namespace rejections are terminal for this connection.
       // Transport failures keep Socket.IO's existing jittered reconnection (current.active).
       if (
         error.message !== RealtimeConnectionErrors.Unauthorized ||
