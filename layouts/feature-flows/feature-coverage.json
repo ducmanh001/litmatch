@@ -1,0 +1,268 @@
+{
+  "verdict": "PASS",
+  "productGroups": 21,
+  "implementedRegistryGroups": 21,
+  "diagramSections": 25,
+  "imageCount": 50,
+  "productCapabilities": [
+    {
+      "number": 1,
+      "title": "Soul Match",
+      "features": [
+        "01-matching-engine",
+        "02-soul-match"
+      ],
+      "note": "Matching engine là entry dùng chung; Soul giữ chat/rating riêng."
+    },
+    {
+      "number": 2,
+      "title": "Voice Match",
+      "features": [
+        "01-matching-engine",
+        "03-voice-match"
+      ]
+    },
+    {
+      "number": 3,
+      "title": "Party Room",
+      "features": [
+        "04-party-room"
+      ]
+    },
+    {
+      "number": 4,
+      "title": "Movie Match / Movie Night",
+      "features": [
+        "05-movie-match-movie-night"
+      ]
+    },
+    {
+      "number": 5,
+      "title": "Palm Match",
+      "features": [
+        "06-palm-match"
+      ]
+    },
+    {
+      "number": 6,
+      "title": "Feed và Stories",
+      "features": [
+        "07-feed-va-stories"
+      ]
+    },
+    {
+      "number": 7,
+      "title": "Avatar tùy chỉnh",
+      "features": [
+        "08-avatar-tuy-chinh"
+      ]
+    },
+    {
+      "number": 8,
+      "title": "Diamond, top-up và VIP",
+      "features": [
+        "09-diamond-top-up-va-vip"
+      ]
+    },
+    {
+      "number": 9,
+      "title": "Matching speed-up",
+      "features": [
+        "10-matching-speed-up-detail"
+      ]
+    },
+    {
+      "number": 10,
+      "title": "Gift",
+      "features": [
+        "11-gift"
+      ]
+    },
+    {
+      "number": 11,
+      "title": "Mini game",
+      "features": [
+        "12-mini-game"
+      ]
+    },
+    {
+      "number": 12,
+      "title": "Trust & Safety",
+      "features": [
+        "13-trust-safety"
+      ]
+    },
+    {
+      "number": 13,
+      "title": "Preference khi matching",
+      "features": [
+        "14-preference-matching-detail",
+        "23-user-profile-va-privacy"
+      ],
+      "note": "Ticket genderPreference và shard ageBand/region tách khỏi preference lưu trên profile."
+    },
+    {
+      "number": 14,
+      "title": "Availability theo platform/runtime",
+      "features": [
+        "15-runtime-availability"
+      ]
+    },
+    {
+      "number": 15,
+      "title": "Friend và chat 1-1",
+      "features": [
+        "16-friend-va-chat-1-1",
+        "25-realtime-fanout"
+      ],
+      "note": "Realtime fanout là transport dùng chung, không domain chat thứ hai."
+    },
+    {
+      "number": 16,
+      "title": "Đăng ký, onboarding và guest",
+      "features": [
+        "17-dang-ky-onboarding-va-guest",
+        "23-user-profile-va-privacy",
+        "24-analytics-consent"
+      ],
+      "note": "Profile/privacy và telemetry frontend có source registry riêng; telemetry hiện không có UI consent gate chủ động."
+    },
+    {
+      "number": 17,
+      "title": "Discovery, Nearby và direct invite",
+      "features": [
+        "18-discovery-nearby-va-direct-invite",
+        "23-user-profile-va-privacy"
+      ]
+    },
+    {
+      "number": 18,
+      "title": "Mood và conversation streak",
+      "features": [
+        "19-mood-va-conversation-streak"
+      ]
+    },
+    {
+      "number": 19,
+      "title": "Short video",
+      "features": [
+        "20-short-video"
+      ],
+      "note": "Backend report còn có; visible reporting UI đang deferred."
+    },
+    {
+      "number": 20,
+      "title": "Notification",
+      "features": [
+        "21-notification"
+      ]
+    },
+    {
+      "number": 21,
+      "title": "Support và admin operations",
+      "features": [
+        "22-support-va-admin-operations"
+      ]
+    }
+  ],
+  "registryCoverage": {
+    "auth-session": [
+      "17-dang-ky-onboarding-va-guest"
+    ],
+    "runtime-capabilities": [
+      "15-runtime-availability"
+    ],
+    "economy-ledger": [
+      "09-diamond-top-up-va-vip"
+    ],
+    "matching": [
+      "01-matching-engine",
+      "10-matching-speed-up-detail",
+      "14-preference-matching-detail",
+      "18-discovery-nearby-va-direct-invite"
+    ],
+    "soul-match": [
+      "02-soul-match"
+    ],
+    "calling": [
+      "03-voice-match",
+      "16-friend-va-chat-1-1"
+    ],
+    "party-room": [
+      "04-party-room"
+    ],
+    "gift": [
+      "11-gift"
+    ],
+    "friend-chat-streak": [
+      "16-friend-va-chat-1-1",
+      "19-mood-va-conversation-streak"
+    ],
+    "feed-stories": [
+      "07-feed-va-stories"
+    ],
+    "safety": [
+      "13-trust-safety"
+    ],
+    "avatar-discovery-mood": [
+      "08-avatar-tuy-chinh",
+      "18-discovery-nearby-va-direct-invite",
+      "19-mood-va-conversation-streak"
+    ],
+    "notification": [
+      "21-notification"
+    ],
+    "support-tickets": [
+      "22-support-va-admin-operations"
+    ],
+    "mini-game": [
+      "12-mini-game"
+    ],
+    "movie-match": [
+      "05-movie-match-movie-night"
+    ],
+    "palm-match": [
+      "06-palm-match"
+    ],
+    "short-video": [
+      "20-short-video"
+    ],
+    "user-profile-open-entry": [
+      "23-user-profile-va-privacy"
+    ],
+    "privacy-analytics-consent": [
+      "23-user-profile-va-privacy",
+      "24-analytics-consent",
+      "18-discovery-nearby-va-direct-invite"
+    ],
+    "realtime-fanout": [
+      "25-realtime-fanout"
+    ]
+  },
+  "deferredCoverage": [
+    {
+      "id": "production-cache-policy",
+      "status": "deferred",
+      "features": [],
+      "note": "Chưa có production hit-rate, latency hay eviction evidence để dựng cache/TTL policy mới."
+    },
+    {
+      "id": "algorithm-upgrades",
+      "status": "deferred",
+      "features": [],
+      "note": "Matching shard expansion, Feed CQRS và ranking nâng cấp chờ số liệu traffic/SLO thật."
+    },
+    {
+      "id": "short-video-reporting-ui",
+      "status": "deferred",
+      "features": [
+        "20-short-video"
+      ],
+      "note": "API/backend report còn hoạt động nhưng nút báo cáo đã bị gỡ khỏi reel UI hiện tại; không claim UI implemented."
+    }
+  ],
+  "sources": [
+    "docs/01-product-features.md",
+    "docs/feature-registry.json"
+  ]
+}
