@@ -54,6 +54,13 @@ Mỗi artifact vẫn phải ghi tên DRI cá nhân đang chịu trách nhiệm c
 
 ## Staging load + multi-pod reconnect
 
+The reproducible benchmark dispatch, sanitized live deployment manifest and report schema are in
+[capacity qualification § 6](./capacity-qualification.md#6-reproducible-staging-benchmark-artifact).
+Its `benchmark.json` retains p95/p99, error rates and raw thresholds. Gateway and worker recovery
+remain `NOT_RUN` until separately observed; benchmark PASS does not qualify capacity or recovery.
+The workflow emits only `staging-load` in `loadtest.json`; keep the existing production gate
+blocked until the quota, multi-pod and game-day evidence below has actually been collected.
+
 1. Deploy đúng git SHA với ít nhất 2 signaling replicas và Redis giống topology production.
 2. Chạy Socket.IO load thật (Artillery/client Socket.IO native được ưu tiên) qua load balancer,
    không gọi thẳng pod. Profile tối thiểu: steady 15 phút, peak dự kiến x 1.5 trong 10 phút.
