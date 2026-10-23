@@ -51,13 +51,16 @@
   nhất — kể cả nếu report đã dismiss/chưa xử lý, để giảm phơi nhiễm ngay lập tức trong lúc chờ
   review (chưa có admin review ở GĐ4, xem § 5).
 
-Query chạy trong transaction verify của `tryPair` (đã có sẵn call site — matching-service.md
-§ 2), KHÔNG chỉ lúc enqueue ticket.
+Thực thi bằng MỘT truy vấn SQL (`CAN_PAIR_SQL` trong `safety.service.ts`, dùng `idx_blocks_pair_created` và
+`idx_reports_reporter_target_created`; ngữ nghĩa từng nhánh được test trên Postgres thật ở
+`matching.integration.spec.ts`) thay vì 4 truy vấn tuần tự như trước — Movie/Palm Match gọi lặp theo từng ứng viên
+nên cũng hưởng. Query chạy ở matcher HAI lần (đã có sẵn call site — matching-service.md § 2): lúc chọn cặp như bộ lọc, và
+lại dưới lock trong transaction `confirmPair` làm quyết định cuối; KHÔNG chỉ lúc enqueue ticket.
 
 ### 3.2 Trust score ảnh hưởng priority (không sửa state machine/lock đã có)
 
 Lúc tạo `MatchTicket` (enqueue), `MatchingService` đọc `trustScore` hiện tại của user qua
-`UserService`, cộng penalty vào score Redis khởi tạo (số càng cao → bị `ZPOPMIN` xử lý sau,
+`UserService`, cộng penalty vào score Redis khởi tạo (số càng cao → được matcher xét sau (nằm sau trong cửa sổ ứng viên),
 tương tự cách `priorityBoostMs` trừ vào score đã có):
 
 ```text

@@ -1,7 +1,6 @@
 import { Inject, Module, OnApplicationShutdown } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { closeCoreRedisClient } from '../../common/redis/core-redis-client';
 import { FriendModule } from '../friend';
 import { MiniGameActiveParticipant } from './entities/mini-game-active-participant.entity';
 import { MiniGameSession } from './entities/mini-game-session.entity';
@@ -12,7 +11,7 @@ import {
   miniGameRedisProvider,
 } from './redis/mini-game-redis.provider';
 
-import type Redis from 'ioredis';
+import type { RealtimePublisherPort } from '../../common/realtime/realtime-publisher.port';
 
 /**
  * Mini Game (docs/services/mini-game-service.md): oẳn tù tì 2 người đã là bạn. `FriendModule`:
@@ -29,9 +28,11 @@ import type Redis from 'ioredis';
   exports: [MiniGameService],
 })
 export class MiniGameModule implements OnApplicationShutdown {
-  constructor(@Inject(MINI_GAME_REDIS) private readonly redis: Redis) {}
+  constructor(
+    @Inject(MINI_GAME_REDIS) private readonly redis: RealtimePublisherPort,
+  ) {}
 
   async onApplicationShutdown(): Promise<void> {
-    await closeCoreRedisClient(this.redis);
+    await this.redis.close?.();
   }
 }

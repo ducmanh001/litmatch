@@ -2623,8 +2623,42 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Gửi thông báo in-app + push best-effort theo audience — chỉ admin */
+    /** Xếp hàng broadcast thông báo in-app + push best-effort theo audience — gửi dần ở nền, chỉ admin */
     post: operations['AdminController_broadcastNotification'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/notifications/broadcast/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Tiến độ một lần broadcast thông báo — chỉ admin */
+    get: operations['AdminController_getBroadcast'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/admin/notifications/broadcast/{id}/cancel': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Huỷ broadcast đang xếp hàng/đang gửi — lô đã gửi không thu hồi được; idempotent, chỉ admin */
+    post: operations['AdminController_cancelBroadcast'];
     delete?: never;
     options?: never;
     head?: never;
@@ -3030,10 +3064,10 @@ export interface components {
     };
     OtpRequestedDto: {
       /**
-       * @description Mã OTP 6 chữ số — không gửi SMS, client dùng để hiển thị và tự điền
+       * @description Mã OTP 6 chữ số — CHỈ có khi AUTH_OTP_DELIVERY=response (dev/test/e2e) để client hiển thị và tự điền. Khi mã được gửi qua SMS (sms-http) trường này vắng mặt.
        * @example 123456
        */
-      code: string;
+      code?: string;
       /** @description TTL của OTP vừa tạo (giây) — client hiển thị đếm ngược */
       ttlSeconds: number;
     };
@@ -4115,7 +4149,23 @@ export interface components {
     };
     BroadcastNotificationResultDto: {
       broadcastId: string;
+      /** @enum {string} */
+      status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+    };
+    BroadcastStatusDto: {
+      broadcastId: string;
+      /** @enum {string} */
+      status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+      /** @enum {string} */
+      audience: 'all' | 'vip' | 'free';
       recipientCount: number;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      startedAt: string | null;
+      /** Format: date-time */
+      completedAt: string | null;
+      lastError: string | null;
     };
     AdminRolePermissionDto: {
       /** @enum {string} */
@@ -8848,7 +8898,10 @@ export interface operations {
   AdminController_broadcastNotification: {
     parameters: {
       query?: never;
-      header?: never;
+      header: {
+        /** @description Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10) */
+        'Idempotency-Key': string;
+      };
       path?: never;
       cookie?: never;
     };
@@ -8858,13 +8911,65 @@ export interface operations {
       };
     };
     responses: {
-      200: {
+      202: {
         headers: {
           [name: string]: unknown;
         };
         content: {
           'application/json': {
             data: components['schemas']['BroadcastNotificationResultDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_getBroadcast: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['BroadcastStatusDto'];
+            meta?: {
+              [key: string]: unknown;
+            };
+          };
+        };
+      };
+    };
+  };
+  AdminController_cancelBroadcast: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['BroadcastStatusDto'];
             meta?: {
               [key: string]: unknown;
             };

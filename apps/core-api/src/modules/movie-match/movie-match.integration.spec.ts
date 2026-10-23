@@ -12,6 +12,7 @@ import { Safety1752800000000 } from '../../database/migrations/1752800000000-saf
 import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
 import { MovieMatch1753200000000 } from '../../database/migrations/1753200000000-movie-match';
 import { MovieMatchAnon1755900000000 } from '../../database/migrations/1755900000000-movie-match-anon';
+import { MovieMatchQueueOrderIndex1758100000000 } from '../../database/migrations/1758100000000-movie-match-queue-order-index';
 import { MatchingDailyEntitlements1757100000000 } from '../../database/migrations/1757100000000-matching-daily-entitlements';
 
 import { MovieMatchErrors } from './movie-match.errors';
@@ -164,6 +165,7 @@ d('Movie Match integration (Postgres thật)', () => {
         ReportTargetVideo1754900000000,
         MovieMatch1753200000000,
         MovieMatchAnon1755900000000,
+        MovieMatchQueueOrderIndex1758100000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -196,10 +198,8 @@ d('Movie Match integration (Postgres thật)', () => {
         recordActivity: async () => ({ streak: {}, milestoneHit: null }),
       } as never,
       safety,
-      {
-        create: async () => ({ id: 'notif-stub' }),
-        sendPush: async () => undefined,
-      } as never,
+      // stub FriendMessageNotifier — suite này không gọi sendMessage
+      { notify: async () => undefined } as never,
       configStub,
       { publish: async () => 1 } as never,
     );
@@ -399,6 +399,232 @@ d('Movie Match integration (Postgres thật)', () => {
       expect(aState.partnerUserId).toBeUndefined();
     });
 
+    describe('ghép không khoá toàn cục (SKIP LOCKED + tự chữa khi poll)', () => {
+      const cleanQueue = () =>
+        ds.query(`DELETE FROM movie_match_queue_entries`);
+
+      it('12 user join ĐỒNG THỜI (nhiều hơn pool) → không ai vào hai phiên; vài lượt poll sau tất cả được ghép, hàng đợi trống', async () => {
+        await cleanQueue();
+        const users = await Promise.all(
+          Array.from({ length: 12 }, (_, i) => createUser(`conc-${i}`)),
+        );
+        const ids = users.map((user) => user.id);
+
+        await Promise.all(
+          users.map((user) => movieMatch.joinAnonQueue(user.id)),
+        );
+        // Hai người vào cùng lúc có thể bỏ lỡ nhau (đối tác đang bị khoá): người MỚI hơn thử lại ở lượt poll kế tiếp.
+        let states = await Promise.all(
+          users.map((user) => movieMatch.getAnonCurrent(user.id)),
+        );
+        for (
+          let round = 0;
+          round < 10 &&
+          states.some(
+            (state) => state.state !== MovieMatchClientState.Watching,
+          );
+          round += 1
+        ) {
+          states = await Promise.all(
+            users.map((user) => movieMatch.getAnonCurrent(user.id)),
+          );
+        }
+
+        expect(states.map((state) => state.state)).toEqual(
+          Array(12).fill(MovieMatchClientState.Watching),
+        );
+        expect(new Set(states.map((state) => state.sessionId)).size).toBe(6);
+        const perSession = (await ds.query(
+          `SELECT session_id, count(*)::int AS n FROM movie_session_active_participants
+            WHERE user_id = ANY($1) GROUP BY session_id`,
+          [ids],
+        )) as Array<{ session_id: string; n: number }>;
+        expect(perSession).toHaveLength(6);
+        expect(perSession.every((row) => row.n === 2)).toBe(true);
+        const [queued] = (await ds.query(
+          `SELECT count(*)::int AS n FROM movie_match_queue_entries WHERE user_id = ANY($1)`,
+          [ids],
+        )) as Array<{ n: number }>;
+        expect(queued?.n).toBe(0);
+      });
+
+      it('entry đối tác đang bị lượt khác giữ khoá → joiner KHÔNG chờ; khi khoá nhả, lượt poll kế tiếp ghép cặp', async () => {
+        await cleanQueue();
+        const [a, b] = await Promise.all([
+          createUser('lock-a'),
+          createUser('lock-b'),
+        ]);
+        await movieMatch.joinAnonQueue(a.id);
+
+        const holder = ds.createQueryRunner();
+        await holder.connect();
+        await holder.startTransaction();
+        await holder.query(
+          `SELECT 1 FROM movie_match_queue_entries WHERE user_id = $1 FOR UPDATE`,
+          [a.id],
+        );
+        try {
+          const startedAt = Date.now();
+          const bState = await movieMatch.joinAnonQueue(b.id);
+          expect(Date.now() - startedAt).toBeLessThan(5_000); // không đợi khoá
+          expect(bState.state).toBe(MovieMatchClientState.Queued);
+        } finally {
+          await holder.rollbackTransaction();
+          await holder.release();
+        }
+
+        const retry = await movieMatch.getAnonCurrent(b.id);
+        expect(retry.state).toBe(MovieMatchClientState.Watching);
+        expect((await movieMatch.getAnonCurrent(a.id)).sessionId).toBe(
+          retry.sessionId,
+        );
+      });
+
+      it('hai bên đã nằm sẵn trong hàng đợi (bỏ lỡ nhau) → một lượt poll là ghép được', async () => {
+        await cleanQueue();
+        const [a, b] = await Promise.all([
+          createUser('heal-a'),
+          createUser('heal-b'),
+        ]);
+        await ds.query(
+          `INSERT INTO movie_match_queue_entries (user_id) VALUES ($1), ($2)`,
+          [a.id, b.id],
+        );
+
+        // Chỉ người MỚI hơn (theo queued_at, user_id) giành người cũ hơn — poll cả hai thì đúng một bên ghép được.
+        await movieMatch.getAnonCurrent(a.id);
+        await movieMatch.getAnonCurrent(b.id);
+        const finalA = await movieMatch.getAnonCurrent(a.id);
+        const finalB = await movieMatch.getAnonCurrent(b.id);
+
+        expect(finalA.state).toBe(MovieMatchClientState.Watching);
+        expect(finalB.state).toBe(MovieMatchClientState.Watching);
+        expect(finalA.sessionId).toBe(finalB.sessionId);
+      });
+
+      it('toàn bộ hàng đợi poll CÙNG LÚC vẫn ghép được (không ai khoá hàng của mình khi tìm, nên không bỏ qua nhau)', async () => {
+        await cleanQueue();
+        const users = await Promise.all(
+          Array.from({ length: 8 }, (_, i) => createUser(`storm-${i}`)),
+        );
+        // Nạp sẵn cả 8 vào hàng đợi (queued_at khác nhau) rồi bắn poll đồng loạt một lượt duy nhất.
+        for (const user of users) {
+          await ds.query(
+            `INSERT INTO movie_match_queue_entries (user_id, queued_at) VALUES ($1, clock_timestamp())`,
+            [user.id],
+          );
+        }
+
+        const states = await Promise.all(
+          users.map((user) => movieMatch.getAnonCurrent(user.id)),
+        );
+
+        // Một lượt đồng loạt phải tạo được ít nhất một cặp (trước đây: mỗi người khoá hàng mình → không ai ghép)
+        const watching = states.filter(
+          (state) => state.state === MovieMatchClientState.Watching,
+        );
+        expect(watching.length).toBeGreaterThanOrEqual(2);
+      });
+
+      it('hai lượt join ĐỒNG THỜI của CÙNG một user: lượt sau trả đúng phiên vừa ghép, không để lại entry thừa trong hàng đợi', async () => {
+        await cleanQueue();
+        const [older, user] = await Promise.all([
+          createUser('movie-dup-older'),
+          createUser('movie-dup-user'),
+        ]);
+        await movieMatch.joinAnonQueue(older.id); // người cũ hơn đang chờ
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        // Giữ lượt 1 ngay SAU khi nó đã xoá entry của chính mình (chốt ghép) nhưng TRƯỚC khi commit — đúng lúc user
+        // bấm lần hai / mở tab thứ hai.
+        let reached!: () => void;
+        const reachedPromise = new Promise<void>(
+          (resolve) => (reached = resolve),
+        );
+        let release!: () => void;
+        const releasePromise = new Promise<void>(
+          (resolve) => (release = resolve),
+        );
+        const target = movieMatch as unknown as Record<
+          string,
+          (...args: unknown[]) => Promise<unknown>
+        >;
+        const original = target['createAnonSession'].bind(movieMatch);
+        const spy = jest
+          .spyOn(target, 'createAnonSession')
+          .mockImplementation(async (...args: unknown[]) => {
+            reached();
+            await releasePromise;
+            return original(...args);
+          });
+        let first: Promise<{ state: string; sessionId?: string }>;
+        let second: Promise<{ state: string; sessionId?: string }>;
+        try {
+          first = movieMatch.joinAnonQueue(user.id);
+          await reachedPromise;
+          second = movieMatch.joinAnonQueue(user.id);
+          // Cho lượt 2 chạy tới điểm chờ (khoá/ghi) trong lúc lượt 1 chưa commit.
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          release();
+          const [r1, r2] = await Promise.all([first, second]);
+          expect(r1.state).toBe(MovieMatchClientState.Watching);
+          expect(r2.state).toBe(MovieMatchClientState.Watching);
+          expect(r2.sessionId).toBe(r1.sessionId);
+        } finally {
+          release();
+          spy.mockRestore();
+        }
+        const [row] = (await ds.query(
+          `SELECT count(*)::int AS n FROM movie_match_queue_entries WHERE user_id = ANY($1)`,
+          [[older.id, user.id]],
+        )) as Array<{ n: number }>;
+        expect(row?.n).toBe(0);
+      });
+
+      it('dọn entry quá hạn có chặn 50/lượt, không đụng entry còn hạn', async () => {
+        await cleanQueue();
+        await ds.query(
+          `INSERT INTO movie_match_queue_entries (user_id, queued_at)
+           SELECT gen_random_uuid(), now() - interval '1 day' FROM generate_series(1, 60)`,
+        );
+        const joiner = await createUser('purge-a');
+        const second = await createUser('purge-b');
+        const staleLeft = async (): Promise<number> => {
+          const [row] = (await ds.query(
+            `SELECT count(*)::int AS n FROM movie_match_queue_entries WHERE queued_at < now() - interval '1 hour'`,
+          )) as Array<{ n: number }>;
+          return row?.n ?? -1;
+        };
+
+        await movieMatch.joinAnonQueue(joiner.id);
+        expect(await staleLeft()).toBe(10); // 60 − 50
+        await movieMatch.joinAnonQueue(second.id);
+        expect(await staleLeft()).toBe(0);
+      });
+
+      it('migration: index (queued_at, user_id) hợp lệ và câu chọn ứng viên dùng được nó', async () => {
+        const queryRunner = ds.createQueryRunner();
+        await queryRunner.connect();
+        try {
+          await queryRunner.query('SET enable_seqscan = off');
+          const rows = (await queryRunner.query(
+            `EXPLAIN SELECT c.user_id FROM movie_match_queue_entries c
+              WHERE (c.queued_at, c.user_id) < (
+                      SELECT o.queued_at, o.user_id FROM movie_match_queue_entries o WHERE o.user_id = $1
+                    )
+                AND c.queued_at >= $2 AND c.user_id <> ALL($3::uuid[])
+              ORDER BY c.queued_at ASC, c.user_id ASC LIMIT 1 FOR UPDATE OF c SKIP LOCKED`,
+            ['00000000-0000-4000-8000-000000000000', new Date(0), []],
+          )) as Array<{ 'QUERY PLAN': string }>;
+          expect(rows.map((row) => row['QUERY PLAN']).join('\n')).toContain(
+            'idx_movie_match_queue_order',
+          );
+        } finally {
+          await queryRunner.release();
+        }
+      });
+    });
+
     it('chat trong phiên: idempotent replay, sender vai trò tương đối, quá dài 422, non-member 404', async () => {
       const [a, b, outsider] = await Promise.all([
         createUser('chat-a'),
@@ -589,5 +815,64 @@ d('Movie Match integration (Postgres thật)', () => {
         movieMatch.sendAnonReaction(a.id, sessionId, '😂'),
       ).resolves.toBeUndefined();
     });
+  });
+  it('join replay vẫn trả phiên đang xem khi một user KHÁC ghép mình sau lần kiểm tra trạng thái đầu tiên; không để lại hàng queue thừa', async () => {
+    const [b, d] = await Promise.all([
+      createUser('movie-race-b'),
+      createUser('movie-race-d'),
+    ]);
+    expect((await movieMatch.joinAnonQueue(b.id)).state).toBe(
+      MovieMatchClientState.Queued,
+    );
+    type ActiveStateFn = (manager: unknown, userId: string) => Promise<unknown>;
+    const internals = movieMatch as unknown as {
+      anonActiveState: ActiveStateFn;
+    };
+    const original = internals.anonActiveState.bind(movieMatch);
+    let observed!: () => void;
+    let resume!: () => void;
+    let blocked = false;
+    const checked = new Promise<void>((resolve) => {
+      observed = resolve;
+    });
+    const allowed = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
+    const spy = jest
+      .spyOn(internals, 'anonActiveState')
+      .mockImplementation(async (manager, userId) => {
+        const active = await original(manager, userId);
+        if (userId === b.id && !active && !blocked) {
+          blocked = true;
+          observed();
+          await allowed;
+        }
+        return active;
+      });
+    let replay: Promise<{ state: MovieMatchClientState }> | undefined;
+    try {
+      replay = movieMatch.joinAnonQueue(b.id);
+      const outcome = replay.then(
+        (value) => ({ value }),
+        (error: unknown) => ({ error }),
+      );
+      await checked;
+      const paired = await movieMatch.joinAnonQueue(d.id);
+      expect(paired.state).toBe(MovieMatchClientState.Watching);
+      resume();
+
+      const result = await outcome;
+      expect('error' in result).toBe(false);
+      expect(
+        (result as { value: { state: MovieMatchClientState } }).value.state,
+      ).toBe(MovieMatchClientState.Watching);
+      expect(
+        await ds.getRepository(MovieMatchQueueEntry).countBy({ userId: b.id }),
+      ).toBe(0);
+    } finally {
+      resume();
+      await replay?.catch(() => undefined);
+      spy.mockRestore();
+    }
   });
 });

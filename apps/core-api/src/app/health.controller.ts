@@ -1,8 +1,9 @@
 import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { SkipThrottle, Throttle, minutes } from '@nestjs/throttler';
+import { SkipThrottle } from '@nestjs/throttler';
 
 import { Public } from '../common/decorators/public.decorator';
+import { SkipRequestConcurrency } from '../common/interceptors/request-concurrency.interceptor';
 import { ReadinessService } from './readiness.service';
 
 import type { Response } from 'express';
@@ -10,6 +11,8 @@ import type { ReadinessResult } from './readiness.service';
 
 @ApiTags('health')
 @Controller('health')
+@SkipRequestConcurrency()
+@SkipThrottle()
 export class HealthController {
   constructor(private readonly readiness: ReadinessService) {}
 
@@ -32,7 +35,6 @@ export class HealthController {
   }
 
   @Public()
-  @Throttle({ default: { limit: 30, ttl: minutes(1) } })
   @Get('ready')
   @ApiOperation({
     summary: 'Readiness: Postgres và Redis sẵn sàng nhận traffic',

@@ -88,7 +88,7 @@ describe('ConfigPage', () => {
 
   it('gửi thông báo đủ dữ liệu — gọi API và reset sau success', async () => {
     const post = vi.spyOn(apiClient, 'POST').mockResolvedValue({
-      data: { data: { broadcastId: 'b1', recipientCount: 12 } },
+      data: { data: { broadcastId: 'b1', status: 'queued' } },
     } as never);
     renderPage();
     await screen.findByText('com.litmatch.diamond.100');
@@ -105,6 +105,7 @@ describe('ConfigPage', () => {
       expect(post).toHaveBeenCalledWith(
         '/api/v1/admin/notifications/broadcast',
         {
+          params: { header: { 'Idempotency-Key': expect.any(String) } },
           body: {
             title: 'Ưu đãi cuối tuần',
             body: 'Nội dung thông báo',
@@ -116,5 +117,53 @@ describe('ConfigPage', () => {
     await waitFor(() =>
       expect(screen.getByLabelText('Tiêu đề')).toHaveValue(''),
     );
+  });
+  it('gửi lại cùng nội dung sau lỗi dùng LẠI cùng Idempotency-Key; đổi nội dung thì khoá mới', async () => {
+    const post = vi
+      .spyOn(apiClient, 'POST')
+      .mockRejectedValueOnce(new Error('mất mạng'))
+      .mockRejectedValueOnce(new Error('mất mạng'))
+      .mockResolvedValue({
+        data: { data: { broadcastId: 'b1', status: 'queued' } },
+      } as never);
+    renderPage();
+    await screen.findByText('com.litmatch.diamond.100');
+    fireEvent.change(screen.getByLabelText('Tiêu đề'), {
+      target: { value: 'Ưu đãi' },
+    });
+    fireEvent.change(screen.getByLabelText('Nội dung'), {
+      target: { value: 'Nội dung A' },
+    });
+    const send = () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Gửi thông báo' }));
+    const keyOf = (call: number): string =>
+      (
+        post.mock.calls[call]?.[1] as {
+          params: { header: Record<string, string> };
+        }
+      ).params.header['Idempotency-Key'];
+
+    send();
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Gửi thông báo' }),
+      ).toBeEnabled(),
+    );
+    send(); // cùng nội dung: server có thể đã nhận lần trước → phải cùng khoá để không tạo bản thứ hai
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+    expect(keyOf(1)).toBe(keyOf(0));
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Gửi thông báo' }),
+      ).toBeEnabled(),
+    );
+    fireEvent.change(screen.getByLabelText('Nội dung'), {
+      target: { value: 'Nội dung B' },
+    });
+    send();
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(3));
+    expect(keyOf(2)).not.toBe(keyOf(0));
   });
 });

@@ -32,6 +32,8 @@ data:
   # phải < max_connections của Postgres (hoặc đặt PgBouncer ở giữa) — xem k8s/README.md mục "Ngân sách kết nối Postgres".
   DATABASE_POOL_MAX: '10'
   DATABASE_POOL_ACQUIRE_TIMEOUT_MS: '10000'
+  DATABASE_STATEMENT_TIMEOUT_MS: '15000'
+  HTTP_MAX_CONCURRENT_REQUESTS: '0'
 
   # KAFKA_BROKERS không chứa credential (SASL nếu bật thì phải chuyển sang Secret) — trỏ managed
   # Kafka ngoài cluster, giả định theo yêu cầu task (không deploy Kafka trong k8s manifest này).
@@ -44,6 +46,9 @@ data:
   AUTH_OTP_MAX_ATTEMPTS: '5'
   AUTH_OTP_REQUESTS_PER_HOUR: '5'
   AUTH_PHONE_OTP_ENABLED: 'true'
+  # Fail-closed cho profile K8s (ADR 0013): không trả mã OTP trong response. Đặt 'sms-http' + AUTH_OTP_SMS_HTTP_URL/TOKEN
+  # (Secret) khi có cổng SMS; 'disabled' = chỉ Google/social/guest. ('response' chỉ cho dev/e2e — lộ mã cho bất kỳ ai.)
+  AUTH_OTP_DELIVERY: 'disabled'
   AUTH_GOOGLE_CLIENT_ID: ''
   AUTH_APPLE_CLIENT_ID: ''
   AUTH_FACEBOOK_APP_ID: ''
@@ -75,9 +80,17 @@ data:
   ECONOMY_STORE_HTTP_TIMEOUT_MS: '10000'
   ECONOMY_OUTBOX_RELAY_ENABLED: 'false'
   ECONOMY_OUTBOX_RELAY_INTERVAL_MS: '2000'
+  ECONOMY_OUTBOX_RELAY_MAX_BATCHES_PER_TICK: '10'
+  ECONOMY_OUTBOX_RELAY_TICK_BUDGET_MS: '1000'
   ECONOMY_RECONCILIATION_ENABLED: 'true'
   ECONOMY_RECONCILIATION_INTERVAL_MS: '300000'
   ECONOMY_RECONCILIATION_FAST_INTERVAL_MS: '60000'
+  # Bất biến Nợ=Có kiểm tăng dần: LAG > transaction ghi sổ lâu nhất; FULL = chu kỳ dựng lại tổng từ toàn bộ lịch sử
+  ECONOMY_RECONCILIATION_LAG_MS: '300000'
+  ECONOMY_RECONCILIATION_FULL_INTERVAL_MS: '86400000'
+  ECONOMY_RECONCILIATION_BATCH_SIZE: '2000'
+  ECONOMY_RECONCILIATION_MAX_BATCHES_PER_TICK: '10'
+  ECONOMY_RECONCILIATION_TICK_BUDGET_MS: '1000'
 
   # --- economy: refund/chargeback ---
   ECONOMY_APPLE_WEBHOOK_VERIFIER: 'store'
@@ -99,7 +112,14 @@ data:
 
   # --- matching (docs/03 § 3.8.B) ---
   MATCHING_MATCHER_INTERVAL_MS: '10000'
+  MATCHING_QUEUE_REPAIR_INTERVAL_MS: '5000'
+  MATCHING_QUEUE_REPAIR_BATCH_SIZE: '500'
   MATCHING_MATCHER_BATCH_SIZE: '20'
+  # Cửa sổ ứng viên đầu shard (2 = hành vi cũ) và số shard drain song song mỗi pod (≤ 1/4 DATABASE_POOL_MAX).
+  MATCHING_MATCHER_CANDIDATE_WINDOW: '32'
+  MATCHING_MATCHER_CONCURRENCY: '2'
+  # Nhớ cặp bị block/report (ms) để không hỏi canPair lại mỗi wake-up; 0 = tắt.
+  MATCHING_MATCHER_UNPAIRABLE_CACHE_MS: '30000'
   MATCHING_SWEEPER_INTERVAL_MS: '5000'
   MATCHING_QUEUE_MAX_WAIT_SECONDS: '120'
   MATCHING_CONFIRM_TIMEOUT_SECONDS: '15'
@@ -128,6 +148,8 @@ data:
 
   # --- friend chat 1-1 ---
   FRIEND_MESSAGE_MAX_LENGTH: '2000'
+  # Gộp thông báo tin nhắn theo (người nhận, hội thoại); 0 = mỗi tin một thông báo (ADR 0013)
+  FRIEND_MESSAGE_NOTIFY_WINDOW_SECONDS: '60'
 
   # --- livekit (URL thường trỏ Service ClusterIP của media-server trong cùng namespace —
   # xem k8s/base/media-server/service.yaml; key/secret nằm ở Secret vì là credential) ---
@@ -142,6 +164,9 @@ data:
   CALLING_PENDING_TIMEOUT_SECONDS: '60'
   CALLING_RECONNECT_WINDOW_SECONDS: '30'
   CALLING_TICKER_INTERVAL_MS: '1000'
+  CALLING_JOB_LEASE_MS: '30000'
+  CALLING_TICK_BUDGET_MS: '1000'
+  CALLING_CLEANUP_CONCURRENCY: '2'
   CALLING_TOKEN_TTL_SECONDS: '120'
 
   # --- party room (docs/03 § 3.8.A — cap cứng, không nới khi chưa có load test) ---
@@ -150,6 +175,30 @@ data:
   PARTY_TOKEN_TTL_SECONDS: '120'
   PARTY_EMPTY_ROOM_TIMEOUT_SECONDS: '300'
   PARTY_SWEEPER_INTERVAL_MS: '30000'
+
+  # --- retention dữ liệu vận hành (ADR 0013) ---
+  # 'dry-run' = chỉ đếm hàng đủ điều kiện (gauge retention_eligible_rows{rule}); đổi sang 'delete' sau khi đã xem số
+  # liệu và chấp nhận các hạn bên dưới (xoá không hoàn tác). 'off' = không chạy job.
+  RETENTION_MODE: 'dry-run'
+  RETENTION_INTERVAL_MS: '60000'
+  RETENTION_BATCH_SIZE: '5000'
+  RETENTION_MAX_BATCHES_PER_TICK: '60'
+  RETENTION_MAX_CONCURRENT_JOBS: '2'
+  RETENTION_BATCH_PAUSE_MS: '50'
+  NOTIFICATION_READ_RETENTION_DAYS: '90'
+  NOTIFICATION_UNREAD_RETENTION_DAYS: '365'
+  # Vòng đời dữ liệu (ADR 0014): chỉ có hiệu lực khi RETENTION_MODE ≠ off; 0 = giữ vĩnh viễn
+  AUTH_REFRESH_RETENTION_GRACE_DAYS: '7'
+  # QUYẾT ĐỊNH BẢO MẬT (ADR 0014): >0 = dọn token đã xoay cũ hơn N ngày lúc xoay (khuyến nghị 7); 0 = tắt
+  AUTH_REFRESH_ROTATED_RETENTION_DAYS: '0'
+  AUTH_OTP_RETENTION_DAYS: '1'
+  MATCHING_QUOTA_RETENTION_DAYS: '2'
+  OUTBOX_PUBLISHED_RETENTION_DAYS: '7'
+  OUTBOX_DEAD_LETTER_RETENTION_DAYS: '0'
+  # QUYẾT ĐỊNH SẢN PHẨM (ADR 0014): 0 = giữ lượt xem khử trùng (khuyến nghị 180)
+  VIDEO_VIEW_RETENTION_DAYS: '0'
+  VIDEO_DELETED_COMMENT_RETENTION_DAYS: '30'
+  MOOD_EVENT_RETENTION_DAYS: '7'
   PARTY_STALE_ROOM_SECONDS: '120'
   PARTY_TITLE_MAX_LENGTH: '100'
   PARTY_HOST_DISCONNECT_GRACE_SECONDS: '15'
@@ -183,6 +232,21 @@ data:
   # K8s production chưa có vendor storage/transcode thật; dev provider fail-fast ở production.
   # Giữ capability tắt cho tới khi có ADR + provider production.
   VIDEO_UPLOAD_ENABLED: 'false'
+  # Ranking: mỗi tick tính lại tối đa BATCH_SIZE × MAX_BATCHES_PER_TICK video, xoay vòng theo rank_computed_at
+  VIDEO_RANKING_BATCH_SIZE: '2000'
+  VIDEO_RANKING_MAX_BATCHES_PER_TICK: '5'
+  # Ranking theo hạn tính lại (ADR 0014): khoảng = STALENESS_PCT% × (decay + tuổi), trần MAX_INTERVAL_HOURS; tương tác → sớm nhất ACTIVE_REFRESH_SECONDS
+  VIDEO_RANKING_STALENESS_PCT: '1'
+  VIDEO_RANKING_MAX_INTERVAL_HOURS: '168'
+  VIDEO_RANKING_ACTIVE_REFRESH_SECONDS: '600'
+  # Bộ đệm counter view/like/comment (ADR 0013): 'true' khi một video viral làm nghẽn UPDATE videos (số đếm trễ ≤ FLUSH_INTERVAL_MS)
+  VIDEO_COUNTER_BUFFER_ENABLED: 'false'
+  VIDEO_COUNTER_FLUSH_INTERVAL_MS: '2000'
+  VIDEO_COUNTER_FLUSH_BATCH: '500'
+  # Broadcast thông báo của admin gửi ở nền: mỗi tick tối đa BATCH_SIZE × MAX_BATCHES_PER_TICK người
+  ADMIN_BROADCAST_JOB_INTERVAL_MS: '2000'
+  ADMIN_BROADCAST_BATCH_SIZE: '500'
+  ADMIN_BROADCAST_MAX_BATCHES_PER_TICK: '20'
 
   # --- palm match ---
   PALM_MATCH_TARGET_NAME_MAX_LENGTH: '50'

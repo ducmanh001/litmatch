@@ -58,7 +58,7 @@ tiến lên phía sau, không lặp lại 200 hàng cũ nhất và không đói 
 
 ## 3. View counting — chống đếm đôi, self-view không tính
 
-`video_views` unique `(video_id, viewer_id)` — cùng pattern `story_views`. `qualified` (đã xem đủ
+`video_views` unique `(video_id, viewer_id)` — cùng pattern `story_views` (MỘT HÀNG MỖI CẶP, không phải mỗi lượt xem; nếu bật `VIDEO_VIEW_RETENTION_DAYS` (mặc định 0 = giữ; khuyến nghị 180) thì khi `RETENTION_MODE=delete` xoá hàng quá hạn đó (`dry-run` chỉ đếm), sau đó người xem lại có thể được đếm thêm một lần — ADR 0014). `qualified` (đã xem đủ
 `VIDEO_QUALIFIED_VIEW_MIN_MS`) chỉ chuyển `false→true` **đúng 1 lần**, `Video.viewCount` cộng
 ATOMIC đúng lúc đó (cùng transaction với update `VideoView.qualified`) — các lần cập nhật
 watch-time sau (video xem tiếp) không cộng lại. Self-view (tác giả tự xem video mình) không bao
@@ -87,11 +87,28 @@ module để web không gọi riêng `GET /users/:id` cho từng video/comment. 
 ## 4. Ranking v1 — derived, có fallback
 
 `rankScore = (viewCount·W_view + likeCount·W_like + commentCount·W_comment) / (1 +
-giờ_kể_từ_tạo/VIDEO_RANK_TIME_DECAY_HOURS)`, tính lại toàn bộ video `published` mỗi tick
-(`VideoRankingService`, đơn giản cho quy mô V1 — nâng cấp thành incremental/watch-time-weighted
-sau không đổi schema, `rankScore` vẫn 1 cột `double precision`). `rankScore IS NULL` (video mới,
-job chưa kịp chạy) → `listPublished` fallback `sort=recent`. Job derive, KHÔNG phải nguồn sự
-thật — lỗi job không làm sai correctness, chỉ tạm thời không có ranking mới.
+giờ_kể_từ_tạo/VIDEO_RANK_TIME_DECAY_HOURS)`. Mỗi tick `VideoRankingService` tính lại tối đa
+`VIDEO_RANKING_BATCH_SIZE × VIDEO_RANKING_MAX_BATCHES_PER_TICK` video `published` **đến hạn** (`rank_due_at` NULL hoặc ≤ now,
+theo thứ tự hạn; video mới NULL được tính ngay). Sau khi tính, hạn kế tiếp = now + `VIDEO_RANKING_STALENESS_PCT`% ×
+(`VIDEO_RANK_TIME_DECAY_HOURS` + tuổi video), kẹp trong [60 giây, `VIDEO_RANKING_MAX_INTERVAL_HOURS`]: điểm lệch tương đối ≈
+Δ/(decay + tuổi) sau Δ giờ nên video mới được tính lại mỗi ~30 phút còn video 100 ngày tuổi mỗi ~1 ngày. Mỗi lần counter đổi
+(like/comment/view, hoặc lúc flush bộ đệm) kéo hạn về ≤ now + `VIDEO_RANKING_ACTIVE_REFRESH_SECONDS` (mặc định 600) nên video
+đang có tương tác được tính lại nhanh bất kể tuổi. Công việc vì vậy tỉ lệ với video TRẺ và HOẠT ĐỘNG, không với cả catalogue
+(trước đây xoay vòng cả bảng: chu kỳ đầy đủ = số video / lô × chu kỳ tick, hàng chục triệu video không bao giờ kịp). Cỡ job: số video đến
+hạn mỗi giờ ≈ vài % tổng video + video hoạt động; cần `batch × số lô × (3600 / chu kỳ tick)` lớn hơn con số đó (ví dụ 30 triệu video ≈ 1 triệu
+lần tính/giờ → batch 5.000 × 20 lô mỗi 5 phút). Job báo thiếu công suất bằng backlog `rank_due_at` quá hạn tăng dần. `sort=ranked` chạy
+theo index một phần `idx_videos_ranked`; index `idx_videos_rank_due_at` phục vụ chọn video đến hạn. `rankScore IS NULL` (video mới,
+job chưa kịp chạy) → `listPublished` fallback `sort=recent`. Job derive, KHÔNG phải nguồn sự thật — lỗi job không làm sai correctness, chỉ tạm thời không
+có ranking mới.
+
+**Counter đệm (ADR 0013, tắt mặc định).** `viewCount/likeCount/commentCount` là hàng nóng một hàng/video: mỗi lượt
+tăng khoá hàng `videos` tới hết transaction. Khi `VIDEO_COUNTER_BUFFER_ENABLED=true` các lượt tăng/giảm đi vào Redis
+(hash theo video + tập video có delta), `VideoCounterFlushService` (cluster singleton, mỗi
+`VIDEO_COUNTER_FLUSH_INTERVAL_MS`) drain tối đa `VIDEO_COUNTER_FLUSH_BATCH` video và áp bằng MỘT câu UPDATE `unnest`.
+Bộ đệm được cộng SAU khi transaction nguồn (reaction/comment/view) commit; Redis lỗi thì cộng thẳng vào DB (fail-open);
+flush DB lỗi thì cộng lại delta; `GREATEST(…, 0)` giữ counter không âm. Đánh đổi: số đếm hiển thị trễ tối đa một chu kỳ flush
+và lệch nhẹ nếu pod chết giữa commit nguồn và lần đệm. Hai giới hạn đã biết: (1) `HINCRBY`+`SADD` đi trong một MULTI, nhưng nếu phản hồi Redis trễ quá `commandTimeout` thì lượt đó vừa vào bộ đệm vừa được cộng thẳng DB → đếm hai lần; (2) đặt `VIDEO_COUNTER_BUFFER_ENABLED=false` khi bộ đệm còn delta thì flush job không chạy nữa, delta nằm lại Redis cho tới khi bật lại (tắt cờ chỉ sau khi tập `video:counter:dirty` đã rỗng). Chưa giải quyết: mỗi lượt xem vẫn ghi một hàng `video_views`
+vĩnh viễn (cần quyết định sản phẩm về dữ liệu theo lượt xem).
 
 ## 5. Report + moderation — mở rộng `Report` của Safety, KHÔNG đụng trust score cá nhân
 

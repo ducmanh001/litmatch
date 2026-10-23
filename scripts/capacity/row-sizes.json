@@ -1,0 +1,610 @@
+{
+  "serverVersion": "16.15",
+  "rowsPerTable": 200000,
+  "tables": [
+    {
+      "table": "refresh_tokens",
+      "assume": "mỗi lần xoay token sinh 1 hàng; hash 64 hex; 90% đã xoay",
+      "rows": 200000,
+      "heapBytesPerRow": 174.32576,
+      "indexBytesPerRow": 259.60448,
+      "toastBytesPerRow": 0.2048,
+      "totalBytesPerRow": 434.13504,
+      "indexes": [
+        {
+          "name": "uq_refresh_tokens_token_hash",
+          "bytesPerRow": 125.58336
+        },
+        {
+          "name": "idx_refresh_tokens_user_id",
+          "bytesPerRow": 43.70432
+        },
+        {
+          "name": "refresh_tokens_pkey",
+          "bytesPerRow": 42.63936
+        },
+        {
+          "name": "idx_refresh_tokens_family_id",
+          "bytesPerRow": 25.10848
+        },
+        {
+          "name": "idx_refresh_tokens_expires_at",
+          "bytesPerRow": 22.56896
+        }
+      ]
+    },
+    {
+      "table": "phone_otps",
+      "assume": "số điện thoại 12 ký tự; 70% đã dùng",
+      "rows": 200000,
+      "heapBytesPerRow": 154.58304,
+      "indexBytesPerRow": 106.33216,
+      "toastBytesPerRow": 0.16384,
+      "totalBytesPerRow": 261.07904,
+      "indexes": [
+        {
+          "name": "phone_otps_pkey",
+          "bytesPerRow": 43.08992
+        },
+        {
+          "name": "idx_phone_otps_phone_created",
+          "bytesPerRow": 40.67328
+        },
+        {
+          "name": "idx_phone_otps_created_at",
+          "bytesPerRow": 22.56896
+        }
+      ]
+    },
+    {
+      "table": "messages",
+      "assume": "tin chat bạn bè: content 80 ký tự, idempotency_key = UUID",
+      "rows": 200000,
+      "heapBytesPerRow": 215.61344,
+      "indexBytesPerRow": 250.51136,
+      "toastBytesPerRow": 0.24576,
+      "totalBytesPerRow": 466.37056,
+      "indexes": [
+        {
+          "name": "uq_messages_idempotency_key",
+          "bytesPerRow": 77.90592
+        },
+        {
+          "name": "idx_messages_conversation_created",
+          "bytesPerRow": 77.2096
+        },
+        {
+          "name": "idx_messages_conversation_seq",
+          "bytesPerRow": 50.95424
+        },
+        {
+          "name": "messages_pkey",
+          "bytesPerRow": 44.4416
+        }
+      ]
+    },
+    {
+      "table": "soul_chat_messages",
+      "assume": "tin chat ẩn danh: content 60 ký tự, ~20 tin/phiên",
+      "rows": 200000,
+      "heapBytesPerRow": 199.84384,
+      "indexBytesPerRow": 175.5136,
+      "toastBytesPerRow": 0.24576,
+      "totalBytesPerRow": 375.6032,
+      "indexes": [
+        {
+          "name": "uq_soul_chat_messages_idempotency_key",
+          "bytesPerRow": 78.35648
+        },
+        {
+          "name": "idx_soul_chat_messages_session_seq",
+          "bytesPerRow": 53.20704
+        },
+        {
+          "name": "soul_chat_messages_pkey",
+          "bytesPerRow": 43.95008
+        }
+      ]
+    },
+    {
+      "table": "match_tickets",
+      "assume": "idempotency_key ~73 ký tự (userId:key); 100% đã ghép",
+      "rows": 200000,
+      "heapBytesPerRow": 234.0864,
+      "indexBytesPerRow": 272.34304,
+      "toastBytesPerRow": 0.2048,
+      "totalBytesPerRow": 506.63424,
+      "indexes": [
+        {
+          "name": "uq_match_tickets_idempotency_key",
+          "bytesPerRow": 137.66656
+        },
+        {
+          "name": "idx_match_tickets_user",
+          "bytesPerRow": 43.70432
+        },
+        {
+          "name": "match_tickets_pkey",
+          "bytesPerRow": 43.6224
+        },
+        {
+          "name": "idx_match_tickets_status_enqueued",
+          "bytesPerRow": 40.71424
+        },
+        {
+          "name": "idx_match_tickets_status_shard",
+          "bytesPerRow": 6.59456
+        },
+        {
+          "name": "uq_match_tickets_active_user",
+          "bytesPerRow": 0.04096
+        }
+      ]
+    },
+    {
+      "table": "match_sessions",
+      "assume": "phiên đã xác nhận + kết thúc",
+      "rows": 200000,
+      "heapBytesPerRow": 167.19872,
+      "indexBytesPerRow": 85.89312,
+      "toastBytesPerRow": 0.2048,
+      "totalBytesPerRow": 253.29664,
+      "indexes": [
+        {
+          "name": "match_sessions_pkey",
+          "bytesPerRow": 45.17888
+        },
+        {
+          "name": "idx_match_sessions_status_created",
+          "bytesPerRow": 40.71424
+        }
+      ]
+    },
+    {
+      "table": "notifications",
+      "assume": "payload JSON ~200 byte; 60% đã đọc (sau cổng gộp 60 giây)",
+      "rows": 200000,
+      "heapBytesPerRow": 282.50112,
+      "indexBytesPerRow": 132.096,
+      "toastBytesPerRow": 0.24576,
+      "totalBytesPerRow": 414.84288,
+      "indexes": [
+        {
+          "name": "idx_notifications_user_seq",
+          "bytesPerRow": 50.95424
+        },
+        {
+          "name": "notifications_pkey",
+          "bytesPerRow": 42.76224
+        },
+        {
+          "name": "idx_notifications_unread_user",
+          "bytesPerRow": 15.81056
+        },
+        {
+          "name": "idx_notifications_read_at",
+          "bytesPerRow": 13.5168
+        },
+        {
+          "name": "idx_notifications_unread_created",
+          "bytesPerRow": 9.05216
+        }
+      ]
+    },
+    {
+      "table": "match_daily_quotas",
+      "assume": "1 hàng/(user, ngày, loại ghép)",
+      "rows": 200000,
+      "heapBytesPerRow": 68.28032,
+      "indexBytesPerRow": 70.20544,
+      "toastBytesPerRow": 0.16384,
+      "totalBytesPerRow": 138.6496,
+      "indexes": [
+        {
+          "name": "pk_match_daily_quotas",
+          "bytesPerRow": 63.6928
+        },
+        {
+          "name": "idx_match_daily_quotas_quota_date",
+          "bytesPerRow": 6.51264
+        }
+      ]
+    },
+    {
+      "table": "guest_match_quotas",
+      "assume": "1 hàng/(khoá khách, ngày)",
+      "rows": 200000,
+      "heapBytesPerRow": 117.06368,
+      "indexBytesPerRow": 125.58336,
+      "toastBytesPerRow": 0.16384,
+      "totalBytesPerRow": 242.81088,
+      "indexes": [
+        {
+          "name": "pk_guest_match_quotas",
+          "bytesPerRow": 125.58336
+        }
+      ]
+    },
+    {
+      "table": "outbox_events",
+      "assume": "payload JSON ~220 byte; chưa publish (relay tắt ở K8s)",
+      "rows": 200000,
+      "heapBytesPerRow": 356.18816,
+      "indexBytesPerRow": 90.15296,
+      "toastBytesPerRow": 0.28672,
+      "totalBytesPerRow": 446.62784,
+      "indexes": [
+        {
+          "name": "outbox_events_pkey",
+          "bytesPerRow": 44.93312
+        },
+        {
+          "name": "idx_outbox_events_unpublished",
+          "bytesPerRow": 22.56896
+        },
+        {
+          "name": "idx_outbox_events_relayable",
+          "bytesPerRow": 22.56896
+        },
+        {
+          "name": "idx_outbox_events_published_at",
+          "bytesPerRow": 0.04096
+        },
+        {
+          "name": "idx_outbox_events_dead_lettered_at",
+          "bytesPerRow": 0.04096
+        }
+      ]
+    },
+    {
+      "table": "transactions",
+      "assume": "idempotency_key ~80 ký tự; metadata JSON ~120 byte (SỔ CÁI — không xoá)",
+      "rows": 200000,
+      "heapBytesPerRow": 372.36736,
+      "indexBytesPerRow": 230.8096,
+      "toastBytesPerRow": 0.28672,
+      "totalBytesPerRow": 603.46368,
+      "indexes": [
+        {
+          "name": "uq_transactions_idempotency_key",
+          "bytesPerRow": 136.92928
+        },
+        {
+          "name": "idx_transactions_actor_created",
+          "bytesPerRow": 50.95424
+        },
+        {
+          "name": "transactions_pkey",
+          "bytesPerRow": 42.68032
+        },
+        {
+          "name": "idx_transactions_created_at_brin",
+          "bytesPerRow": 0.12288
+        }
+      ]
+    },
+    {
+      "table": "ledger_entries",
+      "assume": "SỔ CÁI — không xoá; ~2,2 entry/transaction",
+      "rows": 200000,
+      "heapBytesPerRow": 109.24032,
+      "indexBytesPerRow": 124.80512,
+      "toastBytesPerRow": 0.16384,
+      "totalBytesPerRow": 234.20928,
+      "indexes": [
+        {
+          "name": "idx_ledger_entries_account_created",
+          "bytesPerRow": 50.95424
+        },
+        {
+          "name": "ledger_entries_pkey",
+          "bytesPerRow": 41.12384
+        },
+        {
+          "name": "idx_ledger_entries_transaction",
+          "bytesPerRow": 32.72704
+        }
+      ]
+    },
+    {
+      "table": "video_views",
+      "assume": "1 hàng/(video, người xem) — UNIQUE, KHÔNG phải mỗi lượt xem",
+      "rows": 200000,
+      "heapBytesPerRow": 93.10208,
+      "indexBytesPerRow": 131.80928,
+      "toastBytesPerRow": 0.16384,
+      "totalBytesPerRow": 225.0752,
+      "indexes": [
+        {
+          "name": "uq_video_views_video_viewer",
+          "bytesPerRow": 65.536
+        },
+        {
+          "name": "video_views_pkey",
+          "bytesPerRow": 43.70432
+        },
+        {
+          "name": "idx_video_views_created_at",
+          "bytesPerRow": 22.56896
+        }
+      ]
+    },
+    {
+      "table": "video_reactions",
+      "assume": "thích video — UNIQUE (video, user)",
+      "rows": 200000,
+      "heapBytesPerRow": 84.45952,
+      "indexBytesPerRow": 108.7488,
+      "toastBytesPerRow": 0.16384,
+      "totalBytesPerRow": 193.37216,
+      "indexes": [
+        {
+          "name": "uq_video_reactions_video_user",
+          "bytesPerRow": 65.536
+        },
+        {
+          "name": "video_reactions_pkey",
+          "bytesPerRow": 43.2128
+        }
+      ]
+    },
+    {
+      "table": "video_comments",
+      "assume": "content 80 ký tự; chưa xoá mềm",
+      "rows": 200000,
+      "heapBytesPerRow": 182.0672,
+      "indexBytesPerRow": 95.55968,
+      "toastBytesPerRow": 0.24576,
+      "totalBytesPerRow": 277.87264,
+      "indexes": [
+        {
+          "name": "idx_video_comments_video_seq",
+          "bytesPerRow": 50.95424
+        },
+        {
+          "name": "video_comments_pkey",
+          "bytesPerRow": 44.56448
+        },
+        {
+          "name": "idx_video_comments_deleted_at",
+          "bytesPerRow": 0.04096
+        }
+      ]
+    },
+    {
+      "table": "reactions",
+      "assume": "thích bài feed — UNIQUE (post, user)",
+      "rows": 200000,
+      "heapBytesPerRow": 84.45952,
+      "indexBytesPerRow": 110.10048,
+      "toastBytesPerRow": 0.16384,
+      "totalBytesPerRow": 194.72384,
+      "indexes": [
+        {
+          "name": "uq_reactions_post_user",
+          "bytesPerRow": 65.536
+        },
+        {
+          "name": "reactions_pkey",
+          "bytesPerRow": 44.56448
+        }
+      ]
+    },
+    {
+      "table": "comments",
+      "assume": "bình luận feed: content 80 ký tự",
+      "rows": 200000,
+      "heapBytesPerRow": 182.0672,
+      "indexBytesPerRow": 94.24896,
+      "toastBytesPerRow": 0.24576,
+      "totalBytesPerRow": 276.56192,
+      "indexes": [
+        {
+          "name": "idx_comments_post_seq",
+          "bytesPerRow": 50.95424
+        },
+        {
+          "name": "comments_pkey",
+          "bytesPerRow": 43.29472
+        }
+      ]
+    },
+    {
+      "table": "call_sessions",
+      "assume": "cuộc gọi voice đã kết thúc",
+      "rows": 200000,
+      "heapBytesPerRow": 240.96768,
+      "indexBytesPerRow": 208.40448,
+      "toastBytesPerRow": 0.2048,
+      "totalBytesPerRow": 449.57696,
+      "indexes": [
+        {
+          "name": "uq_call_sessions_room_name",
+          "bytesPerRow": 89.57952
+        },
+        {
+          "name": "uq_call_sessions_match_session",
+          "bytesPerRow": 43.70432
+        },
+        {
+          "name": "call_sessions_pkey",
+          "bytesPerRow": 43.33568
+        },
+        {
+          "name": "idx_call_sessions_status_created",
+          "bytesPerRow": 31.66208
+        },
+        {
+          "name": "idx_call_sessions_active_updated",
+          "bytesPerRow": 0.04096
+        },
+        {
+          "name": "idx_call_sessions_reconnect_started",
+          "bytesPerRow": 0.04096
+        },
+        {
+          "name": "uq_call_sessions_active_friend_pair",
+          "bytesPerRow": 0.04096
+        }
+      ]
+    },
+    {
+      "table": "soul_match_ratings",
+      "assume": "2 đánh giá/phiên",
+      "rows": 200000,
+      "heapBytesPerRow": 93.10208,
+      "indexBytesPerRow": 107.52,
+      "toastBytesPerRow": 0.16384,
+      "totalBytesPerRow": 200.78592,
+      "indexes": [
+        {
+          "name": "uq_soul_match_ratings_session_rater",
+          "bytesPerRow": 63.6928
+        },
+        {
+          "name": "soul_match_ratings_pkey",
+          "bytesPerRow": 43.8272
+        }
+      ]
+    },
+    {
+      "table": "voice_match_reactions",
+      "assume": "1–2 phản ứng/cuộc gọi",
+      "rows": 200000,
+      "heapBytesPerRow": 84.45952,
+      "indexBytesPerRow": 108.38016,
+      "toastBytesPerRow": 0.16384,
+      "totalBytesPerRow": 193.00352,
+      "indexes": [
+        {
+          "name": "uq_voice_match_reactions_call_rater",
+          "bytesPerRow": 63.6928
+        },
+        {
+          "name": "voice_match_reactions_pkey",
+          "bytesPerRow": 44.68736
+        }
+      ]
+    },
+    {
+      "table": "story_views",
+      "assume": "UNIQUE (story, viewer)",
+      "rows": 200000,
+      "heapBytesPerRow": 84.45952,
+      "indexBytesPerRow": 107.80672,
+      "toastBytesPerRow": 0.16384,
+      "totalBytesPerRow": 192.43008,
+      "indexes": [
+        {
+          "name": "uq_story_views_story_viewer",
+          "bytesPerRow": 64.9216
+        },
+        {
+          "name": "story_views_pkey",
+          "bytesPerRow": 42.88512
+        }
+      ]
+    },
+    {
+      "table": "gift_events",
+      "assume": "mỗi quà 1 hàng (gắn transaction sổ cái)",
+      "rows": 200000,
+      "heapBytesPerRow": 157.57312,
+      "indexBytesPerRow": 187.8016,
+      "toastBytesPerRow": 0.16384,
+      "totalBytesPerRow": 345.53856,
+      "indexes": [
+        {
+          "name": "idx_gift_events_receiver_created",
+          "bytesPerRow": 50.25792
+        },
+        {
+          "name": "idx_gift_events_room_created",
+          "bytesPerRow": 49.80736
+        },
+        {
+          "name": "gift_events_pkey",
+          "bytesPerRow": 44.032
+        },
+        {
+          "name": "uq_gift_events_transaction",
+          "bytesPerRow": 43.70432
+        }
+      ]
+    },
+    {
+      "table": "party_room_comments",
+      "assume": "content 60 ký tự",
+      "rows": 200000,
+      "heapBytesPerRow": 199.84384,
+      "indexBytesPerRow": 170.68032,
+      "toastBytesPerRow": 0.24576,
+      "totalBytesPerRow": 370.76992,
+      "indexes": [
+        {
+          "name": "uq_party_room_comments_idempotency_key",
+          "bytesPerRow": 77.25056
+        },
+        {
+          "name": "idx_party_room_comments_room_seq",
+          "bytesPerRow": 49.80736
+        },
+        {
+          "name": "party_room_comments_pkey",
+          "bytesPerRow": 43.6224
+        }
+      ]
+    },
+    {
+      "table": "movie_session_messages",
+      "assume": "content 60 ký tự",
+      "rows": 200000,
+      "heapBytesPerRow": 199.84384,
+      "indexBytesPerRow": 176.41472,
+      "toastBytesPerRow": 0.24576,
+      "totalBytesPerRow": 376.50432,
+      "indexes": [
+        {
+          "name": "movie_session_messages_idempotency_key_key",
+          "bytesPerRow": 79.21664
+        },
+        {
+          "name": "idx_movie_session_messages_session_seq",
+          "bytesPerRow": 53.20704
+        },
+        {
+          "name": "movie_session_messages_pkey",
+          "bytesPerRow": 43.99104
+        }
+      ]
+    },
+    {
+      "table": "mood_status_events",
+      "assume": "idempotency_key = UUID",
+      "rows": 200000,
+      "heapBytesPerRow": 141.27104,
+      "indexBytesPerRow": 196.48512,
+      "toastBytesPerRow": 0.16384,
+      "totalBytesPerRow": 337.92,
+      "indexes": [
+        {
+          "name": "uq_mood_status_events_idempotency_key",
+          "bytesPerRow": 77.74208
+        },
+        {
+          "name": "idx_mood_status_events_user_created",
+          "bytesPerRow": 50.95424
+        },
+        {
+          "name": "mood_status_events_pkey",
+          "bytesPerRow": 45.21984
+        },
+        {
+          "name": "idx_mood_status_events_created_at",
+          "bytesPerRow": 22.56896
+        }
+      ]
+    }
+  ],
+  "measuredAt": "2026-10-19T10:21:38.102Z"
+}

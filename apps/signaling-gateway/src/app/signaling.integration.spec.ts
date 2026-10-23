@@ -23,7 +23,7 @@ if (!INTEGRATION_DB_URL) {
   );
 }
 
-jest.setTimeout(30_000);
+jest.setTimeout(90_000); // boot app Nest + Redis thật; 30s không đủ khi máy tải nặng (suite chạy song song)
 
 const JWT_SECRET = 'signaling-integration-secret-0123456789abcdef';
 const REDIS_URL = process.env['REDIS_URL'] ?? 'redis://localhost:6379';
@@ -40,6 +40,7 @@ d('SignalingGateway integration (Socket.IO + Redis thật)', () => {
     process.env['REDIS_URL'] = REDIS_URL;
     // import động SAU khi set env — AppModule validate env lúc khởi tạo
     const { AppModule } = await import('./app.module');
+    const { SignalingGateway } = await import('./signaling.gateway');
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -52,11 +53,14 @@ d('SignalingGateway integration (Socket.IO + Redis thật)', () => {
     redis = new Redis(REDIS_URL);
     jwt = new JwtService({ secret: JWT_SECRET });
 
-    // chờ gateway PSUBSCRIBE xong — publish trước khi subscriber sẵn sàng sẽ rơi vào hư không
+    // Chờ gateway sẵn sàng (kết nối Redis + subscription mong muốn đã có hiệu lực). Không chờ
+    // `PUBSUB NUMPAT`: mặc định WS_FANOUT_MODE=user không PSUBSCRIBE, và suite này không gắn Socket.IO
+    // cluster adapter — điều kiện cũ chỉ đúng khi một suite khác chạy song song giữ pattern trên cùng Redis.
+    const gateway = app.get(SignalingGateway);
     const deadline = Date.now() + 5000;
-    while (Number(await redis.call('PUBSUB', 'NUMPAT')) < 1) {
+    while (!gateway.isReady()) {
       if (Date.now() > deadline)
-        throw new Error('Gateway chưa PSUBSCRIBE sau 5s');
+        throw new Error('Gateway chưa sẵn sàng sau 5s');
       await new Promise((r) => setTimeout(r, 50));
     }
   });

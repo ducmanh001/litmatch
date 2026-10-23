@@ -400,6 +400,31 @@ describe('SoulMatchService (unit — mock repo/matching/friend)', () => {
       expect(friendService.ensureFriendship).not.toHaveBeenCalled();
     });
 
+    it('mọi kiểm tra bạn bè trong transaction của rate() chạy trên manager của transaction (không mượn kết nối pool thứ hai)', async () => {
+      await service.rate(me, 'session-1', like);
+
+      // Lần gọi ở getRoomState (trước transaction) không có manager; lần trong transaction PHẢI có.
+      expect(
+        friendService.areFriends.mock.calls.some((call) => call[2] === manager),
+      ).toBe(true);
+    });
+
+    it('rating đã tồn tại (replay) → kiểm tra bạn bè cũng trên manager của transaction', async () => {
+      manager.findOneBy.mockResolvedValueOnce(
+        Object.assign(new SoulMatchRating(), {
+          sessionId: 'session-1',
+          raterUserId: me.userId,
+          verdict: SoulMatchVerdict.Like,
+        }),
+      );
+
+      await service.rate(me, 'session-1', like);
+
+      expect(
+        friendService.areFriends.mock.calls.some((call) => call[2] === manager),
+      ).toBe(true);
+    });
+
     it('đối phương đã like → ensureFriendship trong manager của transaction, matched=true', async () => {
       manager.findOneBy
         .mockResolvedValueOnce(null) // rating của mình chưa có

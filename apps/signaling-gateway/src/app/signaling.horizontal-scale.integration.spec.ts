@@ -27,7 +27,7 @@ if (!INTEGRATION_DB_URL) {
   );
 }
 
-jest.setTimeout(30_000);
+jest.setTimeout(90_000); // boot hai app Nest + Redis thật; 30s không đủ khi máy tải nặng (suite chạy song song)
 
 const JWT_SECRET = 'signaling-scale-integration-secret-0123456789abcdef';
 const REDIS_URL = process.env['REDIS_URL'] ?? 'redis://localhost:6379';

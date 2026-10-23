@@ -68,7 +68,7 @@ export class AuthController {
   @ApiOkResponse({ type: OtpRequestedDto })
   requestOtp(
     @Body() dto: RequestOtpDto,
-  ): Promise<{ code: string; ttlSeconds: number }> {
+  ): Promise<{ code?: string; ttlSeconds: number }> {
     return this.authService.requestOtp(dto.phone);
   }
 

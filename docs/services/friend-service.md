@@ -108,6 +108,17 @@ conversation thay vì quét toàn bộ lịch sử chat. Khi người nhận đa
 `FriendService.sendMessage` bỏ qua bước tạo notification (best-effort cuối luồng) — không ảnh
 hưởng persist message/streak/realtime.
 
+**Gộp thông báo (ADR 0013).** `FriendMessageNotifier` quyết định thông báo cho người nhận: trong mỗi cửa sổ
+`FRIEND_MESSAGE_NOTIFY_WINDOW_SECONDS` (mặc định 60 s, 0 = tắt gộp) chỉ tin ĐẦU TIÊN của (người nhận, hội thoại) tạo notification +
+push; các tin sau vẫn lưu, publish realtime và tính `unreadCount`. Cổng là khoá Redis
+`friend:msg-notify:{recipientId}:{conversationId}` (`SET NX EX`, `common/redis/redis-window-gate.adapter.ts`); Redis lỗi hoặc mất
+state thì fail-open (thông báo như cũ). Mute mở lại cổng nên bật tiếng lại thì tin kế tiếp có thông báo; tạo
+notification lỗi cũng mở lại cổng. Cố ý KHÔNG dựa vào "người nhận đang online" (presence trễ tới một lease nên
+nuốt push của app nền) hay "còn notification chưa đọc" (đọc hội thoại không đánh dấu notification đã đọc nên sẽ
+im lặng vĩnh viễn). Metric `friend_message_notifications_total{outcome}` (`notified` | `coalesced` | `muted` | `gate_error` |
+`error`); tỉ lệ `coalesced` là mức giảm insert `notifications` và push. Mô hình: 1.500 → 83 insert/giây ở tải đề bài
+(10.000 người chat, 0,3 tin/giây).
+
 `GET /friends/:friendUserId/conversation`: nếu chưa có conversation với `friendUserId` → 404
 (tra theo cặp canonical, không phân biệt "chưa mở chat" với "user không tồn tại", tránh oracle
 dò userId qua API này). `POST /conversations/:id/messages` vẫn chỉ guard membership của

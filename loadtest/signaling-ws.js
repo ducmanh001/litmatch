@@ -47,6 +47,16 @@ import { Trend, Rate } from 'k6/metrics';
 const BASE_URL_CORE = __ENV.BASE_URL_CORE || 'http://localhost:3000';
 const SIGNALING_URL = __ENV.SIGNALING_URL || 'ws://localhost:3001';
 const HOLD_SECONDS = Number(__ENV.HOLD_SECONDS || 20);
+const CONNECT_TIMEOUT_SECONDS = Number(__ENV.CONNECT_TIMEOUT_SECONDS || 10);
+if (
+  !(HOLD_SECONDS > 0) ||
+  !(CONNECT_TIMEOUT_SECONDS > 0) ||
+  !Number.isFinite(HOLD_SECONDS + CONNECT_TIMEOUT_SECONDS)
+) {
+  throw new Error(
+    'HOLD_SECONDS và CONNECT_TIMEOUT_SECONDS phải là số hữu hạn > 0',
+  );
+}
 
 export const options = {
   scenarios: {
@@ -84,75 +94,99 @@ function guestLogin() {
     { headers: { 'Content-Type': 'application/json' } },
   );
   if (res.status !== 200 && res.status !== 201) return null;
-  return JSON.parse(res.body).data.accessToken;
+  try {
+    const token = JSON.parse(res.body).data?.accessToken;
+    return typeof token === 'string' && token.length > 0 ? token : null;
+  } catch {
+    return null;
+  }
 }
 
 export default function () {
   const token = guestLogin();
   if (!token) {
     dropRate.add(1);
+    authFailRate.add(1);
     return;
   }
 
   const url = `${SIGNALING_URL}/socket.io/?EIO=4&transport=websocket`;
   let connectSentAt = 0;
   let gotConnectAck = false;
-  let holdTimer = null;
+  let intentionalClose = false;
+  let transportFailed = false;
+  let admissionFailed = false;
 
-  const res = ws.connect(url, {}, function (socket) {
-    socket.on('open', function () {
-      // Chờ Engine.IO gửi packet "0{...}" (open) trước — client KHÔNG chủ động nói trước ở
-      // transport websocket-only handshake (khác polling handshake dùng HTTP GET trước).
-    });
+  let res;
+  try {
+    res = ws.connect(url, {}, function (socket) {
+      socket.on('open', function () {
+        // Chờ Engine.IO gửi packet "0{...}" (open) trước — client KHÔNG chủ động nói trước ở
+        // transport websocket-only handshake (khác polling handshake dùng HTTP GET trước).
+      });
 
-    socket.on('message', function (data) {
-      if (typeof data !== 'string' || data.length === 0) return;
-      const engineIoType = data[0];
+      socket.on('message', function (data) {
+        if (typeof data !== 'string' || data.length === 0) return;
+        const engineIoType = data[0];
 
-      if (engineIoType === '0') {
-        // Engine.IO OPEN — server gửi {sid, pingInterval, pingTimeout, ...}. Sau bước này gửi
-        // Socket.IO CONNECT packet cho namespace /signaling kèm auth token.
-        connectSentAt = Date.now();
-        socket.send(`40/signaling,${JSON.stringify({ token })}`);
-        return;
-      }
-
-      if (engineIoType === '2') {
-        // Engine.IO PING từ server — PHẢI trả PONG ngay, không thì server đóng kết nối sau
-        // pingTimeout. Đây là lý do phải tự cài ping/pong khi không dùng client Socket.IO thật.
-        socket.send('3');
-        return;
-      }
-
-      if (engineIoType === '4') {
-        // Engine.IO MESSAGE bọc Socket.IO packet bên trong: "4" + socketio-type + [nsp,] + data
-        const socketIoType = data[1];
-        if (socketIoType === '0' && !gotConnectAck) {
-          // "40/signaling,{...}" — CONNECT ack thành công cho namespace /signaling
-          gotConnectAck = true;
-          connectAckLatency.add(Date.now() - connectSentAt);
-        } else if (socketIoType === '4') {
-          // "44/signaling,{...}" — CONNECT_ERROR (vd token invalid/hết hạn)
-          authFailRate.add(1);
-          socket.close();
+        if (engineIoType === '0') {
+          // Engine.IO OPEN — server gửi {sid, pingInterval, pingTimeout, ...}. Sau bước này gửi
+          // Socket.IO CONNECT packet cho namespace /signaling kèm auth token.
+          connectSentAt = Date.now();
+          socket.send(`40/signaling,${JSON.stringify({ token })}`);
+          return;
         }
-      }
-    });
 
-    socket.on('close', function () {
-      if (!gotConnectAck) dropRate.add(1);
-      else dropRate.add(0);
-    });
+        if (engineIoType === '2') {
+          // Engine.IO PING từ server — PHẢI trả PONG ngay, không thì server đóng kết nối sau
+          // pingTimeout. Đây là lý do phải tự cài ping/pong khi không dùng client Socket.IO thật.
+          socket.send('3');
+          return;
+        }
 
-    socket.on('error', function () {
-      dropRate.add(1);
-    });
+        if (engineIoType === '4') {
+          // Engine.IO MESSAGE bọc Socket.IO packet bên trong: "4" + socketio-type + [nsp,] + data
+          const socketIoType = data[1];
+          if (data.startsWith('40/signaling,') && !gotConnectAck) {
+            // "40/signaling,{...}" — CONNECT ack thành công cho namespace /signaling
+            gotConnectAck = true;
+            connectAckLatency.add(Date.now() - connectSentAt);
+            // Hold time measures an admitted namespace session, not time spent waiting for auth.
+            socket.setTimeout(function () {
+              intentionalClose = true;
+              socket.close();
+            }, HOLD_SECONDS * 1000);
+          } else if (socketIoType === '4' && data.startsWith('44/signaling,')) {
+            // "44/signaling,{...}" — CONNECT_ERROR (vd token invalid/hết hạn)
+            admissionFailed = true;
+            socket.close();
+          } else if (data.startsWith('41/signaling,')) {
+            // A server namespace disconnect is a dropped session even if CONNECT was acknowledged.
+            transportFailed = true;
+            socket.close();
+          }
+        }
+      });
 
-    // Giữ kết nối HOLD_SECONDS rồi chủ động đóng — mô phỏng client giữ session realtime.
-    holdTimer = socket.setTimeout(function () {
-      socket.close();
-    }, HOLD_SECONDS * 1000);
-  });
+      socket.on('close', function () {
+        if (!intentionalClose) transportFailed = true;
+      });
+
+      socket.on('error', function () {
+        transportFailed = true;
+      });
+
+      socket.setTimeout(function () {
+        if (!gotConnectAck) socket.close();
+      }, CONNECT_TIMEOUT_SECONDS * 1000);
+    });
+  } catch {
+    transportFailed = true;
+  }
+
+  // One sample per attempt: error + close must not inflate the denominator, and a 101 alone is insufficient.
+  dropRate.add(!gotConnectAck || !intentionalClose || transportFailed ? 1 : 0);
+  authFailRate.add(admissionFailed ? 1 : 0);
 
   check(res, { 'websocket upgrade 101': (r) => r && r.status === 101 });
 }

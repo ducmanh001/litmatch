@@ -9,6 +9,9 @@ import { EconomyLedger1752000000000 } from '../../database/migrations/1752000000
 import { EconomyRefund1752100000000 } from '../../database/migrations/1752100000000-economy-refund';
 import { PayosDiamond1756300000000 } from '../../database/migrations/1756300000000-payos-diamond';
 import { OutboxReliability1757000000000 } from '../../database/migrations/1757000000000-outbox-reliability';
+import { RuntimeRecoveryCheckpoints1759100000000 } from '../../database/migrations/1759100000000-runtime-recovery-checkpoints';
+import { LedgerReconciliationCheckpoint } from './jobs/ledger-reconciliation-checkpoint';
+import { WalletReconciliationSampler } from './jobs/wallet-reconciliation-sampler';
 import { AuthIdentity } from '../auth/entities/auth-identity.entity';
 import { PhoneOtp } from '../auth/entities/phone-otp.entity';
 import { RefreshToken } from '../auth/entities/refresh-token.entity';
@@ -65,6 +68,36 @@ if (!INTEGRATION_DB_URL) {
 }
 
 jest.setTimeout(60_000);
+
+/**
+ * Config đối soát cho test: LAG=0 để giao dịch vừa tạo rơi vào cửa sổ ngay (production dùng LAG > transaction ghi
+ * sổ lâu nhất); FULL lớn để tổng cộng dồn không bị dựng lại ngoài ý muốn. `values` đổi được giữa các lần chạy.
+ */
+function reconConfig() {
+  const values: Record<string, unknown> = {
+    ECONOMY_RECONCILIATION_LAG_MS: 0,
+    ECONOMY_RECONCILIATION_FULL_INTERVAL_MS: 86_400_000,
+    ECONOMY_RECONCILIATION_BATCH_SIZE: 2000,
+    ECONOMY_RECONCILIATION_MAX_BATCHES_PER_TICK: 10,
+    ECONOMY_RECONCILIATION_TICK_BUDGET_MS: 1000,
+  };
+  const config = {
+    getOrThrow: (key: string) => values[key] ?? true,
+  } as unknown as ConfigService<CoreApiEnv, true>;
+  return { values, config };
+}
+
+function makeRecon(
+  ds: DataSource,
+  config: ConfigService<CoreApiEnv, true> = reconConfig().config,
+): ReconciliationService {
+  return new ReconciliationService(
+    ds,
+    config,
+    { addInterval: () => undefined } as unknown as SchedulerRegistry,
+    new EconomyMetrics(metrics.getMeter('economy-integration')),
+  );
+}
 
 d('Economy integration (Postgres thật)', () => {
   let ds: DataSource;
@@ -126,6 +159,7 @@ d('Economy integration (Postgres thật)', () => {
         EconomyRefund1752100000000,
         PayosDiamond1756300000000,
         OutboxReliability1757000000000,
+        RuntimeRecoveryCheckpoints1759100000000,
       ],
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
@@ -474,16 +508,7 @@ d('Economy integration (Postgres thật)', () => {
   });
 
   it('đối soát: phát hiện snapshot bị sửa lệch, rebuildWallet khôi phục từ ledger', async () => {
-    const stubConfig = { getOrThrow: () => true } as unknown as ConfigService<
-      CoreApiEnv,
-      true
-    >;
-    const recon = new ReconciliationService(
-      ds,
-      stubConfig,
-      { addInterval: () => undefined } as unknown as SchedulerRegistry,
-      new EconomyMetrics(metrics.getMeter('economy-integration')),
-    );
+    const recon = makeRecon(ds);
 
     expect((await recon.runOnce()).ok).toBe(true);
 
@@ -498,6 +523,78 @@ d('Economy integration (Postgres thật)', () => {
 
     await ledger.rebuildWallet(userA);
     expect((await recon.runOnce()).ok).toBe(true);
+  });
+
+  /** Ghi một transaction lệch/bù lệch BYPASS LedgerService (giả lập bug hoặc SQL tay) — chỉ chân Nợ hoặc chân Có. */
+  async function postSkewed(
+    key: string,
+    direction: 'debit' | 'credit',
+    amount: number,
+    createdAt = 'now()',
+  ): Promise<void> {
+    const [account] = await ds.query<Array<{ id: string }>>(
+      `SELECT id FROM ledger_accounts WHERE kind <> 'user_wallet' AND currency = 'DIA' LIMIT 1`,
+    );
+    const [tx] = await ds.query<Array<{ id: string }>>(
+      `INSERT INTO transactions (type, status, idempotency_key, request_hash, created_at)
+       VALUES ('test_skew', 'completed', $1, repeat('a', 64), ${createdAt}) RETURNING id`,
+      [key],
+    );
+    await ds.query(
+      `INSERT INTO ledger_entries (transaction_id, account_id, direction, amount, currency, created_at)
+       VALUES ($1, $2, $3, $4, 'DIA', ${createdAt})`,
+      [tx.id, account.id, direction, amount],
+    );
+  }
+
+  it('đối soát tăng dần: giao dịch mới được cộng dồn, lệch được phát hiện, bút toán bù thì hết lệch', async () => {
+    const recon = makeRecon(ds);
+    // Lần đầu dựng lại tổng từ toàn bộ lịch sử.
+    expect((await recon.runFast()).ok).toBe(true);
+
+    await economy.creditFromIap(
+      userA,
+      IapProvider.Google,
+      { devTransactionId: 'recon-incremental-1' },
+      'com.litmatch.diamond.100',
+    );
+    // Cửa sổ mới chứa giao dịch vừa nạp (đã cân Nợ=Có) → vẫn cân.
+    expect((await recon.runFast()).ok).toBe(true);
+
+    await postSkewed('recon-skew-1', 'debit', 5);
+    const dirty = await recon.runFast();
+    expect(dirty.ok).toBe(false);
+    expect(dirty.currencyImbalances).toEqual([
+      { currency: 'DIA', imbalance: '5' },
+    ]);
+
+    // Sửa lệch bằng bút toán bù (không sửa/xoá entry cũ — sổ cái append-only).
+    await postSkewed('recon-skew-1-fix', 'credit', 5);
+    expect((await recon.runFast()).ok).toBe(true);
+    // Một instance mới (pod khác giành khoá) dựng lại từ đầu phải cho cùng kết luận.
+    expect((await makeRecon(ds).runFast()).ok).toBe(true);
+  });
+
+  it('transaction commit muộn (created_at đã nằm sau watermark) lọt khỏi lần kiểm tăng dần nhưng bị bắt khi dựng lại định kỳ', async () => {
+    const { config, values } = reconConfig();
+    const recon = makeRecon(ds, config);
+    expect((await recon.runFast()).ok).toBe(true);
+
+    // Transaction "bắt đầu" từ 1 giờ trước (created_at cũ hơn watermark) nhưng chỉ commit bây giờ.
+    await postSkewed('recon-late-1', 'debit', 7, "now() - interval '1 hour'");
+    // Giới hạn đã ghi tài liệu: cửa sổ tăng dần không thấy nó (LAG phải lớn hơn transaction ghi sổ lâu nhất)...
+    expect((await recon.runFast()).ok).toBe(true);
+
+    // ...nhưng lần dựng lại định kỳ từ toàn bộ lịch sử thì thấy.
+    values['ECONOMY_RECONCILIATION_FULL_INTERVAL_MS'] = 0;
+    const rebased = await recon.runFast();
+    expect(rebased.ok).toBe(false);
+    expect(rebased.currencyImbalances).toEqual([
+      { currency: 'DIA', imbalance: '7' },
+    ]);
+
+    await postSkewed('recon-late-1-fix', 'credit', 7);
+    expect((await recon.runFast()).ok).toBe(true);
   });
 
   it('lịch sử giao dịch: cursor pagination + diamondDelta đúng dấu', async () => {
@@ -587,12 +684,7 @@ d('Economy integration (Postgres thật)', () => {
     expect((await economy.getWallet(user.id)).balance).toBe('50'); // -500 + 550
 
     // Bất biến toàn cục vẫn giữ nguyên sau toàn bộ chuỗi refund/nạp bù
-    const recon = new ReconciliationService(
-      ds,
-      { getOrThrow: () => true } as unknown as ConfigService<CoreApiEnv, true>,
-      { addInterval: () => undefined } as unknown as SchedulerRegistry,
-      new EconomyMetrics(metrics.getMeter('economy-integration')),
-    );
+    const recon = makeRecon(ds);
     expect((await recon.runOnce()).ok).toBe(true);
   });
 
@@ -609,12 +701,7 @@ d('Economy integration (Postgres thật)', () => {
         ),
       ),
     );
-    const recon = new ReconciliationService(
-      ds,
-      { getOrThrow: () => true } as unknown as ConfigService<CoreApiEnv, true>,
-      { addInterval: () => undefined } as unknown as SchedulerRegistry,
-      new EconomyMetrics(metrics.getMeter('economy-integration')),
-    );
+    const recon = makeRecon(ds);
     const products = [
       'com.litmatch.diamond.100',
       'com.litmatch.diamond.550',
@@ -673,6 +760,224 @@ d('Economy integration (Postgres thật)', () => {
    * (crash giữa transaction, Kafka chết, 2 pod relay dẫm batch), không chỉ đúng trên giấy.
    * Không mock DB — mọi assert đọc lại từ Postgres thật sau khi lỗi đã xảy ra.
    */
+  describe('Durable reconciliation paging (real Postgres)', () => {
+    const checkpointKey = 'economy-ledger-reconciliation';
+    const options = {
+      lagMs: 0,
+      fullIntervalMs: 86_400_000,
+      batchSize: 1,
+      maxBatches: 1,
+      budgetMs: 10_000,
+    };
+    beforeEach(async () => {
+      await ds.query('DELETE FROM runtime_job_checkpoints WHERE job_key = $1', [
+        checkpointKey,
+      ]);
+    });
+    afterEach(async () => {
+      await ds.query('DELETE FROM runtime_job_checkpoints WHERE job_key = $1', [
+        checkpointKey,
+      ]);
+    });
+
+    it('a replacement worker resumes a partial audit and detects a skew without changing financial history', async () => {
+      await postSkewed('checkpoint-page-skew', 'debit', 11);
+      try {
+        const first = await new LedgerReconciliationCheckpoint(ds).advance(
+          options,
+        );
+        expect(first.complete).toBe(false);
+        expect(first.completedBefore).toBeNull();
+        const completed = await new LedgerReconciliationCheckpoint(ds).advance({
+          ...options,
+          batchSize: 2,
+          maxBatches: 1000,
+        });
+        expect(completed.complete).toBe(true);
+        expect(completed.imbalances).toEqual([
+          { currency: 'DIA', imbalance: '11' },
+        ]);
+        const repeated = await new LedgerReconciliationCheckpoint(ds).advance(
+          options,
+        );
+        expect(repeated.imbalances).toEqual(completed.imbalances);
+      } finally {
+        await postSkewed('checkpoint-page-skew-reversal', 'credit', 11);
+      }
+    });
+
+    it('two workers serialize checkpoint updates and advance two different transaction pages', async () => {
+      const expected = (await ds.query(
+        'SELECT id FROM transactions ORDER BY created_at, id LIMIT 2',
+      )) as Array<{ id: string }>;
+      expect(expected).toHaveLength(2);
+      await Promise.all([
+        new LedgerReconciliationCheckpoint(ds).advance(options),
+        new LedgerReconciliationCheckpoint(ds).advance(options),
+      ]);
+      const [checkpoint] = (await ds.query(
+        'SELECT state FROM runtime_job_checkpoints WHERE job_key = $1',
+        [checkpointKey],
+      )) as Array<{ state: { cursorId: string } }>;
+      expect(checkpoint.state.cursorId).toBe(expected[1].id);
+    });
+
+    it('a failed page commit preserves the prior cursor and sums for a replacement worker', async () => {
+      await new LedgerReconciliationCheckpoint(ds).advance(options);
+      const [before] = await ds.query(
+        'SELECT state FROM runtime_job_checkpoints WHERE job_key = $1',
+        [checkpointKey],
+      );
+      const failing = {
+        transaction: (
+          work: (manager: { query: DataSource['query'] }) => Promise<unknown>,
+        ) =>
+          ds.transaction((manager) =>
+            work({
+              query: async (sql: string, parameters?: unknown[]) => {
+                if (sql.startsWith('UPDATE runtime_job_checkpoints'))
+                  throw new Error('checkpoint commit interrupted');
+                return manager.query(sql, parameters);
+              },
+            }),
+          ),
+      } as unknown as DataSource;
+      await expect(
+        new LedgerReconciliationCheckpoint(failing).advance(options),
+      ).rejects.toThrow('checkpoint commit interrupted');
+      const [after] = await ds.query(
+        'SELECT state FROM runtime_job_checkpoints WHERE job_key = $1',
+        [checkpointKey],
+      );
+      expect(after.state).toEqual(before.state);
+      const resumed = await new LedgerReconciliationCheckpoint(ds).advance({
+        ...options,
+        batchSize: 2,
+        maxBatches: 1000,
+      });
+      expect(resumed.complete).toBe(true);
+      expect(resumed.imbalances).toEqual([]);
+    });
+  });
+
+  describe('Rotating wallet samples (real Postgres)', () => {
+    const checkpointKey = 'economy-wallet-reconciliation';
+    const readCursor = async () => {
+      const [row] = (await ds.query(
+        'SELECT state FROM runtime_job_checkpoints WHERE job_key = $1',
+        [checkpointKey],
+      )) as Array<{ state: { afterUserId: string | null } }>;
+      return row.state;
+    };
+    const orderedWallets = () =>
+      ds.query(
+        'SELECT user_id AS id, balance::text AS balance FROM wallets ORDER BY user_id',
+      ) as Promise<Array<{ id: string; balance: string }>>;
+
+    beforeEach(async () => {
+      await ds.query('DELETE FROM runtime_job_checkpoints WHERE job_key = $1', [
+        checkpointKey,
+      ]);
+    });
+    afterEach(async () => {
+      await ds.query('DELETE FROM runtime_job_checkpoints WHERE job_key = $1', [
+        checkpointKey,
+      ]);
+    });
+
+    it('a replacement sampler visits a cold wallet outside the first page', async () => {
+      const wallets = await orderedWallets();
+      expect(wallets.length).toBeGreaterThanOrEqual(3);
+      const cold = wallets[2];
+      await ds.query(
+        'UPDATE wallets SET balance = balance + 77 WHERE user_id = $1',
+        [cold.id],
+      );
+      try {
+        expect(await new WalletReconciliationSampler(ds).sample(2)).toEqual([]);
+        const next = await new WalletReconciliationSampler(ds).sample(2);
+        expect(next).toEqual(
+          expect.arrayContaining([
+            {
+              userId: cold.id,
+              snapshot: (BigInt(cold.balance) + 77n).toString(),
+              derived: cold.balance,
+            },
+          ]),
+        );
+      } finally {
+        await ds.query('UPDATE wallets SET balance = $2 WHERE user_id = $1', [
+          cold.id,
+          cold.balance,
+        ]);
+      }
+    });
+
+    it('wraps immediately and still detects a mismatch on repeated whole-database samples', async () => {
+      const wallets = await orderedWallets();
+      const first = wallets[0];
+      await ds.query(
+        `INSERT INTO runtime_job_checkpoints (job_key, state) VALUES ($1, $2::jsonb)`,
+        [
+          checkpointKey,
+          JSON.stringify({ afterUserId: wallets[wallets.length - 1].id }),
+        ],
+      );
+      await ds.query(
+        'UPDATE wallets SET balance = balance + 3 WHERE user_id = $1',
+        [first.id],
+      );
+      try {
+        for (let run = 0; run < 2; run++) {
+          const found = await new WalletReconciliationSampler(ds).sample(
+            wallets.length + 1,
+          );
+          expect(found.some((wallet) => wallet.userId === first.id)).toBe(true);
+        }
+      } finally {
+        await ds.query('UPDATE wallets SET balance = $2 WHERE user_id = $1', [
+          first.id,
+          first.balance,
+        ]);
+      }
+    });
+
+    it('two samplers serialize ownership and cover two distinct pages', async () => {
+      const wallets = await orderedWallets();
+      await Promise.all([
+        new WalletReconciliationSampler(ds).sample(1),
+        new WalletReconciliationSampler(ds).sample(1),
+      ]);
+      expect((await readCursor()).afterUserId).toBe(wallets[1].id);
+    });
+
+    it('a failed cursor commit rolls back the page and a replacement samples it again', async () => {
+      const wallets = await orderedWallets();
+      await new WalletReconciliationSampler(ds).sample(1);
+      const before = await readCursor();
+      const failing = {
+        transaction: (
+          work: (manager: { query: DataSource['query'] }) => Promise<unknown>,
+        ) =>
+          ds.transaction((manager) =>
+            work({
+              query: async (sql: string, parameters?: unknown[]) => {
+                if (sql.startsWith('UPDATE runtime_job_checkpoints'))
+                  throw new Error('wallet cursor commit interrupted');
+                return manager.query(sql, parameters);
+              },
+            }),
+          ),
+      } as unknown as DataSource;
+      await expect(
+        new WalletReconciliationSampler(failing).sample(1),
+      ).rejects.toThrow('wallet cursor commit interrupted');
+      expect(await readCursor()).toEqual(before);
+      await new WalletReconciliationSampler(ds).sample(1);
+      expect((await readCursor()).afterUserId).toBe(wallets[1].id);
+    });
+  });
+
   describe('Chaos luồng tiền', () => {
     /** Relay instance với EventBusPort thay thế — flushOnce không đụng config/scheduler. */
     const makeRelay = (
@@ -683,7 +988,13 @@ d('Economy integration (Postgres thật)', () => {
         ds,
         {
           getOrThrow: (key: keyof CoreApiEnv) =>
-            key === 'ECONOMY_OUTBOX_MAX_ATTEMPTS' ? maxAttempts : false,
+            (
+              ({
+                ECONOMY_OUTBOX_MAX_ATTEMPTS: maxAttempts,
+                ECONOMY_OUTBOX_RELAY_MAX_BATCHES_PER_TICK: 10,
+                ECONOMY_OUTBOX_RELAY_TICK_BUDGET_MS: 1000,
+              }) as Partial<Record<keyof CoreApiEnv, number>>
+            )[key] ?? false,
         } as unknown as ConfigService<CoreApiEnv, true>,
         { addInterval: () => undefined } as unknown as SchedulerRegistry,
         eventBus,

@@ -3,3 +3,4 @@ export * from './lib/auth-token';
 export * from './lib/cursor-pagination';
 export * from './lib/realtime-events';
 export * from './lib/realtime-presence';
+export * from './lib/realtime-shards';

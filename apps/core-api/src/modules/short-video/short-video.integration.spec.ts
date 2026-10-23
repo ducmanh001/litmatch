@@ -1,3 +1,4 @@
+import Redis from 'ioredis';
 import { DataSource } from 'typeorm';
 
 import { SnakeNamingStrategy } from '../../database/snake-naming.strategy';
@@ -11,15 +12,19 @@ import { ReportStatus1753800000000 } from '../../database/migrations/17538000000
 import { ReportTargetVideo1754900000000 } from '../../database/migrations/1754900000000-report-target-video';
 import { ShortVideo1754800000000 } from '../../database/migrations/1754800000000-short-video';
 import { VideoStorageCleanupMarker1757800000000 } from '../../database/migrations/1757800000000-video-storage-cleanup-marker';
+import { ShortVideoRankingIndexes1758200000000 } from '../../database/migrations/1758200000000-short-video-ranking-indexes';
+import { VideoRankDue1758700000000 } from '../../database/migrations/1758700000000-video-rank-due';
 
 import { ShortVideoService } from './short-video.service';
 import { ShortVideoErrors } from './short-video.errors';
 import { VideoSweeperService } from './jobs/video-sweeper.service';
 import { VideoRankingService } from './jobs/video-ranking.service';
+import { VideoCounterFlushService } from './jobs/video-counter-flush.service';
 import { Video, VideoStatus } from './entities/video.entity';
 import { VideoView } from './entities/video-view.entity';
 import { VideoComment } from './entities/video-comment.entity';
 import { VideoReaction } from './entities/video-reaction.entity';
+import { RedisVideoCounterBufferAdapter } from './redis/redis-video-counter-buffer.adapter';
 import { DevVideoStorageAdapter } from './ports/dev-video-storage.adapter';
 import { DevVideoTranscodeAdapter } from './ports/dev-video-transcode.adapter';
 import { SafetyService, ReportReason } from '../safety';
@@ -28,6 +33,7 @@ import { Report } from '../safety/entities/report.entity';
 import { User, UserService } from '../user';
 
 import type { ConfigService } from '@nestjs/config';
+import type { VideoCounterBufferPort } from './ports/video-counter-buffer.port';
 import type { SchedulerRegistry } from '@nestjs/schedule';
 import type { CoreApiEnv } from '../../config/env.validation';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
@@ -65,6 +71,14 @@ const CONFIG: Record<string, unknown> = {
   VIDEO_RANK_WEIGHT_COMMENT: 5,
   VIDEO_RANK_TIME_DECAY_HOURS: 48,
   VIDEO_RANKING_JOB_INTERVAL_MS: 1_800_000,
+  VIDEO_RANKING_BATCH_SIZE: 1_000,
+  VIDEO_RANKING_MAX_BATCHES_PER_TICK: 5,
+  VIDEO_RANKING_STALENESS_PCT: 1,
+  VIDEO_RANKING_MAX_INTERVAL_HOURS: 168,
+  VIDEO_RANKING_ACTIVE_REFRESH_SECONDS: 600,
+  VIDEO_COUNTER_BUFFER_ENABLED: false,
+  VIDEO_COUNTER_FLUSH_INTERVAL_MS: 2_000,
+  VIDEO_COUNTER_FLUSH_BATCH: 500,
   NODE_ENV: 'test',
 };
 const configStub = {
@@ -85,6 +99,7 @@ d('short-video integration (Postgres thật)', () => {
   let video: ShortVideoService;
   let sweeper: VideoSweeperService;
   let ranking: VideoRankingService;
+  let makeVideoService: (buffer?: VideoCounterBufferPort) => ShortVideoService;
 
   const auth = (userId: string): AuthenticatedUser => ({
     userId,
@@ -156,7 +171,11 @@ d('short-video integration (Postgres thật)', () => {
         ReportStatus1753800000000,
         ShortVideo1754800000000,
         VideoStorageCleanupMarker1757800000000,
+        ShortVideoRankingIndexes1758200000000,
+        VideoRankDue1758700000000,
       ],
+      // Như data-source production: migration ranking tạo index CONCURRENTLY nên phải ngoài transaction.
+      migrationsTransactionMode: 'each',
       namingStrategy: new SnakeNamingStrategy(),
       synchronize: false,
       dropSchema: true,
@@ -195,6 +214,20 @@ d('short-video integration (Postgres thật)', () => {
       schedulerStub,
     );
     ranking = new VideoRankingService(ds, configStub, schedulerStub);
+    makeVideoService = (buffer) =>
+      new ShortVideoService(
+        ds,
+        ds.getRepository(Video),
+        ds.getRepository(VideoView),
+        ds.getRepository(VideoComment),
+        ds.getRepository(VideoReaction),
+        storagePort,
+        transcodePort,
+        { listFriendIds: async () => [] } as never,
+        safetyService,
+        configStub,
+        buffer,
+      );
   });
 
   afterAll(async () => {
@@ -500,5 +533,549 @@ d('short-video integration (Postgres thật)', () => {
     const ids = page.items.map((v) => v.id);
     expect(ids).toContain(published.id);
     expect(ids).not.toContain(notYetPublished.id);
+  });
+
+  describe('ranking: tính lại theo hạn (rank_due_at), index cho sort=ranked', () => {
+    const withConfig = async (
+      over: Record<string, unknown>,
+      run: () => Promise<void>,
+    ): Promise<void> => {
+      const previous = Object.fromEntries(
+        Object.keys(over).map((key) => [key, CONFIG[key]]),
+      );
+      Object.assign(CONFIG, over);
+      try {
+        await run();
+      } finally {
+        Object.assign(CONFIG, previous);
+      }
+    };
+    const markAllComputed = (interval: string) =>
+      ds.query(
+        `UPDATE videos SET rank_computed_at = now() - interval '${interval}', rank_due_at = now() - interval '${interval}' WHERE status = 'published'`,
+      );
+
+    it('video mới (NULL) được tính điểm TRƯỚC video đã có điểm, kể cả khi lô chỉ có 1; job không đụng updated_at', async () => {
+      const author = await createUser('rank-order-author');
+      await markAllComputed('10 days');
+      const fresh = await uploadAndPublish(author.id);
+      expect(fresh.rankComputedAt).toBeNull();
+
+      await withConfig(
+        { VIDEO_RANKING_BATCH_SIZE: 1, VIDEO_RANKING_MAX_BATCHES_PER_TICK: 1 },
+        async () => {
+          expect(await ranking.runOnce()).toBe(1);
+        },
+      );
+
+      const reloaded = await ds
+        .getRepository(Video)
+        .findOneByOrFail({ id: fresh.id });
+      expect(reloaded.rankComputedAt).not.toBeNull();
+      expect(reloaded.rankScore).not.toBeNull();
+      expect(reloaded.updatedAt.getTime()).toBe(fresh.updatedAt.getTime());
+    });
+
+    it('video có counter tăng liên tục KHÔNG bị xếp cuối hàng chờ: thứ tự theo lần tính điểm gần nhất, cũ nhất trước', async () => {
+      const author = await createUser('rank-stale-author');
+      const liker = await createUser('rank-stale-liker');
+      const stale = await uploadAndPublish(author.id);
+      const recent = await uploadAndPublish(author.id);
+      await markAllComputed('1 day');
+      await ds.query(
+        `UPDATE videos SET rank_computed_at = now() - interval '30 days', rank_due_at = now() - interval '30 days' WHERE id = $1`,
+        [stale.id],
+      );
+      // like làm updated_at của `stale` mới nhất — trước đây điều này đẩy nó xuống cuối hàng chờ
+      await video.like(auth(liker.id), stale.id);
+
+      await withConfig(
+        { VIDEO_RANKING_BATCH_SIZE: 1, VIDEO_RANKING_MAX_BATCHES_PER_TICK: 1 },
+        async () => {
+          await ranking.runOnce();
+        },
+      );
+
+      const [staleAfter, recentAfter] = await Promise.all([
+        ds.getRepository(Video).findOneByOrFail({ id: stale.id }),
+        ds.getRepository(Video).findOneByOrFail({ id: recent.id }),
+      ]);
+      expect(
+        (staleAfter.rankComputedAt as Date).getTime() >
+          (recentAfter.rankComputedAt as Date).getTime(),
+      ).toBe(true); // stale vừa được tính, recent vẫn là mốc cũ (1 ngày trước)
+    });
+
+    it('nhiều lô mỗi tick: dừng khi một lô không đầy, trả tổng số video đã tính', async () => {
+      const author = await createUser('rank-batches-author');
+      await markAllComputed('5 days');
+      const created: Video[] = [];
+      for (let i = 0; i < 5; i += 1)
+        created.push(await uploadAndPublish(author.id));
+
+      let processed = 0;
+      await withConfig(
+        { VIDEO_RANKING_BATCH_SIZE: 2, VIDEO_RANKING_MAX_BATCHES_PER_TICK: 3 },
+        async () => {
+          processed = await ranking.runOnce();
+        },
+      );
+
+      expect(processed).toBe(6); // 2 + 2 + 2 (tối đa 3 lô) — 5 video mới + 1 video cũ nhất
+      const [row] = (await ds.query(
+        `SELECT count(*)::int AS n FROM videos WHERE id = ANY($1) AND rank_computed_at IS NOT NULL`,
+        [created.map((item) => item.id)],
+      )) as Array<{ n: number }>;
+      expect(row?.n).toBe(5);
+    });
+
+    it('catalogue nhỏ hơn lô × số lô: mỗi video chỉ được tính MỘT lần mỗi tick (không ghi lặp), vòng lặp dừng sớm', async () => {
+      const author = await createUser('rank-once-author');
+      await markAllComputed('3 days');
+      for (let i = 0; i < 3; i += 1) await uploadAndPublish(author.id);
+      const [{ n }] = (await ds.query(
+        `SELECT count(*)::int AS n FROM videos WHERE status = 'published'`,
+      )) as Array<{ n: number }>;
+
+      let processed = 0;
+      await withConfig(
+        {
+          VIDEO_RANKING_BATCH_SIZE: 2,
+          VIDEO_RANKING_MAX_BATCHES_PER_TICK: 100,
+        },
+        async () => {
+          processed = await ranking.runOnce();
+        },
+      );
+
+      // Trước khi sửa: lô nào cũng đầy (còn ≥ 2 video) nên chạy đủ 100 lô × 2 = 200 lần ghi.
+      expect(processed).toBe(n);
+    });
+
+    it('khoảng tính lại tỉ lệ với (decay + tuổi): video mới ~29 phút, video 100 ngày ~1 ngày, trần theo VIDEO_RANKING_MAX_INTERVAL_HOURS', async () => {
+      const author = await createUser('rank-due-author');
+      await markAllComputed('10 days');
+      const fresh = await uploadAndPublish(author.id);
+      const old = await uploadAndPublish(author.id);
+      await ds.query(
+        `UPDATE videos SET created_at = now() - interval '100 days' WHERE id = $1`,
+        [old.id],
+      );
+      const interval = async (id: string): Promise<number> =>
+        Number(
+          (
+            (await ds.query(
+              `SELECT EXTRACT(EPOCH FROM (rank_due_at - rank_computed_at)) AS s FROM videos WHERE id = $1`,
+              [id],
+            )) as Array<{ s: string }>
+          )[0]?.s,
+        );
+
+      await ranking.runOnce();
+
+      // 1% × (48 giờ + tuổi): video mới 0,48 giờ; video 100 ngày (2.400 giờ) 24,48 giờ.
+      expect(await interval(fresh.id)).toBeCloseTo(0.48 * 3600, -1);
+      expect(await interval(old.id)).toBeCloseTo(24.48 * 3600, -1);
+
+      // Trần: video cũ không bao giờ bị hoãn quá VIDEO_RANKING_MAX_INTERVAL_HOURS.
+      await ds.query(`UPDATE videos SET rank_due_at = NULL WHERE id = $1`, [
+        old.id,
+      ]);
+      await withConfig({ VIDEO_RANKING_MAX_INTERVAL_HOURS: 2 }, async () => {
+        await ranking.runOnce();
+      });
+      expect(await interval(old.id)).toBeCloseTo(2 * 3600, -1);
+    });
+
+    it('video chưa đến hạn không được tính lại; đến hạn thì được tính đúng một lần mỗi tick', async () => {
+      const author = await createUser('rank-notdue-author');
+      const target = await uploadAndPublish(author.id);
+      await ds.query(
+        `UPDATE videos SET rank_due_at = now() + interval '1 day' WHERE status = 'published'`,
+      );
+      expect(await ranking.runOnce()).toBe(0);
+
+      await ds.query(
+        `UPDATE videos SET rank_due_at = now() - interval '1 minute' WHERE id = $1`,
+        [target.id],
+      );
+      expect(await ranking.runOnce()).toBe(1);
+      expect(await ranking.runOnce()).toBe(0); // hạn mới nằm trong tương lai
+    });
+
+    it('counter đổi kéo hạn về ≤ now + VIDEO_RANKING_ACTIVE_REFRESH_SECONDS; lần đổi kế tiếp trong khoảng đó không đổi hạn nữa', async () => {
+      const author = await createUser('rank-active-author');
+      const liker = await createUser('rank-active-liker');
+      const liker2 = await createUser('rank-active-liker2');
+      const published = await uploadAndPublish(author.id);
+      await ds.query(
+        `UPDATE videos SET rank_due_at = now() + interval '3 days' WHERE id = $1`,
+        [published.id],
+      );
+      const dueIn = async (): Promise<number> =>
+        Number(
+          (
+            (await ds.query(
+              `SELECT EXTRACT(EPOCH FROM (rank_due_at - now())) AS s FROM videos WHERE id = $1`,
+              [published.id],
+            )) as Array<{ s: string }>
+          )[0]?.s,
+        );
+
+      await video.like(auth(liker.id), published.id);
+      const afterFirst = await dueIn();
+      expect(afterFirst).toBeLessThanOrEqual(600);
+      expect(afterFirst).toBeGreaterThan(500);
+
+      const before = (
+        (await ds.query(`SELECT rank_due_at FROM videos WHERE id = $1`, [
+          published.id,
+        ])) as Array<{ rank_due_at: Date }>
+      )[0]?.rank_due_at;
+      await video.like(auth(liker2.id), published.id);
+      const after = (
+        (await ds.query(`SELECT rank_due_at FROM videos WHERE id = $1`, [
+          published.id,
+        ])) as Array<{ rank_due_at: Date }>
+      )[0]?.rank_due_at;
+      expect(after.getTime()).toBe(before.getTime());
+      expect(
+        (await ds.getRepository(Video).findOneByOrFail({ id: published.id }))
+          .likeCount,
+      ).toBe(2);
+    });
+
+    it('sort=ranked phân trang đúng theo (rank_score DESC, id DESC) — không trùng/không sót — và câu truy vấn dùng idx_videos_ranked', async () => {
+      const author = await createUser('rank-page-author');
+      const created: Video[] = [];
+      for (let i = 0; i < 5; i += 1)
+        created.push(await uploadAndPublish(author.id));
+      await ranking.runOnce();
+
+      const seen: Video[] = [];
+      let cursor: string | undefined;
+      for (let page = 0; page < 50; page += 1) {
+        const result = await video.listPublished({
+          limit: 2,
+          sort: 'ranked',
+          cursor,
+        });
+        seen.push(...result.items);
+        cursor = result.meta.nextCursor ?? undefined;
+        if (cursor === undefined) break;
+      }
+      const ids = seen.map((item) => item.id);
+      expect(new Set(ids).size).toBe(ids.length);
+      for (const item of created) expect(ids).toContain(item.id);
+      const scores = seen.map((item) => item.rankScore as number);
+      expect([...scores].sort((a, b) => b - a)).toEqual(scores);
+
+      const queryRunner = ds.createQueryRunner();
+      await queryRunner.connect();
+      try {
+        await queryRunner.query('SET enable_seqscan = off');
+        const plan = (await queryRunner.query(
+          `EXPLAIN SELECT v.id FROM videos v WHERE v.status = 'published' AND v.rank_score IS NOT NULL
+             ORDER BY v.rank_score DESC, v.id DESC LIMIT 21`,
+        )) as Array<{ 'QUERY PLAN': string }>;
+        expect(plan.map((row) => row['QUERY PLAN']).join('\n')).toContain(
+          'idx_videos_ranked',
+        );
+      } finally {
+        await queryRunner.release();
+      }
+    });
+  });
+
+  describe('hàng chờ duyệt và xoá comment (sửa lỗi phân trang / trừ đếm hai lần)', () => {
+    it('listPendingReview phân trang ASC đi tiếp bằng cursor `>`: đủ hàng, không lặp trang 1', async () => {
+      const author = await createUser('pending-page-author');
+      const mine: string[] = [];
+      for (let i = 0; i < 5; i += 1) {
+        const { video: created } = await video.createUploadIntent(
+          auth(author.id),
+          {},
+          `pending-page-${author.id}-${i}`,
+        );
+        await video.finalizeUpload(auth(author.id), created.id);
+        mine.push(created.id);
+      }
+
+      const seen: Video[] = [];
+      let cursor: string | undefined;
+      for (let page = 0; page < 50; page += 1) {
+        const result = await video.listPendingReview({ limit: 2, cursor });
+        seen.push(...result.items);
+        cursor = result.meta.nextCursor ?? undefined;
+        if (cursor === undefined) break;
+      }
+
+      const ids = seen.map((item) => item.id);
+      expect(new Set(ids).size).toBe(ids.length); // trước đây trang 2 lặp trang 1
+      for (const id of mine) expect(ids).toContain(id);
+      const times = seen.map((item) => item.createdAt.getTime());
+      expect([...times].sort((a, b) => a - b)).toEqual(times); // cũ nhất trước
+    });
+
+    it('xoá comment bấm đúp/đồng thời chỉ trừ commentCount MỘT lần (không âm)', async () => {
+      const author = await createUser('del-comment-author');
+      const published = await uploadAndPublish(author.id);
+      const comment = await video.createComment(
+        auth(author.id),
+        published.id,
+        'xoá hai lần',
+      );
+
+      const results = await Promise.allSettled([
+        video.deleteComment(auth(author.id), published.id, comment.id),
+        video.deleteComment(auth(author.id), published.id, comment.id),
+      ]);
+
+      expect(results.some((result) => result.status === 'fulfilled')).toBe(
+        true,
+      );
+      const reloaded = await ds
+        .getRepository(Video)
+        .findOneByOrFail({ id: published.id });
+      expect(reloaded.commentCount).toBe(0);
+    });
+  });
+
+  describe('counter đệm trên Redis (VIDEO_COUNTER_BUFFER_ENABLED)', () => {
+    const REDIS_URL = process.env['REDIS_URL'] ?? 'redis://localhost:6379';
+    let redis: Redis;
+    let buffer: RedisVideoCounterBufferAdapter;
+    let buffered: ShortVideoService;
+    let flush: VideoCounterFlushService;
+
+    const counts = async (id: string) => {
+      const row = await ds.getRepository(Video).findOneByOrFail({ id });
+      return {
+        views: row.viewCount,
+        likes: row.likeCount,
+        comments: row.commentCount,
+      };
+    };
+
+    beforeAll(() => {
+      redis = new Redis(REDIS_URL, { maxRetriesPerRequest: 1 });
+    });
+
+    afterAll(async () => {
+      await redis.quit();
+    });
+
+    beforeEach(() => {
+      // Tiền tố riêng mỗi test: không ăn nhầm delta của test khác trên cùng Redis
+      buffer = new RedisVideoCounterBufferAdapter(
+        redis,
+        `video:counter:test:${Math.random().toString(36).slice(2)}:`,
+      );
+      buffered = makeVideoService(buffer);
+      flush = new VideoCounterFlushService(
+        ds,
+        configStub,
+        schedulerStub,
+        buffer,
+      );
+    });
+
+    it('like/comment/view qualified KHÔNG ghi videos ngay; flush gom thành một lần cập nhật đúng số lượng', async () => {
+      const author = await createUser('buf-author');
+      const published = await uploadAndPublish(author.id);
+      const users = await Promise.all(
+        Array.from({ length: 5 }, (_, i) => createUser(`buf-liker-${i}`)),
+      );
+
+      for (const user of users) {
+        await buffered.like(auth(user.id), published.id);
+      }
+      await buffered.createComment(
+        auth((users[0] as User).id),
+        published.id,
+        'hay',
+      );
+      await buffered.recordView(
+        auth((users[1] as User).id),
+        published.id,
+        5_000,
+      );
+
+      expect(await counts(published.id)).toEqual({
+        views: 0,
+        likes: 0,
+        comments: 0,
+      });
+      expect(await flush.runOnce()).toBe(1); // một video, dù có 7 lượt
+      expect(await counts(published.id)).toEqual({
+        views: 1,
+        likes: 5,
+        comments: 1,
+      });
+      expect(await flush.runOnce()).toBe(0); // đã drain hết
+    });
+
+    it('flush counter cũng kéo hạn tính lại về ≤ now + VIDEO_RANKING_ACTIVE_REFRESH_SECONDS', async () => {
+      const author = await createUser('buf-due-author');
+      const liker = await createUser('buf-due-liker');
+      const published = await uploadAndPublish(author.id);
+      await ds.query(
+        `UPDATE videos SET rank_due_at = now() + interval '3 days' WHERE id = $1`,
+        [published.id],
+      );
+
+      await buffered.like(auth(liker.id), published.id);
+      await flush.runOnce();
+
+      const [row] = (await ds.query(
+        `SELECT EXTRACT(EPOCH FROM (rank_due_at - now())) AS s FROM videos WHERE id = $1`,
+        [published.id],
+      )) as Array<{ s: string }>;
+      expect(Number(row?.s)).toBeLessThanOrEqual(600);
+    });
+
+    it('unlike và xoá comment trừ qua bộ đệm; counter không âm; like replay (unique) không đệm lần hai', async () => {
+      const author = await createUser('buf-dec-author');
+      const liker = await createUser('buf-dec-liker');
+      const published = await uploadAndPublish(author.id);
+
+      await buffered.like(auth(liker.id), published.id);
+      await buffered.like(auth(liker.id), published.id); // replay: unique chặn, KHÔNG đệm thêm
+      const comment = await buffered.createComment(
+        auth(liker.id),
+        published.id,
+        'x',
+      );
+      await flush.runOnce();
+      expect(await counts(published.id)).toEqual({
+        views: 0,
+        likes: 1,
+        comments: 1,
+      });
+
+      await buffered.unlike(auth(liker.id), published.id);
+      await buffered.deleteComment(auth(liker.id), published.id, comment.id);
+      await flush.runOnce();
+      expect(await counts(published.id)).toEqual({
+        views: 0,
+        likes: 0,
+        comments: 0,
+      });
+
+      // unlike khi chưa like → không đệm, không âm
+      await buffered.unlike(auth(liker.id), published.id);
+      await flush.runOnce();
+      expect((await counts(published.id)).likes).toBe(0);
+    });
+
+    it('Redis lỗi khi đệm → fail-open: cộng thẳng vào DB ngay (hành vi cũ)', async () => {
+      const author = await createUser('buf-open-author');
+      const liker = await createUser('buf-open-liker');
+      const published = await uploadAndPublish(author.id);
+      const broken = {
+        enabled: true,
+        add: () => Promise.reject(new Error('redis down')),
+        drain: async () => [],
+        restore: async () => undefined,
+      } as unknown as VideoCounterBufferPort;
+      const failOpen = makeVideoService(broken);
+
+      await failOpen.like(auth(liker.id), published.id);
+
+      expect((await counts(published.id)).likes).toBe(1);
+    });
+
+    it('flush DB lỗi → delta được cộng lại, tick sau áp đủ (không mất, không áp đôi)', async () => {
+      const author = await createUser('buf-retry-author');
+      const liker = await createUser('buf-retry-liker');
+      const published = await uploadAndPublish(author.id);
+      await buffered.like(auth(liker.id), published.id);
+      const flaky = {
+        query: jest
+          .fn()
+          .mockRejectedValueOnce(new Error('db down'))
+          .mockImplementation((sql: string, params: unknown[]) =>
+            ds.query(sql, params),
+          ),
+      };
+      const flakyFlush = new VideoCounterFlushService(
+        flaky as never,
+        configStub,
+        schedulerStub,
+        buffer,
+      );
+
+      await expect(flakyFlush.runOnce()).rejects.toThrow('db down');
+      expect((await counts(published.id)).likes).toBe(0);
+
+      expect(await flakyFlush.runOnce()).toBe(1);
+      expect((await counts(published.id)).likes).toBe(1);
+      expect(await flakyFlush.runOnce()).toBe(0);
+    });
+
+    it('nhiều video trong một lô chỉ tốn MỘT câu UPDATE; lô vượt VIDEO_COUNTER_FLUSH_BATCH chia nhiều lượt drain', async () => {
+      const author = await createUser('buf-batch-author');
+      const liker = await createUser('buf-batch-liker');
+      const videos = [
+        await uploadAndPublish(author.id),
+        await uploadAndPublish(author.id),
+        await uploadAndPublish(author.id),
+      ];
+      for (const item of videos) await buffered.like(auth(liker.id), item.id);
+      const spy = jest.spyOn(ds, 'query');
+
+      expect(await flush.runOnce()).toBe(3);
+      expect(
+        spy.mock.calls.filter(([sql]) => String(sql).includes('UPDATE videos')),
+      ).toHaveLength(1);
+      spy.mockRestore();
+
+      for (const item of videos) await buffered.unlike(auth(liker.id), item.id);
+      const previous = CONFIG['VIDEO_COUNTER_FLUSH_BATCH'];
+      CONFIG['VIDEO_COUNTER_FLUSH_BATCH'] = 2; // 3 video → lượt drain 2 + 1
+      const batchedSpy = jest.spyOn(ds, 'query');
+      try {
+        expect(await flush.runOnce()).toBe(3);
+        expect(
+          batchedSpy.mock.calls.filter(([sql]) =>
+            String(sql).includes('UPDATE videos'),
+          ),
+        ).toHaveLength(2);
+      } finally {
+        CONFIG['VIDEO_COUNTER_FLUSH_BATCH'] = previous;
+        batchedSpy.mockRestore();
+      }
+      for (const item of videos) {
+        expect((await counts(item.id)).likes).toBe(0);
+      }
+    });
+
+    it('adapter: drain trả đủ delta nhiều video và xoá chúng; restore cộng lại', async () => {
+      await buffer.add('00000000-0000-4000-8000-000000000001', 'like', 3);
+      await buffer.add('00000000-0000-4000-8000-000000000001', 'comment', -1);
+      await buffer.add('00000000-0000-4000-8000-000000000002', 'view', 2);
+
+      const drained = await buffer.drain(10);
+
+      expect(
+        [...drained].sort((a, b) => a.videoId.localeCompare(b.videoId)),
+      ).toEqual([
+        {
+          videoId: '00000000-0000-4000-8000-000000000001',
+          views: 0,
+          likes: 3,
+          comments: -1,
+        },
+        {
+          videoId: '00000000-0000-4000-8000-000000000002',
+          views: 2,
+          likes: 0,
+          comments: 0,
+        },
+      ]);
+      expect(await buffer.drain(10)).toEqual([]);
+      await buffer.restore(drained);
+      expect((await buffer.drain(10)).length).toBe(2);
+    });
   });
 });

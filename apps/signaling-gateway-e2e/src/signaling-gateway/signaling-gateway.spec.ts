@@ -18,7 +18,12 @@ describe('GET /health', () => {
     expect(live.status).toBe(200);
     expect(ready.data).toEqual({
       status: 'ok',
-      checks: { redisSubscription: 'up', redisClusterAdapter: 'up' },
+      // Không đặt REALTIME_REDIS_URLS → một shard (REDIS_URL): "đang phục vụ/tổng" = 1/1.
+      checks: {
+        redisSubscription: 'up',
+        redisClusterAdapter: 'up',
+        realtimeShards: '1/1',
+      },
     });
   });
 });

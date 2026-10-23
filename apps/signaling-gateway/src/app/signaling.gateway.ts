@@ -11,16 +11,19 @@ import {
 } from '@nestjs/websockets';
 import {
   RealtimeConnectionErrors,
-  REALTIME_USER_CHANNEL_PATTERN,
+  parseRealtimeRedisUrls,
   parseRealtimeUserChannel,
 } from '@litmatch/common-dtos';
 import { captureSentryException } from '@litmatch/observability';
 import { randomUUID } from 'node:crypto';
-import Redis from 'ioredis';
 
+import { ConnectionAdmissionBudget } from './connection-admission-budget';
 import { ConnectionQuotaService } from './connection-quota.service';
 import { verifyJwtWithRotation } from './jwt-rotation';
-import { signalingRedisClientOptions } from './redis-client-options';
+import { LeaseRefresher } from './lease-refresher';
+import { OutboundBudget, OutboundTotalBudget } from './outbound-budget';
+import { RealtimeFanout } from './realtime-fanout';
+import { SignalingMetrics } from './signaling.metrics';
 import type { Namespace, Socket } from 'socket.io';
 import type {
   AccessTokenPayload,
@@ -35,6 +38,16 @@ function userRoom(userId: string): string {
 
 const CONNECTION_LIMIT_ERROR = 'CONNECTION_LIMIT';
 const CONNECTION_QUOTA_UNAVAILABLE_ERROR = 'CONNECTION_QUOTA_UNAVAILABLE';
+
+interface SocketData {
+  capacityCleanup?: () => void;
+  userId?: string;
+  quotaLeaseId?: string;
+  quotaPreconnectCleanup?: () => void;
+  fanoutUserId?: string;
+  fanoutPreconnectCleanup?: () => void;
+  connectionCounted?: boolean;
+}
 
 /**
  * Tầng fanout realtime (docs/services/realtime-gateway.md, docs/03 § 3.3): gateway KHÔNG chứa
@@ -52,16 +65,24 @@ export class SignalingGateway
     OnModuleDestroy
 {
   private readonly logger = new Logger(SignalingGateway.name);
-  /** Connection Redis RIÊNG cho subscribe — ioredis ở chế độ subscriber không dùng được lệnh khác. */
-  private subscriber?: Redis;
-  private subscriptionReady = false;
-  private subscriptionInFlight?: Promise<void>;
-  private readonly activeQuotaLeases = new Map<
+  /** Subscribe Redis theo shard — dựng ở `afterInit` (cần config + server đã có). */
+  private fanout?: RealtimeFanout;
+  /** Một timer gia hạn lease cho mọi socket của pod. */
+  private refresher?: LeaseRefresher;
+  private readonly activeLeases = new Map<
     string,
-    { userId: string; timer: NodeJS.Timeout; client: Socket }
+    { userId: string; client: Socket }
   >();
-  private stopQuotaUnavailableListener?: () => void;
   private shuttingDown = false;
+  private readonly admissionBudget: ConnectionAdmissionBudget;
+  private readonly admittedClients = new Set<Socket>();
+  private readonly outboundBudgets = new WeakMap<
+    Socket['conn'],
+    OutboundBudget
+  >();
+  private readonly outboundMaxPackets: number;
+  private readonly outboundMaxBytes: number;
+  private readonly outboundTotal: OutboundTotalBudget;
 
   @WebSocketServer()
   private readonly server!: Namespace;
@@ -73,92 +94,153 @@ export class SignalingGateway
     private readonly jwtService: JwtService,
     private readonly config: ConfigService<SignalingEnv, true>,
     private readonly connectionQuota: ConnectionQuotaService,
+    private readonly metrics: SignalingMetrics,
   ) {
+    this.admissionBudget = new ConnectionAdmissionBudget(
+      config.get('WS_MAX_CONNECTIONS_PER_PROCESS', { infer: true }) ?? 2_000,
+      config.get('WS_MAX_CONCURRENT_HANDSHAKES', { infer: true }) ?? 64,
+    );
     this.previousJwtSecret =
       config.get('JWT_SECRET_PREVIOUS', { infer: true }) || undefined;
+    this.outboundMaxPackets =
+      config.get('WS_OUTBOUND_MAX_PACKETS', { infer: true }) ?? 128;
+    this.outboundMaxBytes =
+      config.get('WS_OUTBOUND_MAX_BYTES', { infer: true }) ?? 1_048_576;
+    this.outboundTotal = new OutboundTotalBudget(
+      config.get('WS_OUTBOUND_TOTAL_MAX_PACKETS', { infer: true }) ?? 16_384,
+      config.get('WS_OUTBOUND_TOTAL_MAX_BYTES', { infer: true }) ?? 134_217_728,
+      (result) => {
+        this.metrics.outboundPressure(result);
+        if (result === 'evicted') this.metrics.slowConsumer();
+      },
+    );
+    this.metrics.bindOutboundGauges(this.outboundTotal);
   }
 
   afterInit(server: Namespace): void {
-    this.stopQuotaUnavailableListener = this.connectionQuota.onUnavailable(() =>
-      this.disconnectActiveQuotaSockets(),
-    );
-    // Middleware handshake: connection KHÔNG token hợp lệ bị từ chối trước khi thành socket
+    // Middleware handshake: connection KHÔNG token hợp lệ bị từ chối trước khi thành socket.
+    // Thứ tự: JWT → quota lease → subscribe Redis. Subscribe xong mới báo `connect`, nên mọi event
+    // publish sau khi client thấy `connect` đều tới được pod này.
     server.use((socket, next) => {
-      if (this.shuttingDown) {
-        next(new Error(CONNECTION_QUOTA_UNAVAILABLE_ERROR));
-        return;
-      }
-      void this.authenticate(socket)
-        .then(async () => {
-          const userId = (socket.data as { userId?: string }).userId;
-          if (!userId) throw new Error(RealtimeConnectionErrors.Unauthorized);
-          if (!(await this.admitConnection(socket, userId))) {
-            throw new Error(CONNECTION_LIMIT_ERROR);
-          }
-          next();
-        })
-        .catch((err: Error) => next(err));
+      this.admit(socket).then(
+        () => next(),
+        (error: Error) => next(error),
+      );
     });
 
-    this.subscriber = new Redis(
-      this.config.getOrThrow('REDIS_URL', { infer: true }),
-      signalingRedisClientOptions(),
-    );
-    this.subscriber.on('ready', () => this.ensureSubscribed());
-    this.subscriber.on('close', () => {
-      this.subscriptionReady = false;
+    this.fanout = new RealtimeFanout({
+      urls: parseRealtimeRedisUrls(
+        this.config.get('REALTIME_REDIS_URLS', { infer: true }),
+        this.config.getOrThrow('REDIS_URL', { infer: true }),
+      ),
+      mode: this.config.get('WS_FANOUT_MODE', { infer: true }) ?? 'user',
+      onEvent: (channel, raw) => this.relay(channel, raw),
+      logger: this.logger,
+      onError: captureSentryException,
     });
-    this.subscriber.on('end', () => {
-      this.subscriptionReady = false;
+
+    const leaseMs = this.connectionQuota.leaseMs;
+    const configuredRefreshMs =
+      this.config.get('WS_CONNECTION_LEASE_REFRESH_MS', { infer: true }) ?? 0;
+    // Gia hạn nhiều hơn một nửa lease thì chỉ còn một cơ hội thử lại trước khi hết hạn.
+    const maxRefreshMs = Math.floor(leaseMs / 2);
+    if (configuredRefreshMs > maxRefreshMs) {
+      this.logger.warn(
+        `WS_CONNECTION_LEASE_REFRESH_MS=${configuredRefreshMs} vượt một nửa WS_CONNECTION_LEASE_MS; dùng ${maxRefreshMs}`,
+      );
+    }
+    this.refresher = new LeaseRefresher({
+      quota: this.connectionQuota,
+      leaseMs,
+      refreshMs:
+        configuredRefreshMs > 0
+          ? Math.min(configuredRefreshMs, maxRefreshMs)
+          : Math.floor(leaseMs / 3),
+      onOutcomes: (outcome, count) => this.metrics.leaseRefresh(outcome, count),
+      onError: (error) => {
+        this.logger.warn(
+          `Gia hạn lease gặp lỗi không lường trước: ${String(error)}`,
+        );
+        captureSentryException(error, 'signaling-lease-refresher');
+      },
     });
-    this.subscriber.on('pmessage', (_pattern, channel, raw) =>
-      this.relay(channel, raw),
-    );
+    this.refresher.start();
+    this.metrics.bindGauges({
+      fanoutUsers: () => this.fanout?.subscribedUsers ?? 0,
+      trackedLeases: () => this.refresher?.size ?? 0,
+      shardsReady: () => this.shardStatus().serving,
+      shardsTotal: () => this.connectionQuota.shardCount,
+      reservedConnections: () => this.admissionBudget.connections,
+      pendingHandshakes: () => this.admissionBudget.pendingHandshakes,
+    });
   }
 
   async onModuleDestroy(): Promise<void> {
     this.shuttingDown = true;
-    this.subscriptionReady = false;
-    this.stopQuotaUnavailableListener?.();
-    this.stopQuotaUnavailableListener = undefined;
-    const leases = [...this.activeQuotaLeases.entries()];
-    this.activeQuotaLeases.clear();
-    await Promise.allSettled(
-      leases.map(([leaseId, { userId, timer, client }]) => {
-        clearInterval(timer);
-        // Stop the transport before freeing its global slot. Nest disposes Socket.IO only after
-        // module-destroy hooks, so release-first would temporarily admit >3 across replicas.
-        client.disconnect(true);
-        return this.connectionQuota.release(userId, leaseId);
-      }),
-    );
-    const subscriber = this.subscriber;
-    this.subscriber = undefined;
-    if (!subscriber) return;
-
-    try {
-      await subscriber.quit();
-    } catch {
-      // `quit()` không gửi được khi Redis đang reconnect (offline queue đã tắt). Đóng cưỡng bức
-      // để retry timer/socket không giữ process sống sau shutdown.
-      subscriber.disconnect();
+    this.admissionBudget.close();
+    this.refresher?.stop();
+    // Trước khi ngắt socket: mỗi socket rời sẽ không còn kéo theo một lệnh UNSUBSCRIBE riêng.
+    this.fanout?.beginClose();
+    const leases = [...this.activeLeases.entries()];
+    this.activeLeases.clear();
+    // Stop the transport before freeing its global slot. Nest disposes Socket.IO only after
+    // module-destroy hooks, so release-first would temporarily admit >3 across replicas.
+    const clients = new Set([
+      ...this.admittedClients,
+      ...leases.map(([, { client }]) => client),
+    ]);
+    for (const client of clients) {
+      client.conn.close(true);
+      this.releaseCapacity(client);
     }
+    await this.connectionQuota.releaseMany(
+      leases.map(([leaseId, { userId }]) => ({ userId, leaseId })),
+    );
+    const fanout = this.fanout;
+    this.fanout = undefined;
+    await fanout?.close();
   }
 
-  /** Readiness thật: Redis đã kết nối VÀ pattern fanout đã subscribe thành công. */
+  /**
+   * Readiness thật: ít nhất MỘT shard Redis phục vụ được (lease đã kết nối VÀ subscription mong muốn
+   * đã có hiệu lực). Một shard hỏng chỉ làm user của shard đó fail closed lúc handshake (`admit`); nếu
+   * pod bị rút khỏi load balancer vì một shard thì CẢ gateway ngừng phục vụ, kể cả user ở các shard
+   * còn lại, và nhiều pod mới cũng không khởi động nổi để gánh tải. Mức suy giảm được báo bằng
+   * `signaling_redis_shards_ready` / `_total` (alert khi ready < total).
+   */
   isReady(): boolean {
-    return (
-      this.subscriber?.status === 'ready' &&
-      this.subscriptionReady &&
-      this.connectionQuota.isReady()
-    );
+    return !this.shuttingDown && this.shardStatus().serving >= 1;
+  }
+
+  /**
+   * Số shard mà CẢ lease lẫn fanout đều sẵn sàng (handshake của user thuộc shard đó mới thành công)
+   * trên tổng số shard cấu hình.
+   */
+  shardStatus(): { serving: number; total: number } {
+    const fanout = this.fanout;
+    const total = this.connectionQuota.shardCount;
+    if (!fanout) return { serving: 0, total };
+    let serving = 0;
+    for (let shard = 0; shard < total; shard += 1) {
+      if (
+        fanout.isShardReady(shard) &&
+        this.connectionQuota.isShardReady(shard)
+      ) {
+        serving += 1;
+      }
+    }
+    return { serving, total };
   }
 
   handleConnection(client: Socket): void {
-    const data = client.data as {
-      userId?: string;
-      quotaPreconnectCleanup?: () => void;
-    };
+    if (this.shuttingDown || client.conn.readyState === 'closed') {
+      this.abortQuotaAdmission(client);
+      this.releaseFanout(client);
+      this.releaseCapacity(client);
+      client.conn.close(true);
+      return;
+    }
+    const data = client.data as SocketData;
     const userId = data.userId;
     if (!userId) {
       // middleware đã chặn — tới đây là bug, ngắt để không có socket "vô danh" nhận event
@@ -169,39 +251,93 @@ export class SignalingGateway
       client.conn.off('close', data.quotaPreconnectCleanup);
       data.quotaPreconnectCleanup = undefined;
     }
-    this.startLeaseRefresh(client, userId);
+    if (data.fanoutPreconnectCleanup) {
+      client.conn.off('close', data.fanoutPreconnectCleanup);
+      data.fanoutPreconnectCleanup = undefined;
+    }
+    if (!this.trackLease(client, userId)) return;
     void client.join(userRoom(userId));
+    data.connectionCounted = true;
+    this.metrics.connectionOpened();
     this.logger.debug(`User ${userId} connected: ${client.id}`);
   }
 
   handleDisconnect(client: Socket): void {
-    const data = client.data as {
-      userId?: string;
-      quotaLeaseId?: string;
-      quotaRefreshTimer?: NodeJS.Timeout;
-    };
-    if (data.quotaRefreshTimer) {
-      clearInterval(data.quotaRefreshTimer);
-      data.quotaRefreshTimer = undefined;
+    this.releaseCapacity(client);
+    const data = client.data as SocketData;
+    if (data.connectionCounted) {
+      data.connectionCounted = false;
+      this.metrics.connectionClosed();
     }
-    if (data.quotaLeaseId && data.userId) {
-      const leaseId = data.quotaLeaseId;
-      this.activeQuotaLeases.delete(leaseId);
+    const leaseId = data.quotaLeaseId;
+    if (leaseId && data.userId) {
+      this.refresher?.remove(leaseId);
+      this.activeLeases.delete(leaseId);
       data.quotaLeaseId = undefined;
-      void this.connectionQuota.release(data.userId, leaseId).catch((error) => {
-        // Fail-safe: lease có TTL nên replica crash/Redis outage không giữ slot vĩnh viễn.
-        this.logger.warn(
-          `Không thể release connection quota: ${String(error)}`,
-        );
-        captureSentryException(error, 'signaling-connection-quota-release');
-      });
+      // Khi shutdown, `onModuleDestroy` release cả lô bằng pipeline — không release từng socket.
+      if (!this.shuttingDown) {
+        void this.connectionQuota
+          .release(data.userId, leaseId)
+          .catch((error) => {
+            // Fail-safe: lease có TTL nên replica crash/Redis outage không giữ slot vĩnh viễn.
+            this.logger.warn(
+              `Không thể release connection quota: ${String(error)}`,
+            );
+            captureSentryException(error, 'signaling-connection-quota-release');
+          });
+      }
     }
+    this.releaseFanout(client);
     this.logger.debug(`Client disconnected: ${client.id}`);
   }
 
   @SubscribeMessage('ping')
   ping(): { event: string; data: string } {
     return { event: 'pong', data: 'pong' };
+  }
+
+  /** Thân middleware handshake (public để unit test): JWT → quota lease → subscribe Redis. */
+  async admit(client: Socket): Promise<void> {
+    if (this.shuttingDown) throw new Error(CONNECTION_QUOTA_UNAVAILABLE_ERROR);
+    const admission = this.admissionBudget.reserve();
+    if (!admission) throw new Error(CONNECTION_QUOTA_UNAVAILABLE_ERROR);
+    const data = client.data as SocketData;
+    const cleanup = () => {
+      admission.releaseConnection();
+      this.admittedClients.delete(client);
+      client.conn.off('close', cleanup);
+      if (data.capacityCleanup === cleanup) data.capacityCleanup = undefined;
+    };
+    data.capacityCleanup = cleanup;
+    this.admittedClients.add(client);
+    client.conn.once('close', cleanup);
+    try {
+      if (client.conn.readyState === 'closed') {
+        throw new Error(CONNECTION_QUOTA_UNAVAILABLE_ERROR);
+      }
+      await this.authenticate(client);
+      if (!admission.active || this.shuttingDown) {
+        throw new Error(CONNECTION_QUOTA_UNAVAILABLE_ERROR);
+      }
+      const userId = data.userId;
+      if (!userId) throw new Error(RealtimeConnectionErrors.Unauthorized);
+      if (!(await this.admitConnection(client, userId))) {
+        throw new Error(CONNECTION_LIMIT_ERROR);
+      }
+      await this.admitFanout(client, userId);
+    } catch (error) {
+      // Socket sẽ không bao giờ `connect` → trả lease ngay thay vì đợi transport đóng.
+      this.abortQuotaAdmission(client);
+      cleanup();
+      throw error;
+    } finally {
+      // Transport closure cannot free this slot while JWT/Redis work is still pending.
+      admission.finishHandshake();
+    }
+  }
+
+  private releaseCapacity(client: Socket): void {
+    (client.data as SocketData).capacityCleanup?.();
   }
 
   /** Verify JWT từ `handshake.auth.token` — gán userId vào socket.data (public để unit test). */
@@ -219,7 +355,7 @@ export class SignalingGateway
       if (typeof payload.sub !== 'string' || payload.sub === '') {
         throw new Error('missing sub');
       }
-      (client.data as { userId?: string }).userId = payload.sub;
+      (client.data as SocketData).userId = payload.sub;
     } catch {
       throw new Error(RealtimeConnectionErrors.Unauthorized);
     }
@@ -230,10 +366,7 @@ export class SignalingGateway
     userId: string,
   ): Promise<boolean> {
     const leaseId = randomUUID();
-    const data = client.data as {
-      quotaLeaseId?: string;
-      quotaPreconnectCleanup?: () => void;
-    };
+    const data = client.data as SocketData;
     let transportClosed = client.conn.readyState === 'closed';
     const cleanup = () => {
       transportClosed = true;
@@ -274,85 +407,155 @@ export class SignalingGateway
     return true;
   }
 
-  private startLeaseRefresh(client: Socket, userId: string): void {
-    const data = client.data as {
-      quotaLeaseId?: string;
-      quotaRefreshTimer?: NodeJS.Timeout;
-    };
-    const leaseId = data.quotaLeaseId;
-    if (!leaseId) {
-      client.disconnect(true);
-      return;
-    }
-    const timer = setInterval(
-      () => {
-        void this.connectionQuota
-          .refresh(userId, leaseId)
-          .then((refreshed) => {
-            if (!refreshed) client.disconnect(true);
-          })
-          .catch((error) => {
-            // Fail closed: khi không thể chứng minh lease còn hợp lệ, ngắt socket.
-            captureSentryException(error, 'signaling-connection-quota-refresh');
-            client.disconnect(true);
-          });
-      },
-      Math.floor(this.connectionQuota.leaseMs / 3),
-    );
-    timer.unref();
-    data.quotaRefreshTimer = timer;
-    this.activeQuotaLeases.set(leaseId, { userId, timer, client });
+  /** Hoàn tác lease đã acquire khi bước sau (subscribe) thất bại và socket sẽ không bao giờ `connect`. */
+  private abortQuotaAdmission(client: Socket): void {
+    const data = client.data as SocketData;
+    const cleanup = data.quotaPreconnectCleanup;
+    if (!cleanup) return;
+    client.conn.off('close', cleanup);
+    data.quotaPreconnectCleanup = undefined;
+    cleanup();
   }
 
-  private disconnectActiveQuotaSockets(): void {
-    for (const { timer, client } of this.activeQuotaLeases.values()) {
-      clearInterval(timer);
-      client.disconnect(true);
+  /**
+   * Subscribe Redis cho user TRƯỚC khi handshake hoàn tất. Mỗi lần gọi đếm một socket; huỷ đúng
+   * một lần qua `releaseFanout` (idempotent theo cờ `fanoutUserId`) dù handshake thất bại, transport
+   * đóng giữa chừng hay socket disconnect bình thường.
+   */
+  private async admitFanout(client: Socket, userId: string): Promise<void> {
+    const data = client.data as SocketData;
+    const fanout = this.fanout;
+    if (!fanout) throw new Error(CONNECTION_QUOTA_UNAVAILABLE_ERROR);
+    // Đặt cờ TRƯỚC khi await: transport đóng trong lúc chờ Redis vẫn thấy cờ và hoàn tác được.
+    data.fanoutUserId = userId;
+    const cleanup = () => this.releaseFanout(client);
+    data.fanoutPreconnectCleanup = cleanup;
+    client.conn.once('close', cleanup);
+    try {
+      await fanout.subscribeUser(userId);
+    } catch (error) {
+      client.conn.off('close', cleanup);
+      data.fanoutPreconnectCleanup = undefined;
+      this.releaseFanout(client);
+      captureSentryException(error, 'signaling-fanout-subscribe');
+      throw new Error(CONNECTION_QUOTA_UNAVAILABLE_ERROR, { cause: error });
     }
+    if (
+      !data.fanoutUserId ||
+      client.conn.readyState === 'closed' ||
+      this.shuttingDown
+    ) {
+      client.conn.off('close', cleanup);
+      data.fanoutPreconnectCleanup = undefined;
+      this.releaseFanout(client);
+      throw new Error(CONNECTION_QUOTA_UNAVAILABLE_ERROR);
+    }
+  }
+
+  private releaseFanout(client: Socket): void {
+    const data = client.data as SocketData;
+    const userId = data.fanoutUserId;
+    if (!userId) return;
+    data.fanoutUserId = undefined;
+    this.fanout?.releaseUser(userId);
+  }
+
+  private trackLease(client: Socket, userId: string): boolean {
+    const leaseId = (client.data as SocketData).quotaLeaseId;
+    if (!leaseId) {
+      client.disconnect(true);
+      return false;
+    }
+    this.activeLeases.set(leaseId, { userId, client });
+    // Hết hạn lease mà không gia hạn được → ngắt socket (lease-refresher giải thích khi nào).
+    // A transient lease failure must close the transport, not send a terminal namespace
+    // DISCONNECT: Socket.IO automatically reconnects transport closures with client backoff.
+    this.refresher?.add(leaseId, userId, () => client.conn.close(true));
+    return true;
   }
 
   /**
    * Relay Redis → socket room của đúng user; payload không đọc/sửa (public để unit test).
    *
-   * Mọi pod đều PSUBSCRIBE `realtime:user:*` nên mọi pod đều nhận (và relay) cùng một event; vì vậy
-   * chỉ emit cho room CỤC BỘ của pod này (`server.local`). Với Redis cluster adapter, một broadcast
-   * không-local còn được chuyển tiếp sang các pod khác → socket nhận N bản (N = số pod).
+   * Chỉ emit cho room CỤC BỘ của pod này (`server.local`): ở chế độ `pattern` mọi pod đều nhận
+   * cùng một event, còn broadcast không-local sẽ được cluster adapter chuyển tiếp sang pod khác và
+   * socket nhận N bản (N = số pod). Kiểm tra room TRƯỚC khi parse JSON: ở chế độ `pattern` đa số
+   * event không dành cho user nào trên pod, và ở chế độ `user` đây là lưới an toàn cho event tới
+   * muộn sau khi socket cuối của user đã rời.
    */
   relay(channel: string, raw: string): void {
     const userId = parseRealtimeUserChannel(channel);
     if (!userId) return; // channel lạ — bỏ qua
+    const room = userRoom(userId);
+    if (!this.hasLocalSockets(room)) {
+      this.metrics.relay('no_local_room');
+      return;
+    }
     let envelope: RealtimeEnvelope;
     try {
       envelope = JSON.parse(raw) as RealtimeEnvelope;
     } catch {
       this.logger.warn(`Bỏ qua payload không phải JSON trên ${channel}`);
+      this.metrics.relay('invalid');
       return;
     }
-    if (typeof envelope?.event !== 'string') return;
-    this.server.local.to(userRoom(userId)).emit(envelope.event, envelope.data);
+    if (typeof envelope?.event !== 'string') {
+      this.metrics.relay('invalid');
+      return;
+    }
+    const nextBytes = OutboundBudget.eventBytes(
+      this.server.name,
+      envelope.event,
+      envelope.data,
+    );
+    // An event larger than the entire pod budget cannot be admitted by evicting anyone.
+    if (!this.outboundTotal.fitsAlone(nextBytes)) {
+      this.metrics.outboundPressure('dropped');
+      return;
+    }
+    let delivered = false;
+    for (const id of this.server.adapter.rooms.get(room) ?? []) {
+      const client = this.server.sockets.get(id);
+      if (!client || client.conn.readyState !== 'open') continue;
+      let budget = this.outboundBudgets.get(client.conn);
+      if (!budget) {
+        budget = new OutboundBudget(client.conn, this.outboundTotal);
+        this.outboundBudgets.set(client.conn, budget);
+      }
+      if (
+        !budget.allows(
+          nextBytes,
+          this.outboundMaxPackets,
+          this.outboundMaxBytes,
+        )
+      ) {
+        this.metrics.slowConsumer();
+        // Discard the queue; a namespace DISCONNECT would disable automatic reconnect.
+        // Engine.IO close synchronously removes this socket from local rooms before the emit.
+        budget.evict();
+        continue;
+      }
+      const cancel = budget.reserve(nextBytes);
+      if (!cancel) continue;
+      try {
+        // Emit separately so every recipient reserves capacity BEFORE enqueue, including the
+        // first event on a connection. local is essential: all pods already receive Redis relay.
+        this.server.local.to(id).emit(envelope.event, envelope.data);
+        delivered = true;
+      } finally {
+        cancel(); // only releases a reservation if emit did not create an Engine.IO packet
+      }
+    }
+    if (delivered) this.metrics.relay('delivered');
   }
 
-  private ensureSubscribed(): void {
-    if (
-      !this.subscriber ||
-      this.subscriber.status !== 'ready' ||
-      this.subscriptionInFlight ||
-      this.subscriptionReady
-    ) {
-      return;
-    }
-    this.subscriptionReady = false;
-    this.subscriptionInFlight = this.subscriber
-      .psubscribe(REALTIME_USER_CHANNEL_PATTERN)
-      .then(() => {
-        this.subscriptionReady = true;
-      })
-      .catch((err: unknown) => {
-        this.logger.error(`PSUBSCRIBE thất bại: ${String(err)}`);
-        captureSentryException(err, 'signaling-redis-subscription');
-      })
-      .finally(() => {
-        this.subscriptionInFlight = undefined;
-      });
+  /** Room còn socket nào trên pod này không (`undefined` adapter = không biết → cứ emit). */
+  private hasLocalSockets(room: string): boolean {
+    const rooms = (
+      this.server as unknown as {
+        adapter?: { rooms?: ReadonlyMap<string, unknown> };
+      }
+    ).adapter?.rooms;
+    return rooms ? rooms.has(room) : true;
   }
 }

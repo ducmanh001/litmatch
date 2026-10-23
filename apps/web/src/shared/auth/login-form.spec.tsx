@@ -192,7 +192,7 @@ describe('LoginForm', () => {
     expect(post).not.toHaveBeenCalled();
   });
 
-  it('API cũ không trả code → hiển thị lỗi, không làm crash màn OTP', async () => {
+  it('mã gửi qua SMS (response không có code) → sang bước nhập mã, báo đã gửi SMS, không tự điền', async () => {
     vi.spyOn(apiClient, 'POST').mockResolvedValue({
       data: { data: { ttlSeconds: 300 } },
     } as never);
@@ -204,8 +204,39 @@ describe('LoginForm', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: 'Gửi mã OTP' }));
 
+    expect(
+      await screen.findByText(
+        'Đã gửi mã xác thực (OTP) qua SMS tới số điện thoại của bạn.',
+      ),
+    ).toBeVisible();
+    const otpDigitInputs = screen
+      .getAllByRole('textbox')
+      .filter((input) => input.getAttribute('inputmode') === 'numeric');
+    expect(otpDigitInputs).toHaveLength(6);
+    expect(otpDigitInputs.map((input) => input.getAttribute('value'))).toEqual([
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+    ]);
+  });
+
+  it('phản hồi OTP sai định dạng hoặc thiếu data → hiển thị lỗi, không làm crash màn OTP', async () => {
+    vi.spyOn(apiClient, 'POST').mockResolvedValue({
+      data: { data: { code: 'abc', ttlSeconds: 300 } },
+    } as never);
+    renderForm();
+
+    await userEvent.type(
+      await screen.findByLabelText('Số điện thoại'),
+      '912345678',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Gửi mã OTP' }));
+
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'API chưa trả về mã OTP hợp lệ',
+      'API trả về phản hồi OTP không hợp lệ',
     );
   });
 

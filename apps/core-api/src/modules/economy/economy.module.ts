@@ -44,6 +44,7 @@ import {
 import { IapRefundPollService } from './jobs/iap-refund-poll.service';
 import { OutboxRelayService } from './jobs/outbox-relay.service';
 import { ReconciliationService } from './jobs/reconciliation.service';
+import { EconomyRetentionJob } from './jobs/economy-retention.job';
 import { RefundService } from './services/refund.service';
 import { PayosService } from './services/payos.service';
 import { PayosClient, PayosHttpClientAdapter } from './ports/payos-client';
@@ -80,6 +81,7 @@ import { LedgerPersistencePort } from './ports/ledger-persistence.port';
     { provide: PayosClient, useExisting: PayosHttpClientAdapter },
     OutboxRelayService,
     ReconciliationService,
+    EconomyRetentionJob,
     IapRefundPollService,
     DevIapVerifier,
     DisabledIapVerifier,

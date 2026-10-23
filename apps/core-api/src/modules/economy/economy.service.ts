@@ -1,7 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@litmatch/common-exceptions';
-import { MoreThan, Repository } from 'typeorm';
+import { In, MoreThan, Repository } from 'typeorm';
 
 import type { EntityManager } from 'typeorm';
 
@@ -218,13 +218,19 @@ export class EconomyService {
     };
   }
 
-  /** Composition cho broadcast admin; chỉ trả ID, không làm lộ Wallet persistence. */
-  async listActiveVipUserIds(): Promise<string[]> {
+  /**
+   * Composition cho broadcast admin: trong `userIds` (một lô nhỏ), ai đang có VIP còn hạn. Chỉ trả ID, không làm
+   * lộ Wallet persistence; theo lô nên không phải nạp mọi ví VIP vào RAM.
+   */
+  async filterActiveVipUserIds(
+    userIds: readonly string[],
+  ): Promise<Set<string>> {
+    if (userIds.length === 0) return new Set();
     const wallets = await this.walletRepo.find({
       select: { userId: true },
-      where: { vipExpiresAt: MoreThan(new Date()) },
+      where: { userId: In([...userIds]), vipExpiresAt: MoreThan(new Date()) },
     });
-    return wallets.map((wallet) => wallet.userId);
+    return new Set(wallets.map((wallet) => wallet.userId));
   }
 
   /**

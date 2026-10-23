@@ -5,6 +5,18 @@ scaffold; chúng không phải bằng chứng đã chạy. Mỗi lần promote p
 `pnpm reliability:production-gate` với `RELIABILITY_EVIDENCE_DIR` trỏ tới artifact bất biến của
 đúng build.
 
+Gate yêu cầu cả ba artifact thuộc cùng môi trường và cùng full Git SHA của release. Đặt
+`RELIABILITY_EXPECTED_GIT_SHA` theo image/build được promote; nếu không đặt, gate dùng `GITHUB_SHA`,
+rồi Git HEAD khi chạy local. Có thể chốt môi trường bằng `RELIABILITY_EXPECTED_ENVIRONMENT=staging|production`.
+`runUrl` phải là HTTPS không chứa credential, `owner` không rỗng và `checks` là mảng tên check.
+Kiểm tra metadata này không xác thực nội dung kết quả: artifact phải do workflow/on-call có trách
+nhiệm phát hành, kèm raw logs và số đo thật. Không dùng artifact của release khác để mở gate.
+
+Khi tăng mục tiêu CCU hoặc thời gian lưu dữ liệu, thực hiện thêm
+[capacity qualification](./capacity-qualification.md). `pnpm capacity:check` kiểm tra ngân sách
+giả định và cấu hình; unit test, metadata PASS hoặc số replica không chứng minh runtime capacity.
+Calling REST load test phải có successful journey rate/count, và không thay thế WebRTC media test.
+
 ## SLO theo rolling 30 ngày
 
 Mọi SLI loại trừ request synthetic được gắn nhãn rõ và lỗi 4xx do input/quyền không hợp lệ; timeout,
@@ -41,6 +53,13 @@ Mỗi artifact vẫn phải ghi tên DRI cá nhân đang chịu trách nhiệm c
   tới khi SLO về trong budget hoặc incident commander chấp nhận ngoại lệ có thời hạn.
 
 ## Staging load + multi-pod reconnect
+
+The reproducible benchmark dispatch, sanitized live deployment manifest and report schema are in
+[capacity qualification § 6](./capacity-qualification.md#6-reproducible-staging-benchmark-artifact).
+Its `benchmark.json` retains p95/p99, error rates and raw thresholds. Gateway and worker recovery
+remain `NOT_RUN` until separately observed; benchmark PASS does not qualify capacity or recovery.
+The workflow emits only `staging-load` in `loadtest.json`; keep the existing production gate
+blocked until the quota, multi-pod and game-day evidence below has actually been collected.
 
 1. Deploy đúng git SHA với ít nhất 2 signaling replicas và Redis giống topology production.
 2. Chạy Socket.IO load thật (Artillery/client Socket.IO native được ưu tiên) qua load balancer,

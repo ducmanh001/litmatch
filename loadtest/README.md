@@ -58,6 +58,14 @@ p95 join < 800ms, get/cancel < 400ms, error rate < 2%.
 
 ## 2. `signaling-ws.js` — GIỚI HẠN QUAN TRỌNG (đọc trước khi tin kết quả)
 
+`connection_drop_rate` có đúng một sample cho mỗi lần thử: chỉ thành công khi đã nhận CONNECT ack
+của namespace `/signaling` và giữ đủ `HOLD_SECONDS` rồi tự đóng. Server ngắt ngay sau ack vẫn là
+failure; `error` rồi `close` không đếm hai lần. Thời gian giữ bắt đầu sau ack, không bao gồm thời
+gian auth. `CONNECT_TIMEOUT_SECONDS` (mặc định 10) chặn handshake không có ack. Metric lịch sử
+`auth_fail_rate` gồm cả lỗi guest login và namespace admission (kể cả lỗi quota), có sample 0 cho
+lần không bị từ chối. Regression test: `node --test scripts/reliability/signaling-loadtest.test.mjs`
+chạy entrypoint thật với transport điều khiển được; không thay cho k6/staging thật.
+
 k6 (`k6/ws` lẫn `k6/experimental/websockets`) chỉ nói WebSocket **thuần** theo chuẩn W3C, không có
 client Socket.IO/Engine.IO built-in. Socket.IO **không phải** WebSocket trần — nó có 2 lớp framing
 riêng (Engine.IO packet bọc Socket.IO packet) cộng cơ chế ping/pong do server khởi xướng để giữ
@@ -129,6 +137,24 @@ kết thúc. Nếu Prometheus đang scrape `prometheus_port` của LiveKit (xem
 `apps/media-server/livekit.yaml`), đối chiếu thêm CPU/room/participant per-node qua
 `k8s/base/media-server/prometheus-alerts.yaml`. Ngưỡng "đạt/không đạt" tham khảo
 `party-room-slo.yaml` — ngưỡng đó cũng là **mục tiêu khởi điểm**, chưa phải số đo xác nhận.
+
+## 5. `realtime-plane-bench.mjs` — trần CPU của một Redis cho presence/pub-sub
+
+Không cần k6/staging: một script Node đo trực tiếp trên một Redis cụ thể hai thứ quyết định trần
+socket của mặt phẳng realtime — chi phí gia hạn lease (EVAL từng socket vs EVALSHA gộp pipeline) và chi
+phí fanout pub/sub (`PSUBSCRIBE realtime:user:*` vs `SUBSCRIBE` theo user) khi có 1/10/40 pod. Chỉ ghi
+key/channel `bench:*`.
+
+```bash
+REDIS_URL=redis://127.0.0.1:6379 node loadtest/realtime-plane-bench.mjs
+USERS=20000 MESSAGES=40000 PODS=1,10,40 node loadtest/realtime-plane-bench.mjs
+```
+
+Đọc cột `redisCpuUsPerOp` (CPU Redis mỗi lệnh/event) và **tỉ lệ** giữa các chế độ; số tuyệt đối phụ thuộc
+máy/mạng. Dùng kết quả chạy trên Redis production-like để thay hằng số trong `pnpm capacity:model`
+(kết quả đo trên máy dev và cách đọc: `docs/plans/2026-10-17-realtime-matching-chat-scale-plan.md` § 5).
+Đây là micro-benchmark, **không** thay thế load test Socket.IO qua load balancer ở mục 2 và staging gate
+của runbook reliability.
 
 ## Về threshold (p95, error rate)
 

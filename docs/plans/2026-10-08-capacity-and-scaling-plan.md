@@ -1,7 +1,8 @@
 # 2026-10-08 — Capacity và lộ trình scale từ vài user tới vài tỷ
 
 Đây là phân tích kịch bản và kế hoạch có ngày cho checkout `250c2a0`, không phải chứng nhận tải
-production. Mốc/trigger hiện hành được quản lý trong [roadmap § 7.3](../07-roadmap.md#73-lộ-trình-quy-mô-từ-vài-user-tới-vài-tỷ).
+production. Tiếp nối cho kịch bản 10 triệu đồng thời (số đo Redis, mô phỏng matcher, thay đổi đã làm):
+[2026-10-17](./2026-10-17-realtime-matching-chat-scale-plan.md). Mốc/trigger hiện hành được quản lý trong [roadmap § 7.3](../07-roadmap.md#73-lộ-trình-quy-mô-từ-vài-user-tới-vài-tỷ).
 [Architecture](../03-architecture.md), [tech stack](../04-tech-stack.md), ADR và service spec vẫn
 quyết định hệ thống được phép vận hành như thế nào. Công nghệ tương lai dưới đây là phương án
 cần đánh giá, không tự trở thành stack đã chọn.

@@ -17,7 +17,7 @@ import { ConversationService } from '../services/conversation.service';
 import { StreakService } from '../services/streak.service';
 import { NotificationService, NotificationType } from '../../notification';
 
-import type Redis from 'ioredis';
+import type { RealtimePublisherPort } from '../../../common/realtime/realtime-publisher.port';
 import type { DataSource } from 'typeorm';
 import type {
   FriendStreakAtRiskEventData,
@@ -46,7 +46,7 @@ export class StreakWarningJob
     private readonly notificationService: NotificationService,
     private readonly config: ConfigService<CoreApiEnv, true>,
     private readonly scheduler: SchedulerRegistry,
-    @Inject(FRIEND_REDIS) private readonly redis: Redis,
+    @Inject(FRIEND_REDIS) private readonly redis: RealtimePublisherPort,
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 

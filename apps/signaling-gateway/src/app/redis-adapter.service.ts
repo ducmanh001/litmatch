@@ -9,8 +9,8 @@ import type { ServerOptions } from 'socket.io';
 /**
  * Socket.IO cluster adapter (docs/07 Giai đoạn 6 — horizontal scale, docs/04 § Realtime signaling).
  * 2 kết nối Redis RIÊNG cho pub/sub nội bộ của thư viện — KHÔNG dùng chung với connection
- * PSUBSCRIBE `realtime:user:*` của SignalingGateway (cùng nguyên tắc "1 connection riêng cho
- * subscribe", docs/services/realtime-gateway.md § 5). Nhờ adapter này, `server.to(room).emit()`
+ * subscriber fanout của SignalingGateway (cùng nguyên tắc "1 connection riêng cho subscribe",
+ * docs/services/realtime-gateway.md § 5). Nhờ adapter này, `server.to(room).emit()`
  * gọi ở 1 instance vẫn tới được socket đang giữ ở instance KHÁC trong cụm.
  */
 @Injectable()

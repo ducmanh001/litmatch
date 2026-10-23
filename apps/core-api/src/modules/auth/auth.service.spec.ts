@@ -49,9 +49,11 @@ describe('AuthService', () => {
     issue: jest.fn().mockResolvedValue('signed-device-token'),
   };
   let phoneOtpEnabled = true;
+  let otpDelivery = 'response';
   const config = {
     getOrThrow: (key: string) => {
       if (key === 'AUTH_PHONE_OTP_ENABLED') return phoneOtpEnabled;
+      if (key === 'AUTH_OTP_DELIVERY') return otpDelivery;
       throw new Error(`missing config ${key}`);
     },
   };
@@ -166,6 +168,26 @@ describe('AuthService', () => {
     ).rejects.toMatchObject({ code: AuthErrors.PHONE_OTP_DISABLED });
     expect(otpService.requestOtp).not.toHaveBeenCalled();
     expect(otpService.verifyOtp).not.toHaveBeenCalled();
+  });
+
+  it('delivery=disabled (mặc định production) → chặn như tắt SĐT dù AUTH_PHONE_OTP_ENABLED=true', async () => {
+    otpDelivery = 'disabled';
+    await expect(service.requestOtp('+84912345678')).rejects.toMatchObject({
+      code: AuthErrors.PHONE_OTP_DISABLED,
+    });
+    await expect(
+      service.upgradeGuestWithOtp('u1', '+84912345678', '123456'),
+    ).rejects.toMatchObject({ code: AuthErrors.PHONE_OTP_DISABLED });
+    expect(otpService.requestOtp).not.toHaveBeenCalled();
+    expect(otpService.verifyOtp).not.toHaveBeenCalled();
+  });
+
+  it('delivery=sms-http: requestOtp chuyển nguyên kết quả (không có mã) từ OtpService', async () => {
+    otpDelivery = 'sms-http';
+    otpService.requestOtp.mockResolvedValue({ ttlSeconds: 300 });
+    await expect(service.requestOtp('+84912345678')).resolves.toEqual({
+      ttlSeconds: 300,
+    });
   });
 
   it('social upgrade giữ userId và thu hồi guest credential + refresh session cũ', async () => {

@@ -8,12 +8,9 @@
 # ClusterIP/LoadBalancer chuẩn không share port range đó dễ dàng cho nhiều pod cùng lúc (mỗi pod
 # cần định danh network riêng cho dải UDP này) — cách phổ biến là `hostNetwork: true` (đánh đổi:
 # mất network namespace isolation, port RTC trùng giữa các pod trên cùng node) hoặc NodePort
-# riêng từng pod (phức tạp, cần tự động hoá gán port). CHƯA chọn phương án nào ở đây vì cần ADR
-# riêng quyết định topology/provider cho networking RTC production (docs/03 § 3.8.A: "capacity
-# phải được chứng minh bằng benchmark... nhu cầu room lớn hơn một node là một quyết định kiến
-# trúc mới"). Vì vậy: replicas mặc định = 1, KHÔNG có HorizontalPodAutoscaler cho app này (xem
-# k8s/README.md để biết lý do đầy đủ) — scale thật cần quyết định networking trước, không phải
-# thiếu sót ngẫu nhiên.
+# riêng từng pod (phức tạp, cần tự động hoá gán port). ADR 0005 đã chọn hostNetwork.
+# Base/staging giữ một replica; production overlays dùng hai host độc lập theo ADR 0015.
+# Không có HPA media: capacity và giới hạn room vẫn cần benchmark trên hạ tầng thật.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

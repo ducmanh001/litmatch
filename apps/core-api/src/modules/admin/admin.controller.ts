@@ -12,6 +12,11 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  ApiIdempotencyKeyHeader,
+  IdempotencyKey,
+} from '../../common/decorators/idempotency-key.decorator';
+import {
+  ApiAcceptedResponse,
   ApiBearerAuth,
   ApiOkResponse,
   ApiOperation,
@@ -57,6 +62,7 @@ import {
   AdminVipPlanDto,
   BroadcastNotificationDto,
   BroadcastNotificationResultDto,
+  BroadcastStatusDto,
   SetCatalogActiveDto,
 } from './dto/admin-config.dto';
 import {
@@ -489,17 +495,50 @@ export class AdminController {
 
   @Post('notifications/broadcast')
   @RequireAdminPermission(AdminPermission.ManageConfig)
-  @HttpCode(HttpStatus.OK)
+  @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({
     summary:
-      'Gửi thông báo in-app + push best-effort theo audience — chỉ admin',
+      'Xếp hàng broadcast thông báo in-app + push best-effort theo audience — gửi dần ở nền, chỉ admin',
   })
-  @ApiOkResponse({ type: BroadcastNotificationResultDto })
+  @ApiAcceptedResponse({ type: BroadcastNotificationResultDto })
+  @ApiIdempotencyKeyHeader()
   broadcastNotification(
     @CurrentUser() actor: AuthenticatedUser,
     @Body() body: BroadcastNotificationDto,
+    @IdempotencyKey() idempotencyKey: string,
   ): Promise<BroadcastNotificationResultDto> {
-    return this.adminService.broadcastNotification(actor.userId, body);
+    return this.adminService.broadcastNotification(
+      actor.userId,
+      body,
+      idempotencyKey,
+    );
+  }
+
+  @Get('notifications/broadcast/:id')
+  @RequireAdminPermission(AdminPermission.ManageConfig)
+  @ApiOperation({ summary: 'Tiến độ một lần broadcast thông báo — chỉ admin' })
+  @ApiOkResponse({ type: BroadcastStatusDto })
+  async getBroadcast(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<BroadcastStatusDto> {
+    return BroadcastStatusDto.from(await this.adminService.getBroadcast(id));
+  }
+
+  @Post('notifications/broadcast/:id/cancel')
+  @RequireAdminPermission(AdminPermission.ManageConfig)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Huỷ broadcast đang xếp hàng/đang gửi — lô đã gửi không thu hồi được; idempotent, chỉ admin',
+  })
+  @ApiOkResponse({ type: BroadcastStatusDto })
+  async cancelBroadcast(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<BroadcastStatusDto> {
+    return BroadcastStatusDto.from(
+      await this.adminService.cancelBroadcast(actor.userId, id),
+    );
   }
 
   @Get('permissions')

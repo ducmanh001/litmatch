@@ -6,6 +6,8 @@ import {
   type CapabilityId,
 } from '../config/capabilities';
 
+import { isPhoneOtpUsable } from '../modules/auth';
+
 import type { CoreApiEnv } from '../config/env.validation';
 import {
   AuthProviderCapabilityDto,
@@ -188,20 +190,29 @@ export class CapabilitiesService {
   }
 
   private phoneOtpCapability(): AuthProviderCapabilityDto {
-    const configured = this.config.getOrThrow('AUTH_PHONE_OTP_ENABLED', {
+    const enabled = this.config.getOrThrow('AUTH_PHONE_OTP_ENABLED', {
       infer: true,
     });
+    const delivery = this.config.getOrThrow('AUTH_OTP_DELIVERY', {
+      infer: true,
+    });
+    // `disabled` fail-closed; `sms-http` là kênh thật; `response` (mã nằm trong response) chỉ là thử nghiệm.
     const state = this.withMaintenance(
       'auth.phoneOtp',
-      configured
+      !isPhoneOtpUsable(enabled, delivery)
         ? this.state(
-            CapabilityStatus.Beta,
-            'Đăng nhập bằng số điện thoại (chế độ thử nghiệm).',
-          )
-        : this.state(
             CapabilityStatus.Disabled,
             'Đăng nhập bằng số điện thoại hiện chưa khả dụng.',
-          ),
+          )
+        : delivery === 'sms-http'
+          ? this.state(
+              CapabilityStatus.Enabled,
+              'Đăng nhập bằng số điện thoại (mã gửi qua SMS).',
+            )
+          : this.state(
+              CapabilityStatus.Beta,
+              'Đăng nhập bằng số điện thoại (chế độ thử nghiệm).',
+            ),
     );
     return { ...state, clientId: null };
   }

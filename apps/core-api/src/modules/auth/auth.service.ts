@@ -14,6 +14,7 @@ import { generateCsrfToken } from '../../common/csrf/csrf-token';
 import { AuthErrors } from './auth.errors';
 import { AuthIdentity, AuthProvider } from './entities/auth-identity.entity';
 import { OtpService } from './services/otp.service';
+import { isPhoneOtpUsable } from './services/phone-otp-delivery';
 import { SocialVerifierService } from './services/social-verifier';
 import { TokenService } from './services/token.service';
 import { GuestDeviceTokenService } from './services/guest-device-token.service';
@@ -65,7 +66,7 @@ export class AuthService {
 
   async requestOtp(
     phone: string,
-  ): Promise<{ code: string; ttlSeconds: number }> {
+  ): Promise<{ code?: string; ttlSeconds: number }> {
     this.assertPhoneOtpEnabled();
     return this.otpService.requestOtp(phone);
   }
@@ -320,8 +321,13 @@ export class AuthService {
   }
 
   private assertPhoneOtpEnabled(): void {
-    if (this.config.getOrThrow('AUTH_PHONE_OTP_ENABLED', { infer: true }))
-      return;
+    const enabled = this.config.getOrThrow('AUTH_PHONE_OTP_ENABLED', {
+      infer: true,
+    });
+    const delivery = this.config.getOrThrow('AUTH_OTP_DELIVERY', {
+      infer: true,
+    });
+    if (isPhoneOtpUsable(enabled, delivery)) return;
     throw new DomainException(
       AuthErrors.PHONE_OTP_DISABLED,
       'Đăng nhập bằng số điện thoại chưa khả dụng trên môi trường này',

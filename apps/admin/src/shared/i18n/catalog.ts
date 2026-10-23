@@ -31,6 +31,7 @@ const vietnamese = {
   'auth.googleLoginUnavailable':
     'Đăng nhập bằng Google hiện chưa khả dụng. Vui lòng thử phương thức khác.',
   'auth.otpCode': 'Mã xác thực (OTP) của bạn là {{code}}',
+  'auth.otpSent': 'Đã gửi mã xác thực (OTP) qua SMS tới số điện thoại của bạn.',
   'auth.checkingMethods': 'Đang kiểm tra phương thức đăng nhập…',
   'auth.signInPhoneOrGoogle': 'Đăng nhập bằng số điện thoại hoặc Google',
   'auth.enterOtpSentTo': 'Nhập mã OTP đã gửi tới {{phone}}',
@@ -181,9 +182,10 @@ const vietnamese = {
   'config.packageUpdated': '{{action}} “{{name}}”',
   'config.composeNotification': 'Soạn thông báo đẩy',
   'config.notificationHint':
-    'Tạo thông báo in-app cho đúng nhóm người nhận; push được gửi best-effort sau khi dữ liệu đã lưu thành công.',
+    'Xếp hàng thông báo in-app cho đúng nhóm người nhận, hệ thống gửi dần ở nền; push được gửi best-effort sau khi dữ liệu đã lưu thành công.',
   'config.requiredNotification': 'Vui lòng nhập tiêu đề và nội dung',
-  'config.notificationSent': 'Đã gửi thông báo tới {{count}} người',
+  'config.notificationQueued':
+    'Đã xếp hàng thông báo — hệ thống sẽ gửi dần ở nền',
   'config.title': 'Tiêu đề',
   'config.titlePlaceholder': 'VD: Ưu đãi nạp Diamond cuối tuần',
   'config.audience': 'Đối tượng nhận',
@@ -286,6 +288,7 @@ const english: Record<MessageKey, string> = {
   'auth.googleLoginUnavailable':
     'Google sign-in is currently unavailable. Please use another method.',
   'auth.otpCode': 'Your verification code (OTP) is {{code}}',
+  'auth.otpSent': 'We sent a verification code (OTP) to your phone by SMS.',
   'auth.checkingMethods': 'Checking sign-in methods…',
   'auth.signInPhoneOrGoogle': 'Sign in with your phone number or Google',
   'auth.enterOtpSentTo': 'Enter the OTP sent to {{phone}}',
@@ -435,9 +438,10 @@ const english: Record<MessageKey, string> = {
   'config.packageUpdated': '{{action}} “{{name}}”',
   'config.composeNotification': 'Compose push notification',
   'config.notificationHint':
-    'Create an in-app notification for the selected audience; push is delivered best-effort after the data is saved successfully.',
+    'Queue an in-app notification for the selected audience; it is delivered gradually in the background, and push is best-effort after the data is saved successfully.',
   'config.requiredNotification': 'Enter a title and message',
-  'config.notificationSent': 'Notification sent to {{count}} people',
+  'config.notificationQueued':
+    'Notification queued — it will be delivered in the background',
   'config.title': 'Title',
   'config.titlePlaceholder': 'E.g. Weekend Diamond top-up offer',
   'config.audience': 'Audience',

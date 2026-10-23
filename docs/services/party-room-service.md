@@ -34,7 +34,10 @@
 ## 3. Concurrency
 
 - MỌI thay đổi state phòng (join/leave/đổi role/close) serialize qua `SELECT ... FOR UPDATE` trên
-  row `party_rooms` — 1 row làm điểm tuần tự hoá, cùng pattern `tryPair` của Matching. Race
+  row `party_rooms` — 1 row làm điểm tuần tự hoá, cùng pattern `tryPair` của Matching. **Gửi bình luận chỉ giữ `FOR SHARE`** (ADR 0014):
+  nhiều bình luận cùng phòng chạy song song thay vì xếp hàng trên một khoá hàng cho mọi bình luận; join/leave/đổi role/close
+  (`FOR UPDATE`) vẫn chờ các bình luận đang chạy xong nên thứ tự leave/send vẫn xác định (có test giữ khoá share bên ngoài).
+  Fanout một sự kiện = một câu đọc `user_id` của member + N `PUBLISH`; `PARTY_MAX_MEMBERS` có trần cứng 500 vì N không được vô hạn. Race
   "2 request xin speaker đồng thời" ([10 § Party Room](../10-code-review-checklist.md)): đếm speaker
   DƯỚI lock, bên sau thấy count đã tăng → `PARTY_SPEAKER_LIMIT_REACHED`.
 - Join: đếm member active dưới lock so `PARTY_MAX_MEMBERS`; LiveKit `maxParticipants` (set lúc

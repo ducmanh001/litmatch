@@ -32,17 +32,20 @@ Quan hệ với `docs/03-architecture.md`: file 03 mô tả kiến trúc **hiệ
 
 ## Danh sách
 
-| #                                                       | Quyết định                                               | Ngày       | Trạng thái |
-| ------------------------------------------------------- | -------------------------------------------------------- | ---------- | ---------- |
-| [0001](./0001-livekit-self-host-lam-media-server.md)    | LiveKit self-host làm Media Server chính từ Giai đoạn 2  | 2026-07-10 | Accepted   |
-| [0002](./0002-browser-refresh-token-local-storage.md)   | Browser V1 giữ refresh token trong localStorage          | 2026-07-13 | Superseded |
-| [0003](./0003-browser-auth-production-gate.md)          | Browser localStorage chỉ là scaffold, production có gate | 2026-07-13 | Superseded |
-| [0004](./0004-api-gateway-nginx-ingress.md)             | API Gateway = nginx-ingress controller                   | 2026-07-13 | Accepted   |
-| [0005](./0005-livekit-hostnetwork-rtc.md)               | Networking RTC multi-node LiveKit = hostNetwork          | 2026-07-13 | Accepted   |
-| [0006](./0006-cloudflare-global-routing.md)             | Global routing đa region = Cloudflare Load Balancing     | 2026-07-13 | Accepted   |
-| [0007](./0007-httponly-cookie-refresh-token.md)         | Refresh token = httpOnly cookie + CSRF double-submit     | 2026-07-14 | Accepted   |
-| [0008](./0008-zero-cost-single-node-release-profile.md) | Profile release một máy chi phí 0                        | 2026-07-18 | Accepted   |
-| [0009](./0009-hosted-free-alpha-release-profile.md)     | Profile alpha hosted-free đa nhà cung cấp                | 2026-07-22 | Accepted   |
-| [0010](./0010-hosted-observability-error-monitoring.md) | Sentry Cloud cho lỗi, Grafana Cloud cho vận hành hosted  | 2026-07-24 | Accepted   |
-| [0011](./0011-hybrid-modular-layered-event-driven.md)   | Hybrid modular/layered và event-driven có chọn lọc       | 2026-07-30 | Accepted   |
-| [0012](./0012-postgres-persistence-boundaries.md)       | Persistence boundary cho PostgreSQL và TypeORM           | 2026-08-07 | Accepted   |
+| #                                                       | Quyết định                                                           | Ngày       | Trạng thái |
+| ------------------------------------------------------- | -------------------------------------------------------------------- | ---------- | ---------- |
+| [0001](./0001-livekit-self-host-lam-media-server.md)    | LiveKit self-host làm Media Server chính từ Giai đoạn 2              | 2026-07-10 | Accepted   |
+| [0002](./0002-browser-refresh-token-local-storage.md)   | Browser V1 giữ refresh token trong localStorage                      | 2026-07-13 | Superseded |
+| [0003](./0003-browser-auth-production-gate.md)          | Browser localStorage chỉ là scaffold, production có gate             | 2026-07-13 | Superseded |
+| [0004](./0004-api-gateway-nginx-ingress.md)             | API Gateway = nginx-ingress controller                               | 2026-07-13 | Accepted   |
+| [0005](./0005-livekit-hostnetwork-rtc.md)               | Networking RTC multi-node LiveKit = hostNetwork                      | 2026-07-13 | Accepted   |
+| [0006](./0006-cloudflare-global-routing.md)             | Global routing đa region = Cloudflare Load Balancing                 | 2026-07-13 | Accepted   |
+| [0007](./0007-httponly-cookie-refresh-token.md)         | Refresh token = httpOnly cookie + CSRF double-submit                 | 2026-07-14 | Accepted   |
+| [0008](./0008-zero-cost-single-node-release-profile.md) | Profile release một máy chi phí 0                                    | 2026-07-18 | Accepted   |
+| [0009](./0009-hosted-free-alpha-release-profile.md)     | Profile alpha hosted-free đa nhà cung cấp                            | 2026-07-22 | Accepted   |
+| [0010](./0010-hosted-observability-error-monitoring.md) | Sentry Cloud cho lỗi, Grafana Cloud cho vận hành hosted              | 2026-07-24 | Accepted   |
+| [0011](./0011-hybrid-modular-layered-event-driven.md)   | Hybrid modular/layered và event-driven có chọn lọc                   | 2026-07-30 | Accepted   |
+| [0012](./0012-postgres-persistence-boundaries.md)       | Persistence boundary cho PostgreSQL và TypeORM                       | 2026-08-07 | Accepted   |
+| [0013](./0013-scale-readiness-policies.md)              | Chính sách scale: gộp thông báo chat, retention, giao OTP            | 2026-10-19 | Accepted   |
+| [0014](./0014-data-lifecycle-and-growth-model.md)       | Vòng đời dữ liệu và mô hình tăng trưởng theo năm                     | 2026-10-19 | Accepted   |
+| [0015](./0015-bounded-runtime-recovery.md)              | Bounded recovery, diagnostic checkpoints and independent media nodes | 2026-10-20 | Accepted   |

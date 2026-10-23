@@ -191,6 +191,30 @@ describe('createApiClient', () => {
     expect(calls[0].credentials).toBe('include');
   });
 
+  it('restoreSession retry khi refresh đầu tiên lỗi tạm thời, không logout phiên còn cookie', async () => {
+    const { fetch, calls } = fetchStub([
+      jsonResponse(503, errorBody('COMMON_SERVICE_UNAVAILABLE')),
+      jsonResponse(200, {
+        data: { accessToken: 'access-new', csrfToken: 'csrf-new' },
+      }),
+    ]);
+    const storage = memoryCsrfTokenStorage();
+    storage.set('csrf-old');
+    const reloadedStore = createTokenStore(storage);
+    const client = createApiClient({
+      baseUrl: BASE_URL,
+      tokenStore: reloadedStore,
+      fetch,
+    });
+
+    await expect(client.restoreSession()).resolves.toBe(true);
+    expect(calls.map((call) => call.url)).toEqual([
+      '/api/v1/auth/refresh',
+      '/api/v1/auth/refresh',
+    ]);
+    expect(reloadedStore.getStatus()).toBe('authenticated');
+  });
+
   it('Safari/iOS không có Web Locks vẫn restore phiên thay vì bị đẩy về login', async () => {
     vi.stubGlobal('window', {});
     vi.stubGlobal('navigator', {});

@@ -88,7 +88,7 @@ trust score.
 Ephemeral — KHÁC `Post` (không soft-delete/audit trail): hết hạn = filter lúc đọc
 (`expiresAt <= now()`) là nguồn sự thật; `StorySweeperService` (pattern Party Room) hard-delete
 định kỳ chỉ dọn rác, không phải chốt correctness. `story_views` cascade xoá theo FK khi story bị
-sweeper xoá.
+sweeper xoá. Mỗi tick sweeper lặp lô 500 story tới hết backlog trong ngân sách 30 giây (trước đây chỉ MỘT lô mỗi tick = tối đa 500 story/giờ, nên tạo story nhanh hơn thì backlog và `story_views` cascade tăng vô hạn — ADR 0014); ở quy mô lớn hạ `STORY_SWEEPER_INTERVAL_MS`.
 
 - **Ring (`GET /stories/ring`): chỉ story của mình + bạn bè** (quyết định chốt
   [docs/plans/2026-07-14-plan-6-tinh-nang-social-discovery.md § 6](../plans/2026-07-14-plan-6-tinh-nang-social-discovery.md))

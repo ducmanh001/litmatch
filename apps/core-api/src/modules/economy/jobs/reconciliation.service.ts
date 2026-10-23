@@ -13,6 +13,9 @@ import { ManagedInterval } from '../../../common/scheduling/managed-interval';
 import type { CoreApiEnv } from '../../../config/env.validation';
 import { EconomyMetrics } from '../economy.metrics';
 import { LedgerCurrency } from '../entities/ledger-account.entity';
+import { LedgerReconciliationCheckpoint } from './ledger-reconciliation-checkpoint';
+import type { LedgerReconciliationProgress } from './ledger-reconciliation-checkpoint';
+import { WalletReconciliationSampler } from './wallet-reconciliation-sampler';
 
 import type { ReconciliationTier } from '../economy.metrics';
 
@@ -25,6 +28,8 @@ interface FastReconciliationReport {
   currencyImbalances: Array<{ currency: string; imbalance: string }>;
   receiptsWithoutTransaction: number;
   ok: boolean;
+  complete: boolean;
+  completedBefore: string | null;
 }
 
 interface DeepReconciliationReport {
@@ -52,14 +57,21 @@ interface ReconciliationReport {
  * TỰ PHÁT HIỆN tiền sinh ra/mất đi từ hư không bằng bất biến toán học. Từ Giai đoạn 7 tách 2 tier
  * lịch độc lập theo chi phí query:
  * - fast (ECONOMY_RECONCILIATION_FAST_INTERVAL_MS): bất biến Nợ=Có theo currency + orphan
- *   receipt — 1 câu aggregate + 1 câu COUNT, đủ rẻ để chạy dày.
+ *   receipt. Bất biến được kiểm TĂNG DẦN (xem dưới) nên chi phí mỗi tick tỉ lệ với số giao dịch MỚI, không
+ *   phải cả bảng ledger_entries; COUNT orphan chạy trên partial index gần như rỗng.
  * - deep (ECONOMY_RECONCILIATION_INTERVAL_MS): sample ví so snapshot↔derived — scan/join theo
  *   từng ví nên đắt hơn, giữ cadence thưa như cũ.
+ * LedgerReconciliationCheckpoint pages whole transactions and persists each aggregate/cursor
+ * atomically in runtime_job_checkpoints. Both cold-start and periodic rebase are bounded;
+ * a replacement pod resumes the shared cursor. Incomplete history never reports a successful audit.
+ * LAG must exceed the longest financial transaction. Late/backdated inserts are caught by a
+ * subsequent full paged rebase; its completion time depends on backlog and configured capacity.
+ *
  * Lệch = log error + metric `economy_reconciliation_*` (EconomyMetrics) để alert rule Prometheus
  * fire — metrics được push trực tiếp lên Grafana Cloud qua OTLP khi đã cấu hình.
  *
- * BẤT BIẾN: job này READ-ONLY tuyệt đối — chỉ SELECT, không auto-correct. Sửa lệch thật phải đi
- * qua reversal entry ở write path chuẩn (LedgerService), không bao giờ từ job chẩn đoán này.
+ * BẤT BIẾN: financial tables are read-only here. Only diagnostic checkpoints may be updated
+ * (ADR 0015); corrections still require reversal entries through LedgerService.
  */
 @Injectable()
 export class ReconciliationService
@@ -126,14 +138,9 @@ export class ReconciliationService
   /** Tier rẻ: bất biến toàn cục + orphan receipt. Chạy dày (fast interval). */
   async runFast(): Promise<FastReconciliationReport> {
     const startedAt = Date.now();
-    // 1. Bất biến toàn cục: tổng Nợ = tổng Có theo từng currency
-    const imbalances: Array<{ currency: string; imbalance: string }> =
-      await this.dataSource.query(`
-      SELECT currency,
-             SUM(CASE WHEN direction = 'debit' THEN amount ELSE -amount END)::text AS imbalance
-      FROM ledger_entries GROUP BY currency
-      HAVING SUM(CASE WHEN direction = 'debit' THEN amount ELSE -amount END) <> 0
-    `);
+    // 1. Bất biến toàn cục: tổng Nợ = tổng Có theo từng currency (cộng dồn tăng dần)
+    const progress = await this.currentImbalances();
+    const imbalances = progress.imbalances;
 
     // 2. Receipt đã credit phải có đúng 1 transaction ledger đi kèm
     const [{ count: orphanReceipts }]: Array<{ count: string }> =
@@ -144,7 +151,12 @@ export class ReconciliationService
     const report: FastReconciliationReport = {
       currencyImbalances: imbalances,
       receiptsWithoutTransaction: Number(orphanReceipts),
-      ok: imbalances.length === 0 && Number(orphanReceipts) === 0,
+      ok:
+        progress.complete &&
+        imbalances.length === 0 &&
+        Number(orphanReceipts) === 0,
+      complete: progress.complete,
+      completedBefore: progress.completedBefore,
     };
 
     for (const { currency } of imbalances)
@@ -161,7 +173,15 @@ export class ReconciliationService
       (Date.now() - startedAt) / 1000,
     );
 
-    if (!report.ok) {
+    if (
+      !progress.complete &&
+      imbalances.length === 0 &&
+      Number(orphanReceipts) === 0
+    ) {
+      this.logger.warn(
+        'Reconciliation is catching up; incomplete history is not a successful audit',
+      );
+    } else if (!report.ok) {
       this.logger.error(
         { report },
         'ĐỐI SOÁT LỆCH (fast) — tổng Nợ/Có hoặc receipt không khớp, cần điều tra ngay',
@@ -172,39 +192,37 @@ export class ReconciliationService
     return report;
   }
 
+  private currentImbalances(): Promise<LedgerReconciliationProgress> {
+    return new LedgerReconciliationCheckpoint(this.dataSource).advance({
+      lagMs: this.config.getOrThrow('ECONOMY_RECONCILIATION_LAG_MS', {
+        infer: true,
+      }),
+      fullIntervalMs: this.config.getOrThrow(
+        'ECONOMY_RECONCILIATION_FULL_INTERVAL_MS',
+        { infer: true },
+      ),
+      batchSize: this.config.getOrThrow('ECONOMY_RECONCILIATION_BATCH_SIZE', {
+        infer: true,
+      }),
+      maxBatches: this.config.getOrThrow(
+        'ECONOMY_RECONCILIATION_MAX_BATCHES_PER_TICK',
+        { infer: true },
+      ),
+      budgetMs: this.config.getOrThrow(
+        'ECONOMY_RECONCILIATION_TICK_BUDGET_MS',
+        { infer: true },
+      ),
+    });
+  }
+
   /** Tier đắt: sample ví so snapshot↔derived từ ledger. Giữ cadence thưa (interval cũ). */
   async runDeep(
     sampleWallets = WALLET_SAMPLE_SIZE,
   ): Promise<DeepReconciliationReport> {
     const startedAt = Date.now();
-    // 3. Sample ví mới cập nhật gần nhất: snapshot phải khớp derive từ ledger
-    const walletMismatches: Array<{
-      userId: string;
-      snapshot: string;
-      derived: string;
-    }> = await this.dataSource.query(
-      `
-        WITH sample_wallets AS (
-          SELECT user_id, balance
-            FROM wallets
-           ORDER BY updated_at DESC
-           LIMIT $1
-        )
-        SELECT w.user_id AS "userId", w.balance::text AS snapshot, COALESCE(d.derived, 0)::text AS derived
-        FROM sample_wallets w
-        LEFT JOIN (
-          SELECT la.user_id,
-                 SUM(CASE WHEN le.direction = 'credit' THEN le.amount ELSE -le.amount END) AS derived
-          FROM ledger_entries le
-          JOIN ledger_accounts la ON la.id = le.account_id
-          JOIN sample_wallets sw ON sw.user_id = la.user_id
-          WHERE la.kind = 'user_wallet'
-          GROUP BY la.user_id
-        ) d ON d.user_id = w.user_id
-        WHERE w.balance <> COALESCE(d.derived, 0)
-        `,
-      [sampleWallets],
-    );
+    const walletMismatches = await new WalletReconciliationSampler(
+      this.dataSource,
+    ).sample(sampleWallets);
 
     const report: DeepReconciliationReport = {
       walletMismatches,
@@ -234,7 +252,7 @@ export class ReconciliationService
     return report;
   }
 
-  /** Full sweep on-demand (test/tool vận hành): fast + deep gộp, giữ report shape cũ. */
+  /** Combined bounded diagnostic run; deep is a rotating wallet sample, not a full-fleet audit. */
   async runOnce(
     sampleWallets = WALLET_SAMPLE_SIZE,
   ): Promise<ReconciliationReport> {

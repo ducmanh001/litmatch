@@ -133,7 +133,8 @@ chi phí chỉ trả khi boundary thật sự phân tán.
   (map region → URL, fallback `LIVEKIT_URL`; mọi URL cùng MỘT cụm LiveKit chung Redis): Party Room
   ghim URL theo region của host lúc tạo (snapshot cột `livekit_url`), Calling resolve theo region
   của userA trong session (2 bên cùng region theo shard matching § 3.8.B). ADR 0005 KHÔNG đổi trần
-  "một room vừa một node" — tăng replica media-server vẫn chờ benchmark thật.
+  "một room vừa một node". [ADR 0015](./adr/0015-bounded-runtime-recovery.md) cho phép production
+  dùng hai replica trên hai host để có dự phòng; capacity mỗi node và mọi lần nới room cap vẫn cần benchmark.
 - Edge/API Gateway expose core-api/signaling-gateway đã chốt nginx-ingress (ADR 0004).
 - Capacity phải được chứng minh bằng benchmark theo workload của dự án và dashboard production.
   Không dùng con số marketing hoặc benchmark khác codec/bitrate làm SLO. Party Room phải giữ cap
@@ -160,7 +161,7 @@ chi phí chỉ trả khi boundary thật sự phân tán.
 - Idempotency key bắt buộc là **unique constraint ở tầng DB**, đặt trên bảng `Transaction` (1 key cho cả giao dịch nghiệp vụ) — **KHÔNG đặt unique trên bảng `LedgerEntry`**: mỗi giao dịch tạo ≥2 bút toán cùng thuộc 1 key, unique ở tầng ledger sẽ chặn chính bút toán thứ 2 của giao dịch hợp lệ. Các `LedgerEntry` trỏ về `transaction_id`. Không chỉ check-rồi-insert ở tầng code (vẫn có race condition) — request trùng idempotency key thì trả lại chính kết quả giao dịch cũ, không tạo bút toán mới.
 - Snapshot `Wallet.balance` được cập nhật trong **cùng transaction DB** với thao tác append bút toán ledger (không async qua event) — nhờ đó bước "check đủ diamond trước khi trừ" dựa trên snapshot + `SELECT ... FOR UPDATE` là an toàn. Chỉ chuyển sang cập nhật async khi số liệu thật cho thấy contention thực sự — và khi đó phải thiết kế lại luôn cả bước check số dư đi kèm, không đổi lẻ 1 nửa.
 - Ở giai đoạn scale thật, cân nhắc PostgreSQL với constraint chặt + partition theo thời gian là đủ cho phần lớn trường hợp; chỉ cân nhắc engine ledger chuyên dụng (vd TigerBeetle) nếu throughput giao dịch tiền vượt quá khả năng Postgres đã tối ưu (đây là quyết định đo bằng số liệu thật, không phải mặc định).
-- Job đối soát (Giai đoạn 7) chạy **2 tier theo chi phí**: tier fast (bất biến Nợ=Có theo currency + orphan receipt — 1 câu aggregate) chạy dày (`ECONOMY_RECONCILIATION_FAST_INTERVAL_MS`, mặc định 60s), tier deep (sample ví so snapshot↔derived) giữ cadence thưa (`ECONOMY_RECONCILIATION_INTERVAL_MS`, mặc định 300s). Lệch/run lỗi được export qua Prometheus (`economy_reconciliation_mismatch_total` theo check+currency, `economy_reconciliation_last_run_status` theo tier, `economy_reconciliation_run_duration_seconds`) để alert rule fire tự động — job **read-only tuyệt đối**, sửa lệch thật luôn đi qua reversal entry ở write path chuẩn.
+- Job đối soát chạy **2 tier theo chi phí**: fast kiểm tổng Nợ=Có + orphan receipt mỗi 60s; deep đối chiếu mẫu wallet mỗi 300s. Theo [ADR 0015](./adr/0015-bounded-runtime-recovery.md), cả bootstrap và full rebase dùng trang transaction có giới hạn và checkpoint bền vững. Job chỉ đọc bảng tài chính, chỉ ghi metadata chẩn đoán; partial scan không báo PASS. Sửa lệch thật luôn đi qua reversal entry. Metrics theo tier tiếp tục phục vụ alert.
 
 ## 3.9 Profile alpha hosted-free
 

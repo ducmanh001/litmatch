@@ -37,7 +37,7 @@ Các constraint/schema trên chỉ được thêm hoặc đổi bằng migration
 - Đủ diamond tại thời điểm trừ: `SELECT ... FOR UPDATE` trên wallet, khóa theo thứ tự userId,
   rồi mới check + ghi ledger + cập nhật snapshot.
 - Rotate refresh token và revoke family khi reuse: transaction + pessimistic lock/conditional update.
-- Matching `queued → confirmed` và tạo session: Redis `ZPOPMIN` atomic trước, sau đó Postgres
+- Matching `queued → confirmed` và tạo session: Redis `claimPair` (Lua atomic) lấy cặp trước, sau đó Postgres
   khóa hai ticket, đọc user/safety state tươi, transition và tạo session cùng transaction.
 - State transition hợp lệ, phase theo server time, guest quota và retry semantics: domain owner
   enforce tại decision point; unique/check/index của DB là chốt cuối, không thay thế service rule.

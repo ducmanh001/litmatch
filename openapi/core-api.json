@@ -6037,7 +6037,15 @@
     "/api/v1/admin/notifications/broadcast": {
       "post": {
         "operationId": "AdminController_broadcastNotification",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Bắt buộc cho mọi API có tác dụng phụ không được lặp (docs/05 § 5.4, § 5.10)",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -6049,7 +6057,7 @@
           }
         },
         "responses": {
-          "200": {
+          "202": {
             "description": "",
             "content": {
               "application/json": {
@@ -6068,7 +6076,77 @@
           }
         },
         "security": [{ "bearer": [] }],
-        "summary": "Gửi thông báo in-app + push best-effort theo audience — chỉ admin",
+        "summary": "Xếp hàng broadcast thông báo in-app + push best-effort theo audience — gửi dần ở nền, chỉ admin",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/notifications/broadcast/{id}": {
+      "get": {
+        "operationId": "AdminController_getBroadcast",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BroadcastStatusDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Tiến độ một lần broadcast thông báo — chỉ admin",
+        "tags": ["admin"]
+      }
+    },
+    "/api/v1/admin/notifications/broadcast/{id}/cancel": {
+      "post": {
+        "operationId": "AdminController_cancelBroadcast",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BroadcastStatusDto"
+                    },
+                    "meta": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "bearer": [] }],
+        "summary": "Huỷ broadcast đang xếp hàng/đang gửi — lô đã gửi không thu hồi được; idempotent, chỉ admin",
         "tags": ["admin"]
       }
     },
@@ -6909,7 +6987,7 @@
         "properties": {
           "code": {
             "type": "string",
-            "description": "Mã OTP 6 chữ số — không gửi SMS, client dùng để hiển thị và tự điền",
+            "description": "Mã OTP 6 chữ số — CHỈ có khi AUTH_OTP_DELIVERY=response (dev/test/e2e) để client hiển thị và tự điền. Khi mã được gửi qua SMS (sms-http) trường này vắng mặt.",
             "example": "123456"
           },
           "ttlSeconds": {
@@ -6917,7 +6995,7 @@
             "description": "TTL của OTP vừa tạo (giây) — client hiển thị đếm ngược"
           }
         },
-        "required": ["code", "ttlSeconds"]
+        "required": ["ttlSeconds"]
       },
       "VerifyOtpDto": {
         "type": "object",
@@ -9007,9 +9085,46 @@
         "type": "object",
         "properties": {
           "broadcastId": { "type": "string" },
-          "recipientCount": { "type": "number" }
+          "status": {
+            "type": "string",
+            "enum": ["queued", "running", "completed", "failed", "cancelled"]
+          }
         },
-        "required": ["broadcastId", "recipientCount"]
+        "required": ["broadcastId", "status"]
+      },
+      "BroadcastStatusDto": {
+        "type": "object",
+        "properties": {
+          "broadcastId": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["queued", "running", "completed", "failed", "cancelled"]
+          },
+          "audience": { "type": "string", "enum": ["all", "vip", "free"] },
+          "recipientCount": { "type": "number" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "lastError": { "type": "string", "nullable": true }
+        },
+        "required": [
+          "broadcastId",
+          "status",
+          "audience",
+          "recipientCount",
+          "createdAt",
+          "startedAt",
+          "completedAt",
+          "lastError"
+        ]
       },
       "AdminRolePermissionDto": {
         "type": "object",

@@ -37,7 +37,7 @@ import type {
   CallEndedEventData,
   RealtimeEnvelope,
 } from '@litmatch/common-dtos';
-import type Redis from 'ioredis';
+import type { RealtimePublisherPort } from '../../common/realtime/realtime-publisher.port';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import type { CoreApiEnv } from '../../config/env.validation';
 import type { LivekitWebhookEvent } from './ports/livekit-room';
@@ -85,7 +85,7 @@ export class CallingService {
     private readonly livekit: LivekitRoomPort,
     private readonly config: ConfigService<CoreApiEnv, true>,
     private readonly userService: UserService,
-    @Inject(CALLING_REDIS) private readonly redis: Redis,
+    @Inject(CALLING_REDIS) private readonly redis: RealtimePublisherPort,
     private readonly metrics: CallingMetrics,
   ) {}
 
@@ -274,7 +274,7 @@ export class CallingService {
         HttpStatus.NOT_FOUND,
       );
     }
-    call = await this.reconcileCallWithLivekit(call, user.userId);
+    call = await this.reconcileCallWithLivekit(call);
     return call;
   }
 
@@ -437,21 +437,33 @@ export class CallingService {
   /**
    * End idempotent — dùng bởi endpoint/webhook/ticker (spec § 1). Lock call FOR UPDATE:
    * đây chính là chốt chặn race end-vs-tick (docs/10 § Calling). Chỉ lời gọi
-   * thực hiện transition mới dọn room + publish realtime (không bắn đôi khi retry).
+   * thực hiện transition mới publish realtime; cleanup có marker bền vững để ticker/retry tiếp tục
+   * sau lỗi provider hoặc process chết giữa commit và dọn room.
    */
-  async endById(callId: string, reason: CallEndReason): Promise<EndCallResult> {
+  async endById(
+    callId: string,
+    reason: CallEndReason,
+    shouldEnd?: (call: CallSession) => boolean,
+    options?: { deferCleanup?: boolean; skipLocked?: boolean },
+  ): Promise<EndCallResult> {
     const result = await this.dataSource.transaction(async (manager) => {
       const call = await manager.findOne(CallSession, {
         where: { id: callId },
-        lock: { mode: 'pessimistic_write' },
+        lock: {
+          mode: 'pessimistic_write',
+          ...(options?.skipLocked ? { onLocked: 'skip_locked' as const } : {}),
+        },
       });
       if (!call) return { call: null, justEnded: false };
       if (call.status === CallSessionStatus.Ended) {
         return { call, justEnded: false };
       }
+      // Ticker candidates are snapshots: a webhook may have activated/resumed the call while waiting for this lock.
+      if (shouldEnd && !shouldEnd(call)) return { call, justEnded: false };
       call.status = CallSessionStatus.Ended;
       call.endReason = reason;
       call.endedAt = new Date();
+      call.cleanupPending = true;
       // Không tính thời gian nằm trong cửa sổ reconnect vào thời lượng đã dùng.
       // Nếu cửa sổ hết hạn thì mốc startedAt được dời qua đoạn gián đoạn trước khi
       // duration được chốt.
@@ -477,7 +489,22 @@ export class CallingService {
     if (result.justEnded && result.call) {
       // Call drop rate (docs/07 GĐ6) — đúng 1 lần/call vì chỉ nhánh justEnded mới chạy tới đây
       this.metrics.recordEnded(result.call.endReason ?? reason);
-      await this.cleanupEndedCall(result.call);
+      await this.publishCallEnded(result.call);
+    }
+    if (result.call?.cleanupPending && !options?.deferCleanup) {
+      try {
+        await this.cleanupEndedCall(result.call);
+        result.call.cleanupPending = false;
+      } catch (error) {
+        // Requeue at the tail: a permanently failing room must not starve newer cleanup tasks.
+        await this.callRepo.update(
+          { id: result.call.id, cleanupPending: true },
+          { cleanupPending: true },
+        );
+        this.logger.warn(
+          `Cleanup call ${result.call.id} chưa hoàn tất — ticker sẽ thử lại: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
     }
     return result;
   }
@@ -519,11 +546,10 @@ export class CallingService {
   /**
    * Webhook là kênh chính; đối soát RoomService là backstop cho cấu hình webhook lỗi/mất mạng.
    * Pending chỉ được chuyển khi LiveKit xác nhận member thật sự có mặt. Active mà đối phương
-   * không còn trong room thì chốt ended để client không treo màn hình vô hạn.
+   * không còn trong room thì mở reconnect grace; ticker chốt khi quá hạn.
    */
   private async reconcileCallWithLivekit(
     call: CallSession,
-    userId: string,
   ): Promise<CallSession> {
     let identities: string[];
     try {
@@ -537,27 +563,71 @@ export class CallingService {
       return call;
     }
 
-    if (call.status === CallSessionStatus.Pending) {
-      // RoomService đã là nguồn sự thật cho cả room: ghi nhận mọi identity hợp lệ mà
-      // LiveKit trả về, không phụ thuộc việc browser của phía còn lại có đang poll hay không.
-      const memberIds = identities.filter(
-        (identity) => identity === call.userAId || identity === call.userBId,
-      );
-      if (memberIds.length === 0) return call;
-      for (const identity of memberIds) {
-        await this.markJoined(call.id, identity);
-      }
-      return (await this.callRepo.findOneBy({ id: call.id })) ?? call;
-    }
+    return call.status === CallSessionStatus.Ended
+      ? call
+      : this.reconcileParticipants(call, identities);
+  }
 
-    if (call.status === CallSessionStatus.Active) {
-      const partnerId = call.userAId === userId ? call.userBId : call.userAId;
-      if (!identities.includes(partnerId)) {
-        const ended = await this.endById(call.id, CallEndReason.Completed);
-        return ended.call ?? call;
+  private async reconcileParticipants(
+    observed: CallSession,
+    identities: string[],
+  ): Promise<CallSession> {
+    if (
+      observed.status === CallSessionStatus.Pending &&
+      !identities.includes(observed.userAId) &&
+      !identities.includes(observed.userBId)
+    )
+      return observed;
+    if (
+      observed.status === CallSessionStatus.Active &&
+      !observed.reconnectStartedAt &&
+      identities.includes(observed.userAId) &&
+      identities.includes(observed.userBId)
+    )
+      return observed;
+
+    return this.dataSource.transaction(async (manager) => {
+      const call = await manager.findOne(CallSession, {
+        where: { id: observed.id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!call) return observed;
+      // SFU I/O runs outside the lock. Ignore both presence and absence observations
+      // if a webhook changed this call while the snapshot was in flight.
+      const unchanged = (
+        [
+          'updatedAt',
+          'joinedAAt',
+          'joinedBAt',
+          'startedAt',
+          'reconnectStartedAt',
+          'disconnectedAAt',
+          'disconnectedBAt',
+        ] as const
+      ).every((field) => call[field]?.getTime() === observed[field]?.getTime());
+      if (call.status !== observed.status || !unchanged) return call;
+
+      const now = new Date();
+      for (const identity of [call.userAId, call.userBId]) {
+        if (identities.includes(identity))
+          this.recordParticipantJoined(call, identity, now);
       }
-    }
-    return call;
+      if (call.status === CallSessionStatus.Active) {
+        call.disconnectedAAt = identities.includes(call.userAId)
+          ? null
+          : (call.disconnectedAAt ?? now);
+        call.disconnectedBAt = identities.includes(call.userBId)
+          ? null
+          : (call.disconnectedBAt ?? now);
+        if (call.disconnectedAAt || call.disconnectedBAt) {
+          call.reconnectStartedAt ??= now;
+        } else {
+          this.resumeCallTimer(call, now);
+        }
+      }
+      await manager.save(call);
+      return call;
+    });
   }
 
   /**
@@ -606,42 +676,53 @@ export class CallingService {
       if (!call || call.status === CallSessionStatus.Ended) return;
 
       const now = new Date();
-      if (identity === call.userAId) call.joinedAAt = call.joinedAAt ?? now;
-      else if (identity === call.userBId)
-        call.joinedBAt = call.joinedBAt ?? now;
-      else return; // identity lạ — token chỉ mint cho member nên đây là event không liên quan
-
-      if (
-        call.joinedAAt &&
-        call.joinedBAt &&
-        call.status === CallSessionStatus.Pending
-      ) {
-        call.status = CallSessionStatus.Active;
-        call.startedAt = call.startedAt ?? now; // mốc giới hạn Voice Match (spec § 4)
-      }
-
+      if (!this.recordParticipantJoined(call, identity, now)) return;
       if (call.status === CallSessionStatus.Active) {
-        if (identity === call.userAId) call.disconnectedAAt = null;
-        if (identity === call.userBId) call.disconnectedBAt = null;
-
-        // Chỉ resume khi cả 2 đã quay lại. Mốc này cũng giúp reconnect sau
-        // room_finished không làm mất phần thời gian đã dùng trước đó.
-        if (
-          call.reconnectStartedAt &&
-          call.disconnectedAAt === null &&
-          call.disconnectedBAt === null &&
-          call.startedAt
-        ) {
-          const pausedMs = Math.max(
-            0,
-            now.getTime() - call.reconnectStartedAt.getTime(),
-          );
-          call.startedAt = new Date(call.startedAt.getTime() + pausedMs);
-          call.reconnectStartedAt = null;
-        }
+        this.resumeCallTimer(call, now);
       }
       await manager.save(call);
     });
+  }
+
+  /** In-memory mutation shared by locked webhook and SFU reconciliation transactions. */
+  private recordParticipantJoined(
+    call: CallSession,
+    identity: string,
+    now: Date,
+  ): boolean {
+    if (identity === call.userAId) call.joinedAAt ??= now;
+    else if (identity === call.userBId) call.joinedBAt ??= now;
+    else return false;
+    if (
+      call.status === CallSessionStatus.Pending &&
+      call.joinedAAt &&
+      call.joinedBAt
+    ) {
+      call.status = CallSessionStatus.Active;
+      call.startedAt ??= now;
+    }
+    if (call.status === CallSessionStatus.Active) {
+      if (identity === call.userAId) call.disconnectedAAt = null;
+      if (identity === call.userBId) call.disconnectedBAt = null;
+    }
+    return true;
+  }
+
+  /** Resume only once both members return, excluding the pause from the server timer. */
+  private resumeCallTimer(call: CallSession, now: Date): void {
+    if (
+      !call.reconnectStartedAt ||
+      !call.startedAt ||
+      call.disconnectedAAt !== null ||
+      call.disconnectedBAt !== null
+    )
+      return;
+    const pausedMs = Math.max(
+      0,
+      now.getTime() - call.reconnectStartedAt.getTime(),
+    );
+    call.startedAt = new Date(call.startedAt.getTime() + pausedMs);
+    call.reconnectStartedAt = null;
   }
 
   private async markDisconnected(
@@ -690,12 +771,11 @@ export class CallingService {
         call.userAId,
         call.userBId,
       );
-    await this.livekit.deleteRoom(call.roomName).catch((err) => {
-      // room có thể đã tự đóng (room_finished) — không phải lỗi nghiệp vụ
-      this.logger.debug(
-        `deleteRoom ${call.roomName} bỏ qua: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    });
+    await this.livekit.deleteRoom(call.roomName);
+    await this.callRepo.update(call.id, { cleanupPending: false });
+  }
+
+  private async publishCallEnded(call: CallSession): Promise<void> {
     const envelope: RealtimeEnvelope<CallEndedEventData> = {
       event: RealtimeEvents.CallEnded,
       data: {

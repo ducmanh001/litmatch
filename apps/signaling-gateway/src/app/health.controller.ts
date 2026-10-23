@@ -25,10 +25,15 @@ export class HealthController {
   @Get('ready')
   ready(@Res({ passthrough: true }) response: Response): {
     status: 'ok' | 'unavailable';
-    checks: { redisSubscription: string; redisClusterAdapter: string };
+    checks: {
+      redisSubscription: string;
+      redisClusterAdapter: string;
+      realtimeShards: string;
+    };
   } {
     const fanoutReady = this.signaling.isReady();
-    // Cluster adapter down không chặn fanout hiện có (relay riêng qua PSUBSCRIBE) nhưng làm mất
+    const shards = this.signaling.shardStatus();
+    // Cluster adapter down không chặn fanout hiện có (relay riêng qua subscribe Redis) nhưng làm mất
     // khả năng chia sẻ room/broadcast Socket.IO xuyên instance — vẫn tính vào readiness tổng thể
     // vì pod không "sẵn sàng phục vụ đúng nghĩa scale ngang" khi thiếu adapter (docs/07 GĐ6).
     const adapterReady = this.redisAdapter.isReady();
@@ -39,6 +44,8 @@ export class HealthController {
       checks: {
         redisSubscription: fanoutReady ? 'up' : 'down',
         redisClusterAdapter: adapterReady ? 'up' : 'down',
+        // "ready/total": thấp hơn total = pod vẫn phục vụ nhưng user của shard hỏng fail closed.
+        realtimeShards: `${shards.serving}/${shards.total}`,
       },
     };
   }

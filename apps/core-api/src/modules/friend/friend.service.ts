@@ -14,8 +14,8 @@ import { Friendship, FriendshipSource } from './entities/friendship.entity';
 import { Message } from './entities/message.entity';
 import { FRIEND_REDIS } from './redis/friend-redis.provider';
 import { ConversationService } from './services/conversation.service';
+import { FriendMessageNotifier } from './services/friend-message-notifier.service';
 import { StreakService } from './services/streak.service';
-import { NotificationService, NotificationType } from '../notification';
 import { SafetyService } from '../safety';
 
 import type {
@@ -24,7 +24,7 @@ import type {
   FriendStreakIncreasedEventData,
   RealtimeEnvelope,
 } from '@litmatch/common-dtos';
-import type Redis from 'ioredis';
+import type { RealtimePublisherPort } from '../../common/realtime/realtime-publisher.port';
 import type { CoreApiEnv } from '../../config/env.validation';
 
 /** Giới hạn vận hành cho các composition đọc toàn bộ graph; pagination là việc riêng của API. */
@@ -89,9 +89,9 @@ export class FriendService {
     private readonly conversationService: ConversationService,
     private readonly streakService: StreakService,
     private readonly safetyService: SafetyService,
-    private readonly notificationService: NotificationService,
+    private readonly messageNotifier: FriendMessageNotifier,
     private readonly config: ConfigService<CoreApiEnv, true>,
-    @Inject(FRIEND_REDIS) private readonly redis: Redis,
+    @Inject(FRIEND_REDIS) private readonly redis: RealtimePublisherPort,
   ) {}
 
   /**
@@ -178,10 +178,22 @@ export class FriendService {
     return { created: result.raw.length > 0 };
   }
 
-  async areFriends(userAId: string, userBId: string): Promise<boolean> {
+  /**
+   * `manager`: chạy trên transaction của caller (cùng kết nối). Caller đang giữ transaction PHẢI truyền vào —
+   * nếu không, mỗi lần gọi mượn thêm một kết nối pool thứ hai và dưới tải cao các transaction đang chờ kết nối
+   * đó giữ hết pool (cạn pool).
+   */
+  async areFriends(
+    userAId: string,
+    userBId: string,
+    manager?: EntityManager,
+  ): Promise<boolean> {
     if (userAId === userBId) return false;
     const [userLowId, userHighId] = canonicalPair(userAId, userBId);
-    return this.friendshipRepo.exists({ where: { userLowId, userHighId } });
+    const repo = manager
+      ? manager.getRepository(Friendship)
+      : this.friendshipRepo;
+    return repo.exists({ where: { userLowId, userHighId } });
   }
 
   /**
@@ -426,27 +438,18 @@ export class FriendService {
       ),
     );
 
-    // In-app notification cho người nhận — Friend Chat KHÔNG ẩn danh nên lộ senderUserId là
-    // ĐÚNG (khác Soul Match, docs/services/notification-service.md § 3). Tự transaction riêng
-    // vì message đã persist xong (không dùng chung transaction — friend-service.md), best-effort:
-    // lỗi ở đây KHÔNG được làm fail luồng gửi tin nhắn đã thành công.
-    // Người nhận đã mute hội thoại → bỏ qua cả in-app lẫn push; message + realtime + unread
-    // vẫn hoạt động bình thường (mute chỉ tắt kênh thông báo).
+    // In-app notification + push cho người nhận — Friend Chat KHÔNG ẩn danh nên lộ senderUserId là
+    // ĐÚNG (khác Soul Match, docs/services/notification-service.md § 3). Message đã persist xong nên
+    // thông báo tự transaction riêng (không dùng chung transaction — friend-service.md), best-effort:
+    // lỗi ở đây KHÔNG được làm fail luồng gửi tin nhắn đã thành công. Gộp theo cửa sổ và tôn trọng
+    // mute nằm trong `FriendMessageNotifier` (ADR 0013).
     try {
-      const partnerState = await this.memberStateRepo.findOne({
-        where: { conversationId, userId: partnerId },
+      await this.messageNotifier.notify({
+        conversationId,
+        senderUserId: userId,
+        recipientId: partnerId,
+        preview: message.content,
       });
-      if (partnerState?.mutedAt != null) return message;
-      const notification = await this.notificationService.create({
-        userId: partnerId,
-        type: NotificationType.FriendMessage,
-        payload: {
-          conversationId,
-          senderUserId: userId,
-          preview: message.content,
-        },
-      });
-      await this.notificationService.sendPush(notification);
     } catch (err) {
       this.logger.warn(
         `Tạo notification friend_message lỗi (bỏ qua, message vẫn gửi thành công): ${

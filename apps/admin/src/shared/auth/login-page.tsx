@@ -91,18 +91,28 @@ export function LoginPage() {
         body: { phone },
       });
       const otp = res.data?.data;
-      if (otp === undefined || !/^\d{6}$/u.test(otp.code)) {
+      // `code` chỉ có ở chế độ thử nghiệm; khi mã gửi qua SMS thì vắng mặt.
+      if (
+        otp === undefined ||
+        (otp.code !== undefined && !/^\d{6}$/u.test(otp.code))
+      ) {
         throw new Error(t('auth.otpSetupFailed'));
       }
       return { phone, otp };
     },
     onSuccess: ({ phone, otp }) => {
-      codeForm.setValue('code', otp.code, {
-        shouldDirty: true,
-        shouldValidate: true,
-      });
+      if (otp.code !== undefined) {
+        codeForm.setValue('code', otp.code, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
       setPhase({ step: 'code', phone });
-      showToast(t('auth.otpCode', { code: otp.code }));
+      showToast(
+        otp.code === undefined
+          ? t('auth.otpSent')
+          : t('auth.otpCode', { code: otp.code }),
+      );
     },
   });
 

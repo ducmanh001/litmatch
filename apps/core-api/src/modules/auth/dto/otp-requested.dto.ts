@@ -1,12 +1,13 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class OtpRequestedDto {
-  @ApiProperty({
+  @ApiPropertyOptional({
     description:
-      'Mã OTP 6 chữ số — không gửi SMS, client dùng để hiển thị và tự điền',
+      'Mã OTP 6 chữ số — CHỈ có khi AUTH_OTP_DELIVERY=response (dev/test/e2e) để client hiển thị và tự điền. ' +
+      'Khi mã được gửi qua SMS (sms-http) trường này vắng mặt.',
     example: '123456',
   })
-  code!: string;
+  code?: string;
 
   @ApiProperty({
     description: 'TTL của OTP vừa tạo (giây) — client hiển thị đếm ngược',

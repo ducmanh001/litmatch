@@ -63,15 +63,15 @@ The service catalog names every top-level Core API module and links module-speci
 - Owner: core-api/auth
 - Contracts: `openapi/core-api.json`, `docs/06-domain-rules.md`, `docs/adr/0007-httponly-cookie-refresh-token.md`
 - Implementation evidence: `apps/core-api/src/modules/auth/auth.controller.ts:39` — contains `@Controller('auth')`; `apps/core-api/src/modules/auth/controllers/auth-upgrade.controller.ts:32` — contains `@Controller('auth/upgrade')`
-- Verification evidence (automated-test-source): `apps/core-api/src/modules/auth/auth.service.spec.ts:171` — contains `social upgrade giữ userId`
+- Verification evidence (automated-test-source): `apps/core-api/src/modules/auth/auth.service.spec.ts:193` — contains `social upgrade giữ userId`
 
 ### Server-derived runtime availability contract for frontend providers
 
 - Status: `implemented`
 - Owner: core-api/app with admin/web consumers
 - Contracts: `openapi/core-api.json`, `docs/12-frontend-architecture.md`, `.env.example`
-- Implementation evidence: `apps/core-api/src/app/capabilities.controller.ts:10` — contains `@Controller('capabilities')`; `apps/core-api/src/app/capabilities.service.ts:29` — contains `getCapabilities(): CapabilitiesDto`
-- Verification evidence (automated-test-source): `apps/core-api/src/app/capabilities.service.spec.ts:35` — contains `derives configured providers`; `apps/web/src/shared/capabilities/api.spec.tsx:9` — contains `capabilities`
+- Implementation evidence: `apps/core-api/src/app/capabilities.controller.ts:10` — contains `@Controller('capabilities')`; `apps/core-api/src/app/capabilities.service.ts:31` — contains `getCapabilities(): CapabilitiesDto`
+- Verification evidence (automated-test-source): `apps/core-api/src/app/capabilities.service.spec.ts:36` — contains `derives configured providers`; `apps/web/src/shared/capabilities/api.spec.tsx:9` — contains `capabilities`
 
 ### Wallet, IAP catalog, VIP and double-entry ledger
 
@@ -86,8 +86,8 @@ The service catalog names every top-level Core API module and links module-speci
 - Status: `implemented`
 - Owner: core-api/matching
 - Contracts: `openapi/core-api.json`, `docs/services/matching-service.md`, `docs/06-domain-rules.md`
-- Implementation evidence: `apps/core-api/src/modules/matching/matching.controller.ts:42` — contains `@Controller('matching')`; `apps/core-api/src/modules/matching/jobs/matcher-worker.service.ts:72` — contains `MatcherWorkerService`; `apps/core-api/src/modules/matching/services/guest-match-quota.service.ts:37` — contains `GuestMatchQuotaService`
-- Verification evidence (automated-test-source): `apps/core-api/src/modules/matching/matching.integration.spec.ts:473` — contains `guest quota: concurrent guest mới cùng IP`
+- Implementation evidence: `apps/core-api/src/modules/matching/matching.controller.ts:42` — contains `@Controller('matching')`; `apps/core-api/src/modules/matching/jobs/matcher-worker.service.ts:92` — contains `MatcherWorkerService`; `apps/core-api/src/modules/matching/services/guest-match-quota.service.ts:37` — contains `GuestMatchQuotaService`
+- Verification evidence (automated-test-source): `apps/core-api/src/modules/matching/matching.integration.spec.ts:481` — contains `guest quota: concurrent guest mới cùng IP`
 
 ### Anonymous text match, rating and friendship unlock
 
@@ -126,8 +126,8 @@ The service catalog names every top-level Core API module and links module-speci
 - Status: `implemented`
 - Owner: core-api/friend
 - Contracts: `openapi/core-api.json`, `docs/services/friend-service.md`, `docs/services/streak-service.md`
-- Implementation evidence: `apps/core-api/src/modules/friend/friend.controller.ts:46` — contains `export class FriendController`; `apps/core-api/src/modules/friend/services/streak.service.ts:38` — contains `StreakService`
-- Verification evidence (automated-test-source): `apps/core-api/src/modules/friend/friend.integration.spec.ts:11` — contains `Friend`
+- Implementation evidence: `apps/core-api/src/modules/friend/friend.controller.ts:48` — contains `export class FriendController`; `apps/core-api/src/modules/friend/services/streak.service.ts:58` — contains `StreakService`
+- Verification evidence (automated-test-source): `apps/core-api/src/modules/friend/friend.integration.spec.ts:13` — contains `Friend`
 
 ### Feed, reactions, comments and expiring stories
 
@@ -198,15 +198,15 @@ The service catalog names every top-level Core API module and links module-speci
 - Status: `implemented`
 - Owner: core-api/short-video
 - Contracts: `openapi/core-api.json`, `docs/services/short-video-service.md`, `docs/services/safety-service.md`
-- Implementation evidence: `apps/core-api/src/modules/short-video/short-video.controller.ts:48` — contains `@Controller('videos')`; `apps/core-api/src/modules/short-video/jobs/video-ranking.service.ts:28` — contains `VideoRankingService`
-- Verification evidence (automated-test-source): `apps/core-api/src/modules/short-video/short-video.integration.spec.ts:12` — contains `Short`
+- Implementation evidence: `apps/core-api/src/modules/short-video/short-video.controller.ts:48` — contains `@Controller('videos')`; `apps/core-api/src/modules/short-video/jobs/video-ranking.service.ts:36` — contains `VideoRankingService`
+- Verification evidence (automated-test-source): `apps/core-api/src/modules/short-video/short-video.integration.spec.ts:13` — contains `Short`
 
 ### Optional profile birth date without an age-based access gate
 
 - Status: `implemented`
 - Owner: core-api/user
 - Contracts: `openapi/core-api.json`, `docs/01-product-features.md`, `docs/06-domain-rules.md`
-- Implementation evidence: `apps/core-api/src/modules/user/user.service.ts:404` — contains `Ngày sinh là dữ liệu profile tự chọn`; `apps/core-api/src/modules/user/dto/update-profile.dto.ts:40` — contains `không cho ngày trong tương lai`
+- Implementation evidence: `apps/core-api/src/modules/user/user.service.ts:419` — contains `Ngày sinh là dữ liệu profile tự chọn`; `apps/core-api/src/modules/user/dto/update-profile.dto.ts:40` — contains `không cho ngày trong tương lai`
 - Verification evidence (automated-test-source): `apps/core-api/src/modules/user/user.service.spec.ts:64` — contains `birthDate không phải access gate`
 
 ### Hosted analytics with quota controls and an explicit privacy warning
@@ -222,8 +222,8 @@ The service catalog names every top-level Core API module and links module-speci
 - Status: `implemented`
 - Owner: signaling-gateway with core-api producers
 - Contracts: `libs/common-dtos/src/lib/realtime-events.ts`, `docs/services/realtime-gateway.md`, `specs/realtime.asyncapi.yaml`
-- Implementation evidence: `apps/signaling-gateway/src/app/signaling.gateway.ts:46` — contains `@WebSocketGateway`; `libs/common-dtos/src/lib/realtime-events.ts:34` — contains `export const RealtimeEvents`; `apps/signaling-gateway/src/app/connection-quota.service.ts:66` — contains `ConnectionQuotaService`
-- Verification evidence (automated-test-source): `apps/signaling-gateway/src/app/signaling.integration.spec.ts:109` — contains `event chỉ tới ĐÚNG user`; `apps/signaling-gateway/src/app/signaling.horizontal-scale.integration.spec.ts:195` — contains `quota per-user atomic xuyên 2 instance`
+- Implementation evidence: `apps/signaling-gateway/src/app/signaling.gateway.ts:59` — contains `@WebSocketGateway`; `libs/common-dtos/src/lib/realtime-events.ts:34` — contains `export const RealtimeEvents`; `apps/signaling-gateway/src/app/connection-quota.service.ts:113` — contains `ConnectionQuotaService`
+- Verification evidence (automated-test-source): `apps/signaling-gateway/src/app/signaling.integration.spec.ts:113` — contains `event chỉ tới ĐÚNG user`; `apps/signaling-gateway/src/app/signaling.horizontal-scale.integration.spec.ts:195` — contains `quota per-user atomic xuyên 2 instance`
 
 ## Recorded targeted checks
 
@@ -245,7 +245,7 @@ The service catalog names every top-level Core API module and links module-speci
 
 - Result: 21 unit tests and 11 PostgreSQL integration tests passed on 2026-07-24
 - Command: `NX_DAEMON=false nx test core-api --runTestsByPath src/modules/short-video/short-video.service.spec.ts && INTEGRATION_DB_URL=<postgres-test-url> NX_DAEMON=false nx test core-api --skip-nx-cache --runTestsByPath src/modules/short-video/short-video.integration.spec.ts`
-- Source evidence: `apps/core-api/src/modules/short-video/short-video.service.spec.ts:528` — contains `vượt ngưỡng distinct reporter`; `apps/core-api/src/modules/short-video/short-video.integration.spec.ts:445` — contains `cùng 1 người report lặp lại 1 video`
+- Source evidence: `apps/core-api/src/modules/short-video/short-video.service.spec.ts:533` — contains `vượt ngưỡng distinct reporter`; `apps/core-api/src/modules/short-video/short-video.integration.spec.ts:478` — contains `cùng 1 người report lặp lại 1 video`
 - Caveat: The integration suite uses PostgreSQL with development storage/transcode adapters; it does not verify a production video provider.
 
 ### Support service ownership, idempotency and workflow
@@ -266,7 +266,7 @@ The service catalog names every top-level Core API module and links module-speci
 
 - Result: PASS on 2026-07-24: agent check; 76 agent/tool tests; OpenAPI and formatting; lint/build for core-api, web, admin and api-client; core 551, web 230, admin 52 and api-client 23 tests
 - Command: `pnpm agent:check; pnpm agent:test; pnpm openapi:check; pnpm format:check; NX_DAEMON=false nx run-many -t lint build test -p core-api web admin api-client --skip-nx-cache`
-- Source evidence: `package.json:39` — contains `"agent:check":`; `scripts/agent/verify.mjs:34` — contains `requiredTargets: ['lint', 'test', 'build']`
+- Source evidence: `package.json:44` — contains `"agent:check":`; `scripts/agent/verify.mjs:34` — contains `requiredTargets: ['lint', 'test', 'build']`
 - Caveat: The core unit command intentionally skipped 16 integration suites without a shared integration URL. The changed short-video PostgreSQL integration suite is recorded separately. Canonical verify wrappers exceeded the mandatory 45-second shell budget, so their underlying commands were run separately and passed.
 
 ## Review-module verification
@@ -277,11 +277,11 @@ The service catalog names every top-level Core API module and links module-speci
 
 | #   | Assumption                                                                                                                                | Break vector / consequence                                               | Guard location                                                                                                                                                                                                                                                                        | Verdict |
 | --- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| 1   | Backend authorization and validation do not depend on a visible web button; a custom authenticated client may call the endpoint directly. | A caller invokes the API without any web confirmation flow.              | `apps/core-api/src/app/app.module.ts:155` — contains `{ provide: APP_GUARD, useClass: JwtAuthGuard }`; `apps/core-api/src/modules/short-video/short-video.controller.ts:129` — contains `await this.videoService.reportVideo(user, id, dto.reason, dto.description);`                 | PASS    |
-| 2   | A caller cannot create report evidence for a video that does not exist or is not visible to that caller.                                  | A guessed, stale, or unauthorized video UUID is submitted.               | `apps/core-api/src/modules/short-video/short-video.service.ts:489` — contains `Chốt target tồn tại/visible trước khi ghi report`; `apps/core-api/src/modules/short-video/short-video.service.spec.ts:520` — contains `validate video tồn tại trước khi gọi Safety`                    | PASS    |
-| 3   | Retry or rapid double-submit by one reporter does not inflate the distinct-reporter count.                                                | The same user repeats or races the request.                              | `apps/core-api/src/database/migrations/1754900000000-report-target-video.ts:31` — contains `CREATE UNIQUE INDEX uq_reports_video_reporter`; `apps/core-api/src/modules/safety/safety.service.ts:171` — contains `if (!isUniqueViolation(err)) throw err;`                             | PASS    |
-| 4   | The client cannot choose the moderation threshold or force an arbitrary status transition.                                                | A forged body claims a higher report count or requests removal directly. | `apps/core-api/src/modules/short-video/short-video.service.ts:500` — contains `if (distinctReporterCount >= threshold)`; `apps/core-api/src/modules/short-video/short-video.service.ts:507` — contains `return this.transition(videoId, VideoStatus.Published, VideoStatus.Removed);` | PASS    |
-| 5   | Reporting a video must not reduce the author's personal trust score.                                                                      | Content moderation is incorrectly treated as a user report.              | `apps/core-api/src/modules/safety/safety.service.ts:167` — contains `trustPenaltyApplied: 0`; `apps/core-api/src/modules/short-video/short-video.integration.spec.ts:410` — contains `report vượt VIDEO_REPORT_AUTOHIDE_THRESHOLD`                                                    | PASS    |
+| 1   | Backend authorization and validation do not depend on a visible web button; a custom authenticated client may call the endpoint directly. | A caller invokes the API without any web confirmation flow.              | `apps/core-api/src/app/app.module.ts:148` — contains `{ provide: APP_GUARD, useClass: JwtAuthGuard }`; `apps/core-api/src/modules/short-video/short-video.controller.ts:129` — contains `await this.videoService.reportVideo(user, id, dto.reason, dto.description);`                 | PASS    |
+| 2   | A caller cannot create report evidence for a video that does not exist or is not visible to that caller.                                  | A guessed, stale, or unauthorized video UUID is submitted.               | `apps/core-api/src/modules/short-video/short-video.service.ts:587` — contains `Chốt target tồn tại/visible trước khi ghi report`; `apps/core-api/src/modules/short-video/short-video.service.spec.ts:525` — contains `validate video tồn tại trước khi gọi Safety`                    | PASS    |
+| 3   | Retry or rapid double-submit by one reporter does not inflate the distinct-reporter count.                                                | The same user repeats or races the request.                              | `apps/core-api/src/database/migrations/1754900000000-report-target-video.ts:31` — contains `CREATE UNIQUE INDEX uq_reports_video_reporter`; `apps/core-api/src/modules/safety/safety.service.ts:199` — contains `if (!isUniqueViolation(err)) throw err;`                             | PASS    |
+| 4   | The client cannot choose the moderation threshold or force an arbitrary status transition.                                                | A forged body claims a higher report count or requests removal directly. | `apps/core-api/src/modules/short-video/short-video.service.ts:598` — contains `if (distinctReporterCount >= threshold)`; `apps/core-api/src/modules/short-video/short-video.service.ts:605` — contains `return this.transition(videoId, VideoStatus.Published, VideoStatus.Removed);` | PASS    |
+| 5   | Reporting a video must not reduce the author's personal trust score.                                                                      | Content moderation is incorrectly treated as a user report.              | `apps/core-api/src/modules/safety/safety.service.ts:195` — contains `trustPenaltyApplied: 0`; `apps/core-api/src/modules/short-video/short-video.integration.spec.ts:443` — contains `report vượt VIDEO_REPORT_AUTOHIDE_THRESHOLD`                                                    | PASS    |
 
 Checklist:
 

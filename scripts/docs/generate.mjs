@@ -8,6 +8,7 @@ import addFormats from 'ajv-formats';
 import {
   readFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   renameSync,
@@ -731,6 +732,7 @@ export function validateDocx(
 
   const expectedFiles = docxFiles(markdown, title);
   let archiveEntries;
+  let entryMetadata;
   try {
     execFileSync('unzip', ['-tq', docxPath], { stdio: 'pipe' });
     archiveEntries = execFileSync('unzip', ['-Z1', docxPath], {
@@ -739,6 +741,13 @@ export function validateDocx(
       .trim()
       .split('\n')
       .sort();
+    entryMetadata = execFileSync('unzip', ['-Z', '-l', docxPath], {
+      encoding: 'utf8',
+    })
+      .trim()
+      .split(/\r?\n/)
+      .map((line) => line.trim().split(/\s+/))
+      .filter((fields) => expectedFiles.has(fields.at(-1)));
   } catch (error) {
     fail(`generated DOCX is invalid: ${error.message}`);
   }
@@ -746,20 +755,40 @@ export function validateDocx(
   if (JSON.stringify(archiveEntries) !== JSON.stringify(expectedEntries)) {
     fail('generated DOCX structure is stale; run pnpm docs:generate');
   }
-  for (const [entry, expectedContent] of expectedFiles) {
-    const archivePattern = entry
-      .replaceAll('[', String.raw`\[`)
-      .replaceAll(']', String.raw`\]`);
-    const actualContent = execFileSync(
-      'unzip',
-      ['-p', docxPath, archivePattern],
-      {
-        encoding: 'utf8',
-      },
-    );
-    if (actualContent !== expectedContent) {
-      fail(`generated DOCX entry is stale (${entry}); run pnpm docs:generate`);
+  // ZipInfo marks regular files with '-' for both Unix and DOS archives. Check the
+  // archive type too: some Windows extractors copy a symlink target into a regular file.
+  if (
+    JSON.stringify(entryMetadata.map((fields) => fields.at(-1)).sort()) !==
+      JSON.stringify(expectedEntries) ||
+    entryMetadata.some((fields) => !fields[0].startsWith('-'))
+  ) {
+    fail('generated DOCX is invalid; every entry must be a regular file');
+  }
+  // The exact entry allowlist above is checked before extraction. Reading extracted files
+  // avoids platform-dependent unzip pattern escaping for [Content_Types].xml.
+  const temporaryDirectory = mkdtempSync(
+    join(tmpdir(), 'litmatch-docs-verify-'),
+  );
+  try {
+    execFileSync('unzip', ['-qq', docxPath, '-d', temporaryDirectory], {
+      stdio: 'pipe',
+    });
+    for (const [entry, expectedContent] of expectedFiles) {
+      const entryPath = join(temporaryDirectory, entry);
+      if (!lstatSync(entryPath).isFile()) {
+        fail(
+          `generated DOCX entry is invalid (${entry}); expected a regular file`,
+        );
+      }
+      const actualContent = readFileSync(entryPath, 'utf8');
+      if (actualContent !== expectedContent) {
+        fail(
+          `generated DOCX entry is stale (${entry}); run pnpm docs:generate`,
+        );
+      }
     }
+  } finally {
+    rmSync(temporaryDirectory, { recursive: true, force: true });
   }
 }
 

@@ -650,6 +650,56 @@ d('Party Room integration (Postgres thật)', () => {
     ).rejects.toMatchObject({ code: 'PARTY_MEMBER_NOT_A_MEMBER' });
   });
 
+  it('bình luận chỉ giữ FOR SHARE trên phòng: không chặn nhau, còn thao tác đổi state (FOR UPDATE) vẫn chờ bình luận đang chạy', async () => {
+    const host = await createUser('share-host');
+    const sender = await createUser('share-sender');
+    const { room } = await party.createRoom(
+      auth(host.id),
+      'Phòng khoá chia sẻ',
+    );
+    await party.joinRoom(auth(sender.id), room.id);
+
+    // Giữ một khoá FOR SHARE trên hàng phòng (như một bình luận khác đang chạy dở).
+    const holder = ds.createQueryRunner();
+    await holder.connect();
+    await holder.startTransaction();
+    await holder.query(`SELECT id FROM party_rooms WHERE id = $1 FOR SHARE`, [
+      room.id,
+    ]);
+    try {
+      const timeout = (ms: number) =>
+        new Promise<'timeout'>((resolve) =>
+          setTimeout(() => resolve('timeout'), ms),
+        );
+
+      // Bình luận (FOR SHARE) KHÔNG bị chặn bởi khoá share đang giữ.
+      const comment = await Promise.race([
+        party.sendComment(
+          auth(sender.id),
+          room.id,
+          { content: 'không bị chặn' },
+          'share-1',
+        ),
+        timeout(3_000),
+      ]);
+      expect(comment).not.toBe('timeout');
+
+      // Thao tác đổi state (FOR UPDATE) phải CHỜ khoá share: người gửi rời phòng chưa xong tới khi khoá được nhả.
+      const leave = party.leaveRoom(auth(sender.id), room.id);
+      const early = await Promise.race([
+        leave.then(() => 'done' as const),
+        timeout(500),
+      ]);
+      expect(early).toBe('timeout');
+      await holder.commitTransaction();
+      await leave;
+    } finally {
+      if (holder.isTransactionActive) await holder.rollbackTransaction();
+      await holder.release();
+    }
+    expect(await activeMembers(room.id)).toHaveLength(1);
+  });
+
   it('webhook: host rớt NGOÀI Ý MUỐN → set hostDisconnectedAt (KHÔNG đóng ngay), webhook lặp lại không dời mốc', async () => {
     const host = await createUser('g-host');
     const member = await createUser('g-member');

@@ -1,17 +1,18 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { Histogram, Meter } from '@opentelemetry/api';
+import type { Counter, Histogram, Meter } from '@opentelemetry/api';
 
 import { METRICS_METER } from '../../common/metrics/metrics.constants';
 
 /**
  * Matching latency (docs/07 Giai đoạn 6, docs/services/matching-service.md): thời gian 1 ticket
- * chờ từ lúc enqueue tới lúc được ghép (matcher tìm ra cặp hợp lệ trong `tryPair`), theo matchType.
+ * chờ từ lúc enqueue tới lúc được ghép (matcher tìm ra cặp hợp lệ và xác nhận trong `confirmPair`), theo matchType.
  * KHÔNG tính tới lúc confirm — đó là latency phản ứng của user, không phải của matcher.
  */
 @Injectable()
 export class MatchingMetrics {
   private readonly logger = new Logger(MatchingMetrics.name);
   private readonly ticketWaitSeconds: Histogram;
+  private readonly matcherWindows: Counter;
 
   constructor(@Inject(METRICS_METER) meter: Meter) {
     this.ticketWaitSeconds = meter.createHistogram(
@@ -25,6 +26,25 @@ export class MatchingMetrics {
         },
       },
     );
+    this.matcherWindows = meter.createCounter(
+      'matching_matcher_windows_total',
+      {
+        description:
+          'Lần matcher xét cửa sổ ứng viên đầu shard, theo kết quả: matched | progress | contended | stalled. ' +
+          '"stalled" tăng nghĩa là đầu shard có ticket không ghép được (preference/block) — đo head-of-line blocking',
+      },
+    );
+  }
+
+  /** Kết quả một lần xét cửa sổ ứng viên (best-effort như `observeMatched`). */
+  observeWindow(outcome: string): void {
+    try {
+      this.matcherWindows.add(1, { outcome });
+    } catch (err) {
+      this.logger.warn(
+        `Ghi metric matching_matcher_windows_total lỗi: ${String(err)}`,
+      );
+    }
   }
 
   /**

@@ -20,6 +20,34 @@ import type { CoreApiEnv } from '../../config/env.validation';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * `canPair` trong MỘT truy vấn (trước đây 4 truy vấn tuần tự; matcher gọi nó hai lần mỗi cặp và
+ * Movie/Palm Match gọi lặp theo từng ứng viên). Cùng ngữ nghĩa từng nhánh của bản cũ:
+ * 1. block ĐANG hiệu lực theo MỘT chiều bất kỳ — dòng mới nhất của (blocker→blocked) là `blocked`;
+ * 2. report của MỘT chiều bất kỳ trong cooldown (kể cả chưa admin xử lý);
+ * 3. BẤT KỲ dòng block nào (kể cả `unblocked`) của một chiều trong cooldown.
+ * `$1/$2` = hai user, `$3` = mốc cooldown. Dùng `idx_blocks_pair_created` và
+ * `idx_reports_reporter_target_created`. Test trên Postgres thật: matching.integration.spec.ts.
+ */
+const CAN_PAIR_SQL = `
+SELECT (
+  EXISTS (
+    SELECT 1 FROM (SELECT action FROM blocks WHERE blocker_user_id = $1 AND blocked_user_id = $2 ORDER BY created_at DESC LIMIT 1) latest WHERE latest.action = 'blocked'
+  )
+  OR EXISTS (
+    SELECT 1 FROM (SELECT action FROM blocks WHERE blocker_user_id = $2 AND blocked_user_id = $1 ORDER BY created_at DESC LIMIT 1) latest WHERE latest.action = 'blocked'
+  )
+  OR EXISTS (
+    SELECT 1 FROM reports WHERE created_at >= $3
+      AND ((reporter_user_id = $1 AND target_user_id = $2) OR (reporter_user_id = $2 AND target_user_id = $1))
+  )
+  OR EXISTS (
+    SELECT 1 FROM blocks WHERE created_at >= $3
+      AND ((blocker_user_id = $1 AND blocked_user_id = $2) OR (blocker_user_id = $2 AND blocked_user_id = $1))
+  )
+) AS unpairable
+`;
+
 export interface ReportPageFilter {
   status?: ReportStatus;
 }
@@ -288,51 +316,24 @@ export class SafetyService {
    * Implementation thật của `MatchInteractionPolicy.canPair` (docs/services/safety-service.md
    * § 3.1) — verify lại ĐÚNG lúc matcher ghép, không chỉ lúc enqueue (docs/10 § 10.0.C).
    */
-  async canPair(userAId: string, userBId: string): Promise<boolean> {
-    const activeBlock =
-      (await this.isBlocked(userAId, userBId)) ||
-      (await this.isBlocked(userBId, userAId));
-    if (activeBlock) return false;
-
+  async canPair(
+    userAId: string,
+    userBId: string,
+    /** Chạy trên transaction của caller (cùng kết nối) thay vì mượn thêm một kết nối pool. */
+    manager?: EntityManager,
+  ): Promise<boolean> {
     const cooldownDays = this.config.getOrThrow(
       'SAFETY_REMATCH_COOLDOWN_DAYS',
       { infer: true },
     );
     const cutoff = new Date(Date.now() - cooldownDays * DAY_MS);
-
-    const recentReport = await this.reportRepo.exists({
-      where: [
-        {
-          reporterUserId: userAId,
-          targetUserId: userBId,
-          createdAt: MoreThanOrEqual(cutoff),
-        },
-        {
-          reporterUserId: userBId,
-          targetUserId: userAId,
-          createdAt: MoreThanOrEqual(cutoff),
-        },
-      ],
-    });
-    if (recentReport) return false;
-
-    const recentBlock = await this.blockRepo.exists({
-      where: [
-        {
-          blockerUserId: userAId,
-          blockedUserId: userBId,
-          createdAt: MoreThanOrEqual(cutoff),
-        },
-        {
-          blockerUserId: userBId,
-          blockedUserId: userAId,
-          createdAt: MoreThanOrEqual(cutoff),
-        },
-      ],
-    });
-    return !recentBlock;
+    const rows = (await (manager ?? this.blockRepo).query(CAN_PAIR_SQL, [
+      userAId,
+      userBId,
+      cutoff,
+    ])) as Array<{ unpairable: boolean }>;
+    return rows[0]?.unpairable !== true;
   }
-
   /** Moderation queue cho Admin (docs/12 § 12.7) — offset OK vì list nhỏ (docs/05 § 5.4). */
   async findReportsPage(
     filter: ReportPageFilter,

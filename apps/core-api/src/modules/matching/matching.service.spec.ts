@@ -110,7 +110,8 @@ describe('MatchingService (unit — mock repo/capabilities/economy)', () => {
     queue = {
       enqueue: jest.fn(async () => undefined),
       remove: jest.fn(async () => undefined),
-      popMin: jest.fn(async () => []),
+      peekWindow: jest.fn(async () => []),
+      claimPair: jest.fn(async () => true),
       listActiveShards: jest.fn(async () => []),
       markActive: jest.fn(async () => undefined),
       unmarkActive: jest.fn(async () => undefined),
@@ -468,7 +469,7 @@ describe('MatchingService (unit — mock repo/capabilities/economy)', () => {
         'matching:queue:voice:VN:5',
         String(expectedScore),
         'ticket-1',
-        'XX',
+        'XX_LT',
       );
       expect(result.replayed).toBe(false);
     });
@@ -501,7 +502,7 @@ describe('MatchingService (unit — mock repo/capabilities/economy)', () => {
         expect.any(String),
         expect.any(String),
         'ticket-1',
-        'XX',
+        'XX_LT',
       );
     });
 

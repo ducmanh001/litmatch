@@ -13,6 +13,7 @@ import type { Client, Middleware } from 'openapi-fetch';
 const AUTH_REFRESH_PATH = '/api/v1/auth/refresh' satisfies keyof paths;
 /** Header double-submit CSRF (ADR 0007) — cùng tên `x-csrf-token` phía core-api. */
 const CSRF_HEADER_NAME = 'x-csrf-token';
+const RESTORE_RETRY_DELAYS_MS = [0, 250, 1000] as const;
 
 export type CoreApiClient = Client<paths> & {
   /** Restore access token qua refresh cookie httpOnly trước protected UI/realtime. */
@@ -235,9 +236,19 @@ export function createApiClient(options: ApiClientOptions): CoreApiClient {
     async restoreSession(): Promise<boolean> {
       if (tokenStore.getAccessToken() !== null) return true;
       if (tokenStore.getStatus() === 'unauthenticated') return false;
-      const restored = await rotateSession();
-      if (!restored) expireSession();
-      return restored;
+      // A reload commonly coincides with a cold-start or a short network gap. Do not
+      // turn one transient refresh failure into a logout while the refresh cookie is
+      // still present. A real 401 still fails closed after the bounded retry budget.
+      for (const [attempt, delayMs] of RESTORE_RETRY_DELAYS_MS.entries()) {
+        if (delayMs > 0)
+          await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+        const restored = await rotateSession();
+        if (restored) return true;
+        if (tokenStore.getStatus() === 'unauthenticated') return false;
+        if (attempt === RESTORE_RETRY_DELAYS_MS.length - 1) break;
+      }
+      expireSession();
+      return false;
     },
     async refreshSession(): Promise<boolean> {
       const refreshed = await rotateSession();

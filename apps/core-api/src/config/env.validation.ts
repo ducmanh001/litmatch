@@ -1,6 +1,7 @@
 import {
   baseEnvSchema,
   createConfigValidator,
+  realtimeRedisUrlsSchema,
 } from '@litmatch/config-validator';
 import * as Joi from 'joi';
 
@@ -26,7 +27,16 @@ export interface CoreApiEnv {
   DATABASE_URL: string;
   DATABASE_POOL_MAX: number;
   DATABASE_POOL_ACQUIRE_TIMEOUT_MS: number;
+  DATABASE_STATEMENT_TIMEOUT_MS: number;
+  HTTP_MAX_CONCURRENT_REQUESTS: number;
   REDIS_URL: string;
+  /**
+   * Redis từng shard của mặt phẳng realtime (publish `realtime:user:*` + đọc presence), phân theo
+   * userId. Rỗng = một shard là `REDIS_URL`. PHẢI trùng danh sách + thứ tự với signaling-gateway.
+   */
+  REALTIME_REDIS_URLS: string;
+  /** Ordered physical queue shards; empty retains REDIS_URL. Change only with a coordinated drain/rebuild. */
+  MATCHING_REDIS_URLS: string;
   KAFKA_BROKERS: string;
   EVENT_BUS_KAFKA_REQUEST_TIMEOUT_MS: number;
   EVENT_BUS_KAFKA_RETRIES: number;
@@ -44,6 +54,11 @@ export interface CoreApiEnv {
   AUTH_GUEST_DEVICE_TOKEN_SECRET: string;
   AUTH_GUEST_DEVICE_TOKEN_TTL_DAYS: number;
   AUTH_PHONE_OTP_ENABLED: boolean;
+  AUTH_OTP_DELIVERY: 'response' | 'sms-http' | 'disabled';
+  AUTH_OTP_SMS_HTTP_URL: string;
+  AUTH_OTP_SMS_HTTP_TOKEN: string;
+  AUTH_OTP_SMS_HTTP_TIMEOUT_MS: number;
+  AUTH_OTP_SMS_TEMPLATE: string;
   AUTH_GOOGLE_CLIENT_ID: string;
   AUTH_APPLE_CLIENT_ID: string;
   AUTH_FACEBOOK_APP_ID: string;
@@ -81,10 +96,17 @@ export interface CoreApiEnv {
   ECONOMY_STORE_HTTP_TIMEOUT_MS: number;
   ECONOMY_OUTBOX_RELAY_ENABLED: boolean;
   ECONOMY_OUTBOX_RELAY_INTERVAL_MS: number;
+  ECONOMY_OUTBOX_RELAY_MAX_BATCHES_PER_TICK: number;
+  ECONOMY_OUTBOX_RELAY_TICK_BUDGET_MS: number;
   ECONOMY_OUTBOX_MAX_ATTEMPTS: number;
   ECONOMY_RECONCILIATION_ENABLED: boolean;
   ECONOMY_RECONCILIATION_INTERVAL_MS: number;
   ECONOMY_RECONCILIATION_FAST_INTERVAL_MS: number;
+  ECONOMY_RECONCILIATION_LAG_MS: number;
+  ECONOMY_RECONCILIATION_FULL_INTERVAL_MS: number;
+  ECONOMY_RECONCILIATION_BATCH_SIZE: number;
+  ECONOMY_RECONCILIATION_MAX_BATCHES_PER_TICK: number;
+  ECONOMY_RECONCILIATION_TICK_BUDGET_MS: number;
   ECONOMY_APPLE_WEBHOOK_VERIFIER: 'dev' | 'store';
   ECONOMY_APPLE_ROOT_CA_PEM: string;
   ECONOMY_GOOGLE_RTDN_VERIFIER: 'dev' | 'store';
@@ -109,7 +131,19 @@ export interface CoreApiEnv {
   PAYOS_CANCEL_URL: string;
   MATCHING_MATCHER_INTERVAL_MS: number;
   MATCHING_MATCHER_BATCH_SIZE: number;
+  /** Số ticket đầu shard matcher xét mỗi lần để tìm cặp tương thích (docs/services/matching-service.md § 3). */
+  MATCHING_MATCHER_CANDIDATE_WINDOW: number;
+  /** Số shard matcher drain song song mỗi pod; bị chặn theo pool Postgres (tối đa 1/4 pool). */
+  MATCHING_MATCHER_CONCURRENCY: number;
+  /**
+   * Thời gian (ms) matcher nhớ một cặp bị block/report để wake-up kế tiếp không hỏi lại và quét được
+   * sâu hơn; 0 = tắt. Chỉ có thể làm CHẬM một lần ghép (vd sau khi bỏ chặn), không bao giờ cho ghép
+   * cặp bị cấm — quyết định cuối cùng vẫn là `canPair` dưới lock.
+   */
+  MATCHING_MATCHER_UNPAIRABLE_CACHE_MS: number;
   MATCHING_SWEEPER_INTERVAL_MS: number;
+  MATCHING_QUEUE_REPAIR_INTERVAL_MS: number;
+  MATCHING_QUEUE_REPAIR_BATCH_SIZE: number;
   MATCHING_QUEUE_MAX_WAIT_SECONDS: number;
   MATCHING_CONFIRM_TIMEOUT_SECONDS: number;
   MATCHING_AGE_BAND_SIZE: number;
@@ -133,6 +167,7 @@ export interface CoreApiEnv {
   SOUL_RATING_WINDOW_SECONDS: number;
   SOUL_CHAT_MESSAGE_MAX_LENGTH: number;
   FRIEND_MESSAGE_MAX_LENGTH: number;
+  FRIEND_MESSAGE_NOTIFY_WINDOW_SECONDS: number;
   PROFILE_DIRECT_MESSAGE_DAILY_FIRST_CHAT_THRESHOLD: number;
   STREAK_MILESTONE_DAYS: string;
   STREAK_WARNING_HOURS: number;
@@ -146,6 +181,9 @@ export interface CoreApiEnv {
   CALLING_PENDING_TIMEOUT_SECONDS: number;
   CALLING_RECONNECT_WINDOW_SECONDS: number;
   CALLING_TICKER_INTERVAL_MS: number;
+  CALLING_JOB_LEASE_MS: number;
+  CALLING_TICK_BUDGET_MS: number;
+  CALLING_CLEANUP_CONCURRENCY: number;
   CALLING_TOKEN_TTL_SECONDS: number;
   PARTY_MAX_SPEAKERS: number;
   PARTY_MAX_MEMBERS: number;
@@ -202,6 +240,23 @@ export interface CoreApiEnv {
   MOOD_STATUS_TTL_HOURS: number;
   STORY_TTL_HOURS: number;
   STORY_SWEEPER_INTERVAL_MS: number;
+  RETENTION_MODE: 'off' | 'dry-run' | 'delete';
+  RETENTION_INTERVAL_MS: number;
+  RETENTION_BATCH_SIZE: number;
+  RETENTION_MAX_BATCHES_PER_TICK: number;
+  RETENTION_MAX_CONCURRENT_JOBS: number;
+  RETENTION_BATCH_PAUSE_MS: number;
+  NOTIFICATION_READ_RETENTION_DAYS: number;
+  NOTIFICATION_UNREAD_RETENTION_DAYS: number;
+  AUTH_REFRESH_RETENTION_GRACE_DAYS: number;
+  AUTH_REFRESH_ROTATED_RETENTION_DAYS: number;
+  AUTH_OTP_RETENTION_DAYS: number;
+  MATCHING_QUOTA_RETENTION_DAYS: number;
+  OUTBOX_PUBLISHED_RETENTION_DAYS: number;
+  OUTBOX_DEAD_LETTER_RETENTION_DAYS: number;
+  VIDEO_VIEW_RETENTION_DAYS: number;
+  VIDEO_DELETED_COMMENT_RETENTION_DAYS: number;
+  MOOD_EVENT_RETENTION_DAYS: number;
   VIDEO_CAPTION_MAX_LENGTH: number;
   VIDEO_UPLOAD_ENABLED: boolean;
   VIDEO_MODERATION_MODE: 'pre' | 'post';
@@ -214,6 +269,17 @@ export interface CoreApiEnv {
   VIDEO_RANK_WEIGHT_COMMENT: number;
   VIDEO_RANK_TIME_DECAY_HOURS: number;
   VIDEO_RANKING_JOB_INTERVAL_MS: number;
+  VIDEO_RANKING_BATCH_SIZE: number;
+  VIDEO_RANKING_MAX_BATCHES_PER_TICK: number;
+  VIDEO_RANKING_STALENESS_PCT: number;
+  VIDEO_RANKING_MAX_INTERVAL_HOURS: number;
+  VIDEO_RANKING_ACTIVE_REFRESH_SECONDS: number;
+  VIDEO_COUNTER_BUFFER_ENABLED: boolean;
+  VIDEO_COUNTER_FLUSH_INTERVAL_MS: number;
+  VIDEO_COUNTER_FLUSH_BATCH: number;
+  ADMIN_BROADCAST_JOB_INTERVAL_MS: number;
+  ADMIN_BROADCAST_BATCH_SIZE: number;
+  ADMIN_BROADCAST_MAX_BATCHES_PER_TICK: number;
   THROTTLE_TTL_SECONDS: number;
   THROTTLE_LIMIT: number;
   THROTTLE_STORAGE: 'memory' | 'redis';
@@ -253,6 +319,16 @@ export const coreApiEnvSchema = Joi.object({
   // Sàn 5: mỗi job nền singleton (ManagedInterval) giữ 1 kết nối cho advisory lock suốt lúc chạy và task
   // của nó cần thêm 1 kết nối nữa, nên pool nhỏ hơn dễ bị job tự chiếm hết.
   DATABASE_POOL_MAX: Joi.number().integer().min(5).max(100).default(10),
+  DATABASE_STATEMENT_TIMEOUT_MS: Joi.number()
+    .integer()
+    .min(100)
+    .max(120_000)
+    .default(15_000),
+  HTTP_MAX_CONCURRENT_REQUESTS: Joi.number()
+    .integer()
+    .min(0)
+    .max(10_000)
+    .default(0),
   // Thời hạn chờ lấy một kết nối khi pool đã đầy; hết hạn thì lỗi thay vì chờ vô hạn.
   DATABASE_POOL_ACQUIRE_TIMEOUT_MS: Joi.number()
     .integer()
@@ -262,6 +338,8 @@ export const coreApiEnvSchema = Joi.object({
   REDIS_URL: Joi.string()
     .uri({ scheme: ['redis', 'rediss'] })
     .default('redis://localhost:6379'),
+  REALTIME_REDIS_URLS: realtimeRedisUrlsSchema(),
+  MATCHING_REDIS_URLS: realtimeRedisUrlsSchema(),
   KAFKA_BROKERS: Joi.string().default('localhost:9092'),
   EVENT_BUS_KAFKA_REQUEST_TIMEOUT_MS: Joi.number()
     .integer()
@@ -297,6 +375,45 @@ export const coreApiEnvSchema = Joi.object({
   AUTH_GUEST_DEVICE_TOKEN_SECRET: Joi.string().min(32).required(),
   AUTH_GUEST_DEVICE_TOKEN_TTL_DAYS: Joi.number().integer().min(1).default(30),
   AUTH_PHONE_OTP_ENABLED: Joi.boolean().default(true),
+  // Cách giao mã OTP (ADR 0013). `response`: trả mã trong response HTTP để client tự điền — ai biết số
+  // điện thoại cũng đăng nhập được, nên CHỈ hợp lý cho dev/test/e2e và profile alpha chi phí 0 (runbook
+  // zero-cost-production, nơi đây là quyết định có chủ đích); production sẽ log lỗi mỗi lần khởi động.
+  // `sms-http`: POST tới cổng SMS (AUTH_OTP_SMS_HTTP_URL), response không chứa mã. `disabled`: tắt đăng
+  // nhập bằng số điện thoại. Mặc định `response` để không khoá đăng nhập của deployment đang chạy; đóng
+  // lỗ hổng = đặt `sms-http` hoặc `disabled` ở production (k8s/base đã đặt `disabled`).
+  AUTH_OTP_DELIVERY: Joi.string()
+    .valid('response', 'sms-http', 'disabled')
+    .default('response'),
+  // Cổng SMS (chỉ dùng khi AUTH_OTP_DELIVERY=sms-http): production bắt buộc https. Body JSON
+  // `{ to, message, reference }`, header `Authorization: Bearer <TOKEN>` nếu có token.
+  AUTH_OTP_SMS_HTTP_URL: Joi.string()
+    .allow('')
+    .default('')
+    .when('AUTH_OTP_DELIVERY', {
+      is: 'sms-http',
+      then: Joi.string()
+        .invalid('')
+        .when('NODE_ENV', {
+          is: 'production',
+          then: Joi.string().uri({ scheme: 'https' }),
+          otherwise: Joi.string().uri({ scheme: ['http', 'https'] }),
+        })
+        .required(),
+    }),
+  AUTH_OTP_SMS_HTTP_TOKEN: Joi.string().allow('').default(''),
+  AUTH_OTP_SMS_HTTP_TIMEOUT_MS: Joi.number()
+    .integer()
+    .min(500)
+    .max(10_000)
+    .default(3_000),
+  // Nội dung SMS; `{code}` bắt buộc, `{minutes}` tuỳ chọn. Không dấu để vừa một SMS GSM-7 (rẻ hơn).
+  AUTH_OTP_SMS_TEMPLATE: Joi.string()
+    .min(10)
+    .max(300)
+    .pattern(/\{code\}/u, 'phải chứa {code}')
+    .default(
+      'Ma OTP Litmatch cua ban la {code}. Het han sau {minutes} phut. Khong chia se ma nay cho bat ky ai.',
+    ),
   AUTH_GOOGLE_CLIENT_ID: Joi.string().allow('').default(''),
   AUTH_APPLE_CLIENT_ID: Joi.string().allow('').default(''),
   AUTH_FACEBOOK_APP_ID: Joi.string().allow('').default(''),
@@ -379,6 +496,16 @@ export const coreApiEnvSchema = Joi.object({
     .min(1)
     .max(100)
     .default(5),
+  ECONOMY_OUTBOX_RELAY_MAX_BATCHES_PER_TICK: Joi.number()
+    .integer()
+    .min(1)
+    .max(100)
+    .default(10),
+  ECONOMY_OUTBOX_RELAY_TICK_BUDGET_MS: Joi.number()
+    .integer()
+    .min(100)
+    .max(30_000)
+    .default(1000),
   ECONOMY_RECONCILIATION_ENABLED: Joi.boolean().default(true),
   ECONOMY_RECONCILIATION_INTERVAL_MS: Joi.number()
     .integer()
@@ -391,6 +518,35 @@ export const coreApiEnvSchema = Joi.object({
     .integer()
     .min(10_000)
     .default(60_000),
+  // Tier fast kiểm bất biến Nợ=Có TĂNG DẦN: chỉ cộng cửa sổ transaction cũ hơn `now() − LAG`. `created_at` là giờ
+  // BẮT ĐẦU transaction DB nên LAG phải lớn hơn transaction ghi sổ lâu nhất (transaction commit sau cửa sổ của nó
+  // sẽ lọt khỏi lần kiểm tăng dần cho tới lần dựng lại kế tiếp).
+  ECONOMY_RECONCILIATION_LAG_MS: Joi.number()
+    .integer()
+    .min(0)
+    .max(3_600_000)
+    .default(300_000),
+  // Chu kỳ dựng lại tổng cộng dồn từ TOÀN BỘ lịch sử ledger (lưới an toàn cho lần kiểm tăng dần; cũng chạy khi pod
+  // giành khoá singleton lần đầu). Đây là câu truy vấn duy nhất có chi phí tỉ lệ với cả bảng nên giữ thưa, tối thiểu 1 giờ.
+  ECONOMY_RECONCILIATION_FULL_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(3_600_000)
+    .default(86_400_000),
+  ECONOMY_RECONCILIATION_BATCH_SIZE: Joi.number()
+    .integer()
+    .min(1)
+    .max(10_000)
+    .default(2000),
+  ECONOMY_RECONCILIATION_MAX_BATCHES_PER_TICK: Joi.number()
+    .integer()
+    .min(1)
+    .max(1000)
+    .default(10),
+  ECONOMY_RECONCILIATION_TICK_BUDGET_MS: Joi.number()
+    .integer()
+    .min(100)
+    .max(30_000)
+    .default(1000),
 
   // payOS web top-up: credential chỉ ở core-api; URL callback chỉ phục vụ UX, không credit.
   PAYOS_CLIENT_ID: Joi.string().allow('').default(''),
@@ -464,7 +620,33 @@ export const coreApiEnvSchema = Joi.object({
   // Matching — event wake-up là đường chính; interval chỉ là backstop thưa (docs/services/matching-service.md § 8)
   MATCHING_MATCHER_INTERVAL_MS: Joi.number().integer().min(50).default(10_000),
   MATCHING_MATCHER_BATCH_SIZE: Joi.number().integer().min(1).default(20),
+  // 2 = hành vi cũ (chỉ xét 2 ticket đầu shard). Mặc định 32: mô phỏng cho thấy cửa sổ nhỏ để cặp đầu
+  // không khớp preference chặn cả shard (docs/plans/2026-10-17-...).
+  MATCHING_MATCHER_CANDIDATE_WINDOW: Joi.number()
+    .integer()
+    .min(2)
+    .max(64)
+    .default(32),
+  MATCHING_MATCHER_CONCURRENCY: Joi.number()
+    .integer()
+    .min(1)
+    .max(16)
+    .default(2),
+  MATCHING_MATCHER_UNPAIRABLE_CACHE_MS: Joi.number()
+    .integer()
+    .min(0)
+    .max(600_000)
+    .default(30_000),
   MATCHING_SWEEPER_INTERVAL_MS: Joi.number().integer().min(500).default(5000),
+  MATCHING_QUEUE_REPAIR_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(1000)
+    .default(5000),
+  MATCHING_QUEUE_REPAIR_BATCH_SIZE: Joi.number()
+    .integer()
+    .min(1)
+    .max(5000)
+    .default(500),
   MATCHING_QUEUE_MAX_WAIT_SECONDS: Joi.number().integer().min(5).default(120),
   MATCHING_CONFIRM_TIMEOUT_SECONDS: Joi.number().integer().min(3).default(15),
   MATCHING_AGE_BAND_SIZE: Joi.number().integer().min(1).default(5),
@@ -510,6 +692,14 @@ export const coreApiEnvSchema = Joi.object({
     .min(1)
     .max(4000)
     .default(2000),
+  // Gộp thông báo tin nhắn bạn bè: trong mỗi cửa sổ chỉ tin ĐẦU TIÊN của (người nhận, hội thoại) tạo
+  // notification + push; tin sau vẫn lưu + realtime + tính unread. 0 = tắt gộp (mỗi tin một thông báo
+  // như trước). Tối đa 1 giờ để push không bị nuốt quá lâu.
+  FRIEND_MESSAGE_NOTIFY_WINDOW_SECONDS: Joi.number()
+    .integer()
+    .min(0)
+    .max(3600)
+    .default(60),
 
   // Profile social actions — từ người bắt chuyện đầu tiên thứ N+1 trong ngày UTC,
   // mở chat trực tiếp cần một Gift để tạo khác biệt cho profile được quan tâm nhiều.
@@ -560,13 +750,25 @@ export const coreApiEnvSchema = Joi.object({
   CALLING_PENDING_TIMEOUT_SECONDS: Joi.number().integer().min(5).default(60),
   CALLING_RECONNECT_WINDOW_SECONDS: Joi.number().integer().min(5).default(30),
   CALLING_TICKER_INTERVAL_MS: Joi.number().integer().min(200).default(1000),
+  CALLING_JOB_LEASE_MS: Joi.number()
+    .integer()
+    .min(30_000)
+    .max(300_000)
+    .default(30_000),
+  CALLING_TICK_BUDGET_MS: Joi.number()
+    .integer()
+    .min(100)
+    .max(30_000)
+    .default(1000),
+  CALLING_CLEANUP_CONCURRENCY: Joi.number().integer().min(1).max(10).default(2),
   CALLING_TOKEN_TTL_SECONDS: Joi.number().integer().min(30).default(120),
 
   // Party Room — Giai đoạn 3 (docs/services/party-room-service.md § 7)
   // Cap speaker là giới hạn CỨNG theo docs/03 § 3.8.A (consumer tăng N×(N-1)) — chỉ nới khi có cascade SFU
   PARTY_MAX_SPEAKERS: Joi.number().integer().min(1).default(8),
   // Truyền vào LiveKit maxParticipants lúc tạo room — SFU tự chặn join vượt ngưỡng
-  PARTY_MAX_MEMBERS: Joi.number().integer().min(2).default(100),
+  // Trần cứng 500: mỗi sự kiện phòng (bình luận, vào/rời) là N PUBLISH Redis nên N không được vô hạn.
+  PARTY_MAX_MEMBERS: Joi.number().integer().min(2).max(500).default(100),
   PARTY_TOKEN_TTL_SECONDS: Joi.number().integer().min(30).default(120),
   // LiveKit tự đóng room trống sau N giây — backstop tầng SFU cho phòng vô chủ
   PARTY_EMPTY_ROOM_TIMEOUT_SECONDS: Joi.number().integer().min(30).default(300),
@@ -724,6 +926,97 @@ export const coreApiEnvSchema = Joi.object({
     .min(60_000)
     .default(3_600_000),
 
+  // Retention (ADR 0013): xoá dữ liệu vận hành cũ theo lô để bảng không phình vô hạn. `off` (mặc định) không
+  // chạy job; `dry-run` chỉ đếm hàng đủ điều kiện (gauge retention_eligible_rows{rule}) để xem tác động
+  // trước; `delete` xoá thật. Số ngày 0 = giữ vĩnh viễn bảng/quy tắc đó. Mỗi lô là một câu lệnh ngắn,
+  // tối đa BATCH_SIZE × MAX_BATCHES_PER_TICK hàng mỗi tick (mặc định ~1.600 hàng/giây).
+  RETENTION_MODE: Joi.string().valid('off', 'dry-run', 'delete').default('off'),
+  RETENTION_INTERVAL_MS: Joi.number().integer().min(10_000).default(60_000),
+  RETENTION_BATCH_SIZE: Joi.number()
+    .integer()
+    .min(100)
+    .max(50_000)
+    .default(5_000),
+  // 60 lô × 5.000 = 300.000 hàng/tick/quy tắc ≈ 432 triệu hàng/ngày — đủ cho refresh_tokens ở quy mô đề bài (~290 triệu/ngày,
+  // ADR 0014); mặc định cũ 20 chỉ xoá được 144 triệu/ngày nên backlog tăng mãi. Tick vẫn bị chặn bởi ngân sách 30 giây.
+  RETENTION_MAX_BATCHES_PER_TICK: Joi.number()
+    .integer()
+    .min(1)
+    .max(1_000)
+    .default(60),
+  // Số tick retention tối đa chạy CÙNG LÚC trong một process (mỗi tick giữ ≤ 2 kết nối pool); tick vượt ngân sách bị bỏ.
+  RETENTION_MAX_CONCURRENT_JOBS: Joi.number()
+    .integer()
+    .min(1)
+    .max(6)
+    .default(2),
+  RETENTION_BATCH_PAUSE_MS: Joi.number()
+    .integer()
+    .min(0)
+    .max(5_000)
+    .default(50),
+  // Notification đã đọc / chưa đọc (đọc hội thoại không đánh dấu notification đã đọc nên cần hạn riêng cho chưa đọc).
+  NOTIFICATION_READ_RETENTION_DAYS: Joi.number()
+    .integer()
+    .min(0)
+    .max(3_650)
+    .default(90),
+  NOTIFICATION_UNREAD_RETENTION_DAYS: Joi.number()
+    .integer()
+    .min(0)
+    .max(3_650)
+    .default(365),
+  // Vòng đời dữ liệu theo mô hình tăng trưởng (ADR 0014, `pnpm capacity:data`); 0 = giữ vĩnh viễn. Chỉ có hiệu lực khi
+  // RETENTION_MODE ≠ off; dry-run đếm hàng đủ điều kiện trước khi xoá thật.
+  // Sau khi token HẾT HẠN thêm N ngày thì job xoá hàng (theo `expires_at`, nên đổi AUTH_REFRESH_TTL_DAYS không làm xoá nhầm token
+  // còn hạn). 0 = không dọn.
+  AUTH_REFRESH_RETENTION_GRACE_DAYS: Joi.number()
+    .integer()
+    .min(0)
+    .max(365)
+    .default(7),
+  // QUYẾT ĐỊNH BẢO MẬT (ADR 0014): mỗi lần xoay xoá token ĐÃ XOAY cũ hơn N ngày của cùng họ. Giữ bảng nhỏ (~1 TB thay vì ~5 TB ở quy mô
+  // đề bài) nhưng rút cửa sổ phát hiện token bị đánh cắp từ ~AUTH_REFRESH_TTL_DAYS xuống N ngày: phát lại token cũ hơn N ngày chỉ bị từ chối,
+  // không thu hồi cả họ. Mặc định 0 = TẮT (giữ nguyên hành vi bảo mật) cho tới khi chủ hệ thống chấp nhận đánh đổi; chỉ chạy khi RETENTION_MODE=delete.
+  AUTH_REFRESH_ROTATED_RETENTION_DAYS: Joi.number()
+    .integer()
+    .min(0)
+    .max(365)
+    .default(0),
+  AUTH_OTP_RETENTION_DAYS: Joi.number().integer().min(0).max(365).default(1),
+  MATCHING_QUOTA_RETENTION_DAYS: Joi.number()
+    .integer()
+    .min(0)
+    .max(365)
+    .default(2),
+  OUTBOX_PUBLISHED_RETENTION_DAYS: Joi.number()
+    .integer()
+    .min(0)
+    .max(3_650)
+    .default(7),
+  OUTBOX_DEAD_LETTER_RETENTION_DAYS: Joi.number()
+    .integer()
+    .min(0)
+    .max(3_650)
+    .default(0), // dead-letter cần người xử lý nên mặc định GIỮ; chỉ bật khi đã có quy trình xử lý
+  // QUYẾT ĐỊNH SẢN PHẨM (ADR 0014): xoá hàng khử trùng quá N ngày thì người xem lại video cũ có thể được đếm thêm một lần. Mặc định 0 = GIỮ cho tới
+  // khi chủ sản phẩm chọn (khuyến nghị 180).
+  VIDEO_VIEW_RETENTION_DAYS: Joi.number()
+    .integer()
+    .min(0)
+    .max(3_650)
+    .default(0),
+  VIDEO_DELETED_COMMENT_RETENTION_DAYS: Joi.number()
+    .integer()
+    .min(0)
+    .max(3_650)
+    .default(30),
+  MOOD_EVENT_RETENTION_DAYS: Joi.number()
+    .integer()
+    .min(0)
+    .max(3_650)
+    .default(7),
+
   // Video ngắn — W5, hướng Momo (docs/services/short-video-service.md)
   VIDEO_CAPTION_MAX_LENGTH: Joi.number().integer().min(1).default(500),
   // Fail-closed: upload chỉ mở khi môi trường chủ động bật và provider thật đã được tích hợp.
@@ -749,6 +1042,64 @@ export const coreApiEnvSchema = Joi.object({
     .integer()
     .min(60_000)
     .default(1_800_000),
+  // Mỗi tick tính lại tối đa BATCH_SIZE × MAX_BATCHES_PER_TICK video (xoay vòng theo rank_computed_at, video mới
+  // trước). Chu kỳ đầy đủ = số video / (lô × số lô) × chu kỳ tick: tăng theo quy mô (plan 2026-10-17 § 7a).
+  VIDEO_RANKING_BATCH_SIZE: Joi.number()
+    .integer()
+    .min(100)
+    .max(20_000)
+    .default(2_000),
+  VIDEO_RANKING_MAX_BATCHES_PER_TICK: Joi.number()
+    .integer()
+    .min(1)
+    .max(100)
+    .default(5),
+  // Ranking theo HẠN TÍNH LẠI (ADR 0014): khoảng tính lại tỉ lệ với (decay + tuổi) nên công việc tỉ lệ với video trẻ/hoạt động,
+  // không với cả catalogue. Cần số lô × cỡ lô × (3600 / chu kỳ tick) ≥ số video đến hạn mỗi giờ (~3,4%/giờ tổng video ở tuổi trung bình).
+  VIDEO_RANKING_STALENESS_PCT: Joi.number().min(0.1).max(50).default(1),
+  VIDEO_RANKING_MAX_INTERVAL_HOURS: Joi.number()
+    .integer()
+    .min(1)
+    .max(8760)
+    .default(168),
+  VIDEO_RANKING_ACTIVE_REFRESH_SECONDS: Joi.number()
+    .integer()
+    .min(60)
+    .max(86400)
+    .default(600),
+  // Bộ đệm counter view/like/comment trên Redis (ADR 0013): gom nhiều lượt trên cùng video thành MỘT câu UPDATE mỗi
+  // tick để video viral không thành hàng nóng. Tắt mặc định = cộng thẳng vào DB trong transaction như trước. Bật thì
+  // số đếm hiển thị trễ tối đa FLUSH_INTERVAL_MS; Redis lỗi thì tự quay về cộng thẳng vào DB.
+  VIDEO_COUNTER_BUFFER_ENABLED: Joi.boolean().default(false),
+  VIDEO_COUNTER_FLUSH_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(500)
+    .max(60_000)
+    .default(2_000),
+  VIDEO_COUNTER_FLUSH_BATCH: Joi.number()
+    .integer()
+    .min(10)
+    .max(5_000)
+    .default(500),
+
+  // Broadcast thông báo của admin chạy nền (ADR 0013): mỗi tick gửi tối đa BATCH_SIZE × MAX_BATCHES_PER_TICK người
+  // (mặc định 500 × 20 mỗi 2 giây = trần lý thuyết 5.000 người/giây khi tick xong trong 2 giây; thực tế thấp hơn tuỳ tốc độ
+  // ghi DB và push, chưa đo). Tăng lô/số lô nếu DB còn dư tải ghi, giảm nếu push provider nghẽn; lô > 1.000 bị chặn.
+  ADMIN_BROADCAST_JOB_INTERVAL_MS: Joi.number()
+    .integer()
+    .min(500)
+    .max(60_000)
+    .default(2_000),
+  ADMIN_BROADCAST_BATCH_SIZE: Joi.number()
+    .integer()
+    .min(10)
+    .max(1_000)
+    .default(500),
+  ADMIN_BROADCAST_MAX_BATCHES_PER_TICK: Joi.number()
+    .integer()
+    .min(1)
+    .max(200)
+    .default(20),
 
   THROTTLE_TTL_SECONDS: Joi.number().integer().min(1).default(60),
   THROTTLE_LIMIT: Joi.number().integer().min(1).default(100),

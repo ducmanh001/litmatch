@@ -253,23 +253,51 @@ describe('SafetyService', () => {
       expect(await service.canPair('a', 'b')).toBe(true);
     });
 
-    it('có block đang active (1 chiều bất kỳ) → false', async () => {
-      blockRepo.findOne.mockImplementation(
-        async ({ where }: { where: { blockerUserId: string } }) =>
-          where.blockerUserId === 'a' ? { action: BlockAction.Blocked } : null,
+    it('truy vấn báo unpairable (block đang hiệu lực / report / sự kiện block trong cooldown) → false', async () => {
+      blockRepo.query.mockResolvedValue([{ unpairable: true }]);
+      expect(await service.canPair('a', 'b')).toBe(false);
+    });
+
+    it('chỉ MỘT truy vấn duy nhất (không findOne/exists lẻ) với (userA, userB, mốc cooldown)', async () => {
+      const before = Date.now();
+      blockRepo.query.mockResolvedValue([{ unpairable: false }]);
+
+      expect(await service.canPair('a', 'b')).toBe(true);
+
+      expect(blockRepo.query).toHaveBeenCalledTimes(1);
+      const [sql, params] = blockRepo.query.mock.calls[0] as [
+        string,
+        [string, string, Date],
+      ];
+      expect(sql).toContain('FROM blocks');
+      expect(sql).toContain('FROM reports');
+      expect(params.slice(0, 2)).toEqual(['a', 'b']);
+      // cooldown cấu hình 30 ngày (configStub)
+      expect(params[2].getTime()).toBeGreaterThanOrEqual(
+        before - 30 * 24 * 60 * 60 * 1000 - 1,
       );
-      expect(await service.canPair('a', 'b')).toBe(false);
+      expect(params[2].getTime()).toBeLessThanOrEqual(
+        Date.now() - 30 * 24 * 60 * 60 * 1000 + 1,
+      );
+      expect(blockRepo.findOne).not.toHaveBeenCalled();
+      expect(blockRepo.exists).not.toHaveBeenCalled();
+      expect(reportRepo.exists).not.toHaveBeenCalled();
     });
 
-    it('có report gần đây trong cooldown (kể cả chưa admin xử lý) → false', async () => {
-      reportRepo.exists.mockResolvedValue(true);
-      expect(await service.canPair('a', 'b')).toBe(false);
+    it('lỗi DB → ném lên (matcher fail closed, ticket được trả về hàng đợi), không coi là ghép được', async () => {
+      blockRepo.query.mockRejectedValue(new Error('db down'));
+      await expect(service.canPair('a', 'b')).rejects.toThrow('db down');
     });
 
-    it('đã unblock nhưng sự kiện còn trong cooldown window → vẫn false', async () => {
-      blockRepo.findOne.mockResolvedValue(null); // không active
-      blockRepo.exists.mockResolvedValue(true); // nhưng có sự kiện trong window
-      expect(await service.canPair('a', 'b')).toBe(false);
+    it('có truyền manager → chạy trên transaction của caller, KHÔNG mượn thêm kết nối từ repo (tránh cạn pool khi đang giữ transaction)', async () => {
+      const manager = {
+        query: jest.fn(async () => [{ unpairable: true }]),
+      };
+
+      expect(await service.canPair('a', 'b', manager as never)).toBe(false);
+
+      expect(manager.query).toHaveBeenCalledTimes(1);
+      expect(blockRepo.query).not.toHaveBeenCalled();
     });
   });
 

@@ -15,7 +15,10 @@ describe('HealthController readiness', () => {
   ] as const)(
     'fanout=%s, clusterAdapter=%s → %s',
     (fanoutReady, adapterReady, status, httpStatus) => {
-      const signaling = { isReady: () => fanoutReady } as SignalingGateway;
+      const signaling = {
+        isReady: () => fanoutReady,
+        shardStatus: () => ({ serving: fanoutReady ? 3 : 0, total: 3 }),
+      } as unknown as SignalingGateway;
       const redisAdapter = {
         isReady: () => adapterReady,
       } as SignalingRedisAdapterService;
@@ -26,6 +29,7 @@ describe('HealthController readiness', () => {
 
       expect(result.status).toBe(status);
       expect(result.checks.redisSubscription).toBe(fanoutReady ? 'up' : 'down');
+      expect(result.checks.realtimeShards).toBe(fanoutReady ? '3/3' : '0/3');
       expect(result.checks.redisClusterAdapter).toBe(
         adapterReady ? 'up' : 'down',
       );

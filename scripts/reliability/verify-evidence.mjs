@@ -1,10 +1,27 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
 
 const evidenceDir = process.env['RELIABILITY_EVIDENCE_DIR'];
 if (!evidenceDir) {
   throw new Error(
     'RELIABILITY_EVIDENCE_DIR is required (directory containing loadtest.json, game-day.json and slo-dashboard.json)',
+  );
+}
+
+const expectedSha =
+  process.env['RELIABILITY_EXPECTED_GIT_SHA'] ??
+  process.env['GITHUB_SHA'] ??
+  execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+if (!/^[0-9a-f]{40}$/i.test(expectedSha))
+  throw new Error('Expected release SHA must be a full 40-character git SHA');
+let expectedEnvironment = process.env['RELIABILITY_EXPECTED_ENVIRONMENT'];
+if (
+  expectedEnvironment &&
+  !['staging', 'production'].includes(expectedEnvironment)
+) {
+  throw new Error(
+    'RELIABILITY_EXPECTED_ENVIRONMENT must be staging or production',
   );
 }
 
@@ -49,16 +66,35 @@ for (const { name, maxAgeDays, checks } of required) {
 
   if (!['staging', 'production'].includes(evidence.environment))
     problems.push('environment must be staging or production');
+  expectedEnvironment ??= evidence.environment;
+  if (evidence.environment !== expectedEnvironment)
+    problems.push(
+      'environment must match the other evidence and expected environment',
+    );
   if (evidence.status !== 'pass') problems.push('status must be pass');
-  if (!/^[0-9a-f]{7,40}$/i.test(evidence.gitSha ?? ''))
-    problems.push('gitSha must identify the tested build');
+  if (evidence.gitSha !== expectedSha)
+    problems.push('gitSha must match the expected release SHA');
   if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > maxAgeDays * 86_400_000)
     problems.push(`executedAt must be within ${maxAgeDays} days`);
-  if (!evidence.runUrl)
-    problems.push('runUrl must link immutable raw evidence');
-  if (!evidence.owner) problems.push('owner must name the accountable DRI');
+  try {
+    const url = new URL(evidence.runUrl);
+    if (url.protocol !== 'https:' || url.username || url.password)
+      throw new Error('invalid evidence link');
+  } catch {
+    problems.push(
+      'runUrl must be an HTTPS link to immutable raw evidence without credentials',
+    );
+  }
+  if (typeof evidence.owner !== 'string' || !evidence.owner.trim())
+    problems.push('owner must name the accountable DRI');
+  const artifactChecks = Array.isArray(evidence.checks) ? evidence.checks : [];
+  if (
+    !Array.isArray(evidence.checks) ||
+    !artifactChecks.every((check) => typeof check === 'string')
+  )
+    problems.push('checks must be an array of check names');
   for (const check of checks) {
-    if (!evidence.checks?.includes(check))
+    if (!artifactChecks.includes(check))
       problems.push(`checks must include ${check}`);
   }
 

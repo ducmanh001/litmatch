@@ -137,6 +137,8 @@ describe('LivekitSdkClient (provider adapter)', () => {
     const providerError = new Error('LiveKit unavailable');
     mockRoomService.deleteRoom.mockRejectedValueOnce(providerError);
     await expect(client.deleteRoom('party-1')).rejects.toBe(providerError);
+    mockRoomService.deleteRoom.mockRejectedValueOnce({ status: 404 });
+    await expect(client.deleteRoom('already-removed')).resolves.toBeUndefined();
   });
 
   it('verify webhook trước khi map event; lỗi signature không bị nuốt', async () => {

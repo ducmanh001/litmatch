@@ -44,7 +44,7 @@ import type {
   SoulEndedEventData,
   SoulMessageEventData,
 } from '@litmatch/common-dtos';
-import type Redis from 'ioredis';
+import type { RealtimePublisherPort } from '../../common/realtime/realtime-publisher.port';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import type { CoreApiEnv } from '../../config/env.validation';
 import type { RateSessionDto, SendSoulMessageDto } from './dto/soul-match.dtos';
@@ -76,7 +76,7 @@ export class SoulMatchService {
     private readonly friendService: FriendService,
     private readonly userService: UserService,
     private readonly config: ConfigService<CoreApiEnv, true>,
-    @Inject(SOUL_MATCH_REDIS) private readonly redis: Redis,
+    @Inject(SOUL_MATCH_REDIS) private readonly redis: RealtimePublisherPort,
   ) {}
 
   /** Trạng thái phòng cho member poll — chỉ verdict của mình + cờ matched (spec § 2). */
@@ -324,6 +324,7 @@ export class SoulMatchService {
             matched: await this.friendService.areFriends(
               user.userId,
               partnerId,
+              manager,
             ),
           };
         }
@@ -340,6 +341,7 @@ export class SoulMatchService {
         let matched = await this.friendService.areFriends(
           user.userId,
           partnerId,
+          manager,
         );
         if (dto.verdict === SoulMatchVerdict.Like) {
           const partnerRating = await manager.findOneBy(SoulMatchRating, {

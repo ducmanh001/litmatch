@@ -28,6 +28,26 @@ export interface DisplayStreak {
 }
 
 /**
+ * `recordActivity` sẽ KHÔNG đổi gì khi người gửi đã được ghi nhận hôm nay VÀ không còn bước xác
+ * nhận nào đang chờ (bên kia chưa nhắn hôm nay, hoặc hôm nay đã xác nhận rồi). Điều kiện cuối chỉ
+ * để chặn dữ liệu bất thường (cả hai bên đã "active" mà chưa được xác nhận): vẫn đi qua transaction
+ * để sửa, thay vì bị đường nhanh bỏ qua.
+ */
+function isNoOpActivity(
+  row: ConversationStreak,
+  senderIsLow: boolean,
+  today: string,
+): boolean {
+  const senderToday =
+    (senderIsLow ? row.userLowLastActiveDate : row.userHighLastActiveDate) ===
+    today;
+  const otherToday =
+    (senderIsLow ? row.userHighLastActiveDate : row.userLowLastActiveDate) ===
+    today;
+  return senderToday && !(otherToday && row.lastConfirmedDate !== today);
+}
+
+/**
  * Streak trò chuyện (docs/services/streak-service.md) — sub-service nội bộ của `friend`, chỉ
  * `FriendService` gọi (docs/05 § 5.3). Tính on-write: `recordActivity` khoá row FOR UPDATE để
  * serialize 2 bên gửi message gần như đồng thời, tự tạo row nếu chưa có (1:1 lazy với
@@ -55,6 +75,19 @@ export class StreakService {
   ): Promise<RecordActivityResult> {
     const isLow = conversation.userLowId === senderUserId;
     const today = todayUtc();
+
+    // Đường nhanh: sau tin đầu tiên của người gửi trong ngày UTC, mọi tin tiếp theo của họ không
+    // đổi gì trong row này, nhưng transaction bên dưới vẫn tốn một row lock và vài round trip cho
+    // MỖI tin nhắn. Đọc không khoá để bỏ qua các lời gọi đó. An toàn dưới race: các cột ngày chỉ
+    // tiến tới `today` và `lastConfirmedDate` được đặt trong cùng transaction với ngày của bên
+    // thứ hai, nên bản đọc cũ chỉ có thể báo "còn việc" (đi tiếp vào transaction, nơi mọi thứ
+    // được đọc lại dưới lock), không bao giờ báo "không còn việc" sai.
+    const current = await this.streakRepo.findOneBy({
+      conversationId: conversation.id,
+    });
+    if (current && isNoOpActivity(current, isLow, today)) {
+      return { streak: current, milestoneHit: null };
+    }
 
     return this.dataSource.transaction(async (manager) => {
       await manager.query(

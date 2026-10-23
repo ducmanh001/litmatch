@@ -9,11 +9,8 @@ import { DataSource, EntityManager, Repository } from 'typeorm';
 import { canonicalPair } from '../../common/entities/canonical-pair';
 import { fnv1aHash } from '../../common/hash/fnv1a';
 import { todayUtc } from '../../common/date/utc-date';
-import {
-  PALM_MATCH_ADVISORY_LOCK_KEY,
-  PALM_ZODIAC_SIGNS,
-  palmMatchSeedInput,
-} from './palm-match.constants';
+import { lockAdvisoryXact } from '../../database/advisory-lock';
+import { PALM_ZODIAC_SIGNS, palmMatchSeedInput } from './palm-match.constants';
 import { PalmMatchClientState } from './dto/palm-match.dtos';
 import {
   PalmMatchActiveParticipant,
@@ -33,6 +30,11 @@ import { SafetyService } from '../safety';
 
 import type { CoreApiEnv } from '../../config/env.validation';
 import type { PalmZodiacSign } from './palm-match.constants';
+
+/** Số ứng viên tối đa xét mỗi lượt ghép (mỗi ứng viên: giành hàng + kiểm active + canPair). */
+const MATCH_MAX_CANDIDATES = 20;
+/** Số entry quá hạn dọn mỗi lượt join — chặn để một lượt không gánh cả backlog. */
+const STALE_PURGE_BATCH = 50;
 
 export interface PalmMatchReading {
   category: PalmMatchCategory;
@@ -108,26 +110,29 @@ export class PalmMatchService {
   }
 
   /**
-   * Enqueue idempotent rồi thử ghép với entry cũ nhất. Advisory transaction lock serialize phần
-   * chọn cặp; PK queue/active-participant vẫn là chốt DB cuối nếu implementation đổi sau này.
+   * Enqueue idempotent rồi thử ghép với entry cũ nhất. KHÔNG có khoá toàn cục: người MỚI hơn giành entry đối tác
+   * cũ hơn bằng `FOR UPDATE SKIP LOCKED` (`tryMatch`) nên các lượt join của những user khác nhau không xếp hàng sau
+   * nhau; PK queue/active-participant là chốt DB cuối. Hai người vào cùng một lúc có thể bỏ lỡ nhau (mỗi bên
+   * thấy bên kia đang bị khoá) — lượt poll `getCurrent` tiếp theo thử ghép lại.
+   *
+   * Các lượt join của CÙNG một user (bấm đúp, hai tab) được tuần tự hoá bằng khoá advisory THEO USER: nếu không,
+   * lượt thứ hai đọc "chưa active" trước khi lượt đầu commit rồi chèn lại entry sau khi user đã được ghép.
+   *
+   * Khoá advisory KHÔNG đủ khi người được chọn là bên bị giành: một user KHÁC (D) có thể giành entry của mình (B) bằng
+   * `FOR UPDATE SKIP LOCKED` trong `tryMatch` ngay giữa lúc B kiểm tra "chưa active" và lúc B chèn entry, commit phiên
+   * active; B tiếp tục chèn LẠI entry và trả `queued` cho user đã active, để lại một hàng queue thừa. Vì vậy sau khi chèn,
+   * B khoá hàng queue của CHÍNH MÌNH (chờ nếu D đang giữ nó; từ đây không ai giành được B nữa, `SKIP LOCKED` bỏ qua) rồi
+   * KIỂM LẠI active ở ranh giới ghi: nếu D đã ghép B thì dọn entry vừa chèn và trả đúng phiên đang active.
    */
   async joinQueue(userId: string): Promise<PalmMatchStateView> {
     return this.dataSource.transaction(async (manager) => {
-      await this.lockMatcher(manager);
+      await lockAdvisoryXact(manager, 'palm-match-join', userId);
       await this.expireActiveForUser(manager, userId);
 
       const activeState = await this.activeState(manager, userId);
       if (activeState) return activeState;
 
-      const queueMaxWaitSeconds = this.config.getOrThrow(
-        'PALM_MATCH_QUEUE_MAX_WAIT_SECONDS',
-        { infer: true },
-      );
-      const queueCutoff = new Date(Date.now() - queueMaxWaitSeconds * 1000);
-      await manager.query(
-        'DELETE FROM palm_match_queue_entries WHERE queued_at < $1',
-        [queueCutoff],
-      );
+      await this.purgeStaleEntries(manager);
       await manager
         .createQueryBuilder()
         .insert()
@@ -135,53 +140,16 @@ export class PalmMatchService {
         .values({ userId })
         .orIgnore()
         .execute();
-
-      const candidates = (await manager.query(
-        `SELECT user_id FROM palm_match_queue_entries
-         WHERE user_id <> $1 ORDER BY queued_at ASC, user_id ASC LIMIT 20`,
+      await manager.query(
+        `SELECT 1 FROM palm_match_queue_entries WHERE user_id = $1 FOR UPDATE`,
         [userId],
-      )) as Array<{ user_id: string }>;
-
-      let partnerId: string | undefined;
-      for (const candidate of candidates) {
-        const candidateActive = await manager.findOneBy(
-          PalmMatchActiveParticipant,
-          { userId: candidate.user_id },
-        );
-        if (candidateActive) {
-          await manager.delete(PalmMatchQueueEntry, {
-            userId: candidate.user_id,
-          });
-          continue;
-        }
-        // Re-check đúng lúc ghép, không tin state ở thời điểm enqueue.
-        if (await this.safetyService.canPair(userId, candidate.user_id)) {
-          partnerId = candidate.user_id;
-          break;
-        }
-      }
-
-      if (!partnerId) {
-        const queued = await manager.findOneByOrFail(PalmMatchQueueEntry, {
-          userId,
-        });
-        return {
-          state: PalmMatchClientState.Queued,
-          queuedAt: queued.queuedAt.toISOString(),
-        };
-      }
-
-      const session = await this.createSessionSnapshot(
-        manager,
-        userId,
-        partnerId,
       );
-      await manager.delete(PalmMatchQueueEntry, [userId, partnerId]);
-      await manager.insert(PalmMatchActiveParticipant, [
-        { userId, sessionId: session.id },
-        { userId: partnerId, sessionId: session.id },
-      ]);
-      return this.sessionView(session, userId);
+      const claimedMeanwhile = await this.activeState(manager, userId);
+      if (claimedMeanwhile) {
+        await manager.delete(PalmMatchQueueEntry, { userId });
+        return claimedMeanwhile;
+      }
+      return this.tryMatch(manager, userId);
     });
   }
 
@@ -203,10 +171,8 @@ export class PalmMatchService {
         await manager.delete(PalmMatchQueueEntry, { userId });
         return { state: PalmMatchClientState.Idle };
       }
-      return {
-        state: PalmMatchClientState.Queued,
-        queuedAt: queued.queuedAt.toISOString(),
-      };
+      // Tự chữa: hai người join cùng lúc có thể bỏ lỡ nhau (SKIP LOCKED) — mỗi lượt poll thử ghép lại.
+      return this.tryMatch(manager, userId);
     });
   }
 
@@ -303,7 +269,8 @@ export class PalmMatchService {
    */
   async dismissCurrent(userId: string): Promise<PalmMatchStateView> {
     return this.dataSource.transaction(async (manager) => {
-      await this.lockMatcher(manager);
+      // Không cần khoá toàn cục: nếu entry đang bị một lượt ghép giữ khoá thì DELETE chờ lượt đó commit rồi
+      // thấy hàng đã mất và đọc active-participant bên dưới (đã được ghép → huỷ cho cả hai).
       await manager.delete(PalmMatchQueueEntry, { userId });
       const active = await manager.findOneBy(PalmMatchActiveParticipant, {
         userId,
@@ -325,10 +292,124 @@ export class PalmMatchService {
 
   // ---------- nội bộ ----------
 
-  private async lockMatcher(manager: EntityManager): Promise<void> {
-    await manager.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
-      PALM_MATCH_ADVISORY_LOCK_KEY,
+  /**
+   * Dọn entry quá hạn chờ — có chặn (50 hàng) và `SKIP LOCKED` nên không chặn/không bị chặn bởi lượt ghép khác;
+   * `idx_palm_match_queue_order` phục vụ quét theo `queued_at`.
+   */
+  private async purgeStaleEntries(manager: EntityManager): Promise<void> {
+    const maxWaitSeconds = this.config.getOrThrow(
+      'PALM_MATCH_QUEUE_MAX_WAIT_SECONDS',
+      { infer: true },
+    );
+    await manager.query(
+      `DELETE FROM palm_match_queue_entries
+        WHERE user_id IN (
+          SELECT user_id FROM palm_match_queue_entries
+           WHERE queued_at < $1
+           ORDER BY queued_at ASC
+           LIMIT $2
+           FOR UPDATE SKIP LOCKED
+        )`,
+      [new Date(Date.now() - maxWaitSeconds * 1000), STALE_PURGE_BATCH],
+    );
+  }
+
+  /**
+   * Một lượt thử ghép cho `userId` (đã có entry). QUY TẮC "người MỚI HƠN giành người CŨ HƠN": chỉ xét các entry cũ
+   * hơn mình theo (queued_at, user_id) và giành bằng `FOR UPDATE SKIP LOCKED` (không bao giờ chờ nên không
+   * deadlock; ứng viên cũ nhất còn rảnh được chọn trước = FIFO). Không khoá hàng của chính mình khi tìm: nếu
+   * mình khoá sớm thì mọi người mới hơn đều thấy mình "đang bị khoá" và bỏ qua → cả hàng đợi poll cùng lúc sẽ
+   * không ai ghép được. Sau khi chọn được đối tác mới xoá entry của mình (DELETE chờ nếu một lượt mới hơn đang
+   * giành mình; lượt đó commit xong thì DELETE không còn hàng → nhả đối tác, dựng lại state). Mọi cạnh chờ đều đi
+   * từ cũ sang mới nên không có chu trình. Cặp (cũ, mới) bị bỏ lỡ do khoá tạm thời sẽ được ghép ở lượt poll kế
+   * tiếp của người MỚI hơn.
+   */
+  private async tryMatch(
+    manager: EntityManager,
+    userId: string,
+  ): Promise<PalmMatchStateView> {
+    const own = (await manager.query(
+      `SELECT queued_at FROM palm_match_queue_entries WHERE user_id = $1`,
+      [userId],
+    )) as Array<{ queued_at: Date }>;
+    const ownEntry = own[0];
+    if (ownEntry === undefined) {
+      return (
+        (await this.activeState(manager, userId)) ?? {
+          state: PalmMatchClientState.Idle,
+        }
+      );
+    }
+
+    const maxWaitSeconds = this.config.getOrThrow(
+      'PALM_MATCH_QUEUE_MAX_WAIT_SECONDS',
+      { infer: true },
+    );
+    const cutoff = new Date(Date.now() - maxWaitSeconds * 1000);
+    const skipped: string[] = [];
+    let partnerId: string | undefined;
+    for (let i = 0; i < MATCH_MAX_CANDIDATES; i += 1) {
+      const rows = (await manager.query(
+        // So sánh (queued_at, user_id) NGAY TRONG SQL (đủ độ chính xác micro giây; truyền qua JS Date sẽ cắt
+        // về mili giây và hai bên có thể cùng coi nhau là "không cũ hơn").
+        `SELECT c.user_id FROM palm_match_queue_entries c
+          WHERE (c.queued_at, c.user_id) < (
+                  SELECT o.queued_at, o.user_id FROM palm_match_queue_entries o WHERE o.user_id = $1
+                )
+            AND c.queued_at >= $2 AND c.user_id <> ALL($3::uuid[])
+          ORDER BY c.queued_at ASC, c.user_id ASC
+          LIMIT 1
+          FOR UPDATE OF c SKIP LOCKED`,
+        [userId, cutoff, skipped],
+      )) as Array<{ user_id: string }>;
+      const candidateId = rows[0]?.user_id;
+      if (candidateId === undefined) break;
+
+      const candidateActive = await manager.findOneBy(
+        PalmMatchActiveParticipant,
+        { userId: candidateId },
+      );
+      if (candidateActive) {
+        await manager.delete(PalmMatchQueueEntry, { userId: candidateId });
+        skipped.push(candidateId);
+        continue;
+      }
+      // Re-check đúng lúc ghép, không tin state ở thời điểm enqueue. Chạy trên transaction này.
+      if (await this.safetyService.canPair(userId, candidateId, manager)) {
+        partnerId = candidateId;
+        break;
+      }
+      skipped.push(candidateId);
+    }
+
+    if (partnerId === undefined) {
+      return {
+        state: PalmMatchClientState.Queued,
+        queuedAt: ownEntry.queued_at.toISOString(),
+      };
+    }
+
+    // Xoá entry của chính mình để "chốt" lượt ghép. Nếu một lượt mới hơn đang giành mình thì DELETE chờ nó
+    // commit rồi không còn hàng → bỏ lượt này (nhả đối tác) và dựng lại state từ bảng active.
+    const claimed = await manager.delete(PalmMatchQueueEntry, { userId });
+    if (!claimed.affected) {
+      return (
+        (await this.activeState(manager, userId)) ?? {
+          state: PalmMatchClientState.Idle,
+        }
+      );
+    }
+    const session = await this.createSessionSnapshot(
+      manager,
+      userId,
+      partnerId,
+    );
+    await manager.delete(PalmMatchQueueEntry, { userId: partnerId });
+    await manager.insert(PalmMatchActiveParticipant, [
+      { userId, sessionId: session.id },
+      { userId: partnerId, sessionId: session.id },
     ]);
+    return this.sessionView(session, userId);
   }
 
   private async createSessionSnapshot(

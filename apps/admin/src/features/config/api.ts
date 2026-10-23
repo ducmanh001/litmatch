@@ -68,11 +68,14 @@ export function useBroadcastNotification() {
       title: string;
       body: string;
       audience: BroadcastAudience;
+      idempotencyKey: string;
     }) => {
+      const { idempotencyKey, ...body } = input;
       const response = await apiClient.POST(
         '/api/v1/admin/notifications/broadcast',
         {
-          body: input,
+          params: { header: { 'Idempotency-Key': idempotencyKey } },
+          body,
         },
       );
       return response.data?.data;

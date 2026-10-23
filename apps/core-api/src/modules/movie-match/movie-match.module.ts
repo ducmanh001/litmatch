@@ -1,7 +1,6 @@
 import { Inject, Module, OnApplicationShutdown } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { closeCoreRedisClient } from '../../common/redis/core-redis-client';
 import { FriendModule } from '../friend';
 import { SafetyModule } from '../safety';
 import {
@@ -17,7 +16,7 @@ import {
   movieMatchRedisProvider,
 } from './redis/movie-match-redis.provider';
 
-import type Redis from 'ioredis';
+import type { RealtimePublisherPort } from '../../common/realtime/realtime-publisher.port';
 
 /**
  * Movie Match (docs/services/movie-match-service.md): phiên xem chung 2 người đã là bạn +
@@ -41,9 +40,11 @@ import type Redis from 'ioredis';
   exports: [MovieMatchService],
 })
 export class MovieMatchModule implements OnApplicationShutdown {
-  constructor(@Inject(MOVIE_MATCH_REDIS) private readonly redis: Redis) {}
+  constructor(
+    @Inject(MOVIE_MATCH_REDIS) private readonly redis: RealtimePublisherPort,
+  ) {}
 
   async onApplicationShutdown(): Promise<void> {
-    await closeCoreRedisClient(this.redis);
+    await this.redis.close?.();
   }
 }

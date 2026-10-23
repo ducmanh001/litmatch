@@ -80,12 +80,21 @@ export class TokenService {
     });
     const user = await this.userService.getByIdOrThrow(session.userId);
     const tokens = await this.issueTokens(user.id, user.isGuest, user.role);
+    // Dọn token đã xoay cũ chỉ khi retention XOÁ THẬT được bật VÀ chủ hệ thống chấp nhận đánh đổi bảo mật
+    // (AUTH_REFRESH_ROTATED_RETENTION_DAYS > 0, mặc định 0): nó rút cửa sổ phát hiện token bị đánh cắp từ TTL xuống N ngày.
+    const purgeDays =
+      this.config.getOrThrow('RETENTION_MODE', { infer: true }) === 'delete'
+        ? this.config.getOrThrow('AUTH_REFRESH_ROTATED_RETENTION_DAYS', {
+            infer: true,
+          })
+        : 0;
     const result = await this.refreshSessions.rotate({
       tokenId: session.id,
       replacement: {
         tokenHash: this.hash(tokens.refreshToken),
         expiresAt: this.refreshExpiresAt(ttlDays),
       },
+      purgeRotatedOlderThanDays: purgeDays,
     });
 
     if (result === 'invalid') {

@@ -72,7 +72,31 @@ giá hoặc tự gửi giá trong request mua.
 
 ### Đối soát (reconciliation) — chạy định kỳ từ Giai đoạn 1
 
-1. Toàn cục: tổng Nợ = tổng Có theo currency; 2. mọi `iap_receipts` đã credit có đúng 1 transaction completed khớp số diamond; 3. sample wallet vs derive từ ledger. Từ Giai đoạn 7 tách 2 tier: check 1+2 là tier fast (`ECONOMY_RECONCILIATION_FAST_INTERVAL_MS`, mặc định 60s), check 3 là tier deep (`ECONOMY_RECONCILIATION_INTERVAL_MS`, mặc định 300s); `ECONOMY_RECONCILIATION_ENABLED=false` tắt cả hai. Lệch → log error + metric `economy_reconciliation_mismatch_total{check,currency}`; mỗi run set `economy_reconciliation_last_run_status{tier}` (0 = lệch hoặc run lỗi — alert rule fire trên metric này) + histogram `economy_reconciliation_run_duration_seconds{tier}`. Job read-only tuyệt đối — không auto-correct, sửa lệch bằng reversal entry qua write path chuẩn.
+1. Toàn cục: tổng Nợ = tổng Có theo currency; 2. mọi `iap_receipts` đã credit có đúng 1 transaction completed khớp số diamond; 3. sample wallet vs derive từ ledger. Từ Giai đoạn 7 tách 2 tier: check 1+2 là tier fast (`ECONOMY_RECONCILIATION_FAST_INTERVAL_MS`, mặc định 60s), check 3 là tier deep (`ECONOMY_RECONCILIATION_INTERVAL_MS`, mặc định 300s); `ECONOMY_RECONCILIATION_ENABLED=false` tắt cả hai. Lệch → log error + metric `economy_reconciliation_mismatch_total{check,currency}`; mỗi run set `economy_reconciliation_last_run_status{tier}` (0 = lệch, chưa hoàn tất hoặc run lỗi) + histogram `economy_reconciliation_run_duration_seconds{tier}`. Job chỉ đọc các bảng tài chính; checkpoint chẩn đoán được ghi theo ADR 0015, sửa lệch vẫn phải qua reversal entry.
+
+**Kiểm bất biến Nợ=Có theo trang bền vững (ADR 0015).** Mỗi trang lấy tối đa
+`ECONOMY_RECONCILIATION_BATCH_SIZE` transaction theo `(created_at, id)`, chỉ xét dữ liệu cũ hơn
+`ECONOMY_RECONCILIATION_LAG_MS`. Aggregate luôn chứa trọn transaction. Tổng và cursor microsecond
+được commit cùng nhau trong `runtime_job_checkpoints`; pod mới tiếp tục mà không quét lại từ đầu.
+Mỗi tick bị chặn bởi `ECONOMY_RECONCILIATION_MAX_BATCHES_PER_TICK` và
+`ECONOMY_RECONCILIATION_TICK_BUDGET_MS`. Statement deadline vẫn áp dụng riêng mỗi trang.
+
+- `complete=false` nghĩa là chưa bắt kịp lịch sử, không phải một lần đối soát thành công.
+- Sau `ECONOMY_RECONCILIATION_FULL_INTERVAL_MS`, job bắt đầu một lượt rebase phân trang để phát
+  hiện transaction commit muộn, backdate hoặc entry chèn ngoài write path chuẩn. Thời gian phát
+  hiện còn phụ thuộc thời gian hoàn tất lượt quét; không có bảo đảm tối đa 24 giờ khi backlog lớn.
+- Không sửa `transactions`, `ledger_entries`, wallet hoặc receipt. Checkpoint có thể dựng lại và
+  không thay thế ledger; các index mới phục vụ keyset scan, không nới unique idempotency.
+- **Tier deep luân phiên cả ví lạnh**: mỗi 300s đọc tối đa 100 ví theo keyset `wallets.user_id`
+  (primary key), lưu `afterUserId` ở checkpoint `economy-wallet-reconciliation`. Không sort toàn bộ
+  ví theo `updated_at` và không thêm index vào cột cập nhật mỗi lần ghi số dư. Tail sau cursor và
+  head khi hết tail được đọc trong cùng một statement, tối đa đúng ngân sách mẫu và không trùng ví;
+  vì vậy DB nhỏ vẫn được kiểm tra đầy đủ ở mỗi lần chạy tay, không có tick rỗng chỉ để wrap cursor.
+  Snapshot và ledger của từng ví dùng chung MVCC statement snapshot. Khoá checkpoint, đọc mẫu và
+  lưu cursor cùng transaction; lỗi đọc/commit không bỏ qua mẫu, pod mới tiếp tục cursor chung.
+  Các bảng tài chính vẫn chỉ đọc. `ok` chỉ phản ánh mẫu vừa kiểm tra, không chứng minh toàn bộ ví
+  đã sạch; thời gian bao phủ một vòng phụ thuộc số ví, cadence và số job chạy thành công. Mẫu chạy
+  tay phải là số nguyên 1–10.000; tăng cỡ mẫu vẫn cần đo chi phí lịch sử ledger mỗi ví.
 
 ## 3. Quy tắc concurrency (docs/10 § Economy)
 
@@ -88,7 +112,16 @@ giá hoặc tự gửi giá trong request mua.
 
 `economy.diamond.credited` / `economy.diamond.debited` / `economy.vip.purchased` / `economy.diamond.refunded` — payload `{version: 1, transactionId, userId, amount, transactionType}`. Ghi vào `outbox_events` cùng DB transaction; relay (interval, `FOR UPDATE SKIP LOCKED`) publish Kafka topic `litmatch.economy.events`, bật/tắt bằng env.
 
-> **Giới hạn đã biết — chưa có consumer và chưa có retention:** repo chưa có module nào subscribe topic này (adapter Kafka có sẵn đường consumer + inbox/dedup nhưng chưa được dùng), và không có job dọn `outbox_events`. Khi relay tắt (profile hosted-free, K8s base) các dòng giữ `published_at = NULL` và tích luỹ không giới hạn; khi relay bật, dòng đã publish cũng được giữ vĩnh viễn. Điều này đúng với ADR 0009 (outbox vẫn append khi relay tắt) và chưa cần xử lý ở quy mô pilot. Trước khi bật relay ở production cần quyết định hai việc: (1) consumer đầu tiên là gì (analytics, notification…), (2) thời gian giữ dòng đã publish để còn replay. Hướng đề xuất cho (2): job singleton xoá theo lô dòng `published_at` cũ hơn N ngày (N cấu hình, mặc định tắt), kèm index riêng cho `published_at IS NOT NULL`; không xoá dòng `dead_lettered_at` vì cần người xử lý. Đây là thay đổi Economy nên phải qua `review-module verify`.
+Relay bắt kịp backlog qua tối đa `ECONOMY_OUTBOX_RELAY_MAX_BATCHES_PER_TICK` lô/tick (mặc định 10,
+100 event/lô), bị chặn bởi `ECONOMY_OUTBOX_RELAY_TICK_BUDGET_MS` (mặc định 1000). Không bắt đầu
+network attempt mới khi hết budget/shutdown; lỗi broker đầu tiên kết thúc batch để không giữ DB
+lock qua 100 lần timeout. I/O đang chạy vẫn chờ deadline driver. Relay tắt thì startup cảnh báo;
+không tự bật Kafka/consumer hoặc xóa unpublished events. Deploy phải cấu hình consumer và chứng
+minh replay/catch-up trước khi bật retention published.
+
+> **Retention (ADR 0014, C19):** `EconomyRetentionJob` xoá dòng ĐÃ publish quá `OUTBOX_PUBLISHED_RETENTION_DAYS` (mặc định 7) bằng index một phần `idx_outbox_events_published_at`; dòng dead-letter mặc định GIỮ (`OUTBOX_DEAD_LETTER_RETENTION_DAYS=0` vì cần người xử lý). `RETENTION_MODE=dry-run` chỉ đếm, `delete` mới xoá thật. Job CHỈ chạm `outbox_events` — không đụng `transactions`/`ledger_entries` (append-only): `buildDeleteSql`/`buildCountSql` từ chối cấu trúc mọi quy tắc trỏ vào các bảng sổ cái/ví/chứng từ (deny-list `PROTECTED_TABLES`) và có test chặn.
+>
+> **Giới hạn đã biết — chưa có consumer:** repo chưa có module nào subscribe topic này (adapter Kafka có sẵn đường consumer + inbox/dedup nhưng chưa được dùng). Khi relay tắt (mặc định ở MỌI profile: env, K8s base, compose production, hosted-free) các dòng giữ `published_at = NULL`, không dòng nào đủ điều kiện xoá nên bảng tích luỹ không giới hạn (mô hình ADR 0014: ≈ 4,8 triệu dòng/ngày ở 10 triệu CCU, ≈ 0,7 TB/năm). Điều này đúng với ADR 0009 (outbox vẫn append khi relay tắt) và chưa cần xử lý ở quy mô pilot. Trước khi bật relay ở production cần quyết định: (1) consumer đầu tiên là gì (analytics, notification…); (2) nếu chưa có consumer thì có ngừng ghi outbox hay không (job retention chỉ giải quyết dòng ĐÃ publish). Dòng dead-letter không bao giờ tự xoá vì cần người xử lý. Đây là thay đổi Economy nên phải qua `review-module verify`.
 
 > **Event là hợp đồng liên module**: mọi module khác tiêu thụ diamond (Matching speed-up, Calling per-phút, Gift) gọi Economy **qua DI trong process** (không qua network — [AGENTS.md luật 1](../../AGENTS.md)), nhưng các phản ứng phụ (notification, analytics, trust score) chỉ được nghe **qua event outbox này**, không đọc thẳng bảng của Economy. Thêm loại event mới là non-breaking; đổi/xoá field phải lên `version` mới ([05 § 5.9](../05-coding-standards.md)).
 

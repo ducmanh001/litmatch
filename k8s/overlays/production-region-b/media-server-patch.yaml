@@ -1,17 +1,27 @@
-# Region B — SCAFFOLD chưa provision. media-server giữ replicas: 1 và KHÔNG có HPA giống mọi
-# môi trường khác (ADR 0005: hostNetwork gỡ blocker networking, nhưng tăng replica vẫn chờ
-# benchmark thật — k8s/README.md mục media-server). Node LiveKit của region này join CÙNG cụm
-# LiveKit (chung Redis) với region A — bất biến ADR 0005, cấu hình redis trong livekit.yaml
-# của base phải trỏ Redis chung đó lúc deploy thật. Resource copy từ production; tune theo
-# node thật của region.
+# Region B remains unprovisioned; both nodes must join the SAME LiveKit Redis cluster as A.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: media-server
   namespace: litmatch
 spec:
+  replicas: 2
+  progressDeadlineSeconds: 18600
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   template:
     spec:
+      terminationGracePeriodSeconds: 18000
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: media-server
+              topologyKey: kubernetes.io/hostname
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001

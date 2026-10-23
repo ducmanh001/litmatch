@@ -7,9 +7,6 @@
  */
 export const VIDEO_URL_HARD_CAP = 4096;
 
-/** Advisory transaction lock serialize matcher ẩn danh — cùng kỹ thuật Palm Match. */
-export const MOVIE_MATCH_ADVISORY_LOCK_KEY = 'litmatch:movie-match:pairing';
-
 /** Whitelist reaction đúng movie-match.html — server chặn emoji ngoài danh sách. */
 export const MOVIE_MATCH_REACTIONS = ['😂', '😍', '😱', '👏'] as const;
 

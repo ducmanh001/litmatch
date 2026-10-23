@@ -65,7 +65,7 @@ import type {
   RealtimeEnvelope,
 } from '@litmatch/common-dtos';
 import type { CreatePartyRoomCommentDto } from './dto/party-room.dtos';
-import type Redis from 'ioredis';
+import type { RealtimePublisherPort } from '../../common/realtime/realtime-publisher.port';
 import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import type { CoreApiEnv } from '../../config/env.validation';
 import type { PartyWebhookEvent } from './ports/livekit-party-room';
@@ -123,7 +123,7 @@ export class PartyRoomService {
     private readonly livekit: PartyLivekitRoomPort,
     private readonly config: ConfigService<CoreApiEnv, true>,
     private readonly userService: UserService,
-    @Inject(PARTY_REDIS) private readonly redis: Redis,
+    @Inject(PARTY_REDIS) private readonly redis: RealtimePublisherPort,
   ) {}
 
   private get commentRepo(): Repository<PartyRoomComment> {
@@ -797,7 +797,7 @@ export class PartyRoomService {
     );
     try {
       const comment = await this.dataSource.transaction(async (manager) => {
-        await this.lockActiveRoom(manager, roomId);
+        await this.lockActiveRoom(manager, roomId, 'read');
         const membership = await manager.findOneBy(PartyRoomMember, {
           roomId,
           userId: user.userId,
@@ -1163,14 +1163,23 @@ export class PartyRoomService {
     );
   }
 
-  /** Lock row phòng FOR UPDATE + verify còn active — điểm tuần tự hoá mọi thay đổi state. */
+  /**
+   * Lock row phòng + verify còn active — điểm tuần tự hoá thay đổi state.
+   * - `write` (mặc định, `FOR UPDATE`): join/leave/đổi role/đóng phòng — một người thay đổi state mỗi lúc.
+   * - `read` (`FOR SHARE`): gửi bình luận chỉ cần phòng còn active và membership KHÔNG đổi trong lúc kiểm tra +
+   *   insert. Nhiều bình luận cùng phòng chạy song song (không còn xếp hàng trên một khoá hàng cho mọi bình luận), còn
+   *   join/leave/đóng phòng (`write`) vẫn chờ các bình luận đang chạy xong — thứ tự leave/send vẫn xác định.
+   */
   private async lockActiveRoom(
     manager: EntityManager,
     roomId: string,
+    mode: 'write' | 'read' = 'write',
   ): Promise<PartyRoom> {
     const room = await manager.findOne(PartyRoom, {
       where: { id: roomId },
-      lock: { mode: 'pessimistic_write' },
+      lock: {
+        mode: mode === 'read' ? 'pessimistic_read' : 'pessimistic_write',
+      },
     });
     if (!room) {
       throw new DomainException(
@@ -1318,7 +1327,11 @@ export class PartyRoomService {
     envelope: RealtimeEnvelope,
     opts: { excludeUserId?: string } = {},
   ): Promise<void> {
-    const members = await this.memberRepo.findBy({ roomId, leftAt: IsNull() });
+    // Chỉ cần userId: không nạp cả hàng member (token, mốc thời gian...) cho mỗi sự kiện fanout.
+    const members = await this.memberRepo.find({
+      select: { userId: true },
+      where: { roomId, leftAt: IsNull() },
+    });
     await Promise.all(
       members
         .filter((m) => m.userId !== opts.excludeUserId)
